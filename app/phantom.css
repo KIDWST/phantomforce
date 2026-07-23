@@ -8993,7 +8993,7 @@ body.phantomplay-playing .buddy-say {
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-35") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-36") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -14842,7 +14842,15 @@ body .phantom .workspace-page :where(
 
   .topbar2,
   .os-command-rail,
-  .mobile-admin-homebar {
+  .mobile-admin-homebar,
+  .os-system-line {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .phantom > .sidebar:not(.is-expanded) {
     display: none !important;
     opacity: 0 !important;
     visibility: hidden !important;
@@ -14856,5 +14864,6 @@ body .phantom .workspace-page :where(
 
   .mobile-bottom-nav {
     display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
   }
 }

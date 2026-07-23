@@ -1302,6 +1302,10 @@ html[data-org-color-mode="light"] .pp-game-art img{
 .pp-devsandbox-section-picker select{padding:6px 9px;border:1px solid #41ffa13d;border-radius:7px;background:#03100c;color:#d3ffe9;font-size:11px;text-transform:none}
 .pp-devsandbox-note{margin:0;padding:8px 11px;color:#5fbf9c;font-size:10.5px;border-bottom:1px solid #41ffa129}
 .pp-devsandbox-error{margin:9px 11px 0;padding:8px 10px;border:1px solid #ff6d8355;border-radius:8px;background:#ff6d830f;color:#ffc7d1;font-size:11px}
+.pp-player-error{position:absolute;z-index:4;top:12px;left:12px;right:88px;display:grid;gap:5px;padding:12px 14px;border:1px solid #ff6d8355;border-radius:10px;background:#0f0508e6;color:#ffc7d1;box-shadow:0 12px 34px #0009}
+.pp-player-error b{font-size:12px;color:#ff97a9}
+.pp-player-error code{padding:6px 8px;border-radius:6px;background:#ff6d830f;color:#ffe2e7;font:11px/1.5 "Spline Sans Mono",monospace;white-space:pre-wrap;word-break:break-word}
+.pp-player-error span{color:#e3a9b1;font-size:10.5px}
 .pp-devsandbox-source{width:100%;height:100%;min-height:0;padding:12px 14px;border:0;background:#03100c;color:#d3ffe9;font:12px/1.55 "Spline Sans Mono",monospace;resize:none;tab-size:2;scrollbar-color:#41ffa166 #03100c;scrollbar-width:thin}
 .pp-devsandbox-mods{display:grid;align-content:start;gap:10px;padding:11px;overflow-y:auto;min-height:0}
 .pp-devmod-ai{display:grid;gap:8px;padding:11px;border:1px solid #41ffa12e;border-radius:10px;background:linear-gradient(135deg,#41ffa112,#42e9ff0b)}

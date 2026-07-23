@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260723-35";
+} from "./store.js?v=phantom-live-20260723-36";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -51,7 +51,7 @@ const ui = {
   snapshot: null, v2: null, v2Offline: false, discovery: null,
   query: "", category: "All",
   detailId: null, detail: null, detailBusy: false, reviewDraft: { rating: 0, text: "" },
-  player: null, playerReady: false, playerPaused: false, resume: null, devSandbox: null, devWorkbench: null, devModDockOpen: false,
+  player: null, playerReady: false, playerPaused: false, playerError: null, resume: null, devSandbox: null, devWorkbench: null, devModDockOpen: false,
   settingsOpen: false, editingSubmissionId: null,
   statusChoice: "online", friendTarget: "",
   analytics: null, leaderboardGameId: "", leaderboard: null,
@@ -202,7 +202,7 @@ function localPlay(game) {
   };
   ui.resume = existing?.state ? { state: existing.state } : null;
   ui.error = "";
-  ui.playerReady = false; ui.playerPaused = false; playTickAt = Date.now();
+  ui.playerReady = false; ui.playerPaused = false; ui.playerError = null; playTickAt = Date.now();
   render(); startClock(); heartbeat(); armReadyFallback();
 }
 
@@ -526,6 +526,11 @@ window.addEventListener('message', function(e){
   if (e.data.type === 'mod') { window.__ppMods[e.data.key] = e.data.value; applyPPUniversalMods(); }
   if (e.data.type === 'modspeed') window.__ppSpeed = Number(e.data.value) || 1;
 });
+function reportPPError(message){
+  try { parent.postMessage({ source: 'phantomplay-game', type: 'runtime-error', message: String(message || 'Unknown script error') }, '*'); } catch (err) {}
+}
+window.addEventListener('error', function(e){ reportPPError(e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); });
+window.addEventListener('unhandledrejection', function(e){ reportPPError('Unhandled promise rejection: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)); });
 })();<\/script>`;
 }
 const MOD_PRESETS = {
@@ -1018,6 +1023,7 @@ function playerMarkup() {
     : (ui.player.overrideBlobUrl || game.launchUrl);
   return `<div class="pp2-player ${sandboxActive ? "is-devsandbox" : ""} ${drawerExpanded ? "is-split" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div>${game.devModeAvailable ? `<button type="button" class="pp-devsandbox-open" data-pp2-devsandbox-open title="Open the code drawer while you play">Code drawer</button>` : ""}<button data-pp2-player-restart>Restart</button><button data-pp2-player-pause>${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp2-player-full>Full screen</button><button class="pp-player-close-game" data-pp2-player-close>Exit game</button></div></header>
     <div class="pp2-stage"><div class="pp2-stage-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>Opening in a private sandbox.</span></div>
+    ${ui.playerError ? `<div class="pp2-player-error" data-pp2-player-error><b>This game hit a script error and stopped.</b><code>${esc(ui.playerError)}</code><span>${sandboxActive ? "Fix the code in the drawer below, then Save to try again." : "Restart won't fix a script error; this needs a code fix."}</span></div>` : ""}
     <iframe src="${esc(frameSrc)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" data-pp2-frame></iframe></div>${sandboxActive ? devModDockMarkup(game) : ""}${devSandboxMarkup(game)}
     <footer><span>Session ${esc(String(play.id).slice(-8))}</span><span data-pp2-live-score>Score —</span><span>${ui.resume?.state ? "Resume state loaded" : "Progress saves automatically"}</span></footer></div>`;
 }
@@ -1089,7 +1095,7 @@ async function launch(gameId) {
       ui.player.overrideBlobUrl = URL.createObjectURL(blob);
     }
     ui.resume = resume;
-    ui.playerReady = false; ui.playerPaused = false; playTickAt = Date.now();
+    ui.playerReady = false; ui.playerPaused = false; ui.playerError = null; playTickAt = Date.now();
     render(); startClock(); heartbeat(); armReadyFallback();
   } catch (error) {
     ui.offline = true;
@@ -1139,7 +1145,7 @@ async function closePlayer() {
   // were closing the old one, don't clobber it (that would wipe a freshly-mounted
   // override back to the shipped file).
   if (ui.player && ui.player !== closing) { heartbeat(); return; }
-  ui.player = null; ui.playerReady = false; ui.playerPaused = false; ui.resume = null;
+  ui.player = null; ui.playerReady = false; ui.playerPaused = false; ui.playerError = null; ui.resume = null;
   document.body.classList.remove("phantomplay-playing");
   heartbeat(); render();
 }
@@ -1190,6 +1196,17 @@ function onGameMessage(event) {
     const live = mountedRoot.querySelector("[data-pp2-live-score]");
     if (live && detail.score !== undefined) live.textContent = `Score ${detail.score}`;
     persistPlay(event.data.type === "complete", detail);
+  }
+  if (event.data.type === "runtime-error") {
+    clearTimeout(readyFallbackTimer);
+    ui.playerError = String(event.data.message || "This game hit a script error and stopped responding.");
+    ui.playerReady = true;
+    const sandboxActive = ui.devSandbox?.gameId === ui.player.game.id;
+    mountedRoot.querySelector(".pp2-stage-loading")?.setAttribute("hidden", "");
+    const stage = mountedRoot.querySelector(".pp2-stage");
+    if (stage && !stage.querySelector("[data-pp2-player-error]")) {
+      stage.insertAdjacentHTML("afterbegin", `<div class="pp2-player-error" data-pp2-player-error><b>This game hit a script error and stopped.</b><code>${esc(ui.playerError)}</code><span>${sandboxActive ? "Fix the code in the drawer below, then Save to try again." : "Restart won't fix a script error; this needs a code fix."}</span></div>`);
+    }
   }
 }
 
@@ -1372,7 +1389,7 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp2-moderate]").forEach((b) => b.onclick = () => moderate(b));
   on("[data-pp2-player-close]", "click", closePlayer);
   on("[data-pp2-player-pause]", "click", () => { if (!ui.playerReady) return; ui.playerPaused = !ui.playerPaused; postToGame(ui.playerPaused ? "pause" : "resume"); const btn = mountedRoot.querySelector("[data-pp2-player-pause]"); if (btn) btn.textContent = ui.playerPaused ? "Resume" : "Pause"; });
-  on("[data-pp2-player-restart]", "click", () => { if (ui.playerReady) { ui.playerPaused = false; postToGame("restart"); } });
+  on("[data-pp2-player-restart]", "click", () => { if (ui.playerReady) { ui.playerPaused = false; ui.playerError = null; postToGame("restart"); mountedRoot?.querySelector("[data-pp2-player-error]")?.remove(); } });
   on("[data-pp2-player-full]", "click", () => mountedRoot.querySelector(".pp2-stage")?.requestFullscreen?.());
   on("[data-pp2-devsandbox-open]", "click", openDevSandbox);
   on("[data-pp2-devsandbox-close]", "click", closeDevSandbox);

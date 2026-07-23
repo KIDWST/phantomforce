@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260723-35";
+} from "./store.js?v=phantom-live-20260723-36";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -187,6 +187,7 @@ const ui = {
   player: null,
   playerReady: false,
   playerPaused: false,
+  playerError: null,
   settingsOpen: false,
   editingSubmissionId: null,
   selectedDeveloperId: "",
@@ -505,6 +506,7 @@ function localPlay(game, opts = {}) {
   ui.error = "";
   ui.playerReady = false;
   ui.playerPaused = false;
+  ui.playerError = null;
   playTickAt = Date.now();
   render();
   startClock();
@@ -927,6 +929,15 @@ window.addEventListener('message', function(e){
   if (e.data.type === 'mod') { window.__ppMods[e.data.key] = e.data.value; applyPPUniversalMods(); }
   if (e.data.type === 'modspeed') window.__ppSpeed = Number(e.data.value) || 1;
 });
+// A game whose script throws (missing element, bad selector, syntax slip)
+// used to fail completely silently: no ready message, no error, just a
+// player that never responds. Surface it instead of leaving the owner to
+// guess why a game "does nothing".
+function reportPPError(message){
+  try { parent.postMessage({ source: 'phantomplay-game', type: 'runtime-error', message: String(message || 'Unknown script error') }, '*'); } catch (err) {}
+}
+window.addEventListener('error', function(e){ reportPPError(e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); });
+window.addEventListener('unhandledrejection', function(e){ reportPPError('Unhandled promise rejection: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)); });
 })();<\/script>`;
 }
 
@@ -1332,7 +1343,7 @@ function playerMarkup() {
   const drawerExpanded = sandboxActive && !ui.devSandbox?.minimized;
   // Priority: live Dev Mode blob > this workspace's saved override > shipped file.
   const frameSrc = sandboxActive && ui.devSandbox?.blobUrl ? ui.devSandbox.blobUrl : (ui.player.overrideBlobUrl || game.launchUrl);
-  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""} ${drawerExpanded ? "is-split" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Open the full bundled source. Edits preview live; press Save when done.">Code drawer</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button class="pp-player-close-game" data-pp-player-close title="Exit the game">Exit game</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${sandboxActive ? "Dev Mode is opening your saved project in a private sandbox." : "The game is opening in a private sandbox."}</span></div><iframe src="${esc(frameSrc)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${sandboxActive ? devModDockMarkup(game) : ""}${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
+  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""} ${drawerExpanded ? "is-split" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Open the full bundled source. Edits preview live; press Save when done.">Code drawer</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button class="pp-player-close-game" data-pp-player-close title="Exit the game">Exit game</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${sandboxActive ? "Dev Mode is opening your saved project in a private sandbox." : "The game is opening in a private sandbox."}</span></div>${ui.playerError ? `<div class="pp-player-error" data-pp-player-error><b>This game hit a script error and stopped.</b><code>${esc(ui.playerError)}</code><span>${sandboxActive ? "Fix the code in the drawer below, then Save to try again." : "Restart won't fix a script error; this needs a code fix."}</span></div>` : ""}<iframe src="${esc(frameSrc)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${sandboxActive ? devModDockMarkup(game) : ""}${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
@@ -1462,6 +1473,7 @@ async function launch(gameId, opts = {}) {
     }
     ui.playerReady = false;
     ui.playerPaused = false;
+    ui.playerError = null;
     playTickAt = Date.now();
     render();
     startClock();
@@ -1774,6 +1786,7 @@ async function closePlayer() {
   ui.player = null;
   ui.playerReady = false;
   ui.playerPaused = false;
+  ui.playerError = null;
   document.body.classList.remove("phantomplay-playing");
   playerClosing = false;
   render();
@@ -2284,6 +2297,7 @@ function togglePlayerPause() {
 function restartPlayer() {
   if (!ui.playerReady) return;
   ui.playerPaused = false;
+  ui.playerError = null;
   postToGame("restart");
   const pauseButton = mountedRoot?.querySelector("[data-pp-player-pause]");
   if (pauseButton) pauseButton.textContent = "Pause";
@@ -2291,6 +2305,7 @@ function restartPlayer() {
   if (score) score.textContent = "Score 0";
   const state = mountedRoot?.querySelector("[data-pp-live-state]");
   if (state) state.textContent = "Playing";
+  mountedRoot?.querySelector("[data-pp-player-error]")?.remove();
 }
 
 function markPlayerReady(frame, { protocol = true, focus = true } = {}) {
@@ -2354,6 +2369,13 @@ function onGameMessage(event) {
   }
   if (event.data.type === "match-action") {
     handleMatchAction(event.data.action, event.data.mode);
+  }
+  if (event.data.type === "runtime-error") {
+    ui.playerError = String(event.data.message || "This game hit a script error and stopped responding.");
+    // A script that threw before calling ready never clears the spinner;
+    // an error is more useful than an infinite "Loading…".
+    if (!ui.playerReady) markPlayerReady(frame, { protocol: false, focus: false });
+    render();
   }
 }
 

@@ -196,6 +196,10 @@ body.phantomplay-playing .workspace-page-body,
 .pp2-stage-loading{position:absolute;inset:0;display:grid;place-items:center;text-align:center;background: var(--glass-2);z-index:2}
 .pp2-stage-loading i{display:block;width:34px;height:34px;margin:0 auto 12px;border-radius:50%;border:3px solid #211d3a;border-top-color:#5e4ade;animation:pp2spin .9s linear infinite}
 @keyframes pp2spin{to{transform:rotate(360deg)}}
+.pp2-player-error{position:absolute;z-index:4;top:12px;left:12px;right:88px;display:grid;gap:5px;padding:12px 14px;border:1px solid #ff6d8355;border-radius:10px;background:#0f0508e6;color:#ffc7d1;box-shadow:0 12px 34px #0009}
+.pp2-player-error b{font-size:12px;color:#ff97a9}
+.pp2-player-error code{padding:6px 8px;border-radius:6px;background:#ff6d830f;color:#ffe2e7;font:11px/1.5 "Spline Sans Mono",monospace;white-space:pre-wrap;word-break:break-word}
+.pp2-player-error span{color:#e3a9b1;font-size:10.5px}
 .pp2-player footer{display:flex;gap:18px;justify-content:center;padding:8px;border-top:1px solid var(--pp2-line);color:var(--pp2-mut);font-size:12px}
 .pp2-player header em.pp-devsandbox-badge{margin-left:10px}
 
