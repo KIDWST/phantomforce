@@ -87,7 +87,12 @@
 
   const turretDamage   = (s) => TURRET.damage + s.up.cannonDmg * 16 + s.eraIndex * 4;
   const turretCooldown = (s) => TURRET.cooldown * Math.pow(0.82, s.up.cannonRate) * (s.path === "tech" ? 0.75 : 1);
-  const turretRange    = (s) => TURRET.range + s.up.cannonRange * 55;
+  // A fully-upgraded cannon reaches exactly half the lane at max level — it
+  // should out-range early units but never reach the enemy's own base/spawn
+  // line, and never overshoot its own cannonball's travel-time visual (see
+  // spawnProjectile).
+  const TURRET_RANGE_PER_LEVEL = (LANE_LENGTH / 2 - TURRET.range) / upById.cannonRange.max; // = 14
+  const turretRange    = (s) => TURRET.range + s.up.cannonRange * TURRET_RANGE_PER_LEVEL;
   const turretTargets  = (s) => 1 + s.up.cannonMulti;
   const incomePerSec   = (s) => 9 + s.eraIndex * 3 + s.up.income * 6;
   const killBounty     = (s) => 0.5 + s.up.bounty * 0.18;
@@ -181,7 +186,11 @@
     const dx = tx - x, dy = ty - y, d = Math.hypot(dx, dy) || 1;
     const sp = 640;
     p.alive = true; p.x = x; p.y = y; p.vx = (dx / d) * sp; p.vy = (dy / d) * sp;
-    p.life = Math.min(0.5, d / sp); p.color = color; p.size = size || 2.5; p.trail = !!trail;
+    // Hit/damage is applied instantly at fire time (see fireTurret/stepUnits) —
+    // this is purely the visual travel. It must last exactly as long as the
+    // real flight so a long-range shot never vanishes before it visually
+    // reaches its target (that desync read as "random" delayed deaths).
+    p.life = Math.min(2.2, d / sp); p.color = color; p.size = size || 2.5; p.trail = !!trail;
     state.projectiles.push(p);
   }
   function spawnParticles(x, y, color, n, spread, grav) {
