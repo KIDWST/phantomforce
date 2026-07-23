@@ -1,0 +1,227 @@
+/* PhantomForce Website Builder — responsive viewport integrity.
+   Loaded after command-os.css so this file is the final layout authority for
+   the Sites workspace. This fixes intrinsic grid overflow; it does not scale
+   or zoom the embedded website. */
+
+.workspace-page[data-workspace-page="sites"],
+.workspace-page[data-workspace-page="sites"] .workspace-page-body,
+.workspace-page[data-workspace-page="sites"] .ss-simple,
+.workspace-page[data-workspace-page="sites"] .ss-simple-main,
+.workspace-page[data-workspace-page="sites"] .ss-simple-preview,
+.workspace-page[data-workspace-page="sites"] .ss-public-source,
+.workspace-page[data-workspace-page="sites"] .ss-public-source > *,
+.workspace-page[data-workspace-page="sites"] .ss-public-source-frame,
+.workspace-page[data-workspace-page="sites"] .ss-frame-stage,
+.workspace-page[data-workspace-page="sites"] .ss-site-editor-panel,
+.workspace-page[data-workspace-page="sites"] .ss-public-source-code {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.workspace-page[data-workspace-page="sites"] {
+  width: 100%;
+  overflow-x: clip;
+}
+
+.workspace-page[data-workspace-page="sites"] .ss-simple-main,
+.workspace-page[data-workspace-page="sites"] .ss-simple-preview {
+  width: 100%;
+}
+
+.workspace-page[data-workspace-page="sites"] .ss-public-source {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 31vw, 420px);
+  align-items: start;
+}
+
+.workspace-page[data-workspace-page="sites"] .ss-public-source-frame iframe {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  transform: none;
+  zoom: 1;
+}
+
+.workspace-page[data-workspace-page="sites"] .ss-editor-tabs,
+.workspace-page[data-workspace-page="sites"] .ss-inspector-list,
+.workspace-page[data-workspace-page="sites"] .ss-ai-option-grid,
+.workspace-page[data-workspace-page="sites"] .ss-quick-grid,
+.workspace-page[data-workspace-page="sites"] .ss-asset-grid,
+.workspace-page[data-workspace-page="sites"] .ss-simple-prompt {
+  min-width: 0;
+}
+
+.workspace-page[data-workspace-page="sites"] .ss-inspector-list button,
+.workspace-page[data-workspace-page="sites"] .ss-ai-option-grid button,
+.workspace-page[data-workspace-page="sites"] .ss-quick-grid button,
+.workspace-page[data-workspace-page="sites"] .ss-asset-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspace-page[data-workspace-page="sites"] .ss-inspector-list b,
+.workspace-page[data-workspace-page="sites"] .ss-ai-option-grid b,
+.workspace-page[data-workspace-page="sites"] .ss-quick-grid b,
+.workspace-page[data-workspace-page="sites"] .ss-asset-card b {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .workspace-page[data-workspace-page="sites"] .workspace-page-body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-x: none;
+    -webkit-overflow-scrolling: touch;
+    padding-inline: clamp(8px, 2.6vw, 16px);
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple {
+    height: auto;
+    min-height: 100%;
+    grid-template-rows: none;
+    grid-auto-rows: max-content;
+    align-content: start;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple-main,
+  .workspace-page[data-workspace-page="sites"] .ss-simple-preview {
+    height: auto;
+    overflow: visible;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-public-source {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    padding: 10px;
+    gap: 12px;
+    overflow: hidden;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-public-source-frame {
+    width: 100%;
+    grid-template-rows: auto minmax(480px, 72dvh);
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-frame-stage {
+    width: 100%;
+    height: min(72dvh, 720px);
+    min-height: 480px;
+    overflow: hidden;
+    contain: layout paint;
+    touch-action: pan-y;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-public-source-frame iframe {
+    height: 100%;
+    min-height: 0;
+    border: 0;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-site-editor-panel,
+  .workspace-page[data-workspace-page="sites"] .ss-public-source-code {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 560px) {
+  .workspace-page[data-workspace-page="sites"] .ss-public-source {
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-public-source-frame,
+  .workspace-page[data-workspace-page="sites"] .ss-site-editor-panel,
+  .workspace-page[data-workspace-page="sites"] .ss-public-source-code {
+    border-radius: 12px;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .site-browser-bar {
+    min-width: 0;
+    padding-inline: 10px;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .site-browser-bar b {
+    min-width: 0;
+    max-width: 52vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .site-browser-bar small {
+    display: none;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-public-source-frame {
+    grid-template-rows: auto minmax(460px, 68dvh);
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-frame-stage {
+    height: min(68dvh, 640px);
+    min-height: 460px;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-live-hotspots button {
+    max-width: 44%;
+    padding: 6px 8px;
+    font-size: 9px;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-ai-option-grid,
+  .workspace-page[data-workspace-page="sites"] .ss-quick-grid,
+  .workspace-page[data-workspace-page="sites"] .ss-asset-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-inspector-list button,
+  .workspace-page[data-workspace-page="sites"] .ss-ai-option-grid button,
+  .workspace-page[data-workspace-page="sites"] .ss-quick-grid button,
+  .workspace-page[data-workspace-page="sites"] .ss-asset-card {
+    width: 100%;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple-prompt {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple-prompt .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-history-list {
+    right: auto;
+    left: 0;
+    width: min(320px, calc(100vw - 28px));
+  }
+}
+
+@media (max-width: 390px) {
+  .workspace-page[data-workspace-page="sites"] .ss-public-source-frame {
+    grid-template-rows: auto minmax(440px, 66dvh);
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-frame-stage {
+    height: min(66dvh, 600px);
+    min-height: 440px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .workspace-page[data-workspace-page="sites"] .ss-live-hotspots button:not(.is-active) {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-page[data-workspace-page="sites"] .ss-simple-preview,
+  .workspace-page[data-workspace-page="sites"] .ss-live-hotspots button {
+    transition: none;
+  }
+}
