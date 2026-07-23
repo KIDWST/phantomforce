@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260723-34";
+} from "./store.js?v=phantom-live-20260723-35";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -228,12 +228,17 @@ let roomPollTicks = 0;
 let readyWatchdog = null;
 function armReadyWatchdog() {
   clearTimeout(readyWatchdog);
+  // A game shows itself by posting the "ready" handshake. Custom/edited Dev Mode
+  // code often doesn't implement that protocol; without a short fallback the
+  // loading overlay would sit there and the game reads as "nothing happens".
+  // Dev Mode gets a snappy lift; shipped games keep a longer grace for slow loads.
+  const grace = ui.devSandbox ? 2600 : 6000;
   readyWatchdog = setTimeout(() => {
     if (ui.player && !ui.playerReady) {
       const frame = mountedRoot?.querySelector("[data-pp-frame]");
       markPlayerReady(frame, { protocol: false, focus: false });
     }
-  }, 12000);
+  }, grace);
 }
 
 function slugifyGame(value) {
@@ -1191,7 +1196,7 @@ function devWorkbenchMarkup() {
       <button type="button" class="pp-secondary" data-pp-devworkbench-redo title="Redo (Ctrl+Shift+Z)" ${d.history?.redo?.length ? "" : "disabled"}>Redo</button>
       <button type="button" class="pp-secondary" data-pp-devworkbench-revert>Revert to last working</button>
       <button type="button" class="pp-secondary" data-pp-devworkbench-save ${d.saving ? "disabled" : ""}>${d.saving ? "Saving…" : "Save"}</button>
-      <button type="button" class="pp-devworkbench-launch" data-pp-devworkbench-launch>${icon("dev")} Launch Dev Mode</button>
+      <button type="button" class="pp-devworkbench-launch" data-pp-devworkbench-launch>${icon("dev")} Save &amp; Launch Dev Mode</button>
       <button type="button" class="pp-secondary" data-pp-devworkbench-start>${icon("play")} Start normal</button>
       <button type="button" class="pp-devworkbench-close-inline" data-pp-devworkbench-close>Close</button>
     </div>
@@ -1324,8 +1329,10 @@ function playerMarkup() {
   const engine = engineFor(game);
   const controls = controlsCopy(game);
   const sandboxActive = ui.devSandbox?.gameId === game.id;
-  const frameSrc = sandboxActive && ui.devSandbox?.blobUrl ? ui.devSandbox.blobUrl : game.launchUrl;
-  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Open the full bundled source. Edits preview live; press Save when done.">Code drawer</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button class="pp-player-close-game" data-pp-player-close title="Exit the game">Exit game</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${sandboxActive ? "Dev Mode is opening your saved project in a private sandbox." : "The game is opening in a private sandbox."}</span></div><iframe src="${esc(frameSrc)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${sandboxActive ? devModDockMarkup(game) : ""}${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
+  const drawerExpanded = sandboxActive && !ui.devSandbox?.minimized;
+  // Priority: live Dev Mode blob > this workspace's saved override > shipped file.
+  const frameSrc = sandboxActive && ui.devSandbox?.blobUrl ? ui.devSandbox.blobUrl : (ui.player.overrideBlobUrl || game.launchUrl);
+  return `<div class="pp-player ${sandboxActive ? "is-devsandbox" : ""} ${drawerExpanded ? "is-split" : ""}" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b>${controls ? `<i>${esc(controls)}</i>` : ""}</span>${sandboxActive ? `<em class="pp-devsandbox-badge">Dev Mode</em>` : ""}</div><div class="pp-player-actions">${game.devModeAvailable ? `<button class="pp-devsandbox-open" type="button" data-pp-devsandbox-open title="Open the full bundled source. Edits preview live; press Save when done.">Code drawer</button>` : ""}<button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button class="pp-player-close-game" data-pp-player-close title="Exit the game">Exit game</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${sandboxActive ? "Dev Mode is opening your saved project in a private sandbox." : "The game is opening in a private sandbox."}</span></div><iframe src="${esc(frameSrc)}" title="${esc(game.title)}" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer" allow="fullscreen; gamepad" tabindex="0" data-pp-frame></iframe></div>${sandboxActive ? devModDockMarkup(game) : ""}${devSandboxMarkup(game)}<footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
@@ -1439,9 +1446,20 @@ async function launch(gameId, opts = {}) {
     localPlay(game, opts);
     return;
   }
+  revokePlayerOverrideBlob();
   try {
-    const result = await api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) });
+    // Fetch the workspace's saved Dev Mode edit alongside the play session so the
+    // first render already mounts it — a plain "Start game" runs the saved code,
+    // not the old shipped file. Non-dev players get a 403 and play the shipped file.
+    const [result, override] = await Promise.all([
+      api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) }),
+      ui.devSandbox?.gameId === gameId ? Promise.resolve(null) : api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override?tenant_id=${encodeURIComponent(currentTenantId())}`).catch(() => null),
+    ]);
     ui.player = { game: result.game || game, play: result.play, roomCode: opts.roomCode || null, restoreState: result.restoreState || null };
+    if (override?.source && ui.devSandbox?.gameId !== gameId) {
+      const blob = new Blob([injectModSupport(override.source, gameId)], { type: "text/html" });
+      ui.player.overrideBlobUrl = URL.createObjectURL(blob);
+    }
     ui.playerReady = false;
     ui.playerPaused = false;
     playTickAt = Date.now();
@@ -1452,6 +1470,9 @@ async function launch(gameId, opts = {}) {
     ui.offline = true;
     localPlay(game, opts);
   }
+}
+function revokePlayerOverrideBlob() {
+  if (ui.player?.overrideBlobUrl) { URL.revokeObjectURL(ui.player.overrideBlobUrl); ui.player.overrideBlobUrl = ""; }
 }
 
 // Dev Sandbox's only entry point: the exact same launch as a normal Play
@@ -1478,11 +1499,18 @@ function launchDevSandboxFromWorkbench() {
   const nextSource = injectModSupport(source, gameId);
   const blob = new Blob([nextSource], { type: "text/html" });
   const blobUrl = URL.createObjectURL(blob);
-  ui.devSandbox = { ...ui.devWorkbench, editedSource: source, localUpdatedAt: localDraft.updatedAt, blobUrl, loading: false, error: "", status: "Running your project in Dev Mode. Press Save when this edit is ready.", minimized: false, saving: false, publishing: false };
+  ui.devSandbox = { ...ui.devWorkbench, editedSource: source, localUpdatedAt: localDraft.updatedAt, blobUrl, hasOverride: true, loading: false, error: "", status: "Saved and running your draft. It will also load on a normal Start.", minimized: false, saving: false, publishing: false };
   pendingDevSandboxBootState = null;
   pendingDevSandboxGameId = null;
   ui.devWorkbench = null;
+  // "Save & Launch" — persist so it survives reloads and loads on a normal Start.
+  persistDevOverride(gameId, source);
   launch(gameId);
+}
+async function persistDevOverride(gameId, source) {
+  try {
+    await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source }) });
+  } catch { /* the live blob still runs; an explicit Save retries the sync */ }
 }
 
 function launchNormalFromWorkbench() {
@@ -1729,6 +1757,7 @@ async function persistPlay(ended, detail = {}) {
 async function closePlayer() {
   if (playerClosing) return;
   playerClosing = true;
+  const closing = ui.player;
   snapshotDevSandboxLocalDraft();
   postToGame("exit", { focus: false });
   if (document.fullscreenElement) await document.exitFullscreen?.().catch(() => undefined);
@@ -1737,8 +1766,11 @@ async function closePlayer() {
   clearTimeout(devSandboxApplyTimer);
   clearTimeout(devSandboxAutosaveTimer);
   revokeDevSandboxBlob();
+  revokePlayerOverrideBlob();
   ui.devSandbox = null;
   await persistPlay(true);
+  // persistPlay awaits the network; if a new game launched meanwhile, don't wipe it.
+  if (ui.player && ui.player !== closing) { playerClosing = false; return; }
   ui.player = null;
   ui.playerReady = false;
   ui.playerPaused = false;

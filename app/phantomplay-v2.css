@@ -175,24 +175,44 @@ html[data-org-color-mode="light"] .pp2-shell{--pp2-bg:#f6f8fb;--pp2-panel:#fffff
 .pp2-notes b{color:var(--pp2-text);margin-right:8px}
 
 /* player */
-.pp2-player{position:fixed;inset:0;z-index:50;display:grid;grid-template-rows:auto 1fr auto;background: var(--glass-2)}
+/* The workspace page's pageRise animation leaves a transform on
+   .workspace-page-body (fill:both), which becomes the containing block for
+   position:fixed and shoves the player ~86px down so it overflows the fold.
+   V1's .pp-player already neutralizes this; V2 must too. */
+body.phantomplay-playing .workspace-page-body,
+.workspace-page:has(.pp2-player) .workspace-page-body{animation:none!important;transform:none!important}
+/* Sit below the global app header (like V1's .pp-player) instead of underlapping
+   the command rail. Viewport-anchored now that the ancestor transform is killed,
+   so it fills exactly to the bottom with no overflow. */
+.pp2-player{position:fixed;inset:86px 0 0 0;z-index:60;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;background: var(--glass-2)}
 .pp2-player header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--pp2-line)}
 .pp2-player header b{color:var(--pp2-text)}
 .pp2-player header i{color:var(--pp2-mut);font-size:11px;margin-left:10px;font-style:normal}
 .pp2-player header button{border:1px solid var(--pp2-line);background:transparent;color:var(--pp2-text);border-radius:8px;padding:6px 12px;margin-left:6px;font:700 12px ui-monospace;cursor:pointer}
-.pp2-stage{position:relative}
-.pp2-stage iframe{width:100%;height:100%;border:0;display:block}
+.pp2-stage{position:relative;min-height:0;min-width:0;overflow:hidden}
+/* Absolute-fill guarantees the game fits the stage exactly, so it can never
+   overflow the viewport (the old height:100% could balloon past the fold). */
+.pp2-stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
 .pp2-stage-loading{position:absolute;inset:0;display:grid;place-items:center;text-align:center;background: var(--glass-2);z-index:2}
 .pp2-stage-loading i{display:block;width:34px;height:34px;margin:0 auto 12px;border-radius:50%;border:3px solid #211d3a;border-top-color:#5e4ade;animation:pp2spin .9s linear infinite}
 @keyframes pp2spin{to{transform:rotate(360deg)}}
 .pp2-player footer{display:flex;gap:18px;justify-content:center;padding:8px;border-top:1px solid var(--pp2-line);color:var(--pp2-mut);font-size:12px}
 .pp2-player header em.pp-devsandbox-badge{margin-left:10px}
 
-/* Dev Mode is a drawer over the running game, not a second squeezed screen. */
+/* Dev Mode: game and code editor sit side-by-side, each correctly sized. The
+   editor is a real grid column (not an overlay squeezing/covering the game).
+   When the drawer is minimized the game reclaims the full width. */
 .pp2-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
 .pp2-player.is-devsandbox .pp2-stage{grid-column:1;grid-row:2}
-@media(max-width:980px){
-  .pp2-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+.pp2-player.is-split{grid-template-columns:minmax(0,1fr) min(46vw,480px);grid-template-rows:auto minmax(0,1fr) auto}
+.pp2-player.is-split>header,.pp2-player.is-split>footer{grid-column:1/-1}
+.pp2-player.is-split .pp2-stage{grid-column:1;grid-row:2}
+.pp2-player.is-split .pp-devsandbox{position:relative;inset:auto;top:auto;right:auto;bottom:auto;left:auto;grid-column:2;grid-row:2;width:auto;height:auto;max-height:none;min-height:0;border-radius:0;border:0;border-left:1px solid #41ffa15c;box-shadow:none}
+@media(max-width:900px){
+  .pp2-player.is-split{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,42vh) minmax(0,1fr) auto}
+  .pp2-player.is-split>header,.pp2-player.is-split>footer{grid-column:1}
+  .pp2-player.is-split .pp2-stage{grid-column:1;grid-row:2}
+  .pp2-player.is-split .pp-devsandbox{grid-column:1;grid-row:3;border-left:0;border-top:1px solid #41ffa15c}
 }
 
 /* settings drawer */

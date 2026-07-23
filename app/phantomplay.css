@@ -1279,6 +1279,17 @@ html[data-org-color-mode="light"] .pp-game-art img{
 .pp-devsandbox-open:hover,.pp-devsandbox-open:focus-visible{border-color:#41ffa1cc;color:#137a4b;outline:none}
 .pp-player.is-devsandbox{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
 .pp-player.is-devsandbox .pp-player-stage{grid-column:1;grid-row:2}
+/* Split view: game and code editor side-by-side, each sized right, instead of
+   the editor floating over and covering the game. Minimize reclaims full width. */
+.pp-player.is-split{grid-template-columns:minmax(0,1fr) min(46vw,480px);grid-template-rows:auto minmax(0,1fr) auto}
+.pp-player.is-split>header,.pp-player.is-split>footer{grid-column:1/-1}
+.pp-player.is-split .pp-player-stage{grid-column:1;grid-row:2}
+.pp-player.is-split .pp-devsandbox{position:relative;inset:auto;top:auto;right:auto;bottom:auto;left:auto;grid-column:2;grid-row:2;width:auto;height:auto;max-height:none;min-height:0;border-radius:0;border:0;border-left:1px solid #41ffa15c;box-shadow:none}
+@media(max-width:900px){
+  .pp-player.is-split{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,42vh) minmax(0,1fr) auto}
+  .pp-player.is-split .pp-player-stage{grid-column:1;grid-row:2}
+  .pp-player.is-split .pp-devsandbox{grid-column:1;grid-row:3;border-left:0;border-top:1px solid #41ffa15c}
+}
 .pp-devsandbox-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border:1px solid #41ffa173;border-radius:999px;background:#020907e8;color:#41ffa1;font:900 9px "Spline Sans Mono",monospace;letter-spacing:.1em;text-transform:uppercase}
 .pp-devsandbox-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:#41ffa1;box-shadow:0 0 8px #41ffa1}
 .pp-devsandbox{position:absolute;z-index:12;top:68px;right:14px;bottom:54px;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto auto;width:min(760px,calc(100% - 28px));min-height:0;overflow:hidden;border:1px solid #41ffa15c;border-radius:14px;background:#03100cf2;box-shadow:0 28px 90px #000c,0 0 0 1px #ffffff08 inset;backdrop-filter:blur(14px)}
