@@ -19,6 +19,7 @@
     "test:videocut-editor": "node scripts/test-videocut-editor.mjs",
     "test:page-worker": "node scripts/test-page-worker.mjs",
     "test:topbar-media": "node scripts/test-topbar-media-responsive.mjs",
+    "test:workspace-mobile-integrity": "node scripts/test-workspace-mobile-integrity.mjs",
     "test:phantomplay": "node scripts/test-phantomplay.mjs && npm run test:phantomplay --workspace @phantomforce/server && npm run test:phantomplay:edge --workspace @phantomforce/server && npm run test:phantomplay:edge:storage --workspace @phantomforce/server && npm run test:phantomplay:dev-mode --workspace @phantomforce/server && npm run test --workspace @phantomforce/phantomplay-edge-worker",
     "test:competitor-intelligence": "node scripts/test-competitor-intelligence.mjs && npm run test:competitor-intelligence --workspace @phantomforce/server",
     "test:workspace-site-builder": "node scripts/test-workspace-site-builder.mjs",

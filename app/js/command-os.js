@@ -6,8 +6,8 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260723-37";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260723-37";
+} from "./store.js?v=phantom-live-20260723-38";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260723-38";
 
 let executionMode = "advise";
 let syncFrame = 0;

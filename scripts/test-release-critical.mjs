@@ -17,6 +17,7 @@ const checks = [
   "test:medialab-editor",
   "test:videocut-editor",
   "test:topbar-media",
+  "test:workspace-mobile-integrity",
   "test:crm-pipeline",
   "test:proposal-pipeline",
   "test:workspace-approvals",

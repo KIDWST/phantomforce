@@ -1,0 +1,224 @@
+/* PhantomForce workspace mobile integrity.
+   This stylesheet is intentionally loaded last. It owns the phone-width
+   contracts that must survive product-specific and legacy cascade layers. */
+
+@media (max-width: 980px) {
+  .workspace-page[data-workspace-page="leads"] .crm-layout {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .workspace-page[data-workspace-page="leads"] .crm-list,
+  .workspace-page[data-workspace-page="leads"] .crm-detail,
+  .workspace-page[data-workspace-page="leads"] .crm-card,
+  .workspace-page[data-workspace-page="leads"] .crm-main {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-page[data-workspace-page="leads"] .crm-detail {
+    position: static;
+  }
+
+  .workspace-page[data-workspace-page="leads"] .crm-next {
+    max-width: 100%;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal !important;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden !important;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple-switcher,
+  .workspace-page[data-workspace-page="sites"] .ss-simple-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple-switcher select,
+  .workspace-page[data-workspace-page="sites"] .ss-simple-actions .btn {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple-sites {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .workspace-page[data-workspace-page="sites"] .ss-simple-site {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-tabs {
+    flex-wrap: wrap;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-tab {
+    flex: 1 1 112px;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage,
+  .workspace-page[data-workspace-page="media"] .ml-stage-frame,
+  .workspace-page[data-workspace-page="media"] .ml-stage-view,
+  .workspace-page[data-workspace-page="media"] .ml-idle {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-idle {
+    overflow: hidden;
+  }
+
+  .workspace-page[data-workspace-page="automation"] .au-row-main {
+    min-width: 0;
+  }
+
+  .workspace-page[data-workspace-page="automation"] .au-row-main p {
+    max-width: 100%;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal !important;
+  }
+
+  .workspace-page[data-workspace-page="workforce"] .worker-web-world,
+  .workspace-page[data-workspace-page="workforce"] .worker-mesh-rings {
+    max-width: 100%;
+    overflow: hidden;
+    contain: layout paint;
+  }
+
+  .workspace-page[data-workspace-page="phantomplay"] .pp-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .workspace-page[data-workspace-page="phantomplay"] .pp-title {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .workspace-page[data-workspace-page="phantomplay"] .pp-tools {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .workspace-page[data-workspace-page="phantomplay"] .pp-top > .pp-tabs {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    overflow: visible;
+  }
+
+  .workspace-page[data-workspace-page="phantomplay"] .pp-tabs button,
+  .workspace-page[data-workspace-page="phantomplay"] .pp-tabs button:first-child,
+  .workspace-page[data-workspace-page="phantomplay"] .pp-tabs button:last-child {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding-inline: 6px;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .workspace-page[data-workspace-page="phantomplay"] .pp-access {
+    display: block;
+    width: auto;
+    min-width: 0;
+    max-width: 118px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-page[data-workspace-page="phantomplay"] .pp-game-art {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-page[data-workspace-page="phantomplay"] .pp-game-art::before {
+    inset: 0 !important;
+    transform: none !important;
+  }
+
+  .workspace-page[data-workspace-page="phantomstore"] .ps-shell,
+  .workspace-page[data-workspace-page="phantomstore"] .ps-product-grid,
+  .workspace-page[data-workspace-page="phantomstore"] .ps-product,
+  .workspace-page[data-workspace-page="phantomstore"] .ps-product > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .workspace-page[data-workspace-page="phantomstore"] .ps-categories {
+    flex-wrap: wrap;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 560px) {
+  .workspace-page[data-workspace-page="sites"] .ss-simple-sites {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-page[data-workspace-page="phantomplay"] .pp-top > .pp-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-page[data-workspace-page] *,
+  .workspace-page[data-workspace-page] *::before,
+  .workspace-page[data-workspace-page] *::after {
+    scroll-behavior: auto !important;
+  }
+}
