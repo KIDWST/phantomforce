@@ -6,10 +6,10 @@
    vault, agentops.js's console) so they read as one product. It does not
    re-implement any of them. */
 
-import { isOwnerOperator, rememberConversation } from "./store.js?v=phantom-live-20260723-49";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-49";
-import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260723-49";
-import { esc } from "./workspaces.js?v=phantom-live-20260723-49";
+import { isOwnerOperator, rememberConversation } from "./store.js?v=phantom-live-20260723-50";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-50";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260723-50";
+import { esc } from "./workspaces.js?v=phantom-live-20260723-50";
 
 const TABS = ["chat", "memory", "activity"];
 let rootEl = null;
@@ -130,7 +130,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260723-49")
+  import("./brain.js?v=phantom-live-20260723-50")
     .then((mod) => { if (mount.isConnected) mod.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">This panel could not load. Try again in a moment.</p>`; });
 }
@@ -174,7 +174,7 @@ export function mountPhantomAI(root) {
   if (ticker && !ticker.dataset.phantomaiWired) {
     ticker.dataset.phantomaiWired = "1";
     ticker.style.cursor = "pointer";
-    ticker.title = "Open Phantom AI — Activity";
+    ticker.title = "Open PhantomBot — Activity";
     ticker.addEventListener("click", () => {
       activatePhantomAiTab("activity");
       root.scrollIntoView({ behavior: "smooth", block: "center" });
