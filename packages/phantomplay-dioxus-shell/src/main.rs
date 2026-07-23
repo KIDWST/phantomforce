@@ -108,7 +108,20 @@ fn relative_label(game: &GameEntry, file: &Path) -> String {
 }
 
 fn main() {
-    dioxus::launch(App);
+    // Branding: this shell IS PhantomPlay to end users — no separate
+    // "Dioxus" name/logo shown anywhere in the product surface (credit for
+    // Dioxus and every other underlying technology belongs in posts/
+    // sponsorships/credits, not the app chrome). Uses the real brand-phantom
+    // ghost mark already shipped in the live web app's app/assets/, copied
+    // into this package's own assets/ so it's embedded at compile time via
+    // include_bytes! rather than depending on a sibling-directory path.
+    let icon = dioxus::desktop::icon_from_memory(include_bytes!("../assets/brand-phantom.png")).ok();
+    let window = dioxus::desktop::WindowBuilder::new().with_title("PhantomPlay");
+    let mut config = dioxus::desktop::Config::new().with_window(window);
+    if let Some(icon) = icon {
+        config = config.with_icon(icon);
+    }
+    dioxus::LaunchBuilder::desktop().with_cfg(config).launch(App);
 }
 
 #[cfg(test)]
@@ -177,6 +190,44 @@ mod tests {
     }
 }
 
+fn mime_for(path: &Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
+        "html" | "htm" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "json" => "application/json",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "wasm" => "application/wasm",
+        _ => "application/octet-stream",
+    }
+}
+
+/// Standalone player window — this is what actually lets someone play a
+/// PhantomPlay game with zero PhantomForce account/server dependency: the
+/// iframe loads through a custom `phantomplay-game://` protocol whose
+/// handler (registered per-window in `play_game`, below) reads the game's
+/// real files straight off disk, the same files the editor pane edits.
+const PLAYER_STYLE: &str = "html,body,iframe{margin:0;height:100%;width:100%;border:0;background:#03110c;}";
+
+#[component]
+fn Player(entry: String) -> Element {
+    // WebView2 on Windows serves custom protocols at http://<scheme>.localhost/
+    // rather than <scheme>://host/ (which is what macOS/Linux webviews use) —
+    // see wry's `with_https_scheme` docs. Windows-only for now; cross-platform
+    // is real follow-up work, not silently assumed to already work elsewhere.
+    #[cfg(target_os = "windows")]
+    let src = format!("http://phantomplay-game.localhost/{entry}");
+    #[cfg(not(target_os = "windows"))]
+    let src = format!("phantomplay-game://localhost/{entry}");
+
+    rsx! {
+        style { {PLAYER_STYLE} }
+        iframe { src: "{src}" }
+    }
+}
+
 #[component]
 fn App() -> Element {
     let games = use_signal(list_games);
@@ -198,6 +249,49 @@ fn App() -> Element {
         }
     };
 
+    let mut play_game = move |idx: usize| {
+        let Some(game) = games().get(idx).cloned() else { return };
+        let entry_path = if game.is_dir { game.path.join("index.html") } else { game.path.clone() };
+        if !entry_path.exists() {
+            status.set(format!("{} has no index.html to play.", game.id));
+            return;
+        }
+        let entry_name = entry_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let game_dir = if game.is_dir {
+            game.path.clone()
+        } else {
+            game.path.parent().unwrap_or(Path::new(".")).to_path_buf()
+        };
+
+        let handler = move |_id: dioxus::desktop::wry::WebViewId<'_>, request: dioxus::desktop::wry::http::Request<Vec<u8>>| {
+            let uri_path = request.uri().path().trim_start_matches('/');
+            let file_path = game_dir.join(uri_path);
+            match fs::read(&file_path) {
+                Ok(bytes) => dioxus::desktop::wry::http::Response::builder()
+                    .header("Content-Type", mime_for(&file_path))
+                    .status(200)
+                    .body(std::borrow::Cow::Owned(bytes))
+                    .unwrap(),
+                Err(_) => dioxus::desktop::wry::http::Response::builder()
+                    .status(404)
+                    .body(std::borrow::Cow::Borrowed(&b"not found"[..]))
+                    .unwrap(),
+            }
+        };
+
+        let window_cfg = dioxus::desktop::Config::new()
+            .with_window(
+                dioxus::desktop::WindowBuilder::new()
+                    .with_title(format!("PhantomPlay — {}", game.id))
+                    .with_inner_size(dioxus::desktop::LogicalSize::new(1000.0, 720.0)),
+            )
+            .with_custom_protocol("phantomplay-game", handler);
+
+        let dom = VirtualDom::new_with_props(Player, PlayerProps { entry: entry_name });
+        dioxus::desktop::window().new_window(dom, window_cfg);
+        status.set(format!("Launched {} in a standalone player window — no account, no server.", game.id));
+    };
+
     let mut open_file = move |idx: usize| {
         if let Some((path, _)) = files().get(idx).cloned() {
             match fs::read_to_string(&path) {
@@ -211,6 +305,12 @@ fn App() -> Element {
             }
         }
     };
+
+    use_effect(move || {
+        if std::env::var("PHANTOMPLAY_AUTOPLAY_TEST").is_ok() {
+            play_game(0);
+        }
+    });
 
     let save_file = move |_| {
         if let Some(idx) = selected_file() {
@@ -230,6 +330,7 @@ fn App() -> Element {
         style { {STYLE} }
         div { class: "shell",
             header {
+                img { class: "brand-ghost", src: asset!("/assets/brand-phantom.png"), alt: "" }
                 div { class: "brand", "PhantomPlay" }
                 div { class: "badge", "NATIVE CODE EDITOR" }
             }
@@ -237,11 +338,13 @@ fn App() -> Element {
                 nav { class: "games-pane",
                     h2 { "Games ({games().len()})" }
                     for (idx , game) in games().iter().cloned().enumerate() {
-                        button {
+                        div {
                             class: if selected_game() == Some(idx) { "row is-active" } else { "row" },
-                            onclick: move |_| open_game(idx),
-                            "{game.id}"
-                            if game.is_dir { span { class: "tag", "dir" } }
+                            span { class: "row-label", onclick: move |_| open_game(idx),
+                                "{game.id}"
+                                if game.is_dir { span { class: "tag", "dir" } }
+                            }
+                            button { class: "play-btn", onclick: move |_| play_game(idx), title: "Play standalone — no account, no server", "▶" }
                         }
                     }
                 }
@@ -302,6 +405,7 @@ const STYLE: &str = r#"
         background: #020b08;
         border-bottom: 1px solid #143324;
     }
+    .brand-ghost { width: 22px; height: 22px; filter: drop-shadow(0 0 6px #28ff8d88); }
     .brand { font-weight: 900; font-size: 18px; color: #61ffb0; text-shadow: 0 0 18px #28ff8d55; }
     .badge {
         padding: 4px 10px;
@@ -335,6 +439,19 @@ const STYLE: &str = r#"
     }
     .row:hover { background: #0c2318; }
     .row.is-active { background: #14432c; color: #b7ffd6; }
+    .games-pane .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; cursor: default; padding: 4px 4px 4px 9px; }
+    .row-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; padding: 3px 0; }
+    .play-btn {
+        flex-shrink: 0;
+        border: 1px solid #2cff9b55;
+        border-radius: 6px;
+        background: #0c2318;
+        color: #7dffbd;
+        font-size: 11px;
+        padding: 3px 8px;
+        cursor: pointer;
+    }
+    .play-btn:hover { background: #14432c; color: #b7ffd6; }
     .tag {
         float: right;
         font-size: 9px;
