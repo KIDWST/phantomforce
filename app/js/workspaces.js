@@ -8,26 +8,34 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
-  session,
-} from "./store.js?v=phantom-live-20260723-45";
+  session, currentTenantId,
+} from "./store.js?v=phantom-live-20260723-46";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260723-45";
+} from "./orgs.js?v=phantom-live-20260723-46";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260723-45";
+} from "./proposalpipeline.js?v=phantom-live-20260723-46";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260723-45";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260723-45";
+} from "./approvalpipeline.js?v=phantom-live-20260723-46";
+import {
+  financeServerAvailable, loadFinanceLedger,
+  createFinanceTransaction as createServerFinanceTransaction,
+  importFinanceLedger as importServerFinanceLedger,
+  reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
+  voidFinanceLedgerTransaction as voidServerFinanceTransaction,
+  financeContentKey,
+} from "./financeledger.js?v=phantom-live-20260723-46";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260723-46";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -41,6 +49,7 @@ const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "al
 const crmSelection = createScopedSelection("");
 const proposalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
 const approvalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
+const financeUi = { loadedTenant: "", loadingTenant: "", notice: "", serverSummary: null };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -1329,15 +1338,107 @@ function connectorLabel(connector) {
   return "Not connected";
 }
 
+function applyServerFinanceDocument(document, ws) {
+  if (!document || !Array.isArray(document.transactions)) return;
+  const finance = store.state.finance;
+  const authoritative = document.transactions
+    .filter((transaction) => !transaction.voidedAt && !transaction.testMode)
+    .map((transaction) => ({
+      id: transaction.id,
+      ws,
+      date: financeDate(transaction.date),
+      description: String(transaction.description || "Transaction").slice(0, 160),
+      amount: Number(transaction.amountMinor) / 100,
+      category: FINANCE_CATEGORIES.includes(transaction.category) ? transaction.category : "Uncategorized",
+      account: String(transaction.account || "Manual ledger").slice(0, 80),
+      source: transaction.source || "manual",
+      externalId: transaction.sourceReference || `server:${transaction.id}`,
+      notes: "",
+      createdAt: transaction.createdAt || new Date().toISOString(),
+      reconciliationStatus: transaction.reconciliationStatus || "unreconciled",
+      serverAuthoritative: true,
+    }))
+    .filter((transaction) => Number.isFinite(transaction.amount) && transaction.amount !== 0);
+  finance.transactions = [
+    ...(finance.transactions || []).filter((transaction) => transaction.ws !== ws),
+    ...authoritative,
+  ];
+  const accountNames = [...new Set(authoritative.map((transaction) => transaction.account))];
+  finance.accounts = [
+    ...(finance.accounts || []).filter((account) => account.ws !== ws),
+    ...accountNames.map((name) => ({
+      id: `server-account:${ws}:${name}`,
+      ws,
+      name,
+      type: "ledger",
+      institution: "",
+      status: "ready",
+      lastSync: document.updatedAt || null,
+    })),
+  ];
+  financeUi.serverSummary = document.summary || null;
+  store.save();
+}
+
+function legacyFinanceTransactions(ws) {
+  return (store.state.finance?.transactions || [])
+    .filter((transaction) => transaction.ws === ws && !transaction.serverAuthoritative && Number(transaction.amount))
+    .map((transaction) => ({
+      date: financeDate(transaction.date),
+      description: transaction.description,
+      amountMinor: Math.round(Number(transaction.amount) * 100),
+      currency: "USD",
+      category: transaction.category,
+      account: transaction.account,
+      sourceReference: transaction.externalId || `legacy:${transaction.id}`,
+      testMode: false,
+    }));
+}
+
+async function loadAuthoritativeFinance(ws, rerender) {
+  const tenant = currentTenantId();
+  if (!financeServerAvailable() || financeUi.loadingTenant === tenant || financeUi.loadedTenant === tenant) return;
+  financeUi.loadingTenant = tenant;
+  financeUi.notice = "Loading verified accounting records…";
+  rerender();
+  try {
+    let payload = await loadFinanceLedger();
+    const legacy = legacyFinanceTransactions(ws);
+    if ((payload.document?.transactions?.length || 0) === 0 && legacy.length) {
+      const key = await financeContentKey(JSON.stringify(legacy));
+      payload = await importServerFinanceLedger({
+        idempotencyKey: `legacy-browser:${key}`,
+        sourceName: "Verified browser-ledger migration",
+        transactions: legacy,
+      });
+      financeUi.notice = `Moved ${payload.batch?.created || 0} existing record${payload.batch?.created === 1 ? "" : "s"} into the verified ledger.`;
+    } else {
+      financeUi.notice = "Verified ledger is synchronized.";
+    }
+    applyServerFinanceDocument(payload.document, ws);
+  } catch (error) {
+    financeUi.notice = error instanceof Error ? error.message : "The verified ledger could not be loaded.";
+  } finally {
+    financeUi.loadedTenant = tenant;
+    financeUi.loadingTenant = "";
+    rerender();
+  }
+}
+
 function renderMoney(el, rerender) {
   const m = moneyView();
   const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  const serverBacked = financeServerAvailable();
+  const readOnly = isDatabaseSession() && !canManageActiveOrg();
   const recent = m.transactions.slice(0, 18);
   const actualCount = m.transactions.length;
   const proposalGoal = m.opportunity;
   el.innerHTML = `
     <section class="finance-shell">
       <div class="finance-toolbar">
+        <span class="finance-authority ${serverBacked ? "is-live" : "is-local"}">${serverBacked ? "Verified server ledger" : "Sign in for verified persistence"}</span>
+        ${financeUi.notice ? `<span class="finance-notice">${esc(financeUi.notice)}</span>` : ""}
+        ${serverBacked ? `<button class="btn btn-quiet" type="button" data-act="finance-refresh">Refresh</button>` : ""}
         <button class="btn" type="button" data-act="export" aria-label="Export accounting transactions as CSV">Export CSV</button>
       </div>
       <div class="stat-row finance-stats">
@@ -1364,7 +1465,7 @@ function renderMoney(el, rerender) {
                 <div class="finance-connector-foot">
                   <i>${esc(connectorLabel(connector))}</i>
                   ${connector.id === "manual"
-                    ? `<label class="btn btn-quiet finance-import">Import CSV<input type="file" accept=".csv,text/csv" data-finance-import hidden /></label>`
+                    ? `<label class="btn btn-quiet finance-import ${readOnly ? "is-disabled" : ""}">Import CSV<input type="file" accept=".csv,text/csv" data-finance-import hidden ${readOnly ? "disabled" : ""} /></label>`
                     : `<button class="btn btn-quiet" data-act="connector" data-id="${esc(connector.id)}" type="button">${connector.status === "requested" ? "Setup requested" : "Prepare setup"}</button>`}
                 </div>
               </article>`).join("")}
@@ -1383,7 +1484,7 @@ function renderMoney(el, rerender) {
             <label><span>Amount</span><input type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required /></label>
             <label><span>Category</span><select name="category">${financeCategoryOptions()}</select></label>
             <label><span>Account</span><input type="text" name="account" placeholder="Business checking / card" /></label>
-            <button class="btn btn-primary" type="submit">Add transaction</button>
+            <button class="btn btn-primary" type="submit" ${readOnly ? "disabled" : ""}>${readOnly ? "Read only" : "Add transaction"}</button>
           </form>
         </section>
       </div>
@@ -1402,7 +1503,9 @@ function renderMoney(el, rerender) {
                 <i>${esc(tx.account)} · ${esc(tx.category)} · ${esc(tx.source)}</i>
               </div>
               <strong>${moneySigned(tx.amount)}</strong>
-              <button class="record-x" data-act="delete-tx" data-id="${esc(tx.id)}" type="button" aria-label="Delete transaction">×</button>
+              <span class="finance-reconciliation">${tx.reconciliationStatus === "reconciled" ? "Reconciled" : "Unreconciled"}</span>
+              ${serverBacked && tx.reconciliationStatus !== "reconciled" && !readOnly ? `<button class="btn btn-quiet" data-act="reconcile-tx" data-id="${esc(tx.id)}" type="button">Reconcile</button>` : ""}
+              ${!readOnly ? `<button class="record-x" data-act="delete-tx" data-id="${esc(tx.id)}" type="button" aria-label="Void transaction">×</button>` : ""}
             </article>`).join("") || empty("No transactions yet. Connect a bank/card, import a CSV export, or add the first one manually.")}
         </div>
       </section>
@@ -1433,28 +1536,40 @@ function renderMoney(el, rerender) {
   };
   const form = el.querySelector("[data-finance-form]");
   if (form) {
-    form.onsubmit = (event) => {
+    form.onsubmit = async (event) => {
       event.preventDefault();
       const data = new FormData(form);
       const rawAmount = Number(data.get("amount"));
       if (!Number.isFinite(rawAmount) || rawAmount <= 0) return;
       const direction = data.get("direction") === "expense" ? -1 : 1;
       const account = ensureAccount(String(data.get("account") || "Manual ledger"));
-      financeNow().transactions.unshift({
-        id: uid("txn"),
-        ws,
+      const localId = uid("txn");
+      const transaction = {
         date: financeDate(data.get("date")),
         description: String(data.get("description") || "Manual transaction").slice(0, 160),
-        amount: direction * rawAmount,
+        amountMinor: Math.round(direction * rawAmount * 100),
+        currency: "USD",
         category: String(data.get("category") || "Uncategorized"),
         account,
         source: "manual",
-        externalId: null,
-        notes: "",
-        createdAt: new Date().toISOString(),
-      });
-      pushActivity("Accounting Ledger", `added a ${direction > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(direction * rawAmount)}.`, ws);
-      store.save();
+        sourceReference: `manual:${localId}`,
+        testMode: false,
+      };
+      if (!serverBacked) {
+        financeUi.notice = "Sign in before recording accounting data so it can be verified and recovered.";
+        rerender();
+        return;
+      }
+      financeUi.notice = "Recording transaction…";
+      rerender();
+      try {
+        const payload = await createServerFinanceTransaction(transaction);
+        applyServerFinanceDocument(payload.document, ws);
+        financeUi.notice = payload.duplicate ? "Duplicate transaction skipped." : "Transaction recorded in the verified ledger.";
+        pushActivity("Accounting Ledger", `recorded a ${direction > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(direction * rawAmount)}.`, ws);
+      } catch (error) {
+        financeUi.notice = error instanceof Error ? error.message : "Transaction could not be recorded.";
+      }
       rerender();
     };
   }
@@ -1463,31 +1578,78 @@ function renderMoney(el, rerender) {
     importInput.onchange = async () => {
       const file = importInput.files?.[0];
       if (!file) return;
-      const rows = parseFinanceCsv(await file.text(), ws);
-      const existing = new Set((financeNow().transactions || []).map((tx) => tx.externalId).filter(Boolean));
-      const fresh = rows.filter((tx) => !tx.externalId || !existing.has(tx.externalId));
-      fresh.forEach((tx) => ensureAccount(tx.account));
-      financeNow().transactions.unshift(...fresh);
-      pushActivity("Accounting Ledger", `imported ${fresh.length} transaction${fresh.length === 1 ? "" : "s"} from ${file.name}.`, ws);
-      store.save();
+      const text = await file.text();
+      const rows = parseFinanceCsv(text, ws);
+      if (!serverBacked) {
+        financeUi.notice = "Sign in before importing accounting data so duplicate protection and recovery stay active.";
+        rerender();
+        return;
+      }
+      financeUi.notice = `Verifying ${rows.length} row${rows.length === 1 ? "" : "s"}…`;
+      rerender();
+      try {
+        const key = await financeContentKey(text);
+        const payload = await importServerFinanceLedger({
+          idempotencyKey: `csv:${key}`,
+          sourceName: file.name,
+          transactions: rows.map((transaction) => ({
+            date: transaction.date,
+            description: transaction.description,
+            amountMinor: Math.round(transaction.amount * 100),
+            currency: "USD",
+            category: transaction.category,
+            account: transaction.account,
+            sourceReference: transaction.externalId,
+            testMode: false,
+          })),
+        });
+        applyServerFinanceDocument(payload.document, ws);
+        financeUi.notice = `Imported ${payload.batch?.created || 0}; skipped ${payload.batch?.duplicates || 0} duplicate${payload.batch?.duplicates === 1 ? "" : "s"}.`;
+        pushActivity("Accounting Ledger", `verified ${payload.batch?.created || 0} transaction${payload.batch?.created === 1 ? "" : "s"} from ${file.name}.`, ws);
+      } catch (error) {
+        financeUi.notice = error instanceof Error ? error.message : "CSV import failed.";
+      }
       rerender();
     };
   }
   el.querySelectorAll("[data-act='delete-tx']").forEach((button) => {
-    button.onclick = (event) => {
+    button.onclick = async (event) => {
       event.preventDefault();
       event.stopPropagation();
       const id = event.currentTarget?.dataset?.id || button.getAttribute("data-id") || "";
       const tx = (financeNow().transactions || []).find((item) => String(item.id) === id);
-      if (tx && !confirm(`Delete "${tx.description}" (${moneySigned(tx.amount)})? This cannot be undone.`)) return;
-      const financeState = financeNow();
-      financeState.transactions = (financeState.transactions || []).filter((item) => String(item.id) !== id);
-      if (tx) pushActivity("Accounting Ledger", `deleted a transaction: ${tx.description} (${moneySigned(tx.amount)}).`, ws);
-      store.save();
+      if (tx && !confirm(`Void "${tx.description}" (${moneySigned(tx.amount)})? It will leave actual totals but remain in the audit history.`)) return;
+      if (!serverBacked) {
+        financeUi.notice = "Sign in before changing accounting records.";
+        rerender();
+        return;
+      }
+      try {
+        const payload = await voidServerFinanceTransaction(id);
+        applyServerFinanceDocument(payload.document, ws);
+        financeUi.notice = "Transaction voided; its audit history was preserved.";
+        if (tx) pushActivity("Accounting Ledger", `voided a transaction: ${tx.description} (${moneySigned(tx.amount)}).`, ws);
+      } catch (error) {
+        financeUi.notice = error instanceof Error ? error.message : "Transaction could not be voided.";
+      }
       rerender();
     };
   });
   bindActions(el, {
+    "finance-refresh": async () => {
+      financeUi.loadedTenant = "";
+      await loadAuthoritativeFinance(ws, rerender);
+    },
+    "reconcile-tx": async (id) => {
+      try {
+        const payload = await reconcileServerFinanceTransaction(id, "reconciled");
+        applyServerFinanceDocument(payload.document, ws);
+        financeUi.notice = "Transaction marked reconciled with actor and time recorded.";
+      } catch (error) {
+        financeUi.notice = error instanceof Error ? error.message : "Transaction could not be reconciled.";
+      }
+      rerender();
+    },
     connector: (id) => {
       const finance = financeNow();
       let connector = finance.connectors.find((item) => item.ws === ws && item.id === id);
@@ -1509,6 +1671,7 @@ function renderMoney(el, rerender) {
       copyText(btn, [header, ...rows].join("\n"));
     },
   });
+  void loadAuthoritativeFinance(ws, rerender);
 }
 
 /* ============================= MEMORY ============================= */
@@ -1699,7 +1862,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260723-45")
+      import("./brain.js?v=phantom-live-20260723-46")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

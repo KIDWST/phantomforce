@@ -44,6 +44,8 @@
     "test:agent-run-lifecycle": "tsx scripts/test-agent-run-lifecycle.ts",
     "test:proposal-lifecycle": "tsx scripts/test-proposal-lifecycle.ts",
     "test:crm-lifecycle": "tsx scripts/test-crm-lifecycle.ts",
+    "test:finance-ledger": "tsx scripts/test-finance-ledger.ts",
+    "test:commerce-order-lifecycle": "tsx scripts/test-commerce-order-lifecycle.ts",
     "test:agent-assist-bridge": "tsx scripts/test-agent-assist-bridge.ts",
     "test:termina-bridge": "tsx scripts/test-termina-bridge.ts",
     "test:local-customer-plan": "tsx scripts/test-local-customer-plan-preview.ts",

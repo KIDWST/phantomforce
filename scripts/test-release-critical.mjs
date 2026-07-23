@@ -23,6 +23,8 @@ const checks = [
   "test:crm-lifecycle",
   "test:proposal-pipeline",
   "test:proposal-lifecycle",
+  "test:finance-ledger",
+  "test:commerce-order-lifecycle",
   "test:workspace-approvals",
   "test:agent-run-lifecycle",
   "test:managed-growth-report",

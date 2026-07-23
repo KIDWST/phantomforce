@@ -538,6 +538,14 @@ import {
   type CrmContactSnapshot,
 } from "./crm/crm-lifecycle.js";
 import {
+  addFinanceTransaction,
+  getFinanceLedger,
+  importFinanceTransactions,
+  publicFinanceLedger,
+  reconcileFinanceTransaction,
+  voidFinanceTransaction,
+} from "./finance/finance-ledger-store.js";
+import {
   createWorkspaceApproval,
   decideWorkspaceApproval,
   deleteWorkspaceApproval,
@@ -615,6 +623,21 @@ const ProposalAcceptBodySchema = z.object({
 const ProposalConvertBodySchema = z.object({
   tenant_id: z.string().trim().max(80).optional(),
   idempotency_key: z.string().trim().min(1).max(180).optional(),
+});
+const FinanceTransactionParamsSchema = z.object({ transactionId: z.string().trim().min(1).max(120) });
+const FinanceTransactionCreateSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  transaction: z.unknown(),
+});
+const FinanceImportSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  idempotency_key: z.string().trim().min(1).max(180),
+  source_name: z.string().trim().min(1).max(160),
+  transactions: z.array(z.unknown()).min(1).max(5_000),
+});
+const FinanceReconcileSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  status: z.enum(["unreconciled", "matched", "reconciled"]),
 });
 const WorkspaceApprovalParamsSchema = z.object({ approvalId: z.string().trim().min(1).max(120) });
 const WorkspaceRecordCreateBodySchema = z.object({
@@ -1338,6 +1361,90 @@ app.delete("/api/proposals/:proposalId", async (request, reply) => {
   const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
   const result = await deleteProposalDraft({ tenantId, proposalId: params.data.proposalId, actor: session.id });
   return { ok: true, tenant_id: tenantId, proposal: result.result, document: publicProposalDocument(result.document), ...workspaceRecordSafety };
+});
+
+app.get("/api/finance/ledger", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const document = await getFinanceLedger(tenantId, session.id);
+  return { ok: true, tenant_id: tenantId, document: publicFinanceLedger(document), ...workspaceRecordSafety };
+});
+
+app.post("/api/finance/transactions", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = FinanceTransactionCreateSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Owner or admin access is required to record accounting transactions." });
+  }
+  try {
+    const result = await addFinanceTransaction({ tenantId, actor: session.id, transaction: parsed.data.transaction });
+    return { ok: true, tenant_id: tenantId, ...result.result, document: publicFinanceLedger(result.document), ...workspaceRecordSafety };
+  } catch (error) {
+    return reply.status(400).send({ ok: false, error: error instanceof Error ? error.message : "Transaction could not be recorded." });
+  }
+});
+
+app.post("/api/finance/import", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = FinanceImportSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Owner or admin access is required to import accounting transactions." });
+  }
+  const result = await importFinanceTransactions({
+    tenantId,
+    actor: session.id,
+    idempotencyKey: parsed.data.idempotency_key,
+    sourceName: parsed.data.source_name,
+    transactions: parsed.data.transactions,
+  });
+  return { ok: true, tenant_id: tenantId, batch: result.result, document: publicFinanceLedger(result.document), ...workspaceRecordSafety };
+});
+
+app.post("/api/finance/transactions/:transactionId/reconcile", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = FinanceTransactionParamsSchema.safeParse(request.params ?? {});
+  const parsed = FinanceReconcileSchema.safeParse(request.body ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Owner or admin access is required to reconcile accounting transactions." });
+  }
+  try {
+    const result = await reconcileFinanceTransaction({ tenantId, actor: session.id, transactionId: params.data.transactionId, status: parsed.data.status });
+    return { ok: true, tenant_id: tenantId, transaction: result.result, document: publicFinanceLedger(result.document), ...workspaceRecordSafety };
+  } catch (error) {
+    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Transaction not found." });
+  }
+});
+
+app.delete("/api/finance/transactions/:transactionId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = FinanceTransactionParamsSchema.safeParse(request.params ?? {});
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Owner or admin access is required to void accounting transactions." });
+  }
+  try {
+    const result = await voidFinanceTransaction({ tenantId, actor: session.id, transactionId: params.data.transactionId });
+    return { ok: true, tenant_id: tenantId, transaction: result.result, document: publicFinanceLedger(result.document), ...workspaceRecordSafety };
+  } catch (error) {
+    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Transaction not found." });
+  }
 });
 
 app.get("/api/workspace-approvals", async (request, reply) => {

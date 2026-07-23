@@ -1,4 +1,4 @@
-import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260723-45";
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260723-46";
 
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
@@ -485,6 +485,10 @@ function normalizeFinance(finance) {
       externalId: tx.externalId || null,
       notes: String(tx.notes || "").slice(0, 300),
       createdAt: tx.createdAt || new Date().toISOString(),
+      reconciliationStatus: ["unreconciled", "matched", "reconciled"].includes(tx.reconciliationStatus)
+        ? tx.reconciliationStatus
+        : "unreconciled",
+      serverAuthoritative: Boolean(tx.serverAuthoritative),
     };
   }).filter((tx) => tx.amount !== 0) : [];
   return { accounts, transactions, connectors };

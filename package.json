@@ -33,6 +33,8 @@
     "test:crm-lifecycle": "npm run test:crm-lifecycle --workspace @phantomforce/server",
     "test:proposal-pipeline": "node scripts/test-proposal-pipeline.mjs",
     "test:proposal-lifecycle": "npm run test:proposal-lifecycle --workspace @phantomforce/server",
+    "test:finance-ledger": "node scripts/test-finance-ledger-ui.mjs && npm run test:finance-ledger --workspace @phantomforce/server",
+    "test:commerce-order-lifecycle": "npm run test:commerce-order-lifecycle --workspace @phantomforce/server",
     "test:workspace-approvals": "node scripts/test-workspace-approvals.mjs",
     "test:agent-run-lifecycle": "npm run test:agent-run-lifecycle --workspace @phantomforce/server",
     "test:managed-growth-report": "node scripts/test-managed-growth-report.mjs && npm run test:managed-growth-report --workspace @phantomforce/server",
