@@ -287,7 +287,11 @@ export function normalizeProposalDraft(value: unknown, tenantId: string, actor: 
   const source = isRecord(value) ? value : {};
   const now = new Date().toISOString();
   const client = cleanText(source.client ?? existing?.client, 140) || "New client";
-  const priceMinor = cleanPriceMinor(source.priceMinor ?? existing?.priceMinor, source.price ?? existing?.price);
+  const priceWasPatched = Object.prototype.hasOwnProperty.call(source, "price")
+    && (!existing || Number(source.price) !== existing.price);
+  const priceMinor = priceWasPatched && !Number.isInteger(Number(source.priceMinor))
+    ? cleanPriceMinor(undefined, source.price)
+    : cleanPriceMinor(source.priceMinor ?? existing?.priceMinor, source.price ?? existing?.price);
   return {
     id: cleanText(source.id ?? existing?.id, 90) || randomUUID(),
     tenantId: safeTenantId(tenantId),

@@ -25,6 +25,13 @@ must(files.server, /app\.post\("\/orgs\/:orgId\/crm\/contacts"/u, "Organization 
 must(files.server, /app\.post\("\/orgs\/:orgId\/crm\/pull"/u, "Organization CRM research route is required.");
 must(files.server, /app\.patch\("\/orgs\/:orgId\/crm\/contacts\/:contactId"/u, "Organization CRM update route is required.");
 must(files.server, /app\.delete\("\/orgs\/:orgId\/crm\/contacts\/:contactId"/u, "Organization CRM delete route is required.");
+must(files.server, /app\.post\("\/orgs\/:orgId\/crm\/contacts\/merge\/preview"/u, "Organization CRM merge preview route is required.");
+must(files.server, /app\.post\("\/orgs\/:orgId\/crm\/contacts\/merge\/apply"/u, "Organization CRM merge apply route is required.");
+must(files.server, /app\.post\("\/orgs\/:orgId\/crm\/merges\/:mergeId\/rollback"/u, "Organization CRM merge rollback route is required.");
+must(files.server, /app\.get\("\/orgs\/:orgId\/crm\/contacts\/:contactId\/history"/u, "Organization CRM stage history route is required.");
+must(files.server, /crm_merge_preview_stale/u, "CRM merge must reject stale previews.");
+must(files.server, /crm_merge_target_changed/u, "CRM rollback must not overwrite contact edits made after a merge.");
+must(files.server, /crm_stage_changed/u, "CRM status and stage changes must be audited.");
 must(files.staticServer, /urlPath\.startsWith\("\/orgs\/"\)/u, "Static server must proxy organization API routes.");
 
 for (const exported of ["fetchOrgCrm", "createOrgCrmContact", "pullOrgCrmContacts", "updateOrgCrmContact", "deleteOrgCrmContact"]) {

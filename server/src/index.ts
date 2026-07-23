@@ -72,6 +72,7 @@ import {
   initializeDatabaseAuthState,
   listInvitations,
   listOrgAuditEvents,
+  recordOrgAuditEvent,
   listOrgMembers,
   listOrganizationsForSession,
   requestPasswordReset,
@@ -530,6 +531,12 @@ import {
   publicProposalDocument,
   updateProposalDraft,
 } from "./proposals/proposal-store.js";
+import {
+  buildCrmMergePreview,
+  crmContactFingerprint,
+  crmStageTransition,
+  type CrmContactSnapshot,
+} from "./crm/crm-lifecycle.js";
 import {
   createWorkspaceApproval,
   decideWorkspaceApproval,
@@ -2604,6 +2611,11 @@ const CrmContactSchema = z.object({
 });
 
 const CrmContactPatchSchema = CrmContactSchema.partial();
+const CrmMergeSchema = z.object({
+  sourceContactId: z.string().trim().min(1).max(120),
+  targetContactId: z.string().trim().min(1).max(120),
+  previewHash: z.string().trim().regex(/^[a-f0-9]{64}$/iu).optional(),
+});
 const CrmPullSchema = z.object({
   count: z.number().int().min(1).max(2000),
   prompt: z.string().trim().max(1000).optional().default(""),
@@ -2646,6 +2658,61 @@ function crmContactView(contact: Awaited<ReturnType<NonNullable<typeof prisma>["
     createdAt: contact.createdAt.toISOString(),
     updatedAt: contact.updatedAt.toISOString(),
   };
+}
+
+function crmContactSnapshot(contact: Awaited<ReturnType<NonNullable<typeof prisma>["contact"]["findMany"]>>[number]): CrmContactSnapshot {
+  return {
+    id: contact.id,
+    orgId: contact.orgId,
+    name: contact.name,
+    email: contact.email,
+    phone: contact.phone,
+    organization: contact.organization,
+    status: contact.status,
+    type: contact.type,
+    value: contact.value,
+    nextStep: contact.nextStep,
+    notes: contact.notes,
+    source: contact.source,
+    website: contact.website,
+    avatarUrl: contact.avatarUrl,
+    socials: contact.socials,
+    tags: contact.tags,
+    fitScore: contact.fitScore,
+    qualification: contact.qualification,
+    outreach: contact.outreach,
+    crmStage: contact.crmStage,
+    dueAt: contact.dueAt?.toISOString() || null,
+    lastTouchAt: contact.lastTouchAt?.toISOString() || null,
+    createdAt: contact.createdAt.toISOString(),
+    updatedAt: contact.updatedAt.toISOString(),
+  };
+}
+
+function crmSnapshotWrite(snapshot: CrmContactSnapshot) {
+  const parsed = CrmContactSchema.parse({
+    name: snapshot.name,
+    organization: snapshot.organization || "",
+    email: snapshot.email || "",
+    phone: snapshot.phone || "",
+    status: snapshot.status,
+    type: snapshot.type,
+    value: snapshot.value,
+    nextStep: snapshot.nextStep || "",
+    notes: snapshot.notes || "",
+    source: snapshot.source || "",
+    website: snapshot.website || "",
+    avatarUrl: snapshot.avatarUrl || "",
+    socials: snapshot.socials || {},
+    tags: snapshot.tags || [],
+    fitScore: snapshot.fitScore,
+    qualification: snapshot.qualification || [],
+    outreach: snapshot.outreach || "",
+    crmStage: snapshot.crmStage || "Prospect",
+    dueAt: snapshot.dueAt,
+    lastTouchAt: snapshot.lastTouchAt,
+  });
+  return { ...crmContactWrite(parsed), name: parsed.name };
 }
 
 function crmBrainPackageView(args: {
@@ -2764,7 +2831,7 @@ app.get("/orgs/:orgId/brain-package", async (request, reply) => {
 
 app.post("/orgs/:orgId/crm/settings", async (request, reply) => {
   const { orgId } = request.params as { orgId: string };
-  const dbSession = requireOrgMember(request, reply, orgId);
+  const dbSession = requireOrgManager(request, reply, orgId);
   if (!dbSession) return reply;
   const db = crmDb(reply);
   if (!db) return reply;
@@ -2784,19 +2851,31 @@ app.post("/orgs/:orgId/crm/settings", async (request, reply) => {
 
 app.post("/orgs/:orgId/crm/contacts", async (request, reply) => {
   const { orgId } = request.params as { orgId: string };
-  const dbSession = requireOrgMember(request, reply, orgId);
+  const dbSession = requireOrgManager(request, reply, orgId);
   if (!dbSession) return reply;
   const db = crmDb(reply);
   if (!db) return reply;
   const parsed = CrmContactSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   const contact = await db.contact.create({ data: { orgId, ...crmContactWrite(parsed.data), name: parsed.data.name } });
+  await recordOrgAuditEvent({
+    orgId,
+    actor: dbSession.email,
+    eventType: "crm_contact_created",
+    targetType: "crm_contact",
+    targetId: contact.id,
+    payload: {
+      status: contact.status,
+      stage: contact.crmStage || "Prospect",
+      organization: contact.organization || "",
+    },
+  });
   return { ok: true, contact: crmContactView(contact) };
 });
 
 app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
   const { orgId } = request.params as { orgId: string };
-  const dbSession = requireOrgMember(request, reply, orgId);
+  const dbSession = requireOrgManager(request, reply, orgId);
   if (!dbSession) return reply;
   const db = crmDb(reply);
   if (!db) return reply;
@@ -2850,9 +2929,155 @@ app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
   });
 });
 
-app.patch("/orgs/:orgId/crm/contacts/:contactId", async (request, reply) => {
+app.post("/orgs/:orgId/crm/contacts/merge/preview", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmMergeSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const contacts = await db.contact.findMany({
+    where: { orgId, id: { in: [parsed.data.sourceContactId, parsed.data.targetContactId] } },
+  });
+  if (contacts.length !== 2) return reply.code(404).send({ ok: false, error: "crm_merge_contact_not_found" });
+  try {
+    const source = contacts.find((contact) => contact.id === parsed.data.sourceContactId)!;
+    const target = contacts.find((contact) => contact.id === parsed.data.targetContactId)!;
+    return { ok: true, preview: buildCrmMergePreview({ orgId, source: crmContactSnapshot(source), target: crmContactSnapshot(target) }) };
+  } catch (error) {
+    return reply.code(409).send({ ok: false, error: error instanceof Error ? error.message : "crm_merge_preview_failed" });
+  }
+});
+
+app.post("/orgs/:orgId/crm/contacts/merge/apply", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const parsed = CrmMergeSchema.required({ previewHash: true }).safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const contacts = await db.contact.findMany({
+    where: { orgId, id: { in: [parsed.data.sourceContactId, parsed.data.targetContactId] } },
+  });
+  if (contacts.length !== 2) return reply.code(404).send({ ok: false, error: "crm_merge_contact_not_found" });
+  const source = contacts.find((contact) => contact.id === parsed.data.sourceContactId)!;
+  const target = contacts.find((contact) => contact.id === parsed.data.targetContactId)!;
+  const preview = buildCrmMergePreview({ orgId, source: crmContactSnapshot(source), target: crmContactSnapshot(target) });
+  if (preview.previewHash !== parsed.data.previewHash) {
+    return reply.code(409).send({ ok: false, error: "crm_merge_preview_stale" });
+  }
+  const applied = await db.$transaction(async (tx) => {
+    const contact = await tx.contact.update({
+      where: { id: target.id },
+      data: crmSnapshotWrite(preview.merged),
+    });
+    await tx.contact.delete({ where: { id: source.id } });
+    return contact;
+  });
+  const appliedSnapshot = crmContactSnapshot(applied);
+  const mergeAudit = await recordOrgAuditEvent({
+    orgId,
+    actor: dbSession.email,
+    eventType: "crm_contacts_merged",
+    targetType: "crm_merge",
+    targetId: target.id,
+    payload: {
+      sourceId: source.id,
+      targetId: target.id,
+      previewHash: preview.previewHash,
+      changes: preview.changes,
+      sourceBefore: preview.source,
+      targetBefore: preview.target,
+      appliedTarget: appliedSnapshot,
+      appliedFingerprint: crmContactFingerprint(appliedSnapshot),
+    },
+  });
+  return { ok: true, mergeId: mergeAudit.id, contact: crmContactView(applied), rollbackAvailable: true };
+});
+
+app.post("/orgs/:orgId/crm/merges/:mergeId/rollback", async (request, reply) => {
+  const { orgId, mergeId } = request.params as { orgId: string; mergeId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const [mergeEvent, priorRollback] = await Promise.all([
+    db.auditEvent.findFirst({ where: { id: mergeId, orgId, eventType: "crm_contacts_merged", targetType: "crm_merge" } }),
+    db.auditEvent.findFirst({ where: { orgId, eventType: "crm_contacts_merge_rolled_back", targetType: "crm_merge", targetId: mergeId } }),
+  ]);
+  if (!mergeEvent) return reply.code(404).send({ ok: false, error: "crm_merge_not_found" });
+  if (priorRollback) return { ok: true, mergeId, rolledBack: true, idempotent: true };
+  const payload = mergeEvent.payload as Record<string, unknown>;
+  const sourceBefore = payload.sourceBefore as CrmContactSnapshot | undefined;
+  const targetBefore = payload.targetBefore as CrmContactSnapshot | undefined;
+  if (!sourceBefore || !targetBefore || sourceBefore.orgId !== orgId || targetBefore.orgId !== orgId) {
+    return reply.code(409).send({ ok: false, error: "crm_merge_rollback_snapshot_invalid" });
+  }
+  const currentTarget = await db.contact.findFirst({ where: { id: targetBefore.id, orgId } });
+  if (!currentTarget) return reply.code(409).send({ ok: false, error: "crm_merge_target_missing" });
+  if (crmContactFingerprint(crmContactSnapshot(currentTarget)) !== payload.appliedFingerprint) {
+    return reply.code(409).send({ ok: false, error: "crm_merge_target_changed" });
+  }
+  await db.$transaction(async (tx) => {
+    await tx.contact.delete({ where: { id: targetBefore.id } });
+    await tx.contact.create({
+      data: {
+        id: targetBefore.id,
+        orgId,
+        ...crmSnapshotWrite(targetBefore),
+        createdAt: new Date(String(targetBefore.createdAt)),
+      },
+    });
+    await tx.contact.create({
+      data: {
+        id: sourceBefore.id,
+        orgId,
+        ...crmSnapshotWrite(sourceBefore),
+        createdAt: new Date(String(sourceBefore.createdAt)),
+      },
+    });
+  });
+  await recordOrgAuditEvent({
+    orgId,
+    actor: dbSession.email,
+    eventType: "crm_contacts_merge_rolled_back",
+    targetType: "crm_merge",
+    targetId: mergeId,
+    payload: { sourceId: sourceBefore.id, targetId: targetBefore.id },
+  });
+  return { ok: true, mergeId, rolledBack: true, restoredContactIds: [sourceBefore.id, targetBefore.id] };
+});
+
+app.get("/orgs/:orgId/crm/contacts/:contactId/history", async (request, reply) => {
   const { orgId, contactId } = request.params as { orgId: string; contactId: string };
   const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const db = crmDb(reply);
+  if (!db) return reply;
+  const exists = await db.contact.findFirst({ where: { id: contactId, orgId }, select: { id: true } });
+  if (!exists) return reply.code(404).send({ ok: false, error: "contact_not_found" });
+  const events = await db.auditEvent.findMany({
+    where: { orgId, targetType: "crm_contact", targetId: contactId },
+    orderBy: { createdAt: "asc" },
+  });
+  return {
+    ok: true,
+    contactId,
+    history: events.map((event) => ({
+      id: event.id,
+      type: event.eventType,
+      actor: event.actor,
+      payload: event.payload,
+      createdAt: event.createdAt.toISOString(),
+    })),
+  };
+});
+
+app.patch("/orgs/:orgId/crm/contacts/:contactId", async (request, reply) => {
+  const { orgId, contactId } = request.params as { orgId: string; contactId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
   if (!dbSession) return reply;
   const db = crmDb(reply);
   if (!db) return reply;
@@ -2861,12 +3086,30 @@ app.patch("/orgs/:orgId/crm/contacts/:contactId", async (request, reply) => {
   const existing = await db.contact.findFirst({ where: { id: contactId, orgId } });
   if (!existing) return reply.code(404).send({ ok: false, error: "contact_not_found" });
   const contact = await db.contact.update({ where: { id: contactId }, data: crmContactWrite(parsed.data) });
+  const transition = crmStageTransition({
+    contactId,
+    actor: dbSession.email,
+    beforeStatus: existing.status,
+    afterStatus: contact.status,
+    beforeStage: existing.crmStage || "Prospect",
+    afterStage: contact.crmStage || "Prospect",
+  });
+  if (transition) {
+    await recordOrgAuditEvent({
+      orgId,
+      actor: dbSession.email,
+      eventType: "crm_stage_changed",
+      targetType: "crm_contact",
+      targetId: contact.id,
+      payload: transition,
+    });
+  }
   return { ok: true, contact: crmContactView(contact) };
 });
 
 app.delete("/orgs/:orgId/crm/contacts/:contactId", async (request, reply) => {
   const { orgId, contactId } = request.params as { orgId: string; contactId: string };
-  const dbSession = requireOrgMember(request, reply, orgId);
+  const dbSession = requireOrgManager(request, reply, orgId);
   if (!dbSession) return reply;
   const db = crmDb(reply);
   if (!db) return reply;

@@ -30,6 +30,7 @@
     "test:customization-ui": "node scripts/test-customization-ui.mjs",
     "test:client-setup-audit": "node scripts/audit-client-setup-data-model.mjs",
     "test:crm-pipeline": "node scripts/test-crm-pipeline.mjs",
+    "test:crm-lifecycle": "npm run test:crm-lifecycle --workspace @phantomforce/server",
     "test:proposal-pipeline": "node scripts/test-proposal-pipeline.mjs",
     "test:proposal-lifecycle": "npm run test:proposal-lifecycle --workspace @phantomforce/server",
     "test:workspace-approvals": "node scripts/test-workspace-approvals.mjs",

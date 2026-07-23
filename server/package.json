@@ -43,6 +43,7 @@
     "test:agent-runs-business-snapshot-redaction": "tsx scripts/test-agent-runs-business-snapshot-redaction.ts",
     "test:agent-run-lifecycle": "tsx scripts/test-agent-run-lifecycle.ts",
     "test:proposal-lifecycle": "tsx scripts/test-proposal-lifecycle.ts",
+    "test:crm-lifecycle": "tsx scripts/test-crm-lifecycle.ts",
     "test:agent-assist-bridge": "tsx scripts/test-agent-assist-bridge.ts",
     "test:termina-bridge": "tsx scripts/test-termina-bridge.ts",
     "test:local-customer-plan": "tsx scripts/test-local-customer-plan-preview.ts",
