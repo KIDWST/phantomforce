@@ -96,5 +96,9 @@ child.on("close", (code) => {
     findings,
     sanitizedReport: outputPath,
   }));
-  process.exit(findings > 0 ? 183 : (code && code !== 183 ? code : 0));
+  /* Current Windows TruffleHog builds return 1 for a completed filesystem
+     scan with no matching results when --fail is enabled. Findings are still
+     authoritative from JSON output; 183 remains the documented finding
+     status, while codes above 1 remain scanner failures. */
+  process.exit(findings > 0 ? 183 : (code && code > 1 && code !== 183 ? code : 0));
 });

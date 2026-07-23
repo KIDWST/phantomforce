@@ -18,6 +18,7 @@ const checks = [
   "test:videocut-editor",
   "test:topbar-media",
   "test:workspace-mobile-integrity",
+  "test:nexus-hardening",
   "test:product-grammar",
   "test:crm-pipeline",
   "test:crm-lifecycle",
@@ -33,6 +34,7 @@ const checks = [
   "test:agent-run-lifecycle",
   "test:managed-growth-report",
   "test:phantomplay",
+  "test:phantomstore",
 ];
 
 for (const check of checks) {

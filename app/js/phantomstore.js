@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260723-47";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260723-48";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
@@ -28,6 +28,8 @@ const ui = {
   installMessage: "",
   buyingProductId: "",
   buyMessage: "",
+  lifecycleProductId: "",
+  lifecycleMessage: "",
   editingToolId: "",
   aiSourceText: "",
   aiDefaultCategory: "AI Tool",
@@ -278,8 +280,21 @@ function localFallbackSnapshot() {
     pendingReviewCount: 0,
     canModerate: false,
     actorId: "local-fallback",
+    library: [],
     readOnlyFallback: true,
   };
+}
+
+function currentPlatform() {
+  const platform = `${navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || ""}`.toLowerCase();
+  if (platform.includes("win")) return "windows-x64";
+  if (platform.includes("mac")) return "macos-arm64";
+  if (platform.includes("linux")) return "linux-x64";
+  return "web";
+}
+
+function libraryEntry(productId) {
+  return (ui.snapshot?.library || []).find((entry) => entry?.product?.id === productId) || null;
 }
 
 function fallbackProductImage(product = {}) {
@@ -301,6 +316,7 @@ function productCard(product) {
   const fallbackImageUrl = fallbackProductImage(product);
   const artUrl = imageUrl || fallbackImageUrl;
   const referenceUrl = safeAssetHref(product.referenceImageUrl);
+  const owned = libraryEntry(product.id);
   return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
     <div class="ps-product-media${imageUrl ? "" : " is-fallback"}">${artUrl ? `<img src="${esc(artUrl)}" alt="${esc(product.name)} key art" loading="lazy" />` : `<div class="ps-product-fallback"><span>${esc(productInitials(product))}</span><b>${esc(product.category || "PhantomStore")}</b></div>`}${referenceUrl ? `<span class="ps-media-note">${imageUrl ? "AI key art from the real product UI" : "Branded fallback until product art is connected"} · <a href="${esc(referenceUrl)}" target="_blank" rel="noopener noreferrer">View real UI</a></span>` : ""}</div>
     <header>
@@ -320,11 +336,59 @@ function productCard(product) {
     <small>${esc(product.qualityNote || "")}</small>
     <div class="ps-card-actions">
       <button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>
+      ${owned ? `<button type="button" class="ps-secondary" data-ps-open-library="${esc(product.id)}">In your library</button>` : ""}
+      ${ui.snapshot?.canModerate && available && !owned ? `<button type="button" class="ps-secondary" data-ps-grant-test="${esc(product.id)}">Grant owner test access</button>` : ""}
       ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
     </div>
     ${ui.buyingProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
     ${reviewList(product.reviews || [])}
   </article>`;
+}
+
+function libraryCard(entry) {
+  const product = entry.product || {};
+  const entitlement = entry.entitlement || {};
+  const installation = entry.installation || null;
+  const platform = currentPlatform();
+  const compatible = (product.compatiblePlatforms || []).includes(platform) || (product.compatiblePlatforms || []).includes("web");
+  const active = entitlement.status === "active";
+  const installed = installation?.status === "installed";
+  const uninstalled = installation?.status === "uninstalled";
+  const busy = ui.lifecycleProductId === product.id;
+  const actionPlatform = (product.compatiblePlatforms || []).includes("web") ? "web" : platform;
+  return `<article class="ps-library-card ${active ? "" : "is-locked"}">
+    <header>
+      <div><p class="ps-kicker">${esc(product.category || "Product")} / ${esc(product.version || "")}</p><h3>${esc(product.name || "Product")}</h3></div>
+      <span>${active ? (installed ? "Installed" : "Owned") : "Access paused"}</span>
+    </header>
+    <p>${esc(product.summary || "")}</p>
+    <dl>
+      <div><dt>Entitlement</dt><dd>${esc(entitlement.status || "unknown")}</dd></div>
+      <div><dt>Platform</dt><dd>${esc(installation?.platform || actionPlatform)}</dd></div>
+      <div><dt>Installed version</dt><dd>${esc(installation?.installedVersion || "Not installed")}</dd></div>
+      <div><dt>User data</dt><dd>${esc(installation?.userDataStatus || "No local data")}</dd></div>
+    </dl>
+    ${!active ? `<p class="ps-library-note">Your files are preserved. Restore the entitlement to use this product again.</p>` : ""}
+    ${active && !compatible ? `<p class="ps-library-note">This release supports ${(product.compatiblePlatforms || []).map(esc).join(", ") || "no connected platform"}; this device reports ${esc(platform)}.</p>` : ""}
+    <div class="ps-card-actions">
+      ${active && compatible && !installed ? `<button type="button" class="ps-primary" data-ps-lifecycle="${uninstalled ? "restore" : "install"}" data-id="${esc(product.id)}" data-platform="${esc(actionPlatform)}" ${busy ? "disabled" : ""}>${busy ? "Working…" : uninstalled ? "Restore install" : "Mark installed"}</button>` : ""}
+      ${active && installed && product.updateAvailable ? `<button type="button" class="ps-primary" data-ps-lifecycle="update" data-id="${esc(product.id)}" data-platform="${esc(actionPlatform)}" ${busy ? "disabled" : ""}>Update to ${esc(product.version)}</button>` : ""}
+      ${active && installed ? `<button type="button" class="ps-secondary" data-ps-lifecycle="uninstall" data-id="${esc(product.id)}" data-platform="${esc(actionPlatform)}" ${busy ? "disabled" : ""}>Uninstall, keep data</button>` : ""}
+    </div>
+    ${ui.lifecycleProductId === product.id && ui.lifecycleMessage ? `<p class="ps-library-note">${esc(ui.lifecycleMessage)}</p>` : ""}
+  </article>`;
+}
+
+function renderLibrary() {
+  const library = Array.isArray(ui.snapshot?.library) ? ui.snapshot.library : [];
+  return `<section class="ps-library">
+    <div class="ps-section-head">
+      <div><p class="ps-kicker">OWNED PRODUCTS</p><h2>Your library</h2></div>
+      <span>${library.length} entitlements</span>
+    </div>
+    <p class="ps-library-intro">Ownership, compatibility, installed version, updates, and uninstall state stay attached to your account. Uninstall preserves product data unless you explicitly choose to purge it.</p>
+    <div class="ps-library-grid">${library.length ? library.map(libraryCard).join("") : emptyState("Your library is empty", "Completed purchases and administrator-granted test access appear here.")}</div>
+  </section>`;
 }
 
 function sellerCard(seller) {
@@ -573,6 +637,7 @@ function renderSubmissions() {
 function renderContent() {
   if (ui.loading) return `<div class="ps-loading"><i></i><b>Loading PhantomStore...</b></div>`;
   if (ui.error) return `<div class="ps-error"><b>PhantomStore is not available.</b><span>${esc(ui.error)}</span><button type="button" data-ps-refresh>Try again</button></div>`;
+  if (ui.tab === "library") return renderLibrary();
   if (ui.tab === "submit") return renderSubmit();
   if (ui.tab === "review") return renderSubmissions();
   return renderDiscover();
@@ -595,7 +660,7 @@ function render() {
       </div>
     </header>
     <nav class="ps-tabs" aria-label="PhantomStore sections">
-      ${[["discover", "Discover"], ["submit", "Submit"], ["review", ui.snapshot?.canModerate ? "Review" : "My tools"]].map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-ps-tab="${id}">${label}</button>`).join("")}
+      ${[["discover", "Discover"], ["library", "Library"], ["submit", "Submit"], ["review", ui.snapshot?.canModerate ? "Review" : "My tools"]].map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-ps-tab="${id}">${label}</button>`).join("")}
     </nav>
     ${renderContent()}
   </section>`;
@@ -716,6 +781,44 @@ async function recordBuy(id) {
   render();
 }
 
+async function grantOwnerTestAccess(id) {
+  ui.lifecycleProductId = id;
+  ui.lifecycleMessage = "Granting verified owner test access…";
+  render();
+  try {
+    const result = await api(`/api/phantomstore/products/${encodeURIComponent(id)}/entitlements`, {
+      method: "POST",
+      body: JSON.stringify({ purchaseReference: `owner-test-${id}-${ui.snapshot?.actorId || "owner"}` }),
+    });
+    ui.lifecycleMessage = result.idempotent ? "Owner test access was already active." : "Owner test access granted.";
+    await hydrate();
+    ui.tab = "library";
+  } catch (error) {
+    ui.lifecycleMessage = error instanceof Error ? error.message : "Owner test access could not be granted.";
+    render();
+  }
+}
+
+async function mutateInstallation(id, action, platform) {
+  ui.lifecycleProductId = id;
+  ui.lifecycleMessage = action === "uninstall" ? "Uninstalling while preserving data…" : `${action[0].toUpperCase()}${action.slice(1)} in progress…`;
+  render();
+  try {
+    const result = await api(`/api/phantomstore/products/${encodeURIComponent(id)}/installation`, {
+      method: "POST",
+      body: JSON.stringify({ action, platform }),
+    });
+    ui.lifecycleMessage = action === "uninstall" && result.userDataPreserved
+      ? "Uninstalled. Your product data was preserved."
+      : result.changed === false ? "Already current." : `${action[0].toUpperCase()}${action.slice(1)} complete.`;
+    await hydrate();
+    ui.tab = "library";
+  } catch (error) {
+    ui.lifecycleMessage = error instanceof Error ? error.message : "Product state could not be updated.";
+    render();
+  }
+}
+
 async function moderate(id, decision) {
   ui.message = "Saving moderation decision...";
   render();
@@ -788,6 +891,15 @@ function bind() {
   });
   mountedRoot.querySelectorAll("[data-ps-buy]").forEach((button) => {
     button.onclick = () => recordBuy(button.dataset.psBuy || "");
+  });
+  mountedRoot.querySelectorAll("[data-ps-grant-test]").forEach((button) => {
+    button.onclick = () => grantOwnerTestAccess(button.dataset.psGrantTest || "");
+  });
+  mountedRoot.querySelectorAll("[data-ps-open-library]").forEach((button) => {
+    button.onclick = () => { ui.tab = "library"; ui.lifecycleProductId = button.dataset.psOpenLibrary || ""; render(); };
+  });
+  mountedRoot.querySelectorAll("[data-ps-lifecycle]").forEach((button) => {
+    button.onclick = () => mutateInstallation(button.dataset.id || "", button.dataset.psLifecycle || "", button.dataset.platform || "web");
   });
   mountedRoot.querySelectorAll("[data-ps-copy]").forEach((button) => {
     button.onclick = () => copyInstall(button.dataset.psCopy || "");

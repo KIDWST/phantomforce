@@ -145,12 +145,41 @@ export type PhantomStoreProduct = {
   featured: boolean;
   updatedAt: string;
   reviews: PhantomStoreReview[];
+  compatiblePlatforms: PhantomStorePlatform[];
+};
+
+export type PhantomStorePlatform = "windows-x64" | "linux-x64" | "macos-arm64" | "web";
+
+export type PhantomStoreEntitlement = {
+  id: string;
+  tenantId: string;
+  actorId: string;
+  productId: string;
+  purchaseReference: string;
+  status: "active" | "revoked";
+  grantedAt: string;
+  updatedAt: string;
+};
+
+export type PhantomStoreInstallation = {
+  id: string;
+  tenantId: string;
+  actorId: string;
+  productId: string;
+  platform: PhantomStorePlatform;
+  installedVersion: string;
+  status: "installed" | "uninstalled";
+  userDataStatus: "preserved" | "purged";
+  accessStatus: "active" | "locked";
+  updatedAt: string;
 };
 
 type PhantomStoreStore = {
   version: 1;
   tools: PhantomStoreTool[];
   productClicks: Record<string, number>;
+  entitlements: PhantomStoreEntitlement[];
+  installations: PhantomStoreInstallation[];
 };
 
 const seededReviews = {
@@ -242,6 +271,7 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     featured: true,
     updatedAt: "2026-07-17T00:00:00.000Z",
     reviews: seededReviews.termina,
+    compatiblePlatforms: ["windows-x64"],
   },
   {
     id: "product-beatforge",
@@ -267,6 +297,7 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     featured: true,
     updatedAt: "2026-07-22T00:00:00.000Z",
     reviews: seededReviews.beatforge,
+    compatiblePlatforms: ["windows-x64"],
   },
   {
     id: "product-phantom-vocal-ai",
@@ -292,6 +323,7 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     featured: false,
     updatedAt: "2026-07-17T00:00:00.000Z",
     reviews: seededReviews.vocal,
+    compatiblePlatforms: ["windows-x64"],
   },
   {
     id: "product-phantombot",
@@ -317,6 +349,7 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     featured: true,
     updatedAt: "2026-07-22T00:00:00.000Z",
     reviews: [],
+    compatiblePlatforms: ["web"],
   },
   {
     id: "product-phantombot-unleashed",
@@ -342,6 +375,7 @@ const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
     featured: false,
     updatedAt: "2026-07-22T00:00:00.000Z",
     reviews: [],
+    compatiblePlatforms: ["windows-x64", "linux-x64"],
   },
 ];
 SEEDED_SELLERS[0].productCount = SEEDED_PRODUCTS.length;
@@ -353,9 +387,13 @@ async function readStore(): Promise<PhantomStoreStore> {
       version: 1,
       tools: Array.isArray(parsed.tools) ? parsed.tools : [],
       productClicks: parsed.productClicks && typeof parsed.productClicks === "object" ? parsed.productClicks : {},
+      entitlements: Array.isArray(parsed.entitlements) ? parsed.entitlements : [],
+      installations: Array.isArray(parsed.installations) ? parsed.installations : [],
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, tools: [], productClicks: {} };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { version: 1, tools: [], productClicks: {}, entitlements: [], installations: [] };
+    }
     throw error;
   }
 }
@@ -403,6 +441,49 @@ function tenantIdFor(session: AccessSession, requested?: unknown) {
 
 function actorIdFor(session: AccessSession) {
   return clean(session.userId || session.id, 120) || "anonymous";
+}
+
+function safePlatform(value: unknown): PhantomStorePlatform {
+  const platform = clean(value, 40).toLowerCase();
+  if (platform === "windows-x64" || platform === "linux-x64" || platform === "macos-arm64" || platform === "web") {
+    return platform;
+  }
+  throw new Error("Choose a supported platform: windows-x64, linux-x64, macos-arm64, or web.");
+}
+
+function productForLifecycle(productId: string) {
+  return SEEDED_PRODUCTS.find((product) => product.id === productId) || null;
+}
+
+function activeEntitlementFor(store: PhantomStoreStore, tenantId: string, actorId: string, productId: string) {
+  return store.entitlements.find((entry) =>
+    entry.tenantId === tenantId
+    && entry.actorId === actorId
+    && entry.productId === productId
+    && entry.status === "active"
+  ) || null;
+}
+
+function libraryFor(store: PhantomStoreStore, tenantId: string, actorId: string) {
+  return store.entitlements
+    .filter((entry) => entry.tenantId === tenantId && entry.actorId === actorId)
+    .map((entitlement) => {
+      const product = productForLifecycle(entitlement.productId);
+      const installation = store.installations.find((entry) =>
+        entry.tenantId === tenantId
+        && entry.actorId === actorId
+        && entry.productId === entitlement.productId
+      ) || null;
+      return product ? {
+        entitlement,
+        installation,
+        product: {
+          ...product,
+          updateAvailable: Boolean(installation?.installedVersion && installation.installedVersion !== product.version),
+        },
+      } : null;
+    })
+    .filter(Boolean);
 }
 
 /* A fixed cap, not plan-tied -- PhantomStore is new and additive; wiring it
@@ -602,6 +683,7 @@ export async function getPhantomStoreSnapshot(session: AccessSession, options: {
     sellers: marketplace.sellers,
     products: marketplace.products,
     submissions: (canModerate ? store.tools : mine).slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    library: libraryFor(store, tenantId, actorId),
     pendingReviewCount: store.tools.filter((tool) => tool.status === "submitted").length,
     canModerate,
     submissionLimit: MAX_SUBMISSIONS_PER_DEVELOPER,
@@ -637,6 +719,143 @@ export async function submitPhantomStoreTool(session: AccessSession, input: Reco
   store.tools.unshift(tool);
   await writeStore(store);
   return { tool, issues };
+}
+
+export async function grantPhantomStoreProductEntitlement(session: AccessSession, productId: string, input: Record<string, unknown>) {
+  if (!session.canManageAccess && session.isSuperAdmin !== true) {
+    throw new Error("Marketplace entitlement administration is required.");
+  }
+  const product = productForLifecycle(productId);
+  if (!product || product.status !== "available") throw new Error("That product is not available for entitlement.");
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = clean(input.actorId, 120) || actorIdFor(session);
+  const purchaseReference = clean(input.purchaseReference, 180);
+  if (!purchaseReference) throw new Error("A verified purchase reference is required.");
+  const store = await readStore();
+  const existingReference = store.entitlements.find((entry) => entry.purchaseReference === purchaseReference);
+  if (existingReference) {
+    if (existingReference.tenantId !== tenantId || existingReference.actorId !== actorId || existingReference.productId !== productId) {
+      throw new Error("That purchase reference is already attached to a different entitlement.");
+    }
+    if (existingReference.status === "revoked") {
+      existingReference.status = "active";
+      existingReference.updatedAt = now();
+      const installation = store.installations.find((entry) =>
+        entry.tenantId === tenantId && entry.actorId === actorId && entry.productId === productId
+      );
+      if (installation) installation.accessStatus = "active";
+      await writeStore(store);
+      return { entitlement: existingReference, idempotent: false, restored: true };
+    }
+    return { entitlement: existingReference, idempotent: true, restored: false };
+  }
+  const existingProduct = store.entitlements.find((entry) =>
+    entry.tenantId === tenantId && entry.actorId === actorId && entry.productId === productId
+  );
+  if (existingProduct?.status === "active") return { entitlement: existingProduct, idempotent: true, restored: false };
+  const timestamp = now();
+  const entitlement: PhantomStoreEntitlement = {
+    id: `entitlement-${randomUUID()}`,
+    tenantId,
+    actorId,
+    productId,
+    purchaseReference,
+    status: "active",
+    grantedAt: timestamp,
+    updatedAt: timestamp,
+  };
+  store.entitlements.push(entitlement);
+  await writeStore(store);
+  return { entitlement, idempotent: false, restored: false };
+}
+
+export async function revokePhantomStoreProductEntitlement(session: AccessSession, productId: string, input: Record<string, unknown>) {
+  if (!session.canManageAccess && session.isSuperAdmin !== true) {
+    throw new Error("Marketplace entitlement administration is required.");
+  }
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = clean(input.actorId, 120) || actorIdFor(session);
+  const store = await readStore();
+  const entitlement = store.entitlements.find((entry) =>
+    entry.tenantId === tenantId && entry.actorId === actorId && entry.productId === productId
+  );
+  if (!entitlement) return null;
+  entitlement.status = "revoked";
+  entitlement.updatedAt = now();
+  const installation = store.installations.find((entry) =>
+    entry.tenantId === tenantId && entry.actorId === actorId && entry.productId === productId
+  );
+  if (installation) {
+    installation.accessStatus = "locked";
+    installation.userDataStatus = "preserved";
+    installation.updatedAt = now();
+  }
+  await writeStore(store);
+  return { entitlement, installation: installation || null, userDataPreserved: true };
+}
+
+export async function mutatePhantomStoreInstallation(session: AccessSession, productId: string, input: Record<string, unknown>) {
+  const product = productForLifecycle(productId);
+  if (!product) throw new Error("Product was not found.");
+  const tenantId = tenantIdFor(session);
+  const actorId = actorIdFor(session);
+  const action = clean(input.action, 30).toLowerCase();
+  if (!["install", "update", "uninstall", "restore"].includes(action)) {
+    throw new Error("Choose install, update, uninstall, or restore.");
+  }
+  const store = await readStore();
+  const entitlement = activeEntitlementFor(store, tenantId, actorId, productId);
+  if (!entitlement) throw new Error("An active product entitlement is required.");
+  const requestedPlatform = safePlatform(input.platform || product.compatiblePlatforms[0]);
+  if (!product.compatiblePlatforms.includes(requestedPlatform)) {
+    throw new Error(`${product.name} ${product.version} is not compatible with ${requestedPlatform}.`);
+  }
+  let installation = store.installations.find((entry) =>
+    entry.tenantId === tenantId && entry.actorId === actorId && entry.productId === productId
+  ) || null;
+  if (action === "uninstall") {
+    if (!installation || installation.status !== "installed") throw new Error("This product is not currently installed.");
+    const purge = input.purgeUserData === true;
+    if (purge && input.confirmPurge !== true) throw new Error("Confirm data deletion before purging product data.");
+    installation.status = "uninstalled";
+    installation.userDataStatus = purge ? "purged" : "preserved";
+    installation.updatedAt = now();
+    await writeStore(store);
+    return { installation, changed: true, userDataPreserved: !purge };
+  }
+  if (action === "update" && (!installation || installation.status !== "installed")) {
+    throw new Error("Install the product before updating it.");
+  }
+  if (action === "restore" && (!installation || installation.status !== "uninstalled")) {
+    throw new Error("Only an uninstalled product can be restored.");
+  }
+  if (!installation) {
+    installation = {
+      id: `installation-${randomUUID()}`,
+      tenantId,
+      actorId,
+      productId,
+      platform: requestedPlatform,
+      installedVersion: product.version,
+      status: "installed",
+      userDataStatus: "preserved",
+      accessStatus: "active",
+      updatedAt: now(),
+    };
+    store.installations.push(installation);
+    await writeStore(store);
+    return { installation, changed: true, userDataPreserved: true };
+  }
+  const unchanged = installation.status === "installed"
+    && installation.installedVersion === product.version
+    && installation.platform === requestedPlatform;
+  installation.platform = requestedPlatform;
+  installation.installedVersion = product.version;
+  installation.status = "installed";
+  installation.accessStatus = "active";
+  installation.updatedAt = now();
+  await writeStore(store);
+  return { installation, changed: !unchanged, userDataPreserved: installation.userDataStatus !== "purged" };
 }
 
 export async function saveGeneratedPhantomStoreDrafts(session: AccessSession, input: Record<string, unknown>) {
@@ -749,5 +968,7 @@ export async function getPhantomStoreStatus() {
     sellers: SEEDED_SELLERS.length,
     products: SEEDED_PRODUCTS.length,
     productBuyClicks: Object.values(store.productClicks || {}).reduce((sum, value) => sum + Number(value || 0), 0),
+    entitlements: store.entitlements.length,
+    installations: store.installations.length,
   };
 }

@@ -137,6 +137,15 @@
     t: 0, over: false, winner: null, aiTimer: 0, aiUpTimer: 0,
     shake: 0, accumulator: 0, lastFrameTime: 0,
   };
+  let paused = false;
+  let completionSent = false;
+  let lastPersistAt = 0;
+
+  function host(type, payload = {}) {
+    try {
+      parent.postMessage({ source: "phantomplay-game", type, ...payload }, "*");
+    } catch {}
+  }
 
   function resetGame() {
     for (const u of state.player.units) unitPool.release(u);
@@ -147,6 +156,124 @@
     state.player = freshSide(0); state.enemy = freshSide(LANE_LENGTH);
     state.popups = []; state.projectiles = []; state.particles = [];
     state.t = 0; state.over = false; state.winner = null; state.aiTimer = 0; state.aiUpTimer = 4; state.shake = 0;
+    state.accumulator = 0; state.lastFrameTime = 0;
+    completionSent = false;
+  }
+
+  function sideSave(side) {
+    return {
+      gold: Math.max(0, Math.round(side.gold * 10) / 10),
+      baseHp: Math.max(0, Math.round(side.baseHp * 10) / 10),
+      baseMaxHp: Math.max(1, Math.round(side.baseMaxHp)),
+      eraIndex: Math.max(0, Math.min(ERAS.length - 1, Number(side.eraIndex) || 0)),
+      path: side.path === "military" || side.path === "tech" ? side.path : null,
+      manualCd: Math.max(0, Number(side.manualCd) || 0),
+      up: Object.fromEntries(UPGRADES.map((upgrade) => [
+        upgrade.id,
+        Math.max(0, Math.min(upgrade.max, Number(side.up?.[upgrade.id]) || 0)),
+      ])),
+      units: side.units.filter((unit) => unit.alive && UNITS[unit.unitId]).slice(0, 80).map((unit) => ({
+        unitId: unit.unitId,
+        x: Math.max(0, Math.min(LANE_LENGTH, Number(unit.x) || 0)),
+        hp: Math.max(1, Math.min(unit.maxHp, Number(unit.hp) || 1)),
+        cooldown: Math.max(0, Number(unit.cooldown) || 0),
+      })),
+    };
+  }
+
+  function saveState(completed = false) {
+    return {
+      schemaVersion: 2,
+      savedAt: new Date().toISOString(),
+      completed,
+      elapsedSeconds: Math.max(0, Math.round(state.t)),
+      player: sideSave(state.player),
+      enemy: sideSave(state.enemy),
+    };
+  }
+
+  function restoreSide(target, source, fallbackX) {
+    const fresh = freshSide(fallbackX);
+    const input = source && typeof source === "object" ? source : {};
+    const finiteOr = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+    fresh.gold = Math.max(0, finiteOr(input.gold, START_GOLD));
+    fresh.baseMaxHp = Math.max(1, finiteOr(input.baseMaxHp, 550));
+    fresh.baseHp = Math.max(0, Math.min(fresh.baseMaxHp, finiteOr(input.baseHp, fresh.baseMaxHp)));
+    fresh.eraIndex = Math.max(0, Math.min(ERAS.length - 1, Number(input.eraIndex) || 0));
+    fresh.path = input.path === "military" || input.path === "tech" ? input.path : null;
+    fresh.manualCd = Math.max(0, Number(input.manualCd) || 0);
+    for (const upgrade of UPGRADES) {
+      fresh.up[upgrade.id] = Math.max(0, Math.min(upgrade.max, Number(input.up?.[upgrade.id]) || 0));
+    }
+    for (const savedUnit of Array.isArray(input.units) ? input.units.slice(0, 80) : []) {
+      const def = UNITS[savedUnit?.unitId];
+      if (!def) continue;
+      const unit = unitPool.acquire();
+      unit.alive = true;
+      unit.side = target;
+      unit.unitId = savedUnit.unitId;
+      unit.x = Math.max(0, Math.min(LANE_LENGTH, Number(savedUnit.x) || fallbackX));
+      unit.hp = Math.max(1, Math.min(def.hp, Number(savedUnit.hp) || def.hp));
+      unit.maxHp = def.hp;
+      unit.cooldown = Math.max(0, Number(savedUnit.cooldown) || 0);
+      unit.walk = 0; unit.atk = 0; unit.flash = 0;
+      fresh.units.push(unit);
+    }
+    return fresh;
+  }
+
+  function migrateSave(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    if (Number(raw.schemaVersion) >= 2) return raw;
+    // Early development saves only carried top-level gold/era fields. Keep
+    // them readable instead of turning a catalog update into a silent wipe.
+    return {
+      schemaVersion: 2,
+      elapsedSeconds: Number(raw.elapsedSeconds || raw.t) || 0,
+      player: raw.player || {
+        gold: raw.playerGold,
+        baseHp: raw.playerBaseHp,
+        eraIndex: raw.playerEraIndex,
+        path: raw.playerPath,
+        up: raw.playerUp,
+      },
+      enemy: raw.enemy || {
+        gold: raw.enemyGold,
+        baseHp: raw.enemyBaseHp,
+        eraIndex: raw.enemyEraIndex,
+        path: raw.enemyPath,
+        up: raw.enemyUp,
+      },
+    };
+  }
+
+  function applySave(raw) {
+    const saved = migrateSave(raw);
+    if (!saved) return false;
+    resetGame();
+    if (saved.completed === true) return true;
+    state.player = restoreSide("player", saved.player, 0);
+    state.enemy = restoreSide("enemy", saved.enemy, LANE_LENGTH);
+    state.t = Math.max(0, Number(saved.elapsedSeconds) || 0);
+    state.aiUpTimer = 2;
+    endModal.hidden = true;
+    renderHud();
+    return true;
+  }
+
+  function scoreForState() {
+    return Math.max(0, Math.round((state.enemy.baseMaxHp - state.enemy.baseHp) + state.player.eraIndex * 150 + state.t));
+  }
+
+  function persistProgress(force = false) {
+    const current = performance.now();
+    if (!force && current - lastPersistAt < 5000) return;
+    lastPersistAt = current;
+    host("progress", {
+      score: scoreForState(),
+      progress: Math.max(0, Math.min(99, Math.round((state.player.eraIndex / (ERAS.length - 1)) * 60 + (1 - state.enemy.baseHp / state.enemy.baseMaxHp) * 39))),
+      state: saveState(),
+    });
   }
 
   function spawnUnit(side, unitId) {
@@ -667,23 +794,27 @@
     $("[data-end-sub]").textContent = state.winner === "player"
       ? "The enemy fortress has fallen. Try a harder path — or a faster one."
       : "Your fortress has fallen. Upgrade the cannon earlier next run.";
+    if (!completionSent) {
+      completionSent = true;
+      host("complete", { score: scoreForState(), progress: state.winner === "player" ? 100 : 0, state: saveState(true) });
+    }
   }
 
   document.addEventListener("click", (e) => {
     const spawnBtn = e.target.closest("[data-spawn]");
-    if (spawnBtn) return void spawnUnit(state.player, spawnBtn.dataset.spawn);
+    if (spawnBtn) { spawnUnit(state.player, spawnBtn.dataset.spawn); persistProgress(true); return; }
     const upBtn = e.target.closest("[data-upgrade]");
-    if (upBtn) return void buyUpgrade(state.player, upBtn.dataset.upgrade);
+    if (upBtn) { buyUpgrade(state.player, upBtn.dataset.upgrade); persistProgress(true); return; }
     if (e.target.closest("[data-turret-btn]")) { if (state.player.manualCd <= 0) { fireTurret(state.player, state.enemy, true, true); state.player.manualCd = MANUAL_OVERCHARGE_CD; } return; }
     if (e.target.closest("[data-advance-btn]")) {
       const ni = state.player.eraIndex + 1;
       if (ni === BRANCH_ERA_INDEX) { if (ERAS[ni] && state.player.gold >= ERAS[ni].advanceCost) branchModal.hidden = false; }
-      else advanceEra(state.player);
+      else { advanceEra(state.player); persistProgress(true); }
       return;
     }
     const pathBtn = e.target.closest("[data-path-choice]");
-    if (pathBtn) { advanceEra(state.player, pathBtn.dataset.pathChoice); branchModal.hidden = true; return; }
-    if (e.target.closest("[data-restart-btn]")) { resetGame(); endModal.hidden = true; }
+    if (pathBtn) { advanceEra(state.player, pathBtn.dataset.pathChoice); branchModal.hidden = true; persistProgress(true); return; }
+    if (e.target.closest("[data-restart-btn]")) { resetGame(); endModal.hidden = true; persistProgress(true); }
   });
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space") { e.preventDefault(); if (state.player.manualCd <= 0) { fireTurret(state.player, state.enemy, true, true); state.player.manualCd = MANUAL_OVERCHARGE_CD; } }
@@ -695,14 +826,26 @@
   function frame(now) {
     if (!state.lastFrameTime) state.lastFrameTime = now;
     let delta = (now - state.lastFrameTime) / 1000; state.lastFrameTime = now;
-    delta = Math.min(delta, 0.25); state.accumulator += delta;
+    delta = paused ? 0 : Math.min(delta, 0.25); state.accumulator += delta;
     while (state.accumulator >= TICK_SECONDS) { simulateTick(TICK_SECONDS); state.accumulator -= TICK_SECONDS; }
     render(); renderHud();
     if (state.over && endModal.hidden) showEndScreen();
+    if (!paused && !state.over) persistProgress(false);
     requestAnimationFrame(frame);
   }
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || data.source !== "phantomplay-host") return;
+    if (data.type === "pause") { paused = true; host("paused", { paused: true }); }
+    else if (data.type === "resume") { paused = false; state.lastFrameTime = 0; host("paused", { paused: false }); }
+    else if (data.type === "restart") { paused = false; resetGame(); endModal.hidden = true; persistProgress(true); }
+    else if (data.type === "exit") { paused = true; persistProgress(true); }
+    else if (data.type === "restore" || data.type === "load-state") { applySave(data.state); }
+    else if (data.type === "save-state") { persistProgress(true); }
+  });
   requestAnimationFrame(frame);
   renderHud();
+  host("ready", { schemaVersion: 2 });
 
   // ---------------------------------------------------------------------
   // Test/debug hook — automated verification only.

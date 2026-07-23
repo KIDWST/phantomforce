@@ -16,6 +16,8 @@ const colorRush = read("../app/games/color-rush.html");
 const phantomRumble = read("../app/games/phantom-rumble.html");
 const cubeTown = read("../app/games/cubetown/cubetown.js");
 const cubeTownIndex = read("../app/games/cubetown/index.html");
+const phantomAges = read("../app/games/phantom-ages/game.js");
+const phantomAgesIndex = read("../app/games/phantom-ages/index.html");
 const flagshipCatalog = read("../server/src/phantom-ai/phantomplay-flagship.ts");
 const serverCatalog = read("../server/src/phantom-ai/phantomplay.ts");
 const serverV2Catalog = read("../server/src/phantom-ai/phantomplay-v2.ts");
@@ -218,6 +220,16 @@ assert.match(cubeTown, /function openGate\(\)/u, "CubeTown must include the Pris
 assert.match(cubeTownIndex, /data-ct-open="questlog"/u, "CubeTown must expose a Quest Log for the larger playthrough.");
 assert.match(cubeTownIndex, /data-ct-panel="trial"/u, "CubeTown must expose a playable shrine trial panel.");
 assert.match(flagshipCatalog, /id:\s*"cubetown"[\s\S]*version:\s*"1\.3\.0"/u, "CubeTown catalog metadata must advertise the expanded version.");
+assert.match(module, /id:\s*"phantom-ages"[\s\S]*index\.html\?v=2\.1\.2[\s\S]*version:\s*"2\.1\.2"[\s\S]*progressSupport:\s*true/u, "Frontend catalog must launch the save-capable Phantom Ages 2.1.2 build.");
+assert.match(serverCatalog, /id:\s*"phantom-ages"[\s\S]*index\.html\?v=2\.1\.2[\s\S]*version:\s*"2\.1\.2"[\s\S]*progressSupport:\s*true/u, "Server catalog must match the save-capable Phantom Ages 2.1.2 build.");
+assert.match(phantomAgesIndex, /game\.js\?v=2\.1\.2/u, "Phantom Ages page must cache-bust to the current runtime.");
+assert.doesNotThrow(() => new Function(phantomAges), "Phantom Ages runtime must parse.");
+assert.match(phantomAges, /const SPEED_SCALE = 1\.5/u, "Phantom Ages first clash must remain fast enough for a real opening.");
+assert.match(phantomAges, /devicePixelRatio[\s\S]*VIEW\.w[\s\S]*VIEW\.h/u, "Phantom Ages must retain DPR-aware responsive canvas sizing.");
+assert.match(phantomAges, /function migrateSave[\s\S]*schemaVersion:\s*2/u, "Phantom Ages must migrate early save shapes instead of silently discarding them.");
+assert.match(phantomAges, /data\.type === "restore" \|\| data\.type === "load-state"/u, "Phantom Ages must accept saved progress from the PhantomPlay host.");
+assert.match(phantomAges, /host\("complete"[\s\S]*state:\s*saveState\(true\)/u, "Phantom Ages completion must report a verified final score and terminal save state.");
+assert.match(phantomAges, /state\.projectiles\.length > 90[\s\S]*130 - state\.particles\.length/u, "Phantom Ages must keep projectile and particle effects bounded under stress.");
 
 const buildIds = new Set(appFiles.flatMap((source) => source.match(/phantom-live-\d{8}-\d+/gu) || []));
 assert.equal(buildIds.size, 1, `The PhantomPlay module graph must use one build ID, found: ${[...buildIds].join(", ")}`);

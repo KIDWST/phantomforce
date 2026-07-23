@@ -335,9 +335,12 @@ import {
 import {
   generatePhantomStoreSubmissionDrafts,
   getPhantomStoreSnapshot,
+  grantPhantomStoreProductEntitlement,
   moderatePhantomStoreTool,
+  mutatePhantomStoreInstallation,
   recordPhantomStoreInstallClick,
   recordPhantomStoreProductBuyClick,
+  revokePhantomStoreProductEntitlement,
   saveGeneratedPhantomStoreDrafts,
   submitPhantomStoreTool,
   updatePhantomStoreTool,
@@ -791,6 +794,18 @@ await app.register(cors, {
   ],
   credentials: true,
   allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER],
+});
+
+/* Keep API responses safe to inspect in browsers without weakening the
+   explicit CORS policy above. Product pages are framed only by their own
+   origin; provider capabilities remain disabled until a feature requests
+   them through a narrower, reviewed boundary. */
+app.addHook("onSend", async (_request, reply, payload) => {
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.header("X-Frame-Options", "DENY");
+  reply.header("Referrer-Policy", "no-referrer");
+  reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  return payload;
 });
 
 /* Resolve database and private local-customer sessions before the paywall so
@@ -5936,6 +5951,50 @@ app.post("/api/phantomstore/products/:id/buy", async (request, reply) => {
   const params = request.params as { id?: string };
   const result = params.id ? await recordPhantomStoreProductBuyClick(session, params.id.slice(0, 180)) : null;
   return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product listing was not found." });
+});
+
+app.post("/api/phantomstore/products/:id/entitlements", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const result = params.id
+      ? await grantPhantomStoreProductEntitlement(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>)
+      : null;
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product listing was not found." });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Product entitlement could not be granted.";
+    return reply.code(/administration/i.test(message) ? 403 : 400).send({ ok: false, error: message });
+  }
+});
+
+app.post("/api/phantomstore/products/:id/entitlements/revoke", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const result = params.id
+      ? await revokePhantomStoreProductEntitlement(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>)
+      : null;
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product entitlement was not found." });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Product entitlement could not be revoked.";
+    return reply.code(/administration/i.test(message) ? 403 : 400).send({ ok: false, error: message });
+  }
+});
+
+app.post("/api/phantomstore/products/:id/installation", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const result = params.id
+      ? await mutatePhantomStoreInstallation(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>)
+      : null;
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product listing was not found." });
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Product installation state could not be updated." });
+  }
 });
 
 app.post("/api/beatforge/preview", async (request, reply) => {

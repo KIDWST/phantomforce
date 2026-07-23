@@ -50,7 +50,10 @@ assert.match(storeSource, /Save all as drafts/u, "Generated marketplace submissi
 assert.match(storeSource, /Nothing is submitted, installed, uploaded, fetched, or approved/u, "AI intake must state its no-external-action boundary.");
 assert.match(storeSource, /\/api\/phantomstore\/tools\/ai-draft/u, "UI must call the PhantomStore AI draft endpoint.");
 assert.match(storeSource, /\/api\/phantomstore\/tools\/bulk-drafts/u, "UI must save generated submissions through the bulk draft endpoint.");
-assert.match(storeSource, /\["discover", "Discover"\][\s\S]*\["submit", "Submit"\][\s\S]*\["review"/u, "PhantomStore must provide discover, submit, and review sections.");
+assert.match(storeSource, /\["discover", "Discover"\][\s\S]*\["library", "Library"\][\s\S]*\["submit", "Submit"\][\s\S]*\["review"/u, "PhantomStore must provide discover, owned library, submit, and review sections.");
+assert.match(storeSource, /function renderLibrary\(\)[\s\S]*Ownership, compatibility, installed version, updates, and uninstall state/u, "PhantomStore must expose a truthful owned-product lifecycle surface.");
+assert.match(storeSource, /data-ps-lifecycle="uninstall"[\s\S]*Uninstall, keep data/u, "Library uninstall must default to preserving customer data.");
+assert.match(storeSource, /\/api\/phantomstore\/products\/\$\{encodeURIComponent\(id\)\}\/installation/u, "Library lifecycle actions must use the authenticated installation endpoint.");
 assert.match(storeSource, /const safeHref[\s\S]*\^https\?:\\\/\\\//u, "Client links must refuse non-http(s) marketplace URLs.");
 assert.match(storeSource, /new URL\(url\)/u, "Client link safety must parse and normalize URLs before rendering hrefs.");
 assert.match(backendSource, /function safeUrl[\s\S]*parsed\.protocol === "https:" \|\| parsed\.protocol === "http:"/u, "Backend must sanitize PhantomStore URLs to http(s) only.");
@@ -63,6 +66,11 @@ assert.match(backendSource, /Drop in a beat, attach your own kit/u, "BeatForge l
 assert.match(backendSource, /review-beatforge-rebuild-plan/u, "BeatForge listing must use producer-specific review proof.");
 assert.doesNotMatch(backendSource, /review-phantomforce-os/u, "Old PhantomForce OS product reviews must not remain attached to BeatForge.");
 assert.match(backendSource, /recordPhantomStoreProductBuyClick/u, "Backend must track product buy intent.");
+assert.match(backendSource, /grantPhantomStoreProductEntitlement/u, "Backend must support authoritative product entitlement grants.");
+assert.match(backendSource, /existingReference[\s\S]*idempotent:\s*true/u, "Purchase-reference replay must be idempotent.");
+assert.match(backendSource, /mutatePhantomStoreInstallation/u, "Backend must support install, update, restore, and uninstall state.");
+assert.match(backendSource, /userDataStatus\s*=\s*purge \? "purged" : "preserved"/u, "Uninstall must preserve customer data unless purge is explicitly confirmed.");
+assert.match(backendTestSource, /Plan\/access loss must revoke access without deleting installed user data/u, "Backend tests must protect customer data through access loss.");
 assert.match(backendSource, /generatePhantomStoreSubmissionDrafts/u, "Backend must provide deterministic PhantomStore draft generation.");
 assert.match(backendSource, /providerCalled:\s*false/u, "Draft generation must not claim an external AI provider was called.");
 assert.match(backendSource, /externalFetchPerformed:\s*false/u, "Draft generation must not fetch external URLs.");
@@ -73,6 +81,9 @@ assert.match(readFileSync(new URL("../server/src/index.ts", import.meta.url), "u
 
 for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product", ".ps-seller", ".ps-reviews", ".ps-submit-layout", ".ps-ai-intake", ".ps-ai-drafts", ".ps-moderate"]) {
   assert.ok(storeCss.includes(selector), `${selector} style must be present.`);
+}
+for (const selector of [".ps-library", ".ps-library-grid", ".ps-library-card", ".ps-library-note"]) {
+  assert.ok(storeCss.includes(selector), `${selector} lifecycle style must be present.`);
 }
 assert.match(storeCss, /\.ps-product-media img\{[^}]*object-fit:contain/u, "PhantomStore product images must show the full cover art instead of cropped/zoomed media.");
 assert.match(storeCss, /\.ps-product-media img\{[^}]*transform:none/u, "PhantomStore product images must not be zoomed with transforms.");

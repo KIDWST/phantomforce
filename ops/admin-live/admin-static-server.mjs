@@ -87,11 +87,20 @@ const mime = new Map([
   [".txt", "text/plain; charset=utf-8"],
 ]);
 
+function securityHeaders() {
+  return {
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  };
+}
+
 function send(res, status, body, type = "text/plain; charset=utf-8") {
   res.writeHead(status, {
     "content-type": type,
     "cache-control": "no-store",
-    "x-content-type-options": "nosniff",
+    ...securityHeaders(),
   });
   res.end(body);
 }
@@ -163,7 +172,7 @@ async function proxyToApi(req, res) {
   try {
     const body = req.method === "GET" || req.method === "HEAD" ? undefined : await readRequestBody(req);
     const upstream = await fetch(target, { method: req.method, headers, body });
-    const responseHeaders = Object.fromEntries(upstream.headers);
+    const responseHeaders = { ...Object.fromEntries(upstream.headers), ...securityHeaders() };
     responseHeaders["cache-control"] = "no-store";
     res.writeHead(upstream.status, responseHeaders);
     if (req.method === "HEAD") {
@@ -893,7 +902,7 @@ createServer(async (req, res) => {
   res.writeHead(200, {
     "content-type": mime.get(ext) || "application/octet-stream",
     "cache-control": ext === ".html" ? "no-store" : "public, max-age=30",
-    "x-content-type-options": "nosniff",
+    ...securityHeaders(),
   });
   createReadStream(target).pipe(res);
 }).listen(port, host, () => {

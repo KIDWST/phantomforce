@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260723-47";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260723-48";
 
 const SLOT_IDS = ["active-1", "active-2", "pending-1"];
 const SLOT_META = {

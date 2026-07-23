@@ -116,6 +116,57 @@ try {
   const beatForgeClick = await store.recordPhantomStoreProductBuyClick(devB, "product-beatforge");
   assert(beatForgeClick?.checkout?.url.includes("beatforge"), "BeatForge buy intent should point at the BeatForge product page.");
 
+  let developerGrantBlocked = false;
+  try {
+    await store.grantPhantomStoreProductEntitlement(devA, "product-termina", {
+      purchaseReference: "purchase-developer-forged",
+    });
+  } catch {
+    developerGrantBlocked = true;
+  }
+  assert(developerGrantBlocked, "A customer must not be able to forge their own product entitlement.");
+
+  const entitlementGrant = await store.grantPhantomStoreProductEntitlement(owner, "product-termina", {
+    tenantId: "org-a",
+    actorId: "dev-a",
+    purchaseReference: "purchase-termina-org-a-dev-a",
+  });
+  assert(entitlementGrant.entitlement.status === "active" && entitlementGrant.idempotent === false, "A verified purchase reference should grant an active entitlement.");
+  const duplicateGrant = await store.grantPhantomStoreProductEntitlement(owner, "product-termina", {
+    tenantId: "org-a",
+    actorId: "dev-a",
+    purchaseReference: "purchase-termina-org-a-dev-a",
+  });
+  assert(duplicateGrant.idempotent === true && duplicateGrant.entitlement.id === entitlementGrant.entitlement.id, "Repeating a purchase reference must be idempotent.");
+
+  let incompatibleInstallBlocked = false;
+  try {
+    await store.mutatePhantomStoreInstallation(devA, "product-termina", { action: "install", platform: "linux-x64" });
+  } catch {
+    incompatibleInstallBlocked = true;
+  }
+  assert(incompatibleInstallBlocked, "Install state must not advance on an incompatible platform.");
+  const installed = await store.mutatePhantomStoreInstallation(devA, "product-termina", { action: "install", platform: "windows-x64" });
+  assert(installed.installation.status === "installed" && installed.installation.installedVersion === "0.2.0", "A compatible entitled product should enter installed state at the catalog version.");
+  const updateNoop = await store.mutatePhantomStoreInstallation(devA, "product-termina", { action: "update", platform: "windows-x64" });
+  assert(updateNoop.changed === false, "Updating an already-current installation must be idempotent.");
+  const uninstalled = await store.mutatePhantomStoreInstallation(devA, "product-termina", { action: "uninstall", platform: "windows-x64" });
+  assert(uninstalled.installation.status === "uninstalled" && uninstalled.userDataPreserved === true, "Uninstall must preserve user data by default.");
+  const restoredInstall = await store.mutatePhantomStoreInstallation(devA, "product-termina", { action: "restore", platform: "windows-x64" });
+  assert(restoredInstall.installation.status === "installed" && restoredInstall.userDataPreserved === true, "An entitled user should be able to restore an uninstalled product without losing data.");
+  const revoked = await store.revokePhantomStoreProductEntitlement(owner, "product-termina", { tenantId: "org-a", actorId: "dev-a" });
+  assert(revoked?.entitlement.status === "revoked" && revoked.userDataPreserved === true, "Plan/access loss must revoke access without deleting installed user data.");
+  const restoredEntitlement = await store.grantPhantomStoreProductEntitlement(owner, "product-termina", {
+    tenantId: "org-a",
+    actorId: "dev-a",
+    purchaseReference: "purchase-termina-org-a-dev-a",
+  });
+  assert(restoredEntitlement.restored === true && restoredEntitlement.entitlement.status === "active", "Replaying the verified purchase should restore the same revoked entitlement.");
+  const library = await store.getPhantomStoreSnapshot(devA);
+  assert(library.library.length === 1 && library.library[0].installation.userDataStatus === "preserved", "The customer's library must expose only their tenant-scoped entitlement and preserved install state.");
+  const otherLibrary = await store.getPhantomStoreSnapshot(devB);
+  assert(otherLibrary.library.length === 0, "Product entitlements and installations must remain tenant and actor isolated.");
+
   const draftClick = await store.recordPhantomStoreInstallClick(devB, draft.tool.id);
   assert(draftClick === null, "Install clicks must not count against tools that were never approved.");
 
@@ -194,6 +245,27 @@ try {
   assert(routeEditMissing.statusCode === 404, "The update route should 404 for unknown tools.");
   const productBuyRoute = await app.inject({ method: "POST", url: "/api/phantomstore/products/product-termina/buy", headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(productBuyRoute.statusCode === 200 && productBuyRoute.json().checkout.url.includes("termina"), "The product buy route should prepare the Termina checkout target.");
+  const routeGrant = await app.inject({
+    method: "POST",
+    url: "/api/phantomstore/products/product-termina/entitlements",
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: { purchaseReference: "owner-route-termina-purchase" },
+  });
+  assert(routeGrant.statusCode === 200 && routeGrant.json().entitlement.status === "active", "The admin entitlement route should grant verified owner access.");
+  const routeInstall = await app.inject({
+    method: "POST",
+    url: "/api/phantomstore/products/product-termina/installation",
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: { action: "install", platform: "windows-x64" },
+  });
+  assert(routeInstall.statusCode === 200 && routeInstall.json().installation.status === "installed", "The installation route should record a compatible entitled installation.");
+  const routeUninstall = await app.inject({
+    method: "POST",
+    url: "/api/phantomstore/products/product-termina/installation",
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: { action: "uninstall", platform: "windows-x64" },
+  });
+  assert(routeUninstall.statusCode === 200 && routeUninstall.json().userDataPreserved === true, "The uninstall route should preserve user data by default.");
   const beatForgePreview = await app.inject({
     method: "POST",
     url: "/api/beatforge/preview",
@@ -211,7 +283,7 @@ try {
   assert(beatForgePreview.json().files_written === false && beatForgePreview.json().daw_mutated === false && beatForgePreview.json().audio_uploaded === false, "BeatForge preview must not write files, mutate the DAW, or upload audio.");
   await app.close();
 
-  console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, moderationNoteHidden: true, routeAuth: true }));
+  console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, entitlementIdempotency: true, compatibilityChecks: true, uninstallPreservesData: true, routeAuth: true }));
 } finally {
   await rm(root, { recursive: true, force: true });
 }

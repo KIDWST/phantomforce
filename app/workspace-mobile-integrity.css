@@ -216,9 +216,36 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pf-skip-link {
+    transition: none;
+  }
+
   .workspace-page[data-workspace-page] *,
   .workspace-page[data-workspace-page] *::before,
   .workspace-page[data-workspace-page] *::after {
     scroll-behavior: auto !important;
   }
+}
+/* The shell's first keyboard stop remains invisible until focused. It jumps
+   directly over navigation and status chrome to the authoritative workspace. */
+.pf-skip-link {
+  position: fixed;
+  z-index: 10000;
+  top: max(8px, env(safe-area-inset-top));
+  left: max(8px, env(safe-area-inset-left));
+  padding: 10px 14px;
+  border: 2px solid var(--neon, #41ffa1);
+  border-radius: 8px;
+  background: #020806;
+  color: #effff6;
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 20px));
+  transition: transform 120ms ease-out;
+}
+
+.pf-skip-link:focus {
+  transform: translateY(0);
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
 }
