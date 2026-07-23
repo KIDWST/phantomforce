@@ -1956,7 +1956,7 @@ function renderPending(body) {
 }
 
 /* ---- Generate ---- */
-const genState = { modality: "image", provider: PRIMARY_MEDIA_LANE, model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, busy: false, showNeg: false, preset: "custom", stageFull: false };
+const genState = { modality: "image", provider: PRIMARY_MEDIA_LANE, model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, showNeg: false, preset: "custom", stageFull: false };
 
 function activePreset() {
   return MEDIA_PRESETS.find((p) => p.id === genState.preset) || null;
@@ -2045,15 +2045,15 @@ function renderGenerate(body, cfg, opts, root) {
 
         <button class="ml-generate ml-hero" data-ml-generate ${!genState.provider ? "disabled" : ""}>
           <span class="ml-generate-glow" aria-hidden="true"></span>
-          <span class="ml-generate-main">${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality === "video" ? "cut" : "image"}`}</span>
-          <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : "Phantom handles the rest"}</i>
+          <span class="ml-generate-main">${pendingJobs.length ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality === "video" ? "cut" : "image"}`}</span>
+          <i class="ml-generate-hint">${pendingJobs.length ? "Phantom is handling the rest" : "Phantom handles the rest"}</i>
         </button>
       </section>
 
       <section class="ml-stage" data-ml-results aria-label="Preview Stage">
-        <div class="ml-stage-frame ${genState.busy ? "is-busy" : ""} ${genState.stageFull ? "is-full" : ""}">
+        <div class="ml-stage-frame ${pendingJobs.length ? "is-busy" : ""} ${genState.stageFull ? "is-full" : ""}">
           <header class="ml-stage-top">
-            <span class="ml-rec ${genState.busy ? "is-live" : ""}"><i aria-hidden="true"></i><span data-ml-busy-stage>${genState.busy ? "Rendering" : "Stage ready"}</span></span>
+            <span class="ml-rec ${pendingJobs.length ? "is-live" : ""}"><i aria-hidden="true"></i><span data-ml-busy-stage>${pendingJobs.length ? "Rendering" : "Stage ready"}</span></span>
             <b>Preview Stage</b>
             <span class="ml-stage-tools">
               <span class="ml-stage-chip">${genState.aspect}${genState.modality === "video" ? ` · ${genState.duration}s` : ""}</span>
@@ -2076,7 +2076,7 @@ function renderGenerate(body, cfg, opts, root) {
 /* ---- Next steps: what to do with the latest cut, once one exists ---- */
 function nextStepsHtml(esc) {
   const recent = session.assets.filter((a) => a.fromGen);
-  if (genState.busy || !recent.length) return "";
+  if (pendingJobs.length || !recent.length) return "";
   const unsavedCount = recent.filter((a) => !a.saved).length;
   return `
     <div class="ml-next" aria-label="Next steps">
@@ -2194,7 +2194,6 @@ function saveMediaPoolSource(asset, extra = {}) {
     return null;
   }
 }
-
 /* Chat is another door into Media Lab, not a second image/video provider.
    Keep the request preparation, entitlement checks, job polling, honest
    preview state, and Media Pool registration in this module so a user can
@@ -2375,17 +2374,26 @@ export async function generateMediaFromChat(raw = "") {
     };
   }
 }
+
+/* Any store.save() anywhere in the app re-renders the whole active workspace
+   page (see boot()'s store.onChange in main.js), which tears down and rebuilds
+   the Media Lab DOM. A `body`/`root` reference captured before an `await` in
+   runGenerate can go stale well before that job finishes. `[data-ml-body]` and
+   `[data-media-suite-body]` stay unique while Media Lab is mounted, so re-query
+   them live instead of trusting the closure-captured nodes. */
+function liveMediaLabBody(body) {
+  return document.body.contains(body) ? body : document.querySelector("[data-ml-body]");
+}
+function liveMediaLabRoot(root, liveBody) {
+  if (document.body.contains(root)) return root;
+  return liveBody?.closest("[data-media-suite-body]") || liveBody?.parentElement || null;
+}
 function refreshGeneratePanel(body, cfg, opts, root) {
-  genState.busy = false;
-  try {
-    renderGenerate(body, cfg, opts, root);
-  } catch {
-    if (root) renderMediaStudio(root, opts);
-  }
-  setTimeout(() => {
-    const btn = body?.querySelector?.("[data-ml-generate]");
-    if (btn?.disabled && root) renderMediaStudio(root, opts);
-  }, 0);
+  const liveBody = liveMediaLabBody(body);
+  if (!liveBody) return; // Media Lab isn't on screen anymore -- nothing to paint
+  const liveRoot = liveMediaLabRoot(root, liveBody);
+  if (!liveRoot) return;
+  renderMediaStudio(liveRoot, opts);
 }
 function skeletons(n) { return `<div class="ml-grid ml-stage-grid">${Array.from({ length: n }, () => `<div class="ml-skel"><div class="ml-skel-shim"></div></div>`).join("")}</div>`; }
 const IDLE_HINTS = [
@@ -2396,7 +2404,7 @@ const IDLE_HINTS = [
 ];
 function resultsHtml(esc) {
   const recent = session.assets.filter((a) => a.fromGen);
-  if (genState.busy) return `
+  if (pendingJobs.length) return `
     <div class="ml-wait-card">
       <img class="ml-wait-phantom" src="/app/assets/poses/conjure.webp" alt="" loading="lazy" />
       <div class="ml-wait-copy">
@@ -2626,19 +2634,20 @@ async function runGenerate(body, cfg, opts, root, esc) {
     startedAt: Date.now(),
   };
   pendingJobs.unshift(pendingJob);
-  genState.busy = true;
-  renderGenerate(body, cfg, opts, root);
+  refreshGeneratePanel(body, cfg, opts, root);
   /* A draft/render can legitimately take a while — a frozen "Rendering…"
      button with no feedback reads as broken. Tick a live elapsed readout and
      step through reassuring copy the longer it runs, updated in place so we
      never disturb the mounted busy view with a full re-render. */
   const busyStartedAt = Date.now();
   const busyTick = () => {
+    const liveBody = liveMediaLabBody(body);
+    if (!liveBody) return;
     const s = Math.round((Date.now() - busyStartedAt) / 1000);
       const stageText = s < 15 ? "Rendering" : s < 45 ? "Still working" : s < 120 ? "Taking longer than usual — hang tight" : "Well past normal — checking Media Lab";
     const label = s < 60 ? `Working… ${s}s` : `Working… ${Math.floor(s / 60)}m ${s % 60}s`;
-    const stageEl = body.querySelector("[data-ml-busy-stage]");
-    const labelEl = body.querySelector("[data-ml-busy-label]");
+    const stageEl = liveBody.querySelector("[data-ml-busy-stage]");
+    const labelEl = liveBody.querySelector("[data-ml-busy-label]");
     if (stageEl) stageEl.textContent = stageText;
     if (labelEl) labelEl.textContent = label;
   };
@@ -2656,8 +2665,6 @@ async function runGenerate(body, cfg, opts, root, esc) {
       // the backend refused to render without an explicit approval — honor it
       logJob("warn", "Awaiting your approval before this render can use credits");
       if (opts.notify) opts.notify("Media Factory", out.message || "This render needs your approval before it can use credits.");
-      genState.busy = false;
-      renderGenerate(body, cfg, opts, root);
       return;
     }
     const stamp = Date.now();
@@ -2699,7 +2706,6 @@ async function runGenerate(body, cfg, opts, root, esc) {
       out.live ? `Generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}`
         : out.queued ? "Queued — waiting for final review in Media Lab"
         : `Render didn't complete — sketched locally (${out.fallbackReason || "unreachable"})`);
-    refreshGeneratePanel(body, cfg, opts, root);
     if (opts.notify) {
       const why = out.live || out.queued ? "" : explainMediaFailure(out.fallbackReason, out.fallbackDetail, out.fallbackLane);
       const status = out.live
@@ -2717,7 +2723,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
   } finally {
     clearInterval(busyTimer);
     if (pendingJob) pendingJobs = pendingJobs.filter((job) => job.id !== pendingJob.id);
-    if (genState.busy) refreshGeneratePanel(body, cfg, opts, root);
+    refreshGeneratePanel(body, cfg, opts, root);
   }
 }
 
