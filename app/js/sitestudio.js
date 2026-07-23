@@ -2,19 +2,22 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney, workspaceStorageGetItem,
-} from "./store.js?v=phantom-live-20260723-40";
+} from "./store.js?v=phantom-live-20260723-42";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
   SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
-} from "./workspaces.js?v=phantom-live-20260723-40";
+} from "./workspaces.js?v=phantom-live-20260723-42";
 import {
-  isDatabaseSession, requestServerPublish, fetchServerRun,
-} from "./orgs.js?v=phantom-live-20260723-40";
+  isDatabaseSession, requestServerPublish, fetchServerRun, fetchServerSites,
+  addServerSiteDomain, verifyServerSiteDomain, rollbackServerSite,
+} from "./orgs.js?v=phantom-live-20260723-42";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
   panel: "website", editorMode: "easy", inspectTarget: "hero",
+  previewMode: "live", compareIndex: -1, proposal: null,
   cartOpen: false, checkoutOpen: false, confirmation: null,
+  serverLoading: new Set(), notice: null,
 };
 const PHANTOMFORCE_PUBLIC_SOURCE = {
   domain: "phantomforce.online",
@@ -57,21 +60,38 @@ const SITE_QUICK_ELEMENTS = [
    Every mutation (prompt apply, section op, domain change, publish request)
    snapshots the editable state first. Capped so localStorage stays sane. */
 const HISTORY_CAP = 12;
+const SITE_DIRECT_FIELDS = {
+  hero: ["headline", "Headline"],
+  cta: ["cta", "Button text"],
+  prompt: ["subhead", "Supporting copy"],
+  proof: ["offer", "Proof statement"],
+  visual: ["style", "Visual direction"],
+};
+
+function cloneValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function editableSiteState(site) {
+  return {
+    title: site.title,
+    kind: site.kind,
+    sections: [...(site.sections || [])],
+    design: cloneValue(site.design || {}),
+    catalog: cloneValue(site.catalog || []),
+    store: cloneValue(site.store || {}),
+    copy: cloneValue(site.copy || {}),
+    domain: site.domain || "",
+    url: site.url || "",
+  };
+}
+
 function snapshotSite(site, label) {
   site.history = Array.isArray(site.history) ? site.history : [];
   site.history.unshift({
     at: new Date().toISOString(),
     label: String(label || "edit").slice(0, 70),
-    data: {
-      title: site.title,
-      kind: site.kind,
-      sections: [...(site.sections || [])],
-      design: { ...(site.design || {}) },
-      catalog: JSON.parse(JSON.stringify(site.catalog || [])),
-      store: JSON.parse(JSON.stringify(site.store || {})),
-      domain: site.domain || "",
-      url: site.url || "",
-    },
+    data: editableSiteState(site),
   });
   site.history = site.history.slice(0, HISTORY_CAP);
 }
@@ -86,9 +106,75 @@ function restoreSnapshot(site, index) {
   site.sections = [...snap.data.sections];
   site.catalog = JSON.parse(JSON.stringify(snap.data.catalog || []));
   site.store = JSON.parse(JSON.stringify(snap.data.store || {}));
+  site.copy = JSON.parse(JSON.stringify(snap.data.copy || {}));
   site.updated = new Date().toISOString();
   /* drop the consumed snapshot (it now sits at index+1 after the unshift) */
   site.history.splice(index + 1, 1);
+  return true;
+}
+
+export function compareSiteVersion(site, index) {
+  const snapshot = (site?.history || [])[index];
+  if (!site || !snapshot) return [];
+  const before = snapshot.data || {};
+  const after = editableSiteState(site);
+  const changes = [];
+  const add = (label, from, to) => {
+    if (JSON.stringify(from) !== JSON.stringify(to)) changes.push({ label, from, to });
+  };
+  add("Title", before.title || "", after.title || "");
+  add("Domain", before.domain || "", after.domain || "");
+  add("Sections", before.sections || [], after.sections || []);
+  add("Headline", before.design?.headline || "", after.design?.headline || "");
+  add("Supporting copy", before.design?.subhead || "", after.design?.subhead || "");
+  add("Call to action", before.design?.cta || "", after.design?.cta || "");
+  add("Theme", before.design?.theme || "", after.design?.theme || "");
+  add("Products", (before.catalog || []).map((item) => `${item.name}:${item.price}`), (after.catalog || []).map((item) => `${item.name}:${item.price}`));
+  return changes;
+}
+
+export function websiteReadiness(site, databaseMode = false) {
+  if (!site) return { ready: false, passed: 0, total: 0, checks: [] };
+  const design = ensureSiteDesign(site);
+  const products = Array.isArray(site.catalog) ? site.catalog : [];
+  const checks = [
+    { id: "title", label: "Site title", pass: String(site.title || "").trim().length >= 2, fix: "Add a clear site title." },
+    { id: "sections", label: "Page structure", pass: Array.isArray(site.sections) && site.sections.length >= 2, fix: "Add at least two page sections." },
+    { id: "headline", label: "Hero message", pass: Boolean(String(design.headline || "").trim()), fix: "Add a hero headline." },
+    { id: "cta", label: "Primary action", pass: Boolean(String(design.cta || "").trim()), fix: "Add a primary call to action." },
+    { id: "products", label: "Catalog integrity", pass: products.every((item) => String(item.name || "").trim() && Number.isFinite(Number(item.price)) && Number(item.price) >= 0), fix: "Repair incomplete product names or prices." },
+    { id: "history", label: "Recovery point", pass: Array.isArray(site.history) && site.history.length > 0, fix: "Make one saved edit so the draft has a recovery point." },
+    { id: "publishing", label: databaseMode ? "Verified publishing path" : "Publishing mode disclosed", pass: databaseMode || !site.serverPublish, fix: "Sign in to the server-backed workspace before publishing." },
+  ];
+  return { ready: checks.every((check) => check.pass), passed: checks.filter((check) => check.pass).length, total: checks.length, checks };
+}
+
+function createSiteProposal(site, prompt, label, scope) {
+  const candidate = cloneValue(site);
+  ensureSiteDesign(candidate);
+  ensureSiteStore(candidate);
+  const foundDomain = domainFromText(prompt);
+  if (foundDomain) setSiteDomain(candidate, foundDomain);
+  const result = applyWebsitePrompt(candidate, prompt);
+  const before = { ...site, history: [{ data: editableSiteState(site) }] };
+  const proxy = { ...candidate, history: before.history };
+  const diff = compareSiteVersion(proxy, 0);
+  return {
+    id: uid("site-proposal"),
+    label: String(label || "Website edit").slice(0, 80),
+    prompt,
+    scope: scope || "Whole site",
+    result,
+    candidate: editableSiteState(candidate),
+    diff,
+  };
+}
+
+function applyProposal(site, proposal) {
+  if (!site || !proposal) return false;
+  snapshotSite(site, proposal.label);
+  Object.assign(site, cloneValue(proposal.candidate));
+  site.updated = new Date().toISOString();
   return true;
 }
 
@@ -128,10 +214,30 @@ async function refreshServerPublish(site, rerender) {
   if (run.state === "succeeded") {
     sp.publicPath = `/public/sites/${sp.serverSiteId}`;
     site.url = sp.publicPath;
+    const record = (await fetchServerSites().catch(() => [])).find((item) => item.id === sp.serverSiteId);
+    if (record) site.serverRecord = record;
     pushActivity("Websites", `${site.title} is LIVE — deployment verified by the server (run ${run.id}).`, site.ws);
   }
   store.save();
   rerender();
+}
+
+async function hydrateServerRecord(site, rerender, force = false) {
+  if (!isDatabaseSession() || !site?.serverSiteId) return;
+  if (!force && site.serverRecord) return;
+  if (siteUi.serverLoading.has(site.id)) return;
+  const siteId = site.id;
+  siteUi.serverLoading.add(siteId);
+  try {
+    const record = (await fetchServerSites()).find((item) => item.id === site.serverSiteId);
+    if (record && siteUi.activeSiteId === siteId) {
+      site.serverRecord = record;
+      store.save();
+      rerender();
+    }
+  } finally {
+    siteUi.serverLoading.delete(siteId);
+  }
 }
 
 function slugText(value) {
@@ -171,6 +277,17 @@ function setSiteDomain(site, value) {
 function normalizeSite(site) {
   ensureSiteDesign(site);
   ensureSiteStore(site);
+  const legacyTerminaStarter = /termina\s*-\s*terminal workflow manager store/i.test(String(site.title || ""))
+    || siteDomain(site) === "termina.phantomforce.online";
+  if (legacyTerminaStarter && site.design.migrationVersion !== "phantomforce-public-v1") {
+    snapshotSite(site, "legacy Termina starter");
+    applySiteTemplate(site, "phantomforce");
+    setSiteDomain(site, PHANTOMFORCE_PUBLIC_SOURCE.domain);
+    site.design.migrationVersion = "phantomforce-public-v1";
+    site.updated = new Date().toISOString();
+    pushActivity("Websites", "migrated the retired Termina starter to the PhantomForce public-site workspace.", site.ws);
+    store.save();
+  }
   site.domains = Array.isArray(site.domains) ? site.domains : [];
   const domain = siteDomain(site);
   if (domain && !site.domains.includes(domain)) site.domains.unshift(domain);
@@ -256,6 +373,9 @@ function siteAssetRailMarkup() {
 
 function siteEasyEditorMarkup(site) {
   const target = selectedInspectTarget();
+  const design = ensureSiteDesign(site);
+  const [field, fieldLabel] = SITE_DIRECT_FIELDS[target.id] || SITE_DIRECT_FIELDS.hero;
+  const fieldValue = design[field] || "";
   return `
     <aside class="ss-site-editor-panel" aria-label="AI website editor">
       <div class="ss-editor-tabs" role="tablist" aria-label="Website editor mode">
@@ -274,6 +394,11 @@ function siteEasyEditorMarkup(site) {
               <b>${esc(item.label)}</b><span>${esc(item.id)}</span>
             </button>`).join("")}
         </div>
+        <form class="ss-direct-editor" data-ss-direct-form data-field="${esc(field)}">
+          <label for="ss-direct-${esc(field)}">${esc(fieldLabel)}</label>
+          <textarea id="ss-direct-${esc(field)}" data-ss-direct-value rows="3">${esc(fieldValue)}</textarea>
+          <button type="submit">Save ${esc(target.label)}</button>
+        </form>
         <div class="ss-ai-option-grid" aria-label="AI edit suggestions">
           ${SITE_STYLE_ACTIONS.map(([id, label, prompt]) => `
             <button type="button" data-ss-ai-style="${esc(`${target.prompt} ${prompt}`)}">
@@ -312,13 +437,17 @@ function siteSourceCodeMarkup(site) {
 }
 
 function publicSourcePreviewMarkup(site) {
+  const draft = siteUi.previewMode === "draft";
   return `
     <div class="ss-public-source">
       <div class="ss-public-source-frame">
         <div class="site-browser-bar">
           <span></span><span></span><span></span>
           <b>${esc(PHANTOMFORCE_PUBLIC_SOURCE.domain)}</b>
-          <small>Live public source</small>
+          <div class="ss-preview-toggle" role="group" aria-label="Preview source">
+            <button type="button" class="${draft ? "" : "is-active"}" data-ss-preview-mode="live">Live</button>
+            <button type="button" class="${draft ? "is-active" : ""}" data-ss-preview-mode="draft">Draft</button>
+          </div>
         </div>
         <div class="ss-frame-stage">
           <div class="ss-live-hotspots" aria-label="Website click-to-edit regions">
@@ -327,7 +456,9 @@ function publicSourcePreviewMarkup(site) {
                 <span>${esc(target.label)}</span>
               </button>`).join("")}
           </div>
-        <iframe src="${esc(PHANTOMFORCE_PUBLIC_SOURCE.previewUrl)}?pf-site-preview=${Date.now()}" title="Live PhantomForce public website preview" loading="lazy"></iframe>
+          ${draft
+            ? `<div class="ss-structured-draft" aria-label="Structured website draft preview">${renderWebsitePreview(site, productsFor(site), { selected: siteUi.selectedSection, interactive: true, cart: ensureSiteStore(site).cart })}</div>`
+            : `<iframe src="${esc(PHANTOMFORCE_PUBLIC_SOURCE.previewUrl)}?pf-site-preview=${Date.now()}" title="Live PhantomForce public website preview" loading="lazy"></iframe>`}
         </div>
       </div>
       ${siteEasyEditorMarkup(site)}
@@ -520,6 +651,107 @@ function siteOptionLabel(site) {
   return domain ? `${site.title} - ${domain}` : site.title;
 }
 
+function valueSummary(value) {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "None";
+  return String(value || "Not set");
+}
+
+function siteProposalMarkup(proposal) {
+  if (!proposal) return "";
+  return `
+    <section class="ss-proposal" aria-label="Proposed website change" aria-live="polite">
+      <header>
+        <div><p>Preview before applying</p><h3>${esc(proposal.label)}</h3><span>${esc(proposal.scope)}</span></div>
+        <span>${proposal.diff.length} change${proposal.diff.length === 1 ? "" : "s"}</span>
+      </header>
+      <div class="ss-proposal-diff">
+        ${proposal.diff.map((change) => `
+          <article>
+            <b>${esc(change.label)}</b>
+            <div><span>Before</span><p>${esc(valueSummary(change.from))}</p></div>
+            <div><span>After</span><p>${esc(valueSummary(change.to))}</p></div>
+          </article>`).join("") || `<p>No material change was produced. Refine the instruction or discard this proposal.</p>`}
+      </div>
+      <footer>
+        <p>${esc(proposal.result || "Draft prepared.")}</p>
+        <button class="btn btn-quiet" type="button" data-act="ss-proposal-discard">Discard</button>
+        <button class="btn btn-primary" type="button" data-act="ss-proposal-apply" ${proposal.diff.length ? "" : "disabled"}>Apply draft</button>
+      </footer>
+    </section>`;
+}
+
+function versionCompareMarkup(site) {
+  if (siteUi.compareIndex < 0) return "";
+  const snap = (site.history || [])[siteUi.compareIndex];
+  if (!snap) return "";
+  const changes = compareSiteVersion(site, siteUi.compareIndex);
+  return `
+    <section class="ss-version-compare" aria-label="Version comparison">
+      <header>
+        <div><p>Version compare</p><h3>Current draft vs ${esc(snap.label)}</h3><span>${ago(snap.at)}</span></div>
+        <button type="button" aria-label="Close version comparison" data-act="ss-compare-close">×</button>
+      </header>
+      <div>
+        ${changes.map((change) => `
+          <article><b>${esc(change.label)}</b><span>${esc(valueSummary(change.from))}</span><i>→</i><strong>${esc(valueSummary(change.to))}</strong></article>`).join("")
+          || `<p>The current draft matches this recovery point.</p>`}
+      </div>
+      <footer>
+        <button class="btn btn-quiet" type="button" data-ss-restore="${siteUi.compareIndex}">Restore this version</button>
+      </footer>
+    </section>`;
+}
+
+function siteReadinessMarkup(site) {
+  const readiness = websiteReadiness(site, isDatabaseSession());
+  const firstBlocker = readiness.checks.find((check) => !check.pass);
+  return `
+    <details class="ss-readiness" ${readiness.ready ? "" : "open"}>
+      <summary>
+        <span>Launch readiness</span>
+        <b>${readiness.passed}/${readiness.total}</b>
+        <i>${readiness.ready ? "Ready for verified publish" : esc(firstBlocker?.fix || "Review required")}</i>
+      </summary>
+      <div>
+        ${readiness.checks.map((check) => `
+          <p class="${check.pass ? "is-pass" : "is-blocked"}"><b>${check.pass ? "✓" : "!"}</b><span>${esc(check.label)}</span><small>${check.pass ? "Ready" : esc(check.fix)}</small></p>`).join("")}
+      </div>
+    </details>`;
+}
+
+function serverLifecycleMarkup(site) {
+  const record = site.serverRecord;
+  const domains = record?.domains || [];
+  const deployments = record?.deployments || [];
+  const current = deployments.find((item) => item.status === "published") || deployments[0];
+  const customDomain = siteDomain(site);
+  if (!isDatabaseSession() && !site.serverPublish) return "";
+  return `
+    <section class="ss-release-receipt" aria-label="Publishing and domain evidence">
+      <header><div><p>Release evidence</p><h3>${site.serverPublish?.state === "succeeded" ? "Verified deployment" : "Server publishing"}</h3></div>
+        ${site.serverPublish?.runId ? `<code>${esc(site.serverPublish.runId)}</code>` : ""}</header>
+      <div class="ss-receipt-grid">
+        <p><span>Build</span><b>${site.serverPublish?.buildVersion ? `v${esc(site.serverPublish.buildVersion)}` : "Not built"}</b></p>
+        <p><span>State</span><b>${esc(site.serverPublish?.state || "Not requested")}</b></p>
+        <p><span>Public path</span><b>${esc(record?.publicPath || site.serverPublish?.publicPath || "Not live")}</b></p>
+        <p><span>Deployment</span><b>${esc(current?.id || "None")}</b></p>
+      </div>
+      ${customDomain ? `
+        <div class="ss-domain-evidence">
+          <b>${esc(customDomain)}</b>
+          ${domains.length ? domains.map((domain) => `
+            <p><span>${esc(domain.state)} · SSL ${esc(domain.sslState || "unknown")}</span>
+              <button class="btn btn-quiet" type="button" data-ss-verify-domain="${esc(domain.id)}">Verify DNS</button></p>
+            ${domain.verificationToken ? `<code>_phantomforce-verify.${esc(domain.domain)} TXT ${esc(domain.verificationToken)}</code>` : ""}`).join("")
+            : site.serverSiteId
+              ? `<button class="btn btn-quiet" type="button" data-act="ss-connect-domain">Connect and verify domain</button>`
+              : `<span>Build the site once before connecting this domain.</span>`}
+        </div>` : ""}
+      ${deployments.filter((item) => item.status === "published" || item.status === "rolled_back").length > 1
+        ? `<button class="btn btn-quiet" type="button" data-act="ss-rollback-live">Rollback to previous live version</button>` : ""}
+    </section>`;
+}
+
 function emptyMarkup() {
   return `
     <section class="ss-simple is-empty">
@@ -553,6 +785,10 @@ function shellMarkup(active, sites, products) {
           <span>${sites.length} website${sites.length === 1 ? "" : "s"}</span>
         </div>
         <div class="ss-simple-actions">
+          <details class="ss-template-picker">
+            <summary>Templates</summary>
+            <div>${Object.values(SITE_TEMPLATES).map((template) => `<button type="button" data-ss-template="${esc(template.id)}">${esc(template.label)}</button>`).join("")}</div>
+          </details>
           <button class="btn btn-quiet" type="button" data-act="ss-new-site">New website</button>
           <button class="btn btn-quiet" type="button" data-act="ss-remove-site" data-id="${esc(active.id)}">Delete</button>
         </div>
@@ -591,10 +827,11 @@ function shellMarkup(active, sites, products) {
             <summary>History (${(active.history || []).length})</summary>
             <div class="ss-history-list">
               ${(active.history || []).map((snap, index) => `
-                <button type="button" data-ss-restore="${index}">
-                  <b>${esc(snap.label)}</b>
-                  <span>${ago(snap.at)}</span>
-                </button>`).join("") || `<p>No versions yet — every edit saves one automatically.</p>`}
+                <article>
+                  <div><b>${esc(snap.label)}</b><span>${ago(snap.at)}</span></div>
+                  <button type="button" data-ss-compare="${index}">Compare</button>
+                  <button type="button" data-ss-restore="${index}">Restore</button>
+                </article>`).join("") || `<p>No versions yet — every edit saves one automatically.</p>`}
             </div>
           </details>
           ${(() => {
@@ -607,6 +844,11 @@ function shellMarkup(active, sites, products) {
           })()}
         </div>
       </div>
+
+      ${siteUi.notice ? `<p class="ss-lifecycle-notice ${siteUi.notice.kind === "error" ? "is-error" : ""}" role="status">${esc(siteUi.notice.text)}</p>` : ""}
+      ${siteProposalMarkup(siteUi.proposal)}
+      ${versionCompareMarkup(active)}
+      ${siteReadinessMarkup(active)}
 
       <main class="ss-simple-main ${siteUi.panel === "store" ? "has-store-console" : ""}">
         <div class="ss-simple-preview ss-device-${esc(siteUi.device)}" data-ss-preview>${isPhantomForcePublicSite(active) ? publicSourcePreviewMarkup(active) : renderWebsitePreview(active, products, { selected: siteUi.selectedSection, interactive: true, cart: ensureSiteStore(active).cart })}</div>
@@ -635,6 +877,7 @@ function shellMarkup(active, sites, products) {
 
       ${siteUi.confirmation ? confirmationMarkup(siteUi.confirmation) : ""}
 
+      ${serverLifecycleMarkup(active)}
       <p class="ss-simple-status">Last edited ${ago(active.updated || new Date().toISOString())}</p>
       ${siteUi.checkoutOpen ? checkoutMarkup(active) : ""}
     </section>`;
@@ -669,11 +912,21 @@ export function renderSiteStudio(el) {
   }
 
   el.querySelectorAll("[data-ss-switch]").forEach((select) => {
-    select.onchange = () => { siteUi.activeSiteId = select.value; siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null; rerender(); };
+    select.onchange = () => {
+      siteUi.activeSiteId = select.value;
+      siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null;
+      siteUi.proposal = null; siteUi.compareIndex = -1; siteUi.notice = null;
+      rerender();
+    };
   });
 
   el.querySelectorAll("[data-ss-site]").forEach((button) => {
-    button.onclick = () => { siteUi.activeSiteId = button.dataset.ssSite; siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null; rerender(); };
+    button.onclick = () => {
+      siteUi.activeSiteId = button.dataset.ssSite;
+      siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null;
+      siteUi.proposal = null; siteUi.compareIndex = -1; siteUi.notice = null;
+      rerender();
+    };
   });
 
   el.querySelectorAll("[data-ss-template]").forEach((button) => {
@@ -688,6 +941,9 @@ export function renderSiteStudio(el) {
       siteUi.cartOpen = false;
       siteUi.checkoutOpen = false;
       siteUi.confirmation = null;
+      siteUi.proposal = null;
+      siteUi.compareIndex = -1;
+      siteUi.previewMode = "draft";
       pushActivity("Websites", `applied the ${templateId} public-site starter to ${site.title}.`, site.ws);
       store.save();
       rerender();
@@ -701,6 +957,8 @@ export function renderSiteStudio(el) {
       siteUi.cartOpen = false;
       siteUi.checkoutOpen = false;
       siteUi.confirmation = null;
+      siteUi.proposal = null;
+      siteUi.compareIndex = -1;
       rerender();
     };
   });
@@ -715,6 +973,8 @@ export function renderSiteStudio(el) {
       siteUi.cartOpen = false;
       siteUi.checkoutOpen = false;
       siteUi.confirmation = null;
+      siteUi.proposal = null;
+      siteUi.compareIndex = -1;
       if (target) pushActivity("Websites", `deleted ${target.title}.`, target.ws);
       store.save();
       rerender();
@@ -741,15 +1001,14 @@ export function renderSiteStudio(el) {
       const prompt = (input?.value || "").trim();
       if (!prompt) return;
       const site = active || createWebsite(prompt);
-      if (active) snapshotSite(site, prompt.slice(0, 60));
       /* a selected section focuses the edit: its name is prepended so the
          prompt engine's section-aware rules see the target */
-      const target = siteUi.selectedSection >= 0 && site.sections[siteUi.selectedSection] !== undefined
-        ? `${site.sections[siteUi.selectedSection]}: ${prompt}`
-        : prompt;
-      applyWebsiteChange(site, target);
-      if (site.catalog?.length) siteUi.panel = "store";
-      store.save();
+      const section = siteUi.selectedSection >= 0 && site.sections[siteUi.selectedSection] !== undefined
+        ? site.sections[siteUi.selectedSection]
+        : "";
+      const target = section ? `${section}: ${prompt}` : prompt;
+      siteUi.proposal = createSiteProposal(site, target, prompt.slice(0, 60), section || "Whole site");
+      siteUi.notice = { kind: "info", text: "Draft prepared. Review the before/after changes, then apply or discard." };
       rerender();
     };
   });
@@ -757,6 +1016,12 @@ export function renderSiteStudio(el) {
   /* ---- editor controls: device preview, undo, history, publish ---- */
   el.querySelectorAll("[data-ss-device]").forEach((button) => {
     button.onclick = () => { siteUi.device = button.dataset.ssDevice; rerender(); };
+  });
+  el.querySelectorAll("[data-ss-preview-mode]").forEach((button) => {
+    button.onclick = () => {
+      siteUi.previewMode = button.dataset.ssPreviewMode === "draft" ? "draft" : "live";
+      rerender();
+    };
   });
 
   el.querySelectorAll("[data-ss-panel]").forEach((button) => {
@@ -777,11 +1042,8 @@ export function renderSiteStudio(el) {
   });
   const applyPublicSitePrompt = (prompt, label = "AI website edit") => {
     if (!active || !prompt) return;
-    snapshotSite(active, label);
-    applyWebsiteChange(active, prompt);
-    active.updated = new Date().toISOString();
-    pushActivity("Websites", `drafted ${label.toLowerCase()} for ${active.title}.`, active.ws);
-    store.save();
+    siteUi.proposal = createSiteProposal(active, prompt, label, selectedInspectTarget().label);
+    siteUi.notice = { kind: "info", text: "AI proposal prepared. Nothing changed yet." };
     rerender();
   };
   el.querySelectorAll("[data-ss-ai-style]").forEach((button) => {
@@ -790,6 +1052,41 @@ export function renderSiteStudio(el) {
   el.querySelectorAll("[data-ss-asset-preset]").forEach((button) => {
     button.onclick = () => applyPublicSitePrompt(`${selectedInspectTarget().prompt} ${button.dataset.ssAssetPreset || ""}`, "asset-assisted website edit");
   });
+  const directForm = el.querySelector("[data-ss-direct-form]");
+  if (directForm && active) directForm.onsubmit = (event) => {
+    event.preventDefault();
+    const field = directForm.dataset.field;
+    if (!Object.values(SITE_DIRECT_FIELDS).some(([candidate]) => candidate === field)) return;
+    const next = directForm.querySelector("[data-ss-direct-value]")?.value.trim() || "";
+    if (!next) return;
+    snapshotSite(active, `edit ${selectedInspectTarget().label}`);
+    ensureSiteDesign(active)[field] = next.slice(0, field === "style" ? 120 : 300);
+    active.updated = new Date().toISOString();
+    siteUi.previewMode = "draft";
+    siteUi.notice = { kind: "info", text: `${selectedInspectTarget().label} saved to the draft. Live remains unchanged until approved publishing succeeds.` };
+    pushActivity("Websites", `updated ${selectedInspectTarget().label.toLowerCase()} on ${active.title}.`, active.ws);
+    store.save();
+    rerender();
+  };
+
+  const applyProposalButton = el.querySelector("[data-act='ss-proposal-apply']");
+  if (applyProposalButton && active) applyProposalButton.onclick = () => {
+    const proposal = siteUi.proposal;
+    if (!proposal || !applyProposal(active, proposal)) return;
+    siteUi.proposal = null;
+    siteUi.previewMode = "draft";
+    siteUi.notice = { kind: "info", text: "Draft applied and recovery point saved. The live site is unchanged." };
+    pushActivity("Websites", `applied ${proposal.label.toLowerCase()} to the draft for ${active.title}.`, active.ws);
+    if (active.catalog?.length) siteUi.panel = "store";
+    store.save();
+    rerender();
+  };
+  const discardProposalButton = el.querySelector("[data-act='ss-proposal-discard']");
+  if (discardProposalButton) discardProposalButton.onclick = () => {
+    siteUi.proposal = null;
+    siteUi.notice = { kind: "info", text: "Proposal discarded. The draft was not changed." };
+    rerender();
+  };
 
   el.querySelectorAll("[data-ss-source-file]").forEach((button) => {
     button.onclick = () => {
@@ -950,6 +1247,7 @@ export function renderSiteStudio(el) {
     active.sections = [...snap.data.sections];
     active.catalog = JSON.parse(JSON.stringify(snap.data.catalog || []));
     active.store = JSON.parse(JSON.stringify(snap.data.store || {}));
+    active.copy = JSON.parse(JSON.stringify(snap.data.copy || {}));
     active.updated = new Date().toISOString();
     pushActivity("Websites", `undid the last edit on ${active.title}.`, active.ws);
     store.save();
@@ -960,12 +1258,26 @@ export function renderSiteStudio(el) {
     button.onclick = () => {
       if (!active) return;
       if (restoreSnapshot(active, Number(button.dataset.ssRestore))) {
+        siteUi.compareIndex = -1;
+        siteUi.proposal = null;
+        siteUi.previewMode = "draft";
         pushActivity("Websites", `restored an earlier version of ${active.title}.`, active.ws);
         store.save();
         rerender();
       }
     };
   });
+  el.querySelectorAll("[data-ss-compare]").forEach((button) => {
+    button.onclick = () => {
+      siteUi.compareIndex = Number(button.dataset.ssCompare);
+      rerender();
+    };
+  });
+  const closeCompare = el.querySelector("[data-act='ss-compare-close']");
+  if (closeCompare) closeCompare.onclick = () => {
+    siteUi.compareIndex = -1;
+    rerender();
+  };
 
   const publishBtn = el.querySelector("[data-act='ss-request-publish']");
   if (publishBtn && active) publishBtn.onclick = async () => {
@@ -987,11 +1299,13 @@ export function renderSiteStudio(el) {
           reason: null,
           error: null,
         };
+        siteUi.notice = { kind: "info", text: `Build v${result.buildVersion} validated. Publish run ${result.run.id} is waiting for approval.` };
         pushActivity("Websites", `built v${result.buildVersion} of ${active.title} and requested publish approval (run ${result.run.id}).`, active.ws);
       } else {
         const why = result.error === "upgrade_required" ? "your current plan doesn't include publishing"
           : result.error === "build_validation_failed" ? "the build failed validation"
           : `the server refused (${result.error})`;
+        siteUi.notice = { kind: "error", text: `Publish did not start: ${why}. Your draft is preserved.` };
         pushActivity("Websites", `publish request for ${active.title} did not start: ${why}.`, active.ws);
       }
       store.save();
@@ -1005,10 +1319,54 @@ export function renderSiteStudio(el) {
       ref: active.id, status: "pending", requestedBy: "Websites", at: new Date().toISOString(),
     });
     pushActivity("Websites", `requested publish approval for ${active.title}.`, active.ws);
+    siteUi.notice = { kind: "info", text: "Approval requested. This local workspace cannot claim a live deployment." };
     store.save();
     rerender();
   };
   if (active) refreshServerPublish(active, rerender);
+  if (active) hydrateServerRecord(active, rerender);
+
+  const connectDomain = el.querySelector("[data-act='ss-connect-domain']");
+  if (connectDomain && active) connectDomain.onclick = async () => {
+    const domain = siteDomain(active);
+    if (!domain || !active.serverSiteId) return;
+    connectDomain.disabled = true;
+    const result = await addServerSiteDomain(active.serverSiteId, domain);
+    if (result.ok) {
+      siteUi.notice = { kind: "info", text: result.domain.instructions || "Domain registered. Add the verification TXT record, then verify DNS." };
+      active.serverRecord = null;
+      await hydrateServerRecord(active, rerender, true);
+    } else {
+      siteUi.notice = { kind: "error", text: ["upgrade_required", "feature_not_available"].includes(result.error) ? "Custom domains require an eligible plan." : `Domain connection failed: ${result.error}.` };
+      rerender();
+    }
+  };
+  el.querySelectorAll("[data-ss-verify-domain]").forEach((button) => {
+    button.onclick = async () => {
+      if (!active?.serverSiteId) return;
+      button.disabled = true;
+      const result = await verifyServerSiteDomain(active.serverSiteId, button.dataset.ssVerifyDomain);
+      siteUi.notice = result.ok
+        ? { kind: result.domain.state === "verified" ? "info" : "error", text: result.check?.detail || `Domain state: ${result.domain.state}.` }
+        : { kind: "error", text: `Domain verification failed: ${result.error}.` };
+      active.serverRecord = null;
+      await hydrateServerRecord(active, rerender, true);
+    };
+  });
+  const rollbackLive = el.querySelector("[data-act='ss-rollback-live']");
+  if (rollbackLive && active) rollbackLive.onclick = async () => {
+    if (!active.serverSiteId || !confirm("Rollback the public site to its previous verified deployment?")) return;
+    rollbackLive.disabled = true;
+    const result = await rollbackServerSite(active.serverSiteId);
+    if (result.ok) {
+      siteUi.notice = { kind: "info", text: `Rollback verified. Deployment ${result.deployment.id} is now live.` };
+      active.serverRecord = null;
+      await hydrateServerRecord(active, rerender, true);
+    } else {
+      siteUi.notice = { kind: "error", text: `Rollback failed: ${result.error}. The current deployment was not changed.` };
+      rerender();
+    }
+  };
 
   /* ---- section selection + toolbar ---- */
   const preview = el.querySelector("[data-ss-preview]");

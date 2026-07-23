@@ -5,6 +5,7 @@ globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: 
 globalThis.window = { addEventListener: () => {} };
 
 const { baseSiteDraft, extractStoreProducts, applyWebsitePrompt, SITE_TEMPLATES, applySiteTemplate } = await import("../app/js/workspaces.js?v=test-workspace-site-builder");
+const { compareSiteVersion, websiteReadiness } = await import("../app/js/sitestudio.js?v=test-workspace-site-builder");
 
 assert.ok(SITE_TEMPLATES.phantomforce, "site studio must ship with a PhantomForce public-site starter.");
 assert.equal(SITE_TEMPLATES.termina, undefined, "the default website/store starter must not be the old Termina store.");
@@ -66,6 +67,27 @@ assert.equal(phantomForce.design.existingUrl, "phantomforce.online", "official P
 assert.equal(phantomForce.store.checkoutMode, "test", "checkout must remain explicit test mode until payments are connected.");
 assert.equal(phantomForce.store.paymentsConnected, false, "the builder must never imply a payment connection.");
 
+phantomForce.history = [{
+  at: new Date().toISOString(),
+  label: "before headline",
+  data: {
+    title: phantomForce.title,
+    kind: phantomForce.kind,
+    sections: [...phantomForce.sections],
+    design: { ...phantomForce.design, headline: "Old headline" },
+    catalog: structuredClone(phantomForce.catalog),
+    store: structuredClone(phantomForce.store),
+    copy: {},
+    domain: phantomForce.domain || "",
+    url: phantomForce.url || "",
+  },
+}];
+const versionDiff = compareSiteVersion(phantomForce, 0);
+assert.ok(versionDiff.some((change) => change.label === "Headline"), "version compare must expose changed headline content.");
+const ready = websiteReadiness(phantomForce, true);
+assert.equal(ready.total, 7, "readiness must evaluate the complete launch checklist.");
+assert.ok(ready.checks.some((check) => check.id === "history" && check.pass), "saved recovery points must count toward readiness.");
+
 const siteStudioSource = readFileSync(new URL("../app/js/sitestudio.js", import.meta.url), "utf8");
 const siteStudioCss = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
 assert.ok(siteStudioSource.includes("AI Website Editor"), "public site editor should default to an AI visual editor, not source loading.");
@@ -74,9 +96,17 @@ assert.ok(siteStudioSource.includes("data-ss-inspect-target"), "public site prev
 assert.ok(siteStudioSource.includes("data-ss-ai-style"), "easy editor must offer AI style actions for selected regions.");
 assert.ok(siteStudioSource.includes("data-ss-asset-preset"), "easy editor must offer Media Pool asset and quick-element actions.");
 assert.ok(siteStudioSource.includes("workspaceStorageGetItem(CONTENT_ASSETS_KEY)"), "Site Studio should read real Media Pool assets from workspace storage.");
+assert.ok(siteStudioSource.includes("data-ss-direct-form"), "selected website regions must support direct manual editing.");
+assert.ok(siteStudioSource.includes("Preview before applying"), "AI website edits must show a proposal diff before mutation.");
+assert.ok(siteStudioSource.includes("data-ss-compare"), "saved website versions must support comparison before restore.");
+assert.ok(siteStudioSource.includes("Launch readiness"), "Website Builder must expose explicit launch readiness.");
+assert.ok(siteStudioSource.includes("data-act=\"ss-connect-domain\""), "server-backed sites must expose domain connection.");
+assert.ok(siteStudioSource.includes("data-act=\"ss-rollback-live\""), "verified deployments must expose rollback when a prior version exists.");
 assert.equal(siteStudioSource.includes("Load current code"), false, "the old oversized load-code affordance should not return.");
 assert.ok(siteStudioCss.includes(".ss-live-hotspots"), "click-to-edit hotspots must be styled.");
 assert.ok(siteStudioCss.includes(".ss-site-editor-panel"), "AI website editor panel must be styled.");
 assert.ok(siteStudioCss.includes(".ss-asset-bank"), "Media Pool and quick-element asset bank must be styled.");
+assert.ok(siteStudioCss.includes(".ss-proposal-diff"), "proposal comparison must be styled.");
+assert.ok(siteStudioCss.includes(".ss-readiness"), "launch readiness must be styled.");
 
 console.log("Workspace site builder prompt parsing checks passed.");

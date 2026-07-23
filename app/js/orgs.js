@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260723-40";
+import { ctx, session } from "./store.js?v=phantom-live-20260723-42";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -397,6 +397,36 @@ export async function fetchServerSites() {
   if (!orgId) return [];
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/sites`);
   return ok ? json.sites || [] : [];
+}
+
+export async function addServerSiteDomain(siteId, domain) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(
+    `/orgs/${encodeURIComponent(orgId)}/sites/${encodeURIComponent(siteId)}/domains`,
+    { method: "POST", body: { domain } },
+  );
+  return ok ? { ok: true, domain: json.domain } : { ok: false, error: json?.error || "domain_add_failed", detail: json };
+}
+
+export async function verifyServerSiteDomain(siteId, domainId) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(
+    `/orgs/${encodeURIComponent(orgId)}/sites/${encodeURIComponent(siteId)}/domains/${encodeURIComponent(domainId)}/verify`,
+    { method: "POST", body: {} },
+  );
+  return ok ? { ok: true, domain: json.domain, check: json.check } : { ok: false, error: json?.error || "domain_verify_failed", detail: json };
+}
+
+export async function rollbackServerSite(siteId) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(
+    `/orgs/${encodeURIComponent(orgId)}/sites/${encodeURIComponent(siteId)}/rollback`,
+    { method: "POST", body: {} },
+  );
+  return ok ? { ok: true, deployment: json.deployment } : { ok: false, error: json?.error || "site_rollback_failed", detail: json };
 }
 
 /* ---------------- Asset Cloud client ----------------
