@@ -44,9 +44,9 @@
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, moneyView, fmtMoney, ago, daysUntil, commandBriefing, resolveApproval,
-} from "./store.js?v=phantom-live-20260722-24";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-24";
-import { WORKSPACE_DEFS, esc } from "./workspaces.js?v=phantom-live-20260722-24";
+} from "./store.js?v=phantom-live-20260722-25";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260722-25";
+import { WORKSPACE_DEFS, esc } from "./workspaces.js?v=phantom-live-20260722-25";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
