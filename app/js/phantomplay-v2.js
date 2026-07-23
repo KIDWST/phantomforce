@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260723-51";
+} from "./store.js?v=phantom-live-20260723-53";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -64,6 +64,7 @@ let pendingDevSandboxGameId = null;
 let pendingDevSandboxBootState = null;
 let devSandboxApplyTimer = null;
 let readyFallbackTimer = null;
+let playerClosing = false;
 
 function authHeaders(json = false) {
   const token = session.token();
@@ -1119,34 +1120,72 @@ function armReadyFallback() {
   }, 2600);
 }
 function startClock() { clearInterval(playClock); playClock = setInterval(() => persistPlay(false), 15000); }
+function detailFromGameMessage(data = {}) {
+  const score = Number(data.score);
+  const progress = data.type === "complete" ? 100 : Number(data.progress);
+  return {
+    score: Number.isFinite(score) ? score : undefined,
+    progress: Number.isFinite(progress) ? progress : undefined,
+    state: data.state && typeof data.state === "object" && !Array.isArray(data.state) ? data.state : undefined,
+  };
+}
 async function persistPlay(ended, detail = {}) {
   if (!ui.player) return;
   const delta = Math.max(0, Math.min(60, Math.round((Date.now() - playTickAt) / 1000)));
   playTickAt = Date.now();
   Object.assign(ui.player.play, { seconds: (ui.player.play.seconds || 0) + delta, score: detail.score ?? ui.player.play.score, progress: detail.progress ?? ui.player.play.progress });
+  if (detail.state !== undefined) ui.player.play.state = detail.state;
   const existing = historyFor(ui.player.game.id);
   const progress = ui.player.play.progress || 0;
-  const rowData = { gameId: ui.player.game.id, lastPlayedAt: new Date().toISOString(), score: Math.max(existing?.score || 0, ui.player.play.score || 0), progress, seconds: (existing?.seconds || 0) + delta, canContinue: progress > 0 && progress < 100 };
+  const state = ui.player.play.state || existing?.state || null;
+  const hasState = !!(state && typeof state === "object" && Object.keys(state).length);
+  const rowData = { gameId: ui.player.game.id, lastPlayedAt: new Date().toISOString(), score: Math.max(existing?.score || 0, ui.player.play.score || 0), progress, seconds: (existing?.seconds || 0) + delta, state, canContinue: progress < 100 && (progress > 0 || hasState) };
   ui.snapshot.history = [rowData, ...ui.snapshot.history.filter((item) => item.gameId !== rowData.gameId)];
   if (ui.offline) { saveOffline(); return; }
   try { await api(`/api/phantomplay/plays/${encodeURIComponent(ui.player.play.id)}`, { method: "PATCH", body: JSON.stringify({ tenantId: currentTenantId(), secondsDelta: delta, score: detail.score, progress: detail.progress, state: detail.state, ended }) }); }
   catch { ui.offline = true; saveOffline(); }
 }
+function requestFinalGameSave(timeoutMs = 450) {
+  const frame = mountedRoot?.querySelector("[data-pp2-frame]");
+  if (!ui.player || !frame?.contentWindow) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (detail) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("message", handler);
+      resolve(detail);
+    };
+    const handler = (event) => {
+      const data = event.data;
+      if (event.source !== frame.contentWindow || !data || data.source !== "phantomplay-game") return;
+      if (data.type === "score" || data.type === "progress" || data.type === "complete" || data.type === "exit") finish(detailFromGameMessage(data));
+    };
+    window.addEventListener("message", handler);
+    postToGame("save-state", { focus: false });
+    postToGame("exit", { focus: false });
+    setTimeout(() => finish(null), timeoutMs);
+  });
+}
 async function closePlayer() {
+  if (playerClosing) return;
+  playerClosing = true;
   const closing = ui.player;
   clearInterval(playClock);
   clearTimeout(devSandboxApplyTimer);
   clearTimeout(readyFallbackTimer);
+  const finalDetail = await requestFinalGameSave();
   revokeDevSandboxBlob();
   revokePlayerOverrideBlob();
   ui.devSandbox = null;
-  await persistPlay(true);
+  await persistPlay(true, finalDetail || {});
   // persistPlay awaits the network; if the player launched a new game while we
   // were closing the old one, don't clobber it (that would wipe a freshly-mounted
   // override back to the shipped file).
-  if (ui.player && ui.player !== closing) { heartbeat(); return; }
+  if (ui.player && ui.player !== closing) { playerClosing = false; heartbeat(); return; }
   ui.player = null; ui.playerReady = false; ui.playerPaused = false; ui.playerError = null; ui.resume = null;
   document.body.classList.remove("phantomplay-playing");
+  playerClosing = false;
   heartbeat(); render();
 }
 function postToGame(type, extra = {}) {
@@ -1191,8 +1230,13 @@ function onGameMessage(event) {
     const button = mountedRoot.querySelector("[data-pp2-player-pause]");
     if (button) button.textContent = ui.playerPaused ? "Resume" : "Pause";
   }
+  if (event.data.type === "exit") {
+    persistPlay(true, detailFromGameMessage(event.data));
+    if (!playerClosing) closePlayer();
+    return;
+  }
   if (event.data.type === "score" || event.data.type === "progress" || event.data.type === "complete") {
-    const detail = { score: Number(event.data.score) || undefined, progress: event.data.type === "complete" ? 100 : Number(event.data.progress) || undefined, state: event.data.state };
+    const detail = detailFromGameMessage(event.data);
     const live = mountedRoot.querySelector("[data-pp2-live-score]");
     if (live && detail.score !== undefined) live.textContent = `Score ${detail.score}`;
     persistPlay(event.data.type === "complete", detail);

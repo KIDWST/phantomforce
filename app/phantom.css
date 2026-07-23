@@ -3533,8 +3533,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .hero2-title span[data-hero-name] { background: linear-gradient(180deg, #9c92ff, var(--neon)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero2-sub { margin: 0 0 16px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
 .cmd-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 400px; margin-bottom: 16px; }
-.hero2-phantombot-link { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 10px 16px; margin-top: 4px; border: 1px solid var(--neon); border-radius: 9px; background: var(--neon); color: #ffffff; font-weight: 800; font-size: 13px; text-decoration: none; }
-.hero2-phantombot-link:hover, .hero2-phantombot-link:focus-visible { opacity: .9; outline: none; }
+.hero2-phantompet,
+#phantom-main.console .chatbox.hero2-phantompet { width: min(100%, 440px) !important; flex-grow: 0 !important; flex-shrink: 0 !important; flex-basis: auto !important; align-self: flex-start !important; height: 104px !important; max-height: 104px !important; min-height: 0 !important; }
 .cmd-chip {
   display: flex; align-items: center; gap: 8px; padding: 11px 13px; cursor: pointer;
   border: 1px solid var(--line); border-radius: 12px; background: var(--glass); color: var(--ink);
@@ -8997,7 +8997,7 @@ body.phantomplay-playing .buddy-say {
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-51") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-53") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;

@@ -69,6 +69,10 @@
     ],
     enemies: [],
     npcs: ["pip", "el", "vey", "maren_plaza"],
+    pickups: [
+      { x: 8, y: 19, type: "cosmetic", slot: 0 }, { x: 21, y: 11, type: "cosmetic", slot: 1 },
+      { x: 30, y: 21, type: "cosmetic", slot: 2 }, { x: 18, y: 12, type: "cosmetic", slot: 3 },
+    ],
     hint: "Duskhollow, at evensong. Your grandmother is waiting inside.",
   };
 
@@ -89,6 +93,7 @@
     spawn: { x: 8, y: 9 },
     exits: [{ gx: 8, gy: 11, to: "village", toSpawn: { x: 7, y: 7 } }],
     npcs: ["maren"],
+    pickups: [{ x: 5, y: 3, type: "cosmetic", slot: 4 }],
     hint: "The hearth is warm. Maren has something for you.",
   };
   ROOMS.shop = {
@@ -107,6 +112,7 @@
     spawn: { x: 8, y: 9 },
     exits: [{ gx: 8, gy: 11, to: "village", toSpawn: { x: 19, y: 7 } }],
     npcs: ["bram"],
+    pickups: [{ x: 8, y: 4, type: "cosmetic", slot: 5 }],
     hint: "Bram trades in embers. Talk to browse his stock.",
   };
   ROOMS.inn = {
@@ -125,6 +131,7 @@
     spawn: { x: 8, y: 9 },
     exits: [{ gx: 8, gy: 11, to: "village", toSpawn: { x: 31, y: 8 } }],
     npcs: ["odile"],
+    pickups: [{ x: 8, y: 4, type: "cosmetic", slot: 6 }],
     hint: "Odile keeps the inn — and every rumour in Duskhollow.",
   };
 
@@ -181,6 +188,9 @@
     pickups: [
       { x: 6, y: 18, type: "quest", id: "lantern" },
       { x: 21, y: 11, type: "pulse" },
+      { x: 38, y: 3, type: "cosmetic", slot: 7 }, { x: 42, y: 5, type: "cosmetic", slot: 8 },
+      { x: 39, y: 7, type: "cosmetic", slot: 9 }, { x: 43, y: 3, type: "cosmetic", slot: 10 },
+      { x: 33, y: 20, type: "cosmetic", slot: 11 },
     ],
     hint: "The orchard lies northeast. Old liminal ruins stand south of the water.",
   };
@@ -221,7 +231,10 @@
       { gx: 12, gy: 10, to: "ossuary1", toSpawn: { x: 17, y: 19 } },
     ],
     enemies: [{ type: "wolf", x: 12, y: 21 }, { type: "leech", x: 30, y: 20 }],
-    pickups: [{ x: 30, y: 17, type: "ash" }],
+    pickups: [
+      { x: 30, y: 17, type: "cosmetic", slot: 12 }, { x: 12, y: 21, type: "cosmetic", slot: 13 },
+      { x: 30, y: 20, type: "cosmetic", slot: 14 },
+    ],
     hint: "The Ossuary stair rises from the island. Liminal pillars answer the Hand across water.",
   };
 
@@ -258,7 +271,11 @@
       { type: "guard", x: 10, y: 7 }, { type: "guard", x: 22, y: 15 }, { type: "guard", x: 8, y: 18 },
       { type: "leech", x: 15, y: 4 }, { type: "leech", x: 20, y: 18 },
     ],
-    pickups: [{ x: 4, y: 4, type: "ash" }],
+    pickups: [
+      { x: 4, y: 4, type: "cosmetic", slot: 15 }, { x: 10, y: 7, type: "cosmetic", slot: 16 },
+      { x: 22, y: 15, type: "cosmetic", slot: 17 }, { x: 8, y: 18, type: "cosmetic", slot: 18 },
+      { x: 15, y: 4, type: "cosmetic", slot: 19 },
+    ],
     bells: [{ gx: 1, gy: 1 }, { gx: 29, gy: 18 }],
     hint: "Two bells hang silent behind null iron. Ring both, and the Bellmother's door will open.",
   };
@@ -319,6 +336,10 @@
     enemies: [
       { type: "mourner", x: 8, y: 6 }, { type: "mourner", x: 25, y: 6 },
       { type: "mourner", x: 16, y: 13 }, { type: "guard", x: 26, y: 15 },
+    ],
+    pickups: [
+      { x: 8, y: 6, type: "cosmetic", slot: 20 }, { x: 25, y: 6, type: "cosmetic", slot: 21 },
+      { x: 16, y: 13, type: "cosmetic", slot: 22 }, { x: 26, y: 15, type: "cosmetic", slot: 23 },
     ],
     sigil: { gx: 14, gy: 6 },
     hint: "The sigil on null iron only answers a shot that has already touched a mirror.",
@@ -442,18 +463,49 @@
 
   const SHOP = [
     { id: "heart", name: "Heart Vessel", desc: "+1 max heart, fully healed", cost: 60, max: 3 },
-    { id: "ashvessel", name: "Ash Vessel", desc: "+25 max ash", cost: 35, max: 3 },
-    { id: "embercharm", name: "Ember Charm", desc: "Relic: ash regenerates 50% faster", cost: 40, relic: "embercharm" },
+    { id: "embercharm", name: "Soul Charm", desc: "Relic: Vesper Souls gained from kills +25%", cost: 40, relic: "embercharm" },
     { id: "swiftsoles", name: "Swift Soles", desc: "Relic: move 12% faster", cost: 50, relic: "swiftsoles" },
   ];
 
   const RELICS = {
     bellsigil: { id: "bellsigil", name: "Bell Sigil", desc: "Your strike rings brass and releases a small resonant pulse." },
     mirrorlitany: { id: "mirrorlitany", name: "Mirror Litany", desc: "Banked and deflected shots strike far harder and pierce." },
-    embercharm: { id: "embercharm", name: "Ember Charm", desc: "Ash regenerates 50% faster." },
+    embercharm: { id: "embercharm", name: "Soul Charm", desc: "Vesper Souls gained from kills +25%." },
     swiftsoles: { id: "swiftsoles", name: "Swift Soles", desc: "Move 12% faster." },
   };
 
+  /* Cosmetics: 24 findable appearance items across 4 slots. Which physical
+   * glint (see room `pickups` with type "cosmetic"/slot) grants which id is
+   * decided by a per-playthrough shuffle (state.flags.cosmeticOrder) built
+   * once in newGame() — every id is guaranteed reachable in one run, but
+   * which glint gives which item differs each tale. */
+  const COSMETICS = [
+    { id: "cloak_bronze", cat: "cloak", name: "Bronze Vigil Cloak", outer: "#3a2418", inner: "#6a4428" },
+    { id: "cloak_glass", cat: "cloak", name: "Glasslight Cloak", outer: "#1a2c38", inner: "#2c4a5a" },
+    { id: "cloak_bramble", cat: "cloak", name: "Bramblewood Cloak", outer: "#1a2c1a", inner: "#2c4a2c" },
+    { id: "cloak_ember", cat: "cloak", name: "Ember Rose Cloak", outer: "#3a1a26", inner: "#5a2c40" },
+    { id: "cloak_iron", cat: "cloak", name: "Null Iron Cloak", outer: "#18181c", inner: "#2c2c34" },
+    { id: "cloak_saintglass", cat: "cloak", name: "Saint-Glass Cloak", outer: "#16242e", inner: "#264458" },
+    { id: "cloak_wolfshard", cat: "cloak", name: "Wolfshard Cloak", outer: "#24202c", inner: "#3c3450" },
+    { id: "cloak_choir", cat: "cloak", name: "Choir White Cloak", outer: "#2a2a34", inner: "#585470" },
+    { id: "glow_rose", cat: "glow", name: "Rose Vesper Glow", color: "#ff9ad0" },
+    { id: "glow_bronze", cat: "glow", name: "Bronze Vesper Glow", color: "#ffb347" },
+    { id: "glow_verdant", cat: "glow", name: "Verdant Vesper Glow", color: "#7dffb3" },
+    { id: "glow_violet", cat: "glow", name: "Violet Vesper Glow", color: "#b389ff" },
+    { id: "glow_ember", cat: "glow", name: "Ember Vesper Glow", color: "#ff6b4a" },
+    { id: "glow_glass", cat: "glow", name: "Glass Vesper Glow", color: "#c9f0ff" },
+    { id: "accessory_circlet", cat: "accessory", name: "Liminal Circlet", color: "#ffd166" },
+    { id: "accessory_feather", cat: "accessory", name: "Raven Feather", color: "#2a2438" },
+    { id: "accessory_veil", cat: "accessory", name: "Mourner's Veil", color: "#c9d6e8" },
+    { id: "accessory_bellcharm", cat: "accessory", name: "Bell Charm", color: "#b8863a" },
+    { id: "accessory_fang", cat: "accessory", name: "Wolf Fang", color: "#eaf2ff" },
+    { id: "accessory_shard", cat: "accessory", name: "Saint-Glass Shard", color: "#8fe9ff" },
+    { id: "trail_cinder", cat: "trail", name: "Cinder Trail", color: "#ffcf6b" },
+    { id: "trail_frost", cat: "trail", name: "Frost Trail", color: "#8fe9ff" },
+    { id: "trail_bloom", cat: "trail", name: "Bloom Trail", color: "#ff9ad0" },
+    { id: "trail_umbral", cat: "trail", name: "Umbral Trail", color: "#9c8fff" },
+  ];
+
   VG.ROOMS = ROOMS;
-  VG.DATA = { NPCS, QUESTS, DIALOG, SHOP, RELICS, FLATLINES };
+  VG.DATA = { NPCS, QUESTS, DIALOG, SHOP, RELICS, FLATLINES, COSMETICS };
 })();

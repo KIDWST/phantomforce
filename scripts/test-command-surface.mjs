@@ -9,12 +9,14 @@ const mediaLab = readFileSync(new URL("../app/js/medialab.js", import.meta.url),
 const commandOsCss = readFileSync(new URL("../app/command-os.css", import.meta.url), "utf8");
 const count = (source, pattern) => source.match(pattern)?.length || 0;
 
-// Chat moved off the dashboard into its own PhantomBot tab (app/js/phantomai.js,
-// the "phantomai" workspace) — the dashboard keeps only a CTA that routes there,
-// not an embedded composer, so nothing here should compete with that tab.
-assert.equal(count(index, /class="chatbox"/gu), 0, "Dashboard must not re-embed the Phantom chat surface; PhantomBot is its own tab now.");
+// Full chat (log + composer) moved off the dashboard into its own PhantomBot
+// tab (app/js/phantomai.js, the "phantomai" workspace, reachable from the
+// sidebar and the command rail). The dashboard keeps only the compact
+// "PhantomPet" status card (avatar, mode, settings) — no composer or log,
+// nothing here should compete with the PhantomBot tab for actual chatting.
+assert.match(index, /class="chatbox hero2-phantompet"/u, "Dashboard must keep the compact PhantomPet status card.");
 assert.equal(count(index, /data-command-form/gu), 0, "Dashboard must not re-embed a command composer; PhantomBot is its own tab now.");
-assert.match(index, /data-open-ws="phantomai"/u, "Dashboard must keep a way to reach PhantomBot.");
+assert.equal(count(index, /data-chat-log/gu), 0, "Dashboard must not re-embed a chat log; PhantomBot is its own tab now.");
 assert.doesNotMatch(index, /data-chatbox-toggle/u, "Phantom Console minimize belongs inside the rendered header, not stranded in static markup.");
 assert.match(index, /data-dashboard-brief-title/u, "Dashboard must keep a data-backed business brief.");
 assert.match(index, /data-dashboard-brief-status/u, "Dashboard must explain the real organization state.");

@@ -65,6 +65,7 @@ try {
   assert(Object.keys(largeSaved?.state || {}).length > 30, "Bigger games should be able to persist more than a tiny arcade state.");
   const afterPlay = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30 });
   assert(afterPlay.history[0]?.canContinue === true, "An unfinished session should appear in Continue Playing.");
+  assert(typeof (afterPlay.history[0] as { state?: Record<string, unknown> })?.state?.["chunk-0"] === "string", "Snapshot history should carry the latest saved game state for resume.");
   assert(afterPlay.access.usedMinutesToday === 2, "Daily play usage should be derived from durable sessions.");
   const replay = await play.startPhantomPlaySession(playerA, { gameId: "neon-drift" }, { entitled: true, dailyMinuteLimit: 30 });
   await play.updatePhantomPlaySession(playerA, replay.play.id, { secondsDelta: 10, score: 20, progress: 100, ended: true });

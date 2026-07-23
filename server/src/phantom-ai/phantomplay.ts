@@ -1283,7 +1283,8 @@ function historySummary(profile: PlayerProfile) {
     score: item.bestScore,
     progress: item.latest.progress,
     seconds: item.totalSeconds,
-    canContinue: item.latest.progress > 0 && item.latest.progress < 100,
+    state: item.latest.state,
+    canContinue: item.latest.progress < 100 && (item.latest.progress > 0 || Object.keys(item.latest.state || {}).length > 0),
   }));
 }
 

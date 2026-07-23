@@ -24,6 +24,9 @@
     bossHp: 0, bossMax: 1, completeSent: false,
     combo: 0, comboT: 0, bestCombo: 0,
     damageFlash: 0, roomFade: 0,
+    dawn: 0, dawnTransition: false,           // 0 = full night, 1 = daylight restored (evensong)
+    vesperHearts: 0, heartsTotal: 2,
+    soulTiers: {},                             // id -> true once a Vesper Soul power-up tier is unlocked
   };
   VG.state = state;
   for (const q of Object.keys(D.QUESTS)) state.quests[q] = "locked";
@@ -33,13 +36,17 @@
   const player = {
     x: 0, y: 0, vx: 0, vy: 0, kx: 0, ky: 0, r: 6, w: 10,
     fx: 0, fy: 1,                     // facing
-    hp: 4, maxHp: 4, ash: 100, maxAsh: 100, embers: 0,
+    hp: 4, maxHp: 4, embers: 0, vesperSouls: 0,
     iframe: 0, strikeCd: 0, strikeT: 0, boltCd: 0,
     rollT: 0, rollCd: 0, rollDir: { x: 0, y: 1 },
     relics: {}, equipped: [],          // owned map, equipped ids (max 2)
     materials: { wolfshard: 0, glassshard: 0 },
     aimx: 0, aimy: 1, dead: false, _key: "player",
     _trail: [], _stepT: 0,             // roll afterimage samples; footstep-dust timer
+    // Vesper Soul power-up bonuses, applied permanently as tiers unlock
+    bonusMeleeDmg: 0, bonusStrikeCdMul: 1, bonusBeamDmg: 0, bonusReach: 0, bonusMagnetMul: 1,
+    // cosmetics: { owned: [ids], equipped: { cloak, glow, accessory, trail } }
+    cosmetics: { owned: [], equipped: { cloak: null, glow: null, accessory: null, trail: null } },
   };
   VG.player = player;
   const relicOn = (id) => player.equipped.includes(id);
@@ -154,9 +161,9 @@
   /* ================= combat ================= */
   function strike() {
     if (player.strikeCd > 0) return;
-    player.strikeCd = 0.32; player.strikeT = 0.14;
+    player.strikeCd = 0.32 * player.bonusStrikeCdMul; player.strikeT = 0.14;
     VG.sfxCinder("needle"); VG.camera.jolt(0.05);
-    const reach = 20, arc = 1.15;
+    const reach = 20 + player.bonusReach, arc = 1.15;
     const fa = Math.atan2(player.fy, player.fx);
     spawnParticles(player.x + player.fx * 12, player.y + player.fy * 12, "#ffd166", 5, 55);
     for (const e of enemies) {
@@ -166,13 +173,13 @@
       const da = Math.abs(Math.atan2(Math.sin(Math.atan2(e.y - player.y, e.x - player.x) - fa), Math.cos(Math.atan2(e.y - player.y, e.x - player.x) - fa)));
       if (da > arc) continue;
       const fromBehind = e.facing ? (Math.cos(e.facing) * (e.x - player.x) + Math.sin(e.facing) * (e.y - player.y)) > 0 : true;
-      damageEnemy(e, 10, fromBehind);
+      damageEnemy(e, 10 + player.bonusMeleeDmg, fromBehind);
       // Knockback impulse, not an instant position nudge: applied/decayed in
       // stepEnemy so it survives that enemy's own AI movement this frame
       // instead of being immediately overwritten by it.
       e.kx = (e.kx || 0) + player.fx * 210; e.ky = (e.ky || 0) + player.fy * 210;
     }
-    if (boss && !boss.dead && VG.dist(player.x, player.y, boss.x, boss.y) < reach + boss.r) damageBoss(8);
+    if (boss && !boss.dead && VG.dist(player.x, player.y, boss.x, boss.y) < reach + boss.r) damageBoss(8 + player.bonusMeleeDmg);
     // deflect bolts
     for (const b of bolts) {
       if (b.hostileToEnemies) continue;
@@ -190,12 +197,15 @@
   }
   function fireBolt() {
     if (!state.flags.hasHand) return;
-    if (player.boltCd > 0 || player.ash < 6) { if (player.ash < 6) VG.sfx(200, 0.05, "square", 0.03); return; }
-    player.boltCd = 0.22; player.ash -= 6;
+    // The beam only answers a Hand at full health — take a single hit and
+    // it's melee-only until a heart restores you back to max. No ash cost:
+    // full HP *is* the resource.
+    if (player.boltCd > 0 || player.hp < player.maxHp) { if (player.hp < player.maxHp) VG.sfx(200, 0.05, "square", 0.03); return; }
+    player.boltCd = 0.22;
     shots.push({
       x: player.x + player.aimx * 8, y: player.y + player.aimy * 8,
       vx: player.aimx * 300, vy: player.aimy * 300,
-      r: 3, dmg: 8, life: 1.8, _bounces: 0, foldshot: false, pierce: 0, key: "shot" + Math.random(),
+      r: 2, dmg: 4 + player.bonusBeamDmg, life: 1.8, _bounces: 0, foldshot: false, pierce: 0, key: "shot" + Math.random(),
     });
     VG.sfxCinder("needle"); VG.camera.jolt(0.04);
     spawnParticles(player.x + player.aimx * 8, player.y + player.aimy * 8, "#ffcf6b", 2, 40);
@@ -219,6 +229,8 @@
     if (state.combo >= 2) toast(`${state.combo} SOUL CHAIN  ×${multiplier}`, e.x, e.y - 18, state.combo >= 6 ? "#ffcf6b" : "#8fe9ff");
     const val = e.type === "wolf" ? 4 : e.type === "guard" ? 6 : e.type === "mourner" ? 6 : 3;
     for (let i = 0; i < val; i++) pickups.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 90, vy: (Math.random() - 0.5) * 90, type: "ember", value: 1, bob: Math.random() * 6 });
+    const soulVal = e.type === "guard" || e.type === "mourner" ? 3 : e.type === "wolf" ? 2 : 1;
+    for (let i = 0; i < soulVal; i++) pickups.push({ x: e.x, y: e.y, vx: (Math.random() - 0.5) * 90, vy: (Math.random() - 0.5) * 90, type: "soul", value: 1, bob: Math.random() * 6 });
     if (e.type === "wolf") player.materials.wolfshard++;
     if (e.type === "mourner") {
       player.materials.glassshard++;
@@ -241,6 +253,31 @@
         banner("RELIC — Mirror Litany");
         toast("Owning it isn't enough — open TAB and equip it (max 2)", player.x, player.y - 28, "#c9d6e8");
         VG.sfxBell(240, 0.16);
+        grantHeart("heart_choir", "VESPER HEART — the Choir's voice, silenced");
+      }
+    }
+  }
+  function grantHeart(flagKey, msg) {
+    if (state.flags[flagKey]) return;
+    state.flags[flagKey] = true;
+    state.vesperHearts = Math.min(state.heartsTotal, state.vesperHearts + 1);
+    banner(`${msg}  (${state.vesperHearts}/${state.heartsTotal})`);
+  }
+  const SOUL_TIERS = [
+    { at: 15, apply: () => { player.bonusMeleeDmg += 3; }, msg: "SOUL-TEMPERED STRIKE — melee +3 damage" },
+    { at: 40, apply: () => { player.bonusStrikeCdMul *= 0.85; }, msg: "STEADY HAND — strike recovers 15% faster" },
+    { at: 75, apply: () => { player.bonusBeamDmg += 3; }, msg: "FOCUSED BEAM — beam +3 damage" },
+    { at: 120, apply: () => { player.bonusReach += 6; }, msg: "WIDE REACH — melee reach +6" },
+    { at: 180, apply: () => { player.bonusMagnetMul *= 2; }, msg: "SOUL MAGNET — pickup range doubled" },
+  ];
+  function checkSoulTiers() {
+    for (const tier of SOUL_TIERS) {
+      const key = "soulTier" + tier.at;
+      if (!state.soulTiers[key] && player.vesperSouls >= tier.at) {
+        state.soulTiers[key] = true;
+        tier.apply();
+        banner(tier.msg);
+        VG.sfxBell(300, 0.14);
       }
     }
   }
@@ -261,6 +298,7 @@
       completeQuest("q_bell");
       player.relics.bellsigil = true;
       banner("RELIC — Bell Sigil");
+      grantHeart("heart_bellmother", "VESPER HEART — the Bellmother's toll, silenced");
       toast("THE BRONZE REMEMBERS ITS SONG", boss.x, boss.y - 24, "#8fe9ff");
       toast("Owning it isn't enough — open TAB and equip it (max 2)", player.x, player.y - 28, "#c9d6e8");
       VG.sfxBell(220, 0.2);
@@ -519,6 +557,7 @@
         completeQuest("q_evensong");
         for (let i = 0; i < 5; i++) setTimeout(() => VG.sfxBell(110 + i * 30, 0.16), i * 420);
         state.score += 1500;
+        state.dawnTransition = true;
         if (!state.completeSent) { state.completeSent = true; host("complete", { score: state.score, progress: 100, state: { quests: state.quests } }); }
         state.phase = "win"; showOverlay("win");
       },
@@ -586,7 +625,6 @@
     player.embers -= item.cost;
     state.shopBought[item.id] = bought + 1;
     if (item.id === "heart") { player.maxHp++; player.hp = player.maxHp; }
-    if (item.id === "ashvessel") { player.maxAsh += 25; player.ash = player.maxAsh; }
     if (item.relic) { player.relics[item.relic] = true; banner("RELIC — " + D.RELICS[item.relic].name); toast("Owning it isn't enough — open TAB and equip it (max 2)", player.x, player.y - 28, "#c9d6e8"); }
     VG.sfx(660, 0.1, "triangle", 0.05);
     saveGame();
@@ -603,24 +641,33 @@
   function saveGame() {
     VG.save.write({
       roomId: ["hollowboss", "ossuaryboss"].includes(state.roomId) ? "village" : state.roomId,
-      hp: player.hp, maxHp: player.maxHp, ash: player.ash, maxAsh: player.maxAsh,
-      embers: player.embers, relics: player.relics, equipped: player.equipped,
+      hp: player.hp, maxHp: player.maxHp,
+      embers: player.embers, vesperSouls: player.vesperSouls, relics: player.relics, equipped: player.equipped,
       materials: player.materials, quests: state.quests, flags: state.flags,
       shopBought: state.shopBought, score: state.score, kills: state.kills,
-      bestCombo: state.bestCombo,
+      bestCombo: state.bestCombo, dawn: state.dawn, dawnTransition: state.dawnTransition,
+      vesperHearts: state.vesperHearts, soulTiers: state.soulTiers,
+      bonusMeleeDmg: player.bonusMeleeDmg, bonusStrikeCdMul: player.bonusStrikeCdMul,
+      bonusBeamDmg: player.bonusBeamDmg, bonusReach: player.bonusReach, bonusMagnetMul: player.bonusMagnetMul,
+      cosmetics: player.cosmetics,
     });
   }
   function restoreSave(s) {
     player.hp = s.hp ?? 4; player.maxHp = s.maxHp ?? 4;
-    player.ash = s.ash ?? 100; player.maxAsh = s.maxAsh ?? 100;
-    player.embers = s.embers ?? 0;
+    player.embers = s.embers ?? 0; player.vesperSouls = s.vesperSouls ?? 0;
     player.relics = s.relics || {}; player.equipped = s.equipped || [];
     player.materials = s.materials || { wolfshard: 0, glassshard: 0 };
     state.quests = Object.assign(state.quests, s.quests || {});
     state.flags = s.flags || {};
+    if (!state.flags.cosmeticOrder) state.flags.cosmeticOrder = shuffledCosmeticOrder();
     state.shopBought = s.shopBought || {};
     state.score = s.score || 0; state.kills = s.kills || 0;
     state.bestCombo = s.bestCombo || 0;
+    state.dawn = s.dawn || 0; state.dawnTransition = !!s.dawnTransition;
+    state.vesperHearts = s.vesperHearts || 0; state.soulTiers = s.soulTiers || {};
+    player.bonusMeleeDmg = s.bonusMeleeDmg || 0; player.bonusStrikeCdMul = s.bonusStrikeCdMul ?? 1;
+    player.bonusBeamDmg = s.bonusBeamDmg || 0; player.bonusReach = s.bonusReach || 0; player.bonusMagnetMul = s.bonusMagnetMul ?? 1;
+    player.cosmetics = s.cosmetics || { owned: [], equipped: { cloak: null, glow: null, accessory: null, trail: null } };
   }
 
   /* ================= room loading ================= */
@@ -639,7 +686,7 @@
     pickups = (def.pickups || [])
       .filter((p) => !(p.type === "quest" && (state.flags[p.id] || state.quests.q_lantern === "done")))
       .filter((p) => !state.flags["got_" + id + "_" + p.x + "_" + p.y] || p.type === "quest")
-      .map((p) => ({ x: p.x * T + 8, y: p.y * T + 8, type: p.type, id: p.id, defKey: "got_" + id + "_" + p.x + "_" + p.y, bob: Math.random() * 6 }));
+      .map((p) => ({ x: p.x * T + 8, y: p.y * T + 8, type: p.type, id: p.id, slot: p.slot, defKey: "got_" + id + "_" + p.x + "_" + p.y, bob: Math.random() * 6 }));
     boss = def.boss && !(def.boss.type === "bellmother" && state.flags.bellRestored) ? makeBoss(def.boss) : null;
     loadNpcs(def);
     portals.reset();
@@ -769,7 +816,6 @@
     player.strikeT = Math.max(0, player.strikeT - dt);
     player.boltCd = Math.max(0, player.boltCd - dt);
     player.iframe = Math.max(0, player.iframe - dt);
-    player.ash = Math.min(player.maxAsh, player.ash + (relicOn("embercharm") ? 12 : 8) * dt);
 
     updateGatePreview();
 
@@ -848,21 +894,37 @@
     if (boss) stepBoss(boss, dt);
     enemies = enemies.filter((e) => !e.dead || e.hurt > 0);
 
-    /* pickups (embers magnet to player) */
+    /* pickups (embers/souls magnet to player) */
     for (const p of pickups) {
       p.bob += dt;
-      if (p.type === "ember") {
+      if (p.type === "ember" || p.type === "soul") {
         p.x += (p.vx || 0) * dt; p.y += (p.vy || 0) * dt;
         p.vx = (p.vx || 0) * 0.9; p.vy = (p.vy || 0) * 0.9;
+        const magnetR = 30 * player.bonusMagnetMul;
         const d = VG.dist(p.x, p.y, player.x, player.y);
-        if (d < 30) { p.x += (player.x - p.x) * dt * 8; p.y += (player.y - p.y) * dt * 8; }
-        if (d < 10) { p.dead = true; player.embers += p.value; VG.sfx(760, 0.04, "triangle", 0.03); }
+        if (d < magnetR) { p.x += (player.x - p.x) * dt * 8; p.y += (player.y - p.y) * dt * 8; }
+        if (d < 10) {
+          p.dead = true;
+          if (p.type === "ember") { player.embers += p.value; VG.sfx(760, 0.04, "triangle", 0.03); }
+          else {
+            player.vesperSouls += Math.round(p.value * (relicOn("embercharm") ? 1.25 : 1));
+            VG.sfx(820, 0.04, "sine", 0.03);
+            checkSoulTiers();
+          }
+        }
         continue;
       }
       if (VG.dist(p.x, p.y, player.x, player.y) < 14) {
-        if (p.type === "ash") { player.maxAsh += 20; player.ash = player.maxAsh; banner("ASH VESSEL — more cinder"); }
-        else if (p.type === "pulse") { player.maxHp += 1; player.hp = player.maxHp; banner("HEART VESSEL"); }
+        if (p.type === "pulse") { player.maxHp += 1; player.hp = player.maxHp; banner("HEART VESSEL"); }
         else if (p.type === "quest") { state.flags[p.id] = true; banner(p.id === "lantern" ? "PIP'S LANTERN — return it" : p.id.toUpperCase()); }
+        else if (p.type === "cosmetic") {
+          const cosId = state.flags.cosmeticOrder && state.flags.cosmeticOrder[p.slot];
+          const item = cosId && D.COSMETICS.find((c) => c.id === cosId);
+          if (item && !player.cosmetics.owned.includes(cosId)) {
+            player.cosmetics.owned.push(cosId);
+            banner("FOUND — " + item.name);
+          }
+        }
         if (p.defKey && p.type !== "quest") state.flags[p.defKey] = true;
         p.dead = true; VG.sfx(660, 0.1, "triangle", 0.05); spawnParticles(p.x, p.y, "#fff", 8);
         saveGame();
@@ -1028,6 +1090,20 @@
     }
     VG.fx.drawGlimpses(ctx, VG.camera);
   }
+  /* Night → day arc: the dungeons already have their own Living Darkness
+     mood system (above); this is the *overworld's* time-of-day, layered on
+     top of the biome's existing dusk wash (world.js drawLight). Starts at
+     full night, only lifts once the evensong ending fires (see SCENES.evensong). */
+  function applyNightVeil() {
+    const biome = state.room && state.room.biome;
+    if (VG.fx.DARK_BIOMES.has(biome)) return;
+    const dawn = state.dawn || 0;
+    if (dawn >= 1) return;
+    const night = (1 - dawn) * 0.5;
+    const r = Math.round(8 + dawn * 60), g = Math.round(10 + dawn * 44), b = Math.round(26 + dawn * 30);
+    ctx.fillStyle = `rgba(${r},${g},${b},${night.toFixed(3)})`;
+    ctx.fillRect(VG.camera.x, VG.camera.y, VG.W, VG.H);
+  }
   function drawScene() {
     const flags = roomFlags();
     state.room.draw(ctx, VG.camera, state.t, flags);
@@ -1048,13 +1124,25 @@
       if (p.type === "ember") {
         ctx.fillStyle = "#ffcf6b"; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
         ctx.fillStyle = "rgba(255,220,140,0.5)"; ctx.fillRect(p.x - 0.5, p.y - 3, 1, 6);
+      } else if (p.type === "soul") {
+        glow("rgba(156,143,255,0.6)", 3, () => {
+          ctx.fillStyle = "#9c8fff"; ctx.beginPath(); ctx.arc(p.x, yy, 2, 0, Math.PI * 2); ctx.fill();
+        });
       } else if (p.type === "quest") {
         shadow(p.x, p.y, 5);
         ctx.fillStyle = "#3a2c1a"; ctx.fillRect(p.x - 3, yy - 6, 6, 9);
         ctx.fillStyle = `rgba(255,200,110,${0.7 + Math.sin(state.t * 4) * 0.3})`; ctx.fillRect(p.x - 2, yy - 5, 4, 6);
+      } else if (p.type === "cosmetic") {
+        const spin = state.t * 2 + p.x;
+        glow("rgba(255,244,216,0.7)", 5, () => {
+          ctx.save(); ctx.translate(p.x, yy); ctx.rotate(spin);
+          ctx.fillStyle = "#fff4d8";
+          ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(2, 0); ctx.lineTo(0, 5); ctx.lineTo(-2, 0); ctx.closePath(); ctx.fill();
+          ctx.restore();
+        });
       } else {
         shadow(p.x, p.y, 4);
-        ctx.fillStyle = p.type === "ash" ? "#ffcf6b" : "#ff9ad0";
+        ctx.fillStyle = "#ff9ad0";
         ctx.beginPath(); ctx.arc(p.x, yy, 4, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(p.x - 1, yy - 6, 2, 12);
       }
@@ -1085,6 +1173,7 @@
     VG.fx.drawAtmosphere(ctx, VG.camera);
     // dusk light pass
     state.room.drawLight(ctx, VG.camera, state.t, flags);
+    applyNightVeil();
     // drifting cloud shadows over the open world
     if (["village", "vale", "lake"].includes(def.biome)) {
       ctx.fillStyle = "rgba(8,6,20,0.10)";
@@ -1732,15 +1821,26 @@
     if (t2.dataset && t2.dataset.vgSet) { VG.settings[t2.dataset.vgSet] = parseFloat(t2.value); if (t2.dataset.vgSet === "volume" && VG.audio.master) VG.audio.master.gain.value = VG.settings.volume; VG.saveSettings(); }
     if (t2.dataset && t2.dataset.vgChk) { VG.settings[t2.dataset.vgChk] = t2.checked; VG.saveSettings(); VG.fit(); }
   });
+  function shuffledCosmeticOrder() {
+    const ids = D.COSMETICS.map((c) => c.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    return ids;
+  }
   function newGame() {
     VG.dread.reset();
     for (const q of Object.keys(D.QUESTS)) state.quests[q] = "locked";
     state.quests.q_hand = "active";
-    state.flags = {}; state.shopBought = {};
-    player.hp = 4; player.maxHp = 4; player.ash = 100; player.maxAsh = 100;
-    player.embers = 0; player.relics = {}; player.equipped = []; player.materials = { wolfshard: 0, glassshard: 0 };
+    state.flags = { cosmeticOrder: shuffledCosmeticOrder() }; state.shopBought = {};
+    player.hp = 4; player.maxHp = 4;
+    player.embers = 0; player.vesperSouls = 0; player.relics = {}; player.equipped = []; player.materials = { wolfshard: 0, glassshard: 0 };
+    player.bonusMeleeDmg = 0; player.bonusStrikeCdMul = 1; player.bonusBeamDmg = 0; player.bonusReach = 0; player.bonusMagnetMul = 1;
+    player.cosmetics = { owned: [], equipped: { cloak: null, glow: null, accessory: null, trail: null } };
     state.score = 0; state.kills = 0; state.completeSent = false;
     state.combo = 0; state.comboT = 0; state.bestCombo = 0; state.damageFlash = 0;
+    state.dawn = 0; state.dawnTransition = false; state.vesperHearts = 0; state.soulTiers = {};
     startGame("maren", null);
   }
   function startGame(roomId, spawn) {
@@ -1777,6 +1877,7 @@
     const dt = Math.min(0.033, (now - last) / 1000); last = now;
     state.damageFlash = Math.max(0, state.damageFlash - dt * 3.8);
     state.roomFade = Math.max(0, state.roomFade - dt * 2.6);
+    if (state.dawnTransition && state.dawn < 1) state.dawn = Math.min(1, state.dawn + dt / 8);
     if (state.comboT > 0) {
       state.comboT = Math.max(0, state.comboT - dt);
       if (state.comboT === 0) state.combo = 0;

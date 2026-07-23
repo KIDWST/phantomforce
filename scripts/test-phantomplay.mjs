@@ -165,6 +165,11 @@ assert.match(module, /data-pp-player-pause/u, "The player must expose pause and 
 assert.match(module, /data-pp-player-restart/u, "The player must expose a restart control.");
 assert.match(module, /data-pp-player-close/u, "The player must expose close controls.");
 assert.match(module, /postToGame\("exit"/u, "Closing the player must notify the game before teardown.");
+assert.match(module, /postToGame\("save-state"/u, "Classic PhantomPlay must request a final save-state payload before closing the iframe.");
+assert.match(v2Module, /postToGame\("save-state"/u, "PhantomPlay V2 must request a final save-state payload before closing the iframe.");
+assert.match(module + v2Module, /function detailFromGameMessage/u, "Both PhantomPlay shells must parse score/progress/state from game protocol messages.");
+assert.match(module + v2Module, /event\.data\.type === "exit"[\s\S]*persistPlay\(true, detailFromGameMessage/u, "Game exit messages must persist their latest score/progress/state instead of only closing the UI.");
+assert.match(module + v2Module, /state,\s*canContinue: progress < 100 && \(progress > 0 \|\| hasState\)/u, "Local fallback history must keep state and mark stateful unfinished games resumable.");
 assert.match(module, /document\.exitFullscreen/u, "Closing the player must escape fullscreen mode.");
 assert.match(module, /PHANTOMPLAY_ENGINE/u, "The player must publish an engine capability profile.");
 assert.match(module, /saveStateBytes:\s*262144/u, "The engine must support larger save-state payloads for bigger games.");
@@ -235,6 +240,8 @@ const buildIds = new Set(appFiles.flatMap((source) => source.match(/phantom-live
 assert.equal(buildIds.size, 1, `The PhantomPlay module graph must use one build ID, found: ${[...buildIds].join(", ")}`);
 assert.doesNotMatch(module + v2Module, /id:\s*`offline-\$\{Date\.now\(\)\}`|offlinePlay\(/u, "PhantomPlay must not create local-only play sessions; launches require the backend play-session route.");
 assert.match(module + v2Module, /\/api\/phantomplay\/plays/u, "PhantomPlay launches must call the backend play-session route.");
+assert.match(serverCatalog, /state: item\.latest\.state/u, "Server history summaries must include the latest saved state for resume-capable games.");
+assert.match(serverCatalog, /canContinue: item\.latest\.progress < 100 && \(item\.latest\.progress > 0 \|\| Object\.keys\(item\.latest\.state \|\| \{\}\)\.length > 0\)/u, "Server history must treat stateful unfinished games as resumable even if progress is zero.");
 
 for (const game of games) {
   assert.match(game, /Content-Security-Policy/u, "Every built-in game must set a CSP.");
