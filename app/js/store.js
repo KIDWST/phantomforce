@@ -1,3 +1,5 @@
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260723-39";
+
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
    no payments, no provider calls happen from here — records move through
@@ -1314,7 +1316,7 @@ export const STATUS_LABEL = {
   "cataloged": "Cataloged", "server-only": "Server-only", "approval-gated": "Approval-gated",
   "not-scheduled": "Not scheduled",
 };
-export const statusLabel = (s) => STATUS_LABEL[s] || s;
+export const statusLabel = (s) => STATUS_LABEL[s] || operationStatusMeta(s).label;
 
 /* ============================ Phantom Loop ============================
    Phantom Loop is a CHAT-ROUTING preference, not a task/plan/build system:

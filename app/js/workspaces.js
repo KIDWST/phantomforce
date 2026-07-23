@@ -9,24 +9,25 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260723-38";
+} from "./store.js?v=phantom-live-20260723-39";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260723-38";
+} from "./orgs.js?v=phantom-live-20260723-39";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260723-38";
+} from "./proposalpipeline.js?v=phantom-live-20260723-39";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260723-38";
+} from "./approvalpipeline.js?v=phantom-live-20260723-39";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260723-39";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -37,6 +38,7 @@ const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all", brainOpen: false };
 const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", loadedOrg: "", loadingOrg: "" };
+const crmSelection = createScopedSelection("");
 const proposalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
 const approvalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
@@ -208,6 +210,16 @@ function syncServerCrm(ws, rerender) {
   });
 }
 
+function syncCrmSelectionScope(ws) {
+  if (crmSelection.switchScope(ws)) leadsUi.selectedId = "";
+  if (leadsUi.selectedId && !crmSelection.has(leadsUi.selectedId)) crmSelection.replace([leadsUi.selectedId]);
+}
+
+function setCrmSelection(id) {
+  leadsUi.selectedId = String(id || "");
+  crmSelection.replace(leadsUi.selectedId ? [leadsUi.selectedId] : []);
+}
+
 function applyCrmCommand(prompt) {
   const settings = workspaceCrmSettings();
   const amount = String(prompt || "").match(/\b(?:pull|find|add|get)\s+(\d{1,5})\b/i)?.[1];
@@ -286,6 +298,7 @@ function crmContactCard(l) {
 
 function renderLeads(el, rerender) {
   const ws = leadWorkspaceId();
+  syncCrmSelectionScope(ws);
   syncServerCrm(ws, rerender);
   const settings = workspaceCrmSettings(ws);
   const leads = filteredCrmContacts();
@@ -311,7 +324,12 @@ function renderLeads(el, rerender) {
       <button class="btn btn-primary" data-act="add">+ New contact</button>
     </div>
     <div class="crm-layout">
-      <div class="crm-list">${leads.map(crmContactCard).join("") || `<div class="ws-empty">No CRM contacts yet. Say “pull 5 new clients per day” or click New contact.</div>`}</div>
+      <div class="crm-list">${leads.map(crmContactCard).join("") || productStateHtml("empty", {
+        title: "No CRM contacts yet",
+        detail: "Ask Phantom to find verified prospects or capture a real contact manually.",
+        actionLabel: "New contact",
+        actionAttribute: "data-act=add",
+      })}</div>
       <aside class="crm-detail">
         ${selected ? `
           <div class="crm-detail-head"><div class="crm-avatar is-large">${crmAvatar(selected)}</div><div><p>${esc(selected.crmStage || statusLabel(selected.status))}</p><h3>${esc(selected.name || selected.company)}</h3><span>${esc(selected.company || "")}</span></div></div>
@@ -334,7 +352,7 @@ function renderLeads(el, rerender) {
             ${selected.status === "won" ? `<button class="btn" data-act="review" data-id="${esc(selected.id)}">Prepare review request</button>` : ""}
             ${selected.status === "lost" ? `<button class="btn btn-quiet" data-act="revive" data-id="${esc(selected.id)}">Re-open</button>` : ""}
           </div>
-        ` : `<div class="ws-empty">Select a contact to open the CRM profile.</div>`}
+        ` : productStateHtml("empty", { title: "No contact selected", detail: "Choose a contact to open its organization-scoped CRM profile." })}
       </aside>
     </div>`;
   const find = (id) => store.state.leads.find((l) => l.id === id);
@@ -366,7 +384,7 @@ function renderLeads(el, rerender) {
             const merged = [...(result.contacts || []), ...store.state.leads.filter((lead) => lead.ws === ws && !result.contacts?.some((c) => c.id === lead.id))];
             store.state.leads = [...merged, ...other];
             store.state.crmSettings[ws] = result.settings || workspaceCrmSettings(ws);
-            leadsUi.selectedId = result.contacts?.[0]?.id || leadsUi.selectedId;
+            setCrmSelection(result.contacts?.[0]?.id || leadsUi.selectedId);
             leadsUi.notice = `Added ${Number(result.created || 0).toLocaleString()} verified public-research contact${result.created === 1 ? "" : "s"} to ${leadWorkspaceName()}. Review every record before drafting outreach.`;
             pushActivity("Easy CRM", `pulled ${Number(result.created || 0).toLocaleString()} CRM candidate${result.created === 1 ? "" : "s"} for ${leadWorkspaceName()}.`, ws);
             store.save();
@@ -388,7 +406,7 @@ function renderLeads(el, rerender) {
     });
   }
   bindActions(el, {
-    select: (id) => { leadsUi.selectedId = id; rerender(); },
+    select: (id) => { setCrmSelection(id); rerender(); },
     add: () => {
       const name = prompt("Contact name (person or business):");
       if (!name) return;
@@ -398,12 +416,12 @@ function renderLeads(el, rerender) {
       const avatarUrl = prompt("Profile image URL (optional — paste from their public profile):") || "";
       const lead = { id: uid("lead"), ws, name: name.trim(), company: company.trim(), source: "Manual CRM", status: "new", value: 750, next: "Qualify need, budget, and best contact path", due: new Date(Date.now() + 86400000).toISOString(), owner: "CRM", notes: "", proposalId: null, type: "prospect", socials: { instagram }, website, avatarUrl, email: "", phone: "", tags: [], qualification: [], outreach: "", crmStage: "Prospect" };
       store.state.leads.unshift(lead);
-      leadsUi.selectedId = lead.id;
+      setCrmSelection(lead.id);
       pushActivity("Easy CRM", `captured CRM contact: ${name.trim()}.`, ws);
       if (isDatabaseSession()) createOrgCrmContact(crmPayload(lead)).then((result) => {
         if (result?.contact) {
           Object.assign(lead, result.contact);
-          leadsUi.selectedId = result.contact.id;
+          setCrmSelection(result.contact.id);
           store.save();
           rerender();
         }
@@ -1681,7 +1699,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260723-38")
+      import("./brain.js?v=phantom-live-20260723-39")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

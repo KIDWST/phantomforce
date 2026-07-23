@@ -6,52 +6,53 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260723-38";
+} from "./store.js?v=phantom-live-20260723-39";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems,
-} from "./organizationpulse.js?v=phantom-live-20260723-38";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260723-38";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260723-38";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260723-38";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260723-38";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260723-38";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260723-38";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260723-38";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260723-38";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-38";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260723-38";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260723-38";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260723-38";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260723-38";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260723-38";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260723-38";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260723-38";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260723-38";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260723-38";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260723-38";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260723-38";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260723-38";
+} from "./organizationpulse.js?v=phantom-live-20260723-39";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260723-39";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260723-39";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260723-39";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260723-39";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260723-39";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260723-39";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260723-39";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260723-39";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-39";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260723-39";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260723-39";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260723-39";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260723-39";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260723-39";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260723-39";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260723-39";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260723-39";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260723-39";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260723-39";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260723-39";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260723-39";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260723-38";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260723-38";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260723-38";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260723-38";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260723-38";
+} from "./orgs.js?v=phantom-live-20260723-39";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260723-39";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260723-39";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260723-39";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260723-39";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260723-38";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260723-39";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260723-38";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260723-39";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260723-38";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260723-38";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260723-38";
+} from "./customization.js?v=phantom-live-20260723-39";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260723-39";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260723-39";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260723-39";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -653,6 +654,9 @@ const WORKSPACE_ALIASES = {
   content: "content",
   analytics: "analytics",
 };
+const ROUTE_REGISTRY = createRouteRegistry([
+  { id: "dashboard", title: "Dashboard", authority: "member" },
+], WORKSPACE_ALIASES);
 
 /* Secondary workspaces still belong to a clear product section. Keeping that
    relationship here makes navigation follow AI routes, cards, deep links, and
@@ -672,7 +676,7 @@ const NAV_PARENT_BY_WORKSPACE = {
 };
 
 function workspaceId(id) {
-  return WORKSPACE_ALIASES[id] || id;
+  return ROUTE_REGISTRY.canonicalId(id);
 }
 
 function canAccessSurface(surface) {
@@ -1575,7 +1579,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260723-38";
+const POSE_VERSION = "phantom-live-20260723-39";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -3972,9 +3976,18 @@ const CUSTOM = {
 };
 
 let openId = null;
+Object.entries({ ...WORKSPACE_DEFS, ...CUSTOM }).forEach(([id, surface]) => {
+  ROUTE_REGISTRY.register({
+    id,
+    title: surface.title,
+    authority: surface.ownerOnly ? "owner" : surface.adminOnly ? "admin" : "member",
+    entitlement: surface.entitlement || null,
+    surface,
+  });
+});
+
 function workspaceDef(id) {
-  const key = workspaceId(id);
-  return CUSTOM[key] || WORKSPACE_DEFS[key] || null;
+  return ROUTE_REGISTRY.resolve(id)?.surface || null;
 }
 function navForWorkspace(id) {
   const key = workspaceId(id);
@@ -4038,8 +4051,8 @@ function renderDashboardPage(pushHash = true) {
 function renderWorkspacePage(id, pushHash = true) {
   const key = workspaceId(id);
   const def = workspaceDef(key);
-  if (!def) return;
-  if (!canAccessSurface(def)) return;
+  if (!def) return routeWorkspace(key, pushHash);
+  if (!canAccessSurface(def)) return false;
   const wsMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
   setGhostMood(wsMood.mood, { emotion: wsMood.emotion, ms: 1400 });
   stageReact(key === "media" ? "video" : key === "sites" ? "website" : "workspace", 720);
@@ -4088,14 +4101,23 @@ function renderWorkspacePage(id, pushHash = true) {
 function routeWorkspace(id, pushHash = true) {
   const key = workspaceId(id);
   if (key === "dashboard") { renderDashboardPage(pushHash); return; }
+  if (!ROUTE_REGISTRY.has(key)) {
+    renderDashboardPage(false);
+    if (location.hash) {
+      try { history.replaceState(null, "", "#page/dashboard"); } catch {}
+    }
+    speak("That workspace is unavailable. Dashboard is open instead.", "", "alert");
+    return false;
+  }
   if (navForWorkspace(key)) renderWorkspacePage(key, pushHash);
   else openWorkspace(key, pushHash);
+  return true;
 }
 function openWorkspace(id, pushHash = true) {
   const key = workspaceId(id);
   const def = workspaceDef(key);
-  if (!def) return;
-  if (!canAccessSurface(def)) return;
+  if (!def) return false;
+  if (!canAccessSurface(def)) return false;
   const overlayMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
   setGhostMood(overlayMood.mood, { emotion: overlayMood.emotion, ms: 1400 });
   stageReact("workspace", 720);
@@ -4131,6 +4153,7 @@ function openWorkspace(id, pushHash = true) {
     try { history.pushState(null, "", `#ws/${key}`); } catch {}
   }
   renderNav();
+  return true;
 }
 function closeOverlay(clearHash) {
   if (!openId) { if (clearHash) syncNavToView(); return; }
@@ -4162,8 +4185,8 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) 
 window.addEventListener("popstate", () => {
   const page = location.hash.match(/^#page\/([a-z-]+)/);
   const ws = location.hash.match(/^#ws\/([a-z-]+)/);
-  if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
-  else if (ws && workspaceDef(ws[1])) routeWorkspace(ws[1], false);
+  if (page) routeWorkspace(page[1], false);
+  else if (ws) routeWorkspace(ws[1], false);
   else renderDashboardPage(false);
 });
 
@@ -4311,9 +4334,9 @@ function enterPhantom() {
   const view = (q.get("view") || "").toLowerCase();
   const page = location.hash.match(/^#page\/([a-z-]+)/);
   const m = location.hash.match(/^#ws\/([a-z-]+)/);
-  if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
-  else if (m && workspaceDef(m[1])) routeWorkspace(m[1], false);
-  else if (view && view !== "command" && workspaceDef(view)) routeWorkspace(view, false);
+  if (page) routeWorkspace(page[1], false);
+  else if (m) routeWorkspace(m[1], false);
+  else if (view && view !== "command") routeWorkspace(view, false);
   // a data-driven spoken briefing once the reveal settles
   if (briefingTimer) clearTimeout(briefingTimer);
   briefingTimer = setTimeout(() => {

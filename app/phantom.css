@@ -8993,7 +8993,7 @@ body.phantomplay-playing .buddy-say {
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-38") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-39") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -14866,4 +14866,26 @@ body .phantom .workspace-page :where(
     display: grid !important;
     grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
   }
+}
+/* Shared product-state grammar: every module gets the same compact,
+   accessible loading/empty/error treatment without inventing local cards. */
+.pf-state {
+  display: grid;
+  justify-items: start;
+  gap: 0.38rem;
+  min-width: 0;
+}
+.pf-state > b {
+  color: var(--text, #effff7);
+  font-size: 0.95rem;
+}
+.pf-state > span {
+  color: var(--muted, #8fa5a0);
+  max-width: 58ch;
+}
+.pf-state-error {
+  border-color: color-mix(in srgb, #ff626f 50%, transparent);
+}
+.pf-state-action {
+  margin-top: 0.35rem;
 }

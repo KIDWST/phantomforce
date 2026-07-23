@@ -1,7 +1,10 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260723-38";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260723-39";
+import { createLatestOperation, normalizeOperationStatus } from "./product-grammar.js?v=phantom-live-20260723-39";
 
 const PULSE_TTL_MS = 45_000;
 const BRAIN_CONTRACT_TTL_MS = 45_000;
+const pulseRequest = createLatestOperation("organization-pulse");
+const brainRequest = createLatestOperation("brain-contract");
 
 const state = {
   tenant: "",
@@ -27,6 +30,8 @@ function syncTenant() {
   state.brainContractError = "";
   state.loadedAt = 0;
   state.brainContractLoadedAt = 0;
+  pulseRequest.cancel("tenant-changed");
+  brainRequest.cancel("tenant-changed");
 }
 
 function authHeaders(extra = {}) {
@@ -86,19 +91,29 @@ export async function loadOrganizationPulse({ force = false } = {}) {
   if (!force && state.pulse && Date.now() - state.loadedAt <= PULSE_TTL_MS) return state.pulse;
   state.status = "loading";
   state.error = "";
+  const request = pulseRequest.begin({ tenant: state.tenant });
   const params = new URLSearchParams();
   if (state.tenant) params.set("tenant_id", state.tenant);
-  const response = await fetch(`/api/organization/pulse?${params.toString()}`, { headers: authHeaders() });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.ok || !payload?.pulse) {
-    state.status = "error";
-    state.error = friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load Organization Pulse.", fallbackPrefix: "Organization Pulse failed" });
-    throw new Error(state.error);
+  try {
+    const response = await fetch(`/api/organization/pulse?${params.toString()}`, { headers: authHeaders(), signal: request.signal });
+    const payload = await response.json().catch(() => ({}));
+    if (!request.isCurrent() || state.tenant !== request.context.tenant) return null;
+    if (!response.ok || !payload?.ok || !payload?.pulse) {
+      state.status = "error";
+      state.error = friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load Organization Pulse.", fallbackPrefix: "Organization Pulse failed" });
+      throw new Error(state.error);
+    }
+    state.pulse = payload.pulse;
+    state.loadedAt = Date.now();
+    state.status = "ready";
+    state.operationStatus = normalizeOperationStatus("completed", { verified: true });
+    return state.pulse;
+  } catch (error) {
+    if (request.signal.aborted || error?.name === "AbortError" || !request.isCurrent()) return null;
+    throw error;
+  } finally {
+    pulseRequest.finish(request);
   }
-  state.pulse = payload.pulse;
-  state.loadedAt = Date.now();
-  state.status = "ready";
-  return state.pulse;
 }
 
 export async function loadBrainContract({ force = false } = {}) {
@@ -112,25 +127,35 @@ export async function loadBrainContract({ force = false } = {}) {
   if (!force && state.brainContract && Date.now() - state.brainContractLoadedAt <= BRAIN_CONTRACT_TTL_MS) return state.brainContract;
   state.brainContractStatus = "loading";
   state.brainContractError = "";
+  const request = brainRequest.begin({ tenant: state.tenant });
   const params = new URLSearchParams();
   if (state.tenant) params.set("tenant_id", state.tenant);
-  const response = await fetch(`/api/brain/contract?${params.toString()}`, { headers: authHeaders() });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.ok) {
-    state.brainContractStatus = "error";
-    state.brainContractError = friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load Brain Signals.", fallbackPrefix: "Brain Signals failed" });
-    throw new Error(state.brainContractError);
+  try {
+    const response = await fetch(`/api/brain/contract?${params.toString()}`, { headers: authHeaders(), signal: request.signal });
+    const payload = await response.json().catch(() => ({}));
+    if (!request.isCurrent() || state.tenant !== request.context.tenant) return null;
+    if (!response.ok || !payload?.ok) {
+      state.brainContractStatus = "error";
+      state.brainContractError = friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load Brain Signals.", fallbackPrefix: "Brain Signals failed" });
+      throw new Error(state.brainContractError);
+    }
+    state.brainContract = {
+      tenantId: payload.tenantId,
+      generatedAt: payload.generatedAt,
+      whatChanged: Array.isArray(payload.whatChanged) ? payload.whatChanged : [],
+      whatMatters: Array.isArray(payload.whatMatters) ? payload.whatMatters : [],
+      recommendedActions: Array.isArray(payload.recommendedActions) ? payload.recommendedActions : [],
+    };
+    state.brainContractLoadedAt = Date.now();
+    state.brainContractStatus = "ready";
+    state.brainOperationStatus = normalizeOperationStatus("completed", { verified: true });
+    return state.brainContract;
+  } catch (error) {
+    if (request.signal.aborted || error?.name === "AbortError" || !request.isCurrent()) return null;
+    throw error;
+  } finally {
+    brainRequest.finish(request);
   }
-  state.brainContract = {
-    tenantId: payload.tenantId,
-    generatedAt: payload.generatedAt,
-    whatChanged: Array.isArray(payload.whatChanged) ? payload.whatChanged : [],
-    whatMatters: Array.isArray(payload.whatMatters) ? payload.whatMatters : [],
-    recommendedActions: Array.isArray(payload.recommendedActions) ? payload.recommendedActions : [],
-  };
-  state.brainContractLoadedAt = Date.now();
-  state.brainContractStatus = "ready";
-  return state.brainContract;
 }
 
 function signalIcon(signal = {}) {
