@@ -21,6 +21,7 @@ const checks = [
   "test:product-grammar",
   "test:crm-pipeline",
   "test:proposal-pipeline",
+  "test:proposal-lifecycle",
   "test:workspace-approvals",
   "test:agent-run-lifecycle",
   "test:managed-growth-report",

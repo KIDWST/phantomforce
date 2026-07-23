@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260723-43";
+} from "./store.js?v=phantom-live-20260723-44";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -216,6 +216,7 @@ let playClock = null;
 let playTickAt = 0;
 let messageBound = false;
 let keyboardBound = false;
+let dragDropBound = false;
 let playerClosing = false;
 let roomPollTimer = null;
 let roomPollTicks = 0;
@@ -1522,7 +1523,16 @@ function launchDevSandboxFromWorkbench() {
 async function persistDevOverride(gameId, source) {
   try {
     await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source }) });
-  } catch { /* the live blob still runs; an explicit Save retries the sync */ }
+  } catch {
+    // The live blob still runs locally, so Dev Mode itself looks fine — but
+    // unlike saveDevWorkbench()'s catch block, this path used to just give up
+    // silently with no retry at all, which is exactly how Normal Mode ends up
+    // stuck on stale code after a "Save & Launch Dev Mode" whose POST failed:
+    // nothing ever tried again to persist it. Route through the same retry
+    // path saveDevWorkbench() uses so both entry points are equally reliable.
+    setDevSandboxStatus("Saving to your account failed — retrying in the background…");
+    retryDevProjectSync(gameId, source);
+  }
 }
 
 function launchNormalFromWorkbench() {
@@ -1588,7 +1598,26 @@ function closeDevWorkbench() {
 
 function retryDevProjectSync(gameId, source, attempt = 0) {
   const delays = [1200, 4000, 12000];
-  if (attempt >= delays.length) return;
+  if (attempt >= delays.length) {
+    // Every retry failed. This used to just `return` here with no signal to
+    // the user at all — Dev Mode kept showing their edits (from the local
+    // blob) so everything *looked* fine, while the override never actually
+    // reached the server. Normal Mode (and any other device) would silently
+    // keep serving the last version that DID save, which is exactly the
+    // "dev mode updated, normal mode didn't" desync this is fixing. Make the
+    // failure visible and give the user a concrete next step instead.
+    const message = "Couldn't save your changes to your account after several tries — Normal Mode will keep showing your last saved version until this succeeds. Click Save to try again.";
+    let shouldRender = false;
+    for (const target of ["devWorkbench", "devSandbox"]) {
+      if (ui[target]?.gameId === gameId) {
+        ui[target] = { ...ui[target], saving: false, status: message, error: target === "devWorkbench" ? message : ui[target].error };
+        shouldRender ||= target === "devWorkbench";
+      }
+    }
+    if (ui.devSandbox?.gameId === gameId) setDevSandboxStatus(message);
+    if (shouldRender) render();
+    return;
+  }
   setTimeout(async () => {
     try {
       const result = await api(`/api/phantomplay/dev-mode/${encodeURIComponent(gameId)}/override`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), source }) });
@@ -2595,6 +2624,27 @@ export function renderPhantomPlay(root, opts = {}) {
       if (event.key === "Escape") { event.preventDefault(); closePlayer(); }
       if ((event.key === "r" || event.key === "R") && !event.ctrlKey && !event.metaKey) { event.preventDefault(); restartPlayer(); }
       if (isGameControlKey(event)) { event.preventDefault(); focusGameFrame(); }
+    });
+  }
+  if (!dragDropBound) {
+    // The dedicated drop zone in devWorkbenchMarkup() only covers its own
+    // small strip ([data-pp-devworkbench-drop]) — a drop landing anywhere
+    // else in the modal (the textarea, the file slots, the header) had no
+    // handler at all, so the browser's default action fired instead: it
+    // navigates the tab to the dropped file, which blows away the whole
+    // admin SPA session and looks like a crash/error to the user. This
+    // window-level fallback only engages while the workbench modal is open
+    // (ui.devWorkbench truthy), prevents that default navigation regardless
+    // of where in the modal the drop lands, and still imports the files —
+    // skipping the dedicated drop zone's own target so files dropped there
+    // aren't imported twice.
+    dragDropBound = true;
+    window.addEventListener("dragover", (event) => { if (ui.devWorkbench) event.preventDefault(); });
+    window.addEventListener("drop", (event) => {
+      if (!ui.devWorkbench) return;
+      event.preventDefault();
+      if (event.target.closest?.("[data-pp-devworkbench-drop]")) return;
+      if (event.dataTransfer?.files?.length) importDevWorkbenchFiles(event.dataTransfer.files);
     });
   }
   render();

@@ -23,6 +23,10 @@ must(files.store, /"draft" \| "sent-ready" \| "sent" \| "won" \| "lost" \| "invo
 must(files.store, /createProposalDraft/u, "Proposal store must create draft proposals.");
 must(files.store, /updateProposalDraft/u, "Proposal store must update draft proposals.");
 must(files.store, /deleteProposalDraft/u, "Proposal store must delete draft proposals.");
+must(files.store, /acceptProposalVersion/u, "Proposal store must bind acceptance to an immutable proposal version.");
+must(files.store, /convertAcceptedProposal/u, "Proposal store must convert accepted proposals idempotently.");
+must(files.store, /priceMinor/u, "Proposal totals must use integer minor-unit arithmetic.");
+must(files.store, /payloadHash/u, "Proposal versions must carry deterministic payload hashes.");
 must(files.store, /serverBacked:\s*true/u, "Proposal drafts must be marked server-backed after normalization.");
 
 for (const route of [
@@ -30,6 +34,8 @@ for (const route of [
   /app\.post\("\/api\/proposals"/u,
   /app\.post\("\/api\/proposals\/:proposalId"/u,
   /app\.delete\("\/api\/proposals\/:proposalId"/u,
+  /app\.post\("\/api\/proposals\/:proposalId\/accept"/u,
+  /app\.post\("\/api\/proposals\/:proposalId\/convert"/u,
 ]) {
   must(files.server, route, `Server route missing: ${route}`);
 }
@@ -63,7 +69,7 @@ assert.doesNotMatch(files.store, /fake email|fake phone|invent real/iu, "Proposa
 console.log(JSON.stringify({
   ok: true,
   product: "Proposal drafts server persistence",
-  routes: 4,
+  routes: 6,
   statuses: ["draft", "sent-ready", "sent", "won", "lost", "invoice-ready"],
   serverBacked: true,
   externalActions: false,

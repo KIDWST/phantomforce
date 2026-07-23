@@ -31,6 +31,7 @@
     "test:client-setup-audit": "node scripts/audit-client-setup-data-model.mjs",
     "test:crm-pipeline": "node scripts/test-crm-pipeline.mjs",
     "test:proposal-pipeline": "node scripts/test-proposal-pipeline.mjs",
+    "test:proposal-lifecycle": "npm run test:proposal-lifecycle --workspace @phantomforce/server",
     "test:workspace-approvals": "node scripts/test-workspace-approvals.mjs",
     "test:agent-run-lifecycle": "npm run test:agent-run-lifecycle --workspace @phantomforce/server",
     "test:managed-growth-report": "node scripts/test-managed-growth-report.mjs && npm run test:managed-growth-report --workspace @phantomforce/server",

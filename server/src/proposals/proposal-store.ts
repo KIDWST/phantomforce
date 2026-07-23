@@ -5,6 +5,50 @@ import { fileURLToPath } from "node:url";
 
 export type ProposalStatus = "draft" | "sent-ready" | "sent" | "won" | "lost" | "invoice-ready";
 
+export type ProposalVersion = {
+  id: string;
+  versionNumber: number;
+  payloadHash: string;
+  createdAt: string;
+  createdBy: string;
+  client: string;
+  contact: string;
+  pkg: string;
+  priceMinor: number;
+  currency: string;
+  retainer: string;
+  pain: string;
+  scope: string[];
+  timeline: string;
+  leadId: string | null;
+  expiresAt: string;
+};
+
+export type ProposalAcceptanceReceipt = {
+  id: string;
+  tenantId: string;
+  proposalId: string;
+  versionId: string;
+  versionNumber: number;
+  payloadHash: string;
+  acceptedAt: string;
+  acceptedBy: string;
+  totalMinor: number;
+  currency: string;
+};
+
+export type ProposalConversionRecord = {
+  id: string;
+  tenantId: string;
+  proposalId: string;
+  acceptanceReceiptId: string;
+  idempotencyKey: string;
+  target: "invoice";
+  status: "invoice-ready";
+  createdAt: string;
+  createdBy: string;
+};
+
 export type ProposalDraft = {
   id: string;
   tenantId: string;
@@ -13,12 +57,19 @@ export type ProposalDraft = {
   contact: string;
   pkg: string;
   price: number;
+  priceMinor: number;
+  currency: string;
   retainer: string;
   status: ProposalStatus;
   pain: string;
   scope: string[];
   timeline: string;
   leadId: string | null;
+  expiresAt: string;
+  versions: ProposalVersion[];
+  activeVersionId: string;
+  acceptanceReceipt: ProposalAcceptanceReceipt | null;
+  conversion: ProposalConversionRecord | null;
   setupSlotId: string;
   createdAt: string;
   updated: string;
@@ -31,13 +82,13 @@ export type ProposalAuditEntry = {
   tenantId: string;
   actor: string;
   proposalId: string;
-  eventType: "created" | "updated" | "deleted";
+  eventType: "created" | "updated" | "versioned" | "accepted" | "converted" | "deleted";
   summary: string;
   createdAt: string;
 };
 
 export type ProposalDocument = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   tenantId: string;
   version: number;
   proposals: ProposalDraft[];
@@ -95,7 +146,25 @@ function cleanStatus(value: unknown): ProposalStatus {
 
 function cleanPrice(value: unknown) {
   const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0, Math.min(1_000_000, Math.round(number))) : 0;
+  return Number.isFinite(number) ? Math.max(0, Math.min(1_000_000, Math.round(number * 100) / 100)) : 0;
+}
+
+function cleanPriceMinor(value: unknown, fallbackPrice: unknown) {
+  const minor = Number(value);
+  if (Number.isInteger(minor) && minor >= 0) return Math.min(100_000_000, minor);
+  return Math.round(cleanPrice(fallbackPrice) * 100);
+}
+
+function cleanCurrency(value: unknown) {
+  const currency = cleanText(value, 3).toUpperCase();
+  return /^[A-Z]{3}$/u.test(currency) ? currency : "USD";
+}
+
+function cleanIsoDate(value: unknown) {
+  const text = cleanText(value, 80);
+  if (!text) return "";
+  const time = Date.parse(text);
+  return Number.isFinite(time) ? new Date(time).toISOString() : "";
 }
 
 function cleanScope(value: unknown) {
@@ -107,10 +176,104 @@ function documentWithChecksum(document: Omit<ProposalDocument, "checksum">): Pro
   return { ...document, checksum: checksum(document) };
 }
 
+function versionPayload(proposal: Pick<ProposalDraft, "client" | "contact" | "pkg" | "priceMinor" | "currency" | "retainer" | "pain" | "scope" | "timeline" | "leadId" | "expiresAt">) {
+  return {
+    client: proposal.client,
+    contact: proposal.contact,
+    pkg: proposal.pkg,
+    priceMinor: proposal.priceMinor,
+    currency: proposal.currency,
+    retainer: proposal.retainer,
+    pain: proposal.pain,
+    scope: [...proposal.scope],
+    timeline: proposal.timeline,
+    leadId: proposal.leadId,
+    expiresAt: proposal.expiresAt,
+  };
+}
+
+function payloadHash(payload: ReturnType<typeof versionPayload>) {
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+function makeProposalVersion(proposal: ProposalDraft, actor: string, createdAt = new Date().toISOString()): ProposalVersion {
+  const payload = versionPayload(proposal);
+  return {
+    id: randomUUID(),
+    versionNumber: proposal.versions.length + 1,
+    payloadHash: payloadHash(payload),
+    createdAt,
+    createdBy: cleanText(actor, 120) || "system",
+    ...payload,
+  };
+}
+
+function normalizeVersion(value: unknown, proposal: ProposalDraft, fallbackNumber: number): ProposalVersion | null {
+  if (!isRecord(value)) return null;
+  const priceMinor = cleanPriceMinor(value.priceMinor, value.price);
+  const normalized = {
+    client: cleanText(value.client, 140) || proposal.client,
+    contact: cleanText(value.contact, 140) || proposal.contact,
+    pkg: cleanText(value.pkg, 80) || proposal.pkg,
+    priceMinor,
+    currency: cleanCurrency(value.currency),
+    retainer: cleanText(value.retainer, 80),
+    pain: cleanText(value.pain, 600) || proposal.pain,
+    scope: cleanScope(value.scope),
+    timeline: cleanText(value.timeline, 240) || proposal.timeline,
+    leadId: cleanText(value.leadId, 120) || null,
+    expiresAt: cleanIsoDate(value.expiresAt),
+  };
+  return {
+    id: cleanText(value.id, 90) || randomUUID(),
+    versionNumber: Number.isInteger(value.versionNumber) && Number(value.versionNumber) > 0
+      ? Number(value.versionNumber)
+      : fallbackNumber,
+    payloadHash: payloadHash(normalized),
+    createdAt: cleanIsoDate(value.createdAt) || proposal.createdAt,
+    createdBy: cleanText(value.createdBy, 120) || proposal.updatedBy,
+    ...normalized,
+  };
+}
+
+function normalizeAcceptance(value: unknown, proposal: ProposalDraft): ProposalAcceptanceReceipt | null {
+  if (!isRecord(value)) return null;
+  const version = proposal.versions.find((candidate) => candidate.id === cleanText(value.versionId, 90));
+  if (!version || cleanText(value.payloadHash, 64) !== version.payloadHash) return null;
+  return {
+    id: cleanText(value.id, 90) || randomUUID(),
+    tenantId: proposal.tenantId,
+    proposalId: proposal.id,
+    versionId: version.id,
+    versionNumber: version.versionNumber,
+    payloadHash: version.payloadHash,
+    acceptedAt: cleanIsoDate(value.acceptedAt) || proposal.updated,
+    acceptedBy: cleanText(value.acceptedBy, 120) || "system",
+    totalMinor: version.priceMinor,
+    currency: version.currency,
+  };
+}
+
+function normalizeConversion(value: unknown, proposal: ProposalDraft): ProposalConversionRecord | null {
+  if (!isRecord(value) || !proposal.acceptanceReceipt) return null;
+  if (cleanText(value.acceptanceReceiptId, 90) !== proposal.acceptanceReceipt.id) return null;
+  return {
+    id: cleanText(value.id, 90) || randomUUID(),
+    tenantId: proposal.tenantId,
+    proposalId: proposal.id,
+    acceptanceReceiptId: proposal.acceptanceReceipt.id,
+    idempotencyKey: cleanText(value.idempotencyKey, 180) || `proposal-conversion:${proposal.acceptanceReceipt.id}`,
+    target: "invoice",
+    status: "invoice-ready",
+    createdAt: cleanIsoDate(value.createdAt) || proposal.updated,
+    createdBy: cleanText(value.createdBy, 120) || "system",
+  };
+}
+
 export function defaultProposalDocument(tenantId: string, actor = "system"): ProposalDocument {
   const now = new Date().toISOString();
   return documentWithChecksum({
-    schemaVersion: 1,
+    schemaVersion: 2,
     tenantId: safeTenantId(tenantId),
     version: 1,
     proposals: [],
@@ -124,6 +287,7 @@ export function normalizeProposalDraft(value: unknown, tenantId: string, actor: 
   const source = isRecord(value) ? value : {};
   const now = new Date().toISOString();
   const client = cleanText(source.client ?? existing?.client, 140) || "New client";
+  const priceMinor = cleanPriceMinor(source.priceMinor ?? existing?.priceMinor, source.price ?? existing?.price);
   return {
     id: cleanText(source.id ?? existing?.id, 90) || randomUUID(),
     tenantId: safeTenantId(tenantId),
@@ -133,13 +297,20 @@ export function normalizeProposalDraft(value: unknown, tenantId: string, actor: 
     client,
     contact: cleanText(source.contact ?? existing?.contact, 140) || client,
     pkg: cleanText(source.pkg ?? existing?.pkg, 80) || "core",
-    price: cleanPrice(source.price ?? existing?.price),
+    price: priceMinor / 100,
+    priceMinor,
+    currency: cleanCurrency(source.currency ?? existing?.currency),
     retainer: cleanText(source.retainer ?? existing?.retainer, 80),
     status: cleanStatus(source.status ?? existing?.status),
     pain: cleanText(source.pain ?? existing?.pain, 600) || "Capture the pain in one sentence.",
     scope: cleanScope(source.scope ?? existing?.scope),
     timeline: cleanText(source.timeline ?? existing?.timeline, 240) || "Timeline not set.",
     leadId: cleanText(source.leadId ?? existing?.leadId, 120) || null,
+    expiresAt: cleanIsoDate(source.expiresAt ?? existing?.expiresAt),
+    versions: existing?.versions.map((version) => structuredClone(version)) ?? [],
+    activeVersionId: existing?.activeVersionId ?? "",
+    acceptanceReceipt: existing?.acceptanceReceipt ? structuredClone(existing.acceptanceReceipt) : null,
+    conversion: existing?.conversion ? structuredClone(existing.conversion) : null,
     setupSlotId: cleanText(source.setupSlotId ?? existing?.setupSlotId, 80),
     createdAt: cleanText(existing?.createdAt ?? source.createdAt, 80) || now,
     updated: now,
@@ -151,11 +322,27 @@ export function normalizeProposalDraft(value: unknown, tenantId: string, actor: 
 export async function readProposalDocument(tenantId: string, root?: string): Promise<ProposalDocument | null> {
   try {
     const raw = JSON.parse(await readFile(documentPath(tenantId, root), "utf8")) as ProposalDocument;
+    const authoritativeTenantId = safeTenantId(raw.tenantId || tenantId);
+    const proposals = Array.isArray(raw.proposals) ? raw.proposals.map((persisted) => {
+      const proposal = normalizeProposalDraft(persisted, authoritativeTenantId, persisted.updatedBy || "system");
+      const source: Record<string, unknown> = isRecord(persisted) ? persisted : {};
+      proposal.versions = Array.isArray(source.versions)
+        ? source.versions.map((version: unknown, index: number) => normalizeVersion(version, proposal, index + 1)).filter((version: ProposalVersion | null): version is ProposalVersion => Boolean(version))
+        : [];
+      if (proposal.versions.length === 0) proposal.versions = [makeProposalVersion(proposal, proposal.updatedBy, proposal.createdAt)];
+      proposal.versions.sort((left, right) => left.versionNumber - right.versionNumber);
+      proposal.activeVersionId = proposal.versions.some((version) => version.id === cleanText(source.activeVersionId, 90))
+        ? cleanText(source.activeVersionId, 90)
+        : proposal.versions.at(-1)!.id;
+      proposal.acceptanceReceipt = normalizeAcceptance(source.acceptanceReceipt, proposal);
+      proposal.conversion = normalizeConversion(source.conversion, proposal);
+      return proposal;
+    }) : [];
     return documentWithChecksum({
-      schemaVersion: 1,
-      tenantId: safeTenantId(raw.tenantId || tenantId),
+      schemaVersion: 2,
+      tenantId: authoritativeTenantId,
       version: Number.isInteger(raw.version) && raw.version > 0 ? raw.version : 1,
-      proposals: Array.isArray(raw.proposals) ? raw.proposals.map((proposal) => normalizeProposalDraft(proposal, raw.tenantId || tenantId, proposal.updatedBy || "system", proposal)) : [],
+      proposals,
       audit: Array.isArray(raw.audit) ? raw.audit.slice(-400) : [],
       updatedAt: cleanText(raw.updatedAt, 80) || new Date().toISOString(),
       updatedBy: cleanText(raw.updatedBy, 120) || "system",
@@ -189,7 +376,7 @@ async function mutateProposalDocument<T>(tenantId: string, actor: string, operat
     const result = operation(current);
     const now = new Date().toISOString();
     const document = documentWithChecksum({
-      schemaVersion: 1,
+      schemaVersion: 2,
       tenantId: current.tenantId,
       version: current.version + 1,
       proposals: current.proposals.slice(0, 500),
@@ -205,6 +392,9 @@ async function mutateProposalDocument<T>(tenantId: string, actor: string, operat
 export async function createProposalDraft(options: { tenantId: string; proposal: unknown; actor: string; root?: string }) {
   return mutateProposalDocument(options.tenantId, options.actor, (document) => {
     const proposal = normalizeProposalDraft(options.proposal, document.tenantId, options.actor);
+    const version = makeProposalVersion(proposal, options.actor, proposal.createdAt);
+    proposal.versions = [version];
+    proposal.activeVersionId = version.id;
     document.proposals.unshift(proposal);
     document.audit.push(audit(document.tenantId, options.actor, proposal.id, "created", `Created proposal draft for ${proposal.client}`));
     return proposal;
@@ -215,10 +405,105 @@ export async function updateProposalDraft(options: { tenantId: string; proposalI
   return mutateProposalDocument(options.tenantId, options.actor, (document) => {
     const existing = document.proposals.find((proposal) => proposal.id === options.proposalId);
     if (!existing) throw new Error("Proposal draft not found.");
-    const next = normalizeProposalDraft({ ...existing, ...(isRecord(options.patch) ? options.patch : {}) }, document.tenantId, options.actor, existing);
+    const patch = isRecord(options.patch) ? options.patch : {};
+    const nextSource: Record<string, unknown> = { ...existing, ...patch };
+    if (Object.prototype.hasOwnProperty.call(patch, "price") && !Object.prototype.hasOwnProperty.call(patch, "priceMinor")) {
+      nextSource.priceMinor = undefined;
+    }
+    const next = normalizeProposalDraft(nextSource, document.tenantId, options.actor, existing);
+    const activeVersion = existing.versions.find((version) => version.id === existing.activeVersionId) ?? existing.versions.at(-1);
+    const nextHash = payloadHash(versionPayload(next));
+    if (!activeVersion || activeVersion.payloadHash !== nextHash) {
+      const version = makeProposalVersion(next, options.actor);
+      next.versions.push(version);
+      next.activeVersionId = version.id;
+      next.acceptanceReceipt = null;
+      next.conversion = null;
+      document.audit.push(audit(document.tenantId, options.actor, existing.id, "versioned", `Created immutable proposal version ${version.versionNumber} for ${next.client}`));
+    }
     Object.assign(existing, next, { id: existing.id, createdAt: existing.createdAt });
     document.audit.push(audit(document.tenantId, options.actor, existing.id, "updated", `Updated proposal draft for ${existing.client}`));
     return existing;
+  }, options.root);
+}
+
+export async function acceptProposalVersion(options: {
+  tenantId: string;
+  proposalId: string;
+  versionId: string;
+  expectedPayloadHash: string;
+  actor: string;
+  root?: string;
+}) {
+  return mutateProposalDocument(options.tenantId, options.actor, (document) => {
+    const proposal = document.proposals.find((candidate) => candidate.id === options.proposalId);
+    if (!proposal) throw new Error("Proposal draft not found.");
+    const version = proposal.versions.find((candidate) => candidate.id === options.versionId);
+    if (!version) throw new Error("Proposal version not found.");
+    if (version.id !== proposal.activeVersionId) throw new Error("proposal_version_not_active");
+    if (version.payloadHash !== options.expectedPayloadHash) throw new Error("proposal_payload_changed");
+    if (version.expiresAt && Date.parse(version.expiresAt) <= Date.now()) throw new Error("proposal_expired");
+    if (proposal.status === "lost") throw new Error("lost_proposal_cannot_be_accepted");
+    if (proposal.acceptanceReceipt) {
+      if (proposal.acceptanceReceipt.versionId === version.id && proposal.acceptanceReceipt.payloadHash === version.payloadHash) {
+        return proposal.acceptanceReceipt;
+      }
+      throw new Error("proposal_already_accepted");
+    }
+    const receipt: ProposalAcceptanceReceipt = {
+      id: randomUUID(),
+      tenantId: document.tenantId,
+      proposalId: proposal.id,
+      versionId: version.id,
+      versionNumber: version.versionNumber,
+      payloadHash: version.payloadHash,
+      acceptedAt: new Date().toISOString(),
+      acceptedBy: cleanText(options.actor, 120) || "system",
+      totalMinor: version.priceMinor,
+      currency: version.currency,
+    };
+    proposal.acceptanceReceipt = receipt;
+    proposal.status = "won";
+    proposal.updated = receipt.acceptedAt;
+    proposal.updatedBy = receipt.acceptedBy;
+    document.audit.push(audit(document.tenantId, options.actor, proposal.id, "accepted", `Accepted proposal version ${version.versionNumber} for ${proposal.client}`));
+    return receipt;
+  }, options.root);
+}
+
+export async function convertAcceptedProposal(options: {
+  tenantId: string;
+  proposalId: string;
+  idempotencyKey?: string;
+  actor: string;
+  root?: string;
+}) {
+  return mutateProposalDocument(options.tenantId, options.actor, (document) => {
+    const proposal = document.proposals.find((candidate) => candidate.id === options.proposalId);
+    if (!proposal) throw new Error("Proposal draft not found.");
+    if (!proposal.acceptanceReceipt) throw new Error("proposal_acceptance_required");
+    const key = cleanText(options.idempotencyKey, 180) || `proposal-conversion:${proposal.acceptanceReceipt.id}`;
+    if (proposal.conversion) {
+      if (proposal.conversion.idempotencyKey === key) return proposal.conversion;
+      throw new Error("proposal_already_converted");
+    }
+    const conversion: ProposalConversionRecord = {
+      id: randomUUID(),
+      tenantId: document.tenantId,
+      proposalId: proposal.id,
+      acceptanceReceiptId: proposal.acceptanceReceipt.id,
+      idempotencyKey: key,
+      target: "invoice",
+      status: "invoice-ready",
+      createdAt: new Date().toISOString(),
+      createdBy: cleanText(options.actor, 120) || "system",
+    };
+    proposal.conversion = conversion;
+    proposal.status = "invoice-ready";
+    proposal.updated = conversion.createdAt;
+    proposal.updatedBy = conversion.createdBy;
+    document.audit.push(audit(document.tenantId, options.actor, proposal.id, "converted", `Converted accepted proposal for ${proposal.client} to invoice-ready`));
+    return conversion;
   }, options.root);
 }
 

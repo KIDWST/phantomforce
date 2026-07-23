@@ -522,6 +522,8 @@ import {
   upsertCrmProspectLanes,
 } from "./crm/crm-pipeline-store.js";
 import {
+  acceptProposalVersion,
+  convertAcceptedProposal,
   createProposalDraft,
   deleteProposalDraft,
   getProposalDocument,
@@ -598,6 +600,15 @@ const ClientSetupSaveBodySchema = z.object({
 });
 const CrmLeadParamsSchema = z.object({ leadId: z.string().trim().min(1).max(120) });
 const ProposalParamsSchema = z.object({ proposalId: z.string().trim().min(1).max(120) });
+const ProposalAcceptBodySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  version_id: z.string().trim().min(1).max(120),
+  payload_hash: z.string().trim().regex(/^[a-f0-9]{64}$/iu),
+});
+const ProposalConvertBodySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  idempotency_key: z.string().trim().min(1).max(180).optional(),
+});
 const WorkspaceApprovalParamsSchema = z.object({ approvalId: z.string().trim().min(1).max(120) });
 const WorkspaceRecordCreateBodySchema = z.object({
   tenant_id: z.string().trim().max(80).optional(),
@@ -1255,6 +1266,57 @@ app.post("/api/proposals/:proposalId", async (request, reply) => {
     return { ok: true, tenant_id: tenantId, proposal: result.result, document: publicProposalDocument(result.document), ...workspaceRecordSafety };
   } catch (error) {
     return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Proposal draft not found." });
+  }
+});
+
+app.post("/api/proposals/:proposalId/accept", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Proposal acceptance access is required." });
+  const params = ProposalParamsSchema.safeParse(request.params ?? {});
+  const parsed = ProposalAcceptBodySchema.safeParse(request.body ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await acceptProposalVersion({
+      tenantId,
+      proposalId: params.data.proposalId,
+      versionId: parsed.data.version_id,
+      expectedPayloadHash: parsed.data.payload_hash,
+      actor: session.id,
+    });
+    return { ok: true, tenant_id: tenantId, acceptance_receipt: result.result, proposal: result.document.proposals.find((proposal) => proposal.id === params.data.proposalId), document: publicProposalDocument(result.document), ...workspaceRecordSafety };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Proposal acceptance failed.";
+    const status = message.includes("not found") ? 404 : 409;
+    return reply.status(status).send({ ok: false, error: message });
+  }
+});
+
+app.post("/api/proposals/:proposalId/convert", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = ProposalParamsSchema.safeParse(request.params ?? {});
+  const parsed = ProposalConvertBodySchema.safeParse(request.body ?? {});
+  if (!params.success) return reply.status(400).send({ ok: false, error: params.error.flatten() });
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Owner or admin access is required to convert accepted proposals." });
+  }
+  try {
+    const result = await convertAcceptedProposal({
+      tenantId,
+      proposalId: params.data.proposalId,
+      idempotencyKey: parsed.data.idempotency_key,
+      actor: session.id,
+    });
+    return { ok: true, tenant_id: tenantId, conversion: result.result, proposal: result.document.proposals.find((proposal) => proposal.id === params.data.proposalId), document: publicProposalDocument(result.document), external_action_executed: false, ...workspaceRecordSafety };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Proposal conversion failed.";
+    const status = message.includes("not found") ? 404 : 409;
+    return reply.status(status).send({ ok: false, error: message });
   }
 });
 
