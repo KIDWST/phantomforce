@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260723-46";
+} from "./store.js?v=phantom-live-20260723-47";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;

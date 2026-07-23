@@ -5030,8 +5030,10 @@ html[data-org-color-mode="dark"] .ml-field-brief .ml-prompt::placeholder {
 .ml-wait-copy span { font: 800 10px "Spline Sans Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--neon); }
 .ml-wait-copy b { font-size: clamp(22px, 3vw, 38px); line-height: 1; color: var(--ink); }
 .ml-wait-copy i { font-style: normal; color: var(--dim); font-size: 15px; line-height: 1.55; }
+.ml-pending-stack, .ml-recent-jobs { display: grid; gap: 18px; align-content: start; }
 .ml-pending-list { display: grid; gap: 12px; align-content: start; }
-.ml-pending-card { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(91, 76, 255,0.08), rgba(255, 255, 255,0.94)); }
+.ml-pending-card { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(91, 76, 255,0.08), rgba(255, 255, 255,0.94)); }
+.ml-pending-card.is-terminal { background: var(--glass-2); }
 .ml-pending-phantom { width: 72px; height: 72px; object-fit: contain; filter: drop-shadow(0 0 18px rgba(91, 76, 255,0.3)); }
 .ml-pending-copy { min-width: 0; display: grid; gap: 5px; }
 .ml-pending-copy span { font: 800 10px "Spline Sans Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--neon); }
@@ -8993,7 +8995,7 @@ body.phantomplay-playing .buddy-say {
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-46") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-47") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -13876,6 +13878,12 @@ body .phantom .workspace-page :where(
 }
 .vc-total { color: var(--neon); font: 700 17px "Spline Sans Mono", monospace; line-height: 32px; }
 .vc-export-slot { display: grid; gap: 6px; margin-left: auto; max-width: 300px; }
+.vc-save-project {
+  min-height: 38px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--glass); color: var(--ink); cursor: pointer; white-space: nowrap;
+  font: 700 12px "Instrument Sans", sans-serif;
+}
+.vc-save-project:hover { border-color: var(--line-strong); color: var(--neon); }
 .vc-export-btn {
   padding: 10px 20px; border: none; border-radius: 11px; cursor: pointer;
   background: linear-gradient(120deg, var(--neon), #5b4cff); color: #ffffff;
@@ -13936,6 +13944,13 @@ body .phantom .workspace-page :where(
   background: none; color: var(--dim); cursor: pointer; font-size: 11px; line-height: 1;
 }
 .vc-mini-btn:hover { color: var(--risk); border-color: rgba(224, 52, 94, 0.4); }
+
+@media (max-width: 700px) {
+  .ml-pending-card { grid-template-columns: 52px minmax(0, 1fr); }
+  .ml-pending-phantom { width: 52px; height: 52px; }
+  .ml-pending-card > .ml-pool-act { grid-column: 1 / -1; justify-self: stretch; }
+  .vc-save-project, .vc-export-slot { margin-left: 0; }
+}
 
 .vc-lane { display: grid; gap: 8px; }
 .vc-timeline { display: flex; gap: 10px; align-items: stretch; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: thin; }

@@ -8,7 +8,7 @@
     "server"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build --workspace @phantomforce/contracts && npm run build --workspace @phantomforce/server",
     "dev:server": "npm run dev --workspace @phantomforce/server",
     "test:intent": "node scripts/test-phantom-intent-router.mjs",
     "test:dashboard-chat": "node scripts/test-dashboard-chat-quality.mjs && npm run test:instant-chat --workspace @phantomforce/server && npm run test:instant-chat:tools --workspace @phantomforce/server",
@@ -35,6 +35,10 @@
     "test:proposal-lifecycle": "npm run test:proposal-lifecycle --workspace @phantomforce/server",
     "test:finance-ledger": "node scripts/test-finance-ledger-ui.mjs && npm run test:finance-ledger --workspace @phantomforce/server",
     "test:commerce-order-lifecycle": "npm run test:commerce-order-lifecycle --workspace @phantomforce/server",
+    "test:content-asset-storage": "npm run test:content-asset-storage --workspace @phantomforce/server",
+    "test:media-generation-lifecycle": "npm run test:media-generation-lifecycle --workspace @phantomforce/server",
+    "test:content-publication-lifecycle": "npm run test:content-publication-lifecycle --workspace @phantomforce/server",
+    "test:creative-os-ui": "node scripts/test-creative-os-ui.mjs",
     "test:workspace-approvals": "node scripts/test-workspace-approvals.mjs",
     "test:agent-run-lifecycle": "npm run test:agent-run-lifecycle --workspace @phantomforce/server",
     "test:managed-growth-report": "node scripts/test-managed-growth-report.mjs && npm run test:managed-growth-report --workspace @phantomforce/server",

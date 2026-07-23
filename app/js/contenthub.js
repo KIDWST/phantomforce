@@ -9,20 +9,21 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260723-46";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260723-46";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260723-46";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260723-46";
+} from "./imagefilters.js?v=phantom-live-20260723-47";
+import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260723-47";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260723-47";
+import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260723-47";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260723-47";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260723-46";
+} from "./content-editor.js?v=phantom-live-20260723-47";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260723-46";
+} from "./store.js?v=phantom-live-20260723-47";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -399,6 +400,9 @@ export function recycleContentAssets(assets = []) {
     ...normalized,
     ...loadRecycledContentAssets().filter((asset) => !ids.has(asset.id)),
   ]);
+  normalized.forEach((asset) => {
+    if (asset.syncedId) archiveSyncedAsset(asset.syncedId).catch(() => null);
+  });
   return { recycled: normalized, active, bin };
 }
 export function restoreRecycledContentAssets(ids = []) {
@@ -418,6 +422,9 @@ export function restoreRecycledContentAssets(ids = []) {
     ...current.filter((asset) => !wanted.has(asset.id)),
   ]);
   saveRecycledContentAssets(bin.filter((asset) => !wanted.has(asset.id)));
+  restored.forEach((asset) => {
+    if (asset.syncedId) restoreSyncedAsset(asset.syncedId).catch(() => null);
+  });
   return restored;
 }
 export function purgeRecycledContentAssets(ids = []) {
@@ -1596,25 +1603,35 @@ function wirePostPublish(body, data, assets, esc, root, opts) {
     notify("Caption drafted. Review before posting or scheduling.");
     renderContentHub(root, opts);
   });
-  const saveDraft = (status) => {
+  const saveDraft = async (status) => {
     let state = readPublishForm(body);
     const source = publishSourceFromState(data, assets, state);
     const thumbnailSource = publishThumbnailFromState(assets, state);
     if (!state.caption.trim()) state = savePublishState({ ...state, caption: suggestPublishCaption(state, source, state.platforms) });
     const draft = buildPublishDraft(state, source, status, thumbnailSource);
+    let publication = null;
+    let syncError = "";
+    try {
+      publication = await persistContentPublication(draft);
+    } catch (error) {
+      syncError = error?.message || "publication_backend_unavailable";
+    }
+    draft.serverPublicationId = publication?.id || "";
+    draft.serverStatus = publication?.status || "";
+    draft.localOnly = !publication;
     savePublishDrafts([draft, ...loadPublishDrafts()]);
     if (status === "scheduled") addPublishPosts(data, draft, "scheduled");
     if (status === "posted") addPublishPosts(data, draft, "published");
     notify(status === "scheduled"
-      ? "Post scheduled locally and added to Planner. No external post was sent."
+      ? `${publication ? "Post schedule saved to this business and added to Planner." : "Post preserved locally, but the server schedule did not sync."} No external post was sent.${syncError ? ` (${syncError})` : ""}`
       : status === "posted"
-        ? "Post recorded across selected channels and added to local analytics. OAuth live posting still requires connected accounts."
-        : "Post draft saved locally.");
+        ? `${publication ? "Manual post record saved to this business" : "Manual post record preserved locally"} and added to local analytics. OAuth live posting still requires connected accounts.${syncError ? ` (${syncError})` : ""}`
+        : `${publication ? "Post draft saved to this business." : "Post draft preserved locally, but server sync failed."}${syncError ? ` (${syncError})` : ""}`);
     renderContentHub(root, opts);
   };
-  body.querySelector("[data-ch-pub-save]")?.addEventListener("click", () => saveDraft("draft"));
-  body.querySelector("[data-ch-pub-schedule-post]")?.addEventListener("click", () => saveDraft("scheduled"));
-  body.querySelector("[data-ch-pub-post-now]")?.addEventListener("click", () => saveDraft("posted"));
+  body.querySelector("[data-ch-pub-save]")?.addEventListener("click", () => void saveDraft("draft"));
+  body.querySelector("[data-ch-pub-schedule-post]")?.addEventListener("click", () => void saveDraft("scheduled"));
+  body.querySelector("[data-ch-pub-post-now]")?.addEventListener("click", () => void saveDraft("posted"));
 }
 function renderContentLibrary(body, data, esc, root, opts) {
   const assets = loadContentAssets();

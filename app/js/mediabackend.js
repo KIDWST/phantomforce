@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260723-46";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260723-46";
+import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260723-47";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260723-47";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -261,6 +261,44 @@ export async function listSyncedAssets() {
     return { ok: false, error: (d && d.error) || `Request failed (${r.status}).`, assets: [] };
   } catch {
     return { ok: false, error: "Could not reach the sync backend.", assets: [] };
+  }
+}
+
+export async function listArchivedSyncedAssets() {
+  try {
+    const r = await fetchWithTimeout(`/phantom-ai/content/assets/archived?tenant_id=${encodeURIComponent(currentTenantId())}`, { headers: authHeaders() }, 12000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok && Array.isArray(d.assets)) return { ok: true, assets: d.assets };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).`, assets: [] };
+  } catch {
+    return { ok: false, error: "Could not reach the sync backend.", assets: [] };
+  }
+}
+
+export async function archiveSyncedAsset(id) {
+  try {
+    const r = await fetchWithTimeout(`/phantom-ai/content/assets/${encodeURIComponent(id)}?tenant_id=${encodeURIComponent(currentTenantId())}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    }, 12000);
+    const d = await r.json().catch(() => null);
+    return r.ok && d?.ok ? { ok: true, archived: true } : { ok: false, error: d?.error || `Archive failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the sync backend." };
+  }
+}
+
+export async function restoreSyncedAsset(id) {
+  try {
+    const r = await fetchWithTimeout(`/phantom-ai/content/assets/${encodeURIComponent(id)}/restore`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ tenant_id: currentTenantId() }),
+    }, 12000);
+    const d = await r.json().catch(() => null);
+    return r.ok && d?.ok ? { ok: true, asset: d.asset } : { ok: false, error: d?.error || `Restore failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the sync backend." };
   }
 }
 

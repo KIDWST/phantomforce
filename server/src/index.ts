@@ -546,6 +546,19 @@ import {
   voidFinanceTransaction,
 } from "./finance/finance-ledger-store.js";
 import {
+  createMediaGenerationJob,
+  listMediaGenerationJobs,
+  retryMediaGenerationJob,
+  transitionMediaGenerationJob,
+} from "./media/media-generation-store.js";
+import {
+  approveContentPublication,
+  cancelContentPublication,
+  createContentPublication,
+  listContentPublications,
+  recordPublicationChannelResult,
+} from "./content/content-publication-store.js";
+import {
   createWorkspaceApproval,
   decideWorkspaceApproval,
   deleteWorkspaceApproval,
@@ -9009,6 +9022,233 @@ const ContentAssetUploadSchema = z.object({
   image: z.string().trim().min(1).max(24_000_000),
   filename: z.string().trim().max(160).optional(),
 });
+const MediaGenerationCreateSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  idempotency_key: z.string().trim().min(1).max(180),
+  modality: z.enum(["image", "video"]),
+  prompt: z.string().trim().min(1).max(2_000),
+  provider: z.string().trim().max(100).optional().default("unassigned"),
+  model: z.string().trim().max(160).optional().default(""),
+  parameters: z.record(z.unknown()).optional().default({}),
+  reference_asset_ids: z.array(z.string().trim().min(1).max(120)).max(12).optional().default([]),
+});
+const MediaGenerationTransitionSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  status: z.enum(["running", "completed", "failed", "cancelled"]),
+  output_asset_ids: z.array(z.string().trim().min(1).max(120)).max(24).optional().default([]),
+  error_code: z.string().trim().max(100).optional().default(""),
+  error_message: z.string().trim().max(500).optional().default(""),
+});
+const MediaGenerationRetrySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  idempotency_key: z.string().trim().min(1).max(180),
+});
+const ContentPublicationCreateSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  idempotency_key: z.string().trim().min(1).max(180),
+  status: z.enum(["draft", "scheduled", "approval_required", "manual_record"]).default("draft"),
+  channels: z.array(z.string().trim().min(1).max(80)).min(1).max(12),
+  caption: z.string().max(8_000).optional().default(""),
+  source_asset_id: z.string().trim().max(140).optional().default(""),
+  thumbnail_asset_id: z.string().trim().max(140).optional().default(""),
+  post_type: z.string().trim().max(80).optional().default("auto"),
+  timezone: z.string().trim().max(100).optional().default("UTC"),
+  scheduled_for: z.string().trim().max(80).optional().default(""),
+});
+const ContentPublicationApproveSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  approval_id: z.string().trim().min(1).max(140),
+});
+const ContentPublicationResultSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  channel: z.string().trim().min(1).max(80),
+  status: z.enum(["published", "failed"]),
+  provider_receipt_id: z.string().trim().max(200).optional().default(""),
+  public_url: z.string().trim().max(1_000).optional().default(""),
+  error_code: z.string().trim().max(100).optional().default(""),
+  error_message: z.string().trim().max(400).optional().default(""),
+});
+
+app.get("/api/content-publications", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: string };
+  const tenantId = customizationTenantForSession(session, query.tenant_id);
+  return { ok: true, tenant_id: tenantId, publications: await listContentPublications(tenantId) };
+});
+
+app.post("/api/content-publications", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = ContentPublicationCreateSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await createContentPublication({
+      tenantId,
+      actor: session.id,
+      idempotencyKey: parsed.data.idempotency_key,
+      input: {
+        status: parsed.data.status,
+        channels: parsed.data.channels,
+        caption: parsed.data.caption,
+        sourceAssetId: parsed.data.source_asset_id,
+        thumbnailAssetId: parsed.data.thumbnail_asset_id,
+        postType: parsed.data.post_type,
+        timezone: parsed.data.timezone,
+        scheduledFor: parsed.data.scheduled_for,
+      },
+    });
+    return reply.code(result.created ? 201 : 200).send({ ok: true, tenant_id: tenantId, ...result });
+  } catch (error) {
+    return reply.code(409).send({ ok: false, error: error instanceof Error ? error.message : "publication_create_failed" });
+  }
+});
+
+app.post("/api/content-publications/:publicationId/approve", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!session.canManageAccess && !session.isSuperAdmin && !["owner", "admin"].includes(String(session.orgRole || ""))) {
+    return reply.code(403).send({ ok: false, error: "manager_approval_required" });
+  }
+  const parsed = ContentPublicationApproveSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const { publicationId } = request.params as { publicationId: string };
+  try {
+    const publication = await approveContentPublication({
+      tenantId,
+      publicationId,
+      approvalId: parsed.data.approval_id,
+      actor: session.id,
+    });
+    return { ok: true, tenant_id: tenantId, publication };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "publication_approval_failed";
+    return reply.code(code === "publication_not_found" ? 404 : 409).send({ ok: false, error: code });
+  }
+});
+
+app.post("/api/content-publications/:publicationId/results", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = ContentPublicationResultSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const { publicationId } = request.params as { publicationId: string };
+  try {
+    const publication = await recordPublicationChannelResult({
+      tenantId,
+      publicationId,
+      actor: session.id,
+      channel: parsed.data.channel,
+      status: parsed.data.status,
+      providerReceiptId: parsed.data.provider_receipt_id,
+      publicUrl: parsed.data.public_url,
+      errorCode: parsed.data.error_code,
+      errorMessage: parsed.data.error_message,
+    });
+    return { ok: true, tenant_id: tenantId, publication };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "publication_result_failed";
+    return reply.code(code === "publication_not_found" ? 404 : 409).send({ ok: false, error: code });
+  }
+});
+
+app.delete("/api/content-publications/:publicationId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: string };
+  const tenantId = customizationTenantForSession(session, query.tenant_id);
+  const { publicationId } = request.params as { publicationId: string };
+  try {
+    const publication = await cancelContentPublication(tenantId, publicationId);
+    return { ok: true, tenant_id: tenantId, publication };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "publication_cancel_failed";
+    return reply.code(code === "publication_not_found" ? 404 : 409).send({ ok: false, error: code });
+  }
+});
+
+app.get("/api/media-generation/jobs", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!hasMediaLabAccess(session)) return reply.code(403).send({ ok: false, error: "media_lab_access_required" });
+  const query = (request.query ?? {}) as { tenant_id?: string; active?: string };
+  const tenantId = customizationTenantForSession(session, query.tenant_id);
+  const jobs = await listMediaGenerationJobs(tenantId, { activeOnly: query.active === "true" });
+  return { ok: true, tenant_id: tenantId, jobs };
+});
+
+app.post("/api/media-generation/jobs", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!hasMediaLabAccess(session)) return reply.code(403).send({ ok: false, error: "media_lab_access_required" });
+  const parsed = MediaGenerationCreateSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const result = await createMediaGenerationJob({
+    tenantId,
+    actor: session.id,
+    idempotencyKey: parsed.data.idempotency_key,
+    input: {
+      modality: parsed.data.modality,
+      prompt: parsed.data.prompt,
+      provider: parsed.data.provider,
+      model: parsed.data.model,
+      parameters: parsed.data.parameters,
+      referenceAssetIds: parsed.data.reference_asset_ids,
+    },
+  });
+  return reply.code(result.created ? 201 : 200).send({ ok: true, tenant_id: tenantId, ...result });
+});
+
+app.patch("/api/media-generation/jobs/:jobId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!hasMediaLabAccess(session)) return reply.code(403).send({ ok: false, error: "media_lab_access_required" });
+  const parsed = MediaGenerationTransitionSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const { jobId } = request.params as { jobId: string };
+  try {
+    const result = await transitionMediaGenerationJob({
+      tenantId,
+      jobId,
+      actor: session.id,
+      status: parsed.data.status,
+      outputAssetIds: parsed.data.output_asset_ids,
+      errorCode: parsed.data.error_code,
+      errorMessage: parsed.data.error_message,
+    });
+    return { ok: true, tenant_id: tenantId, ...result };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "job_transition_failed";
+    return reply.code(code === "job_not_found" ? 404 : 409).send({ ok: false, error: code });
+  }
+});
+
+app.post("/api/media-generation/jobs/:jobId/retry", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!hasMediaLabAccess(session)) return reply.code(403).send({ ok: false, error: "media_lab_access_required" });
+  const parsed = MediaGenerationRetrySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const { jobId } = request.params as { jobId: string };
+  try {
+    const result = await retryMediaGenerationJob({
+      tenantId,
+      jobId,
+      actor: session.id,
+      idempotencyKey: parsed.data.idempotency_key,
+    });
+    return reply.code(result.created ? 201 : 200).send({ ok: true, tenant_id: tenantId, ...result });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "job_retry_failed";
+    return reply.code(code === "job_not_found" ? 404 : 409).send({ ok: false, error: code });
+  }
+});
 
 app.post("/phantom-ai/content/assets", { bodyLimit: 24 * 1024 * 1024 }, async (request, reply) => {
   const session = requireAccessSession(request, reply);
@@ -9045,6 +9285,17 @@ app.get("/phantom-ai/content/assets", async (request, reply) => {
   return { ok: true, session, tenant_id: ownerScope, assets };
 });
 
+app.get("/phantom-ai/content/assets/archived", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const provider = getContentAssetStorageProvider();
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const assets = await provider.listArchivedAssets(ownerScope);
+  return { ok: true, session, tenant_id: ownerScope, assets };
+});
+
 app.get("/phantom-ai/content/assets/:id/file", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
@@ -9062,6 +9313,23 @@ app.get("/phantom-ai/content/assets/:id/file", async (request, reply) => {
   return { ok: true, session, tenant_id: ownerScope, image: result.dataUrl, asset: result.asset };
 });
 
+app.post("/phantom-ai/content/assets/:id/restore", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const body = (request.body ?? {}) as { tenant_id?: unknown };
+  const provider = getContentAssetStorageProvider();
+  const ownerScope = contentAssetOwnerScope(session, body.tenant_id);
+  const asset = await provider.restoreAsset(id, ownerScope);
+
+  if (!asset) {
+    return reply.code(404).send({ ok: false, error: "not_found" });
+  }
+
+  return { ok: true, session, tenant_id: ownerScope, restored: true, asset };
+});
+
 app.delete("/phantom-ai/content/assets/:id", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
@@ -9076,7 +9344,7 @@ app.delete("/phantom-ai/content/assets/:id", async (request, reply) => {
     return reply.code(404).send({ ok: false, error: "not_found" });
   }
 
-  return { ok: true, session, tenant_id: ownerScope };
+  return { ok: true, session, tenant_id: ownerScope, archived: true };
 });
 /* ---- Local background removal (rembg) ----
    A real local-process bridge, not a provider call: no key, no network, no

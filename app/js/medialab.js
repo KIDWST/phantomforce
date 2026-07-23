@@ -6,22 +6,23 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260723-46";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260723-47";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260723-46";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260723-46";
+} from "./contenthub.js?v=phantom-live-20260723-47";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260723-47";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260723-46";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260723-46";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260723-46";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260723-46";
+} from "./content-editor.js?v=phantom-live-20260723-47";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260723-47";
+import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260723-47";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260723-47";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260723-47";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -913,7 +914,7 @@ async function draftCinematicRequest(req = {}, spec = {}) {
 }
 // Returns { assets:[{type,url,meta}], live:boolean } — never throws; falls back
 // to a procedural preview so Media Lab is always usable.
-async function generate(cfg, req) {
+async function generate(cfg, req, externalSignal = null) {
   const base = genBase(cfg);
   req = { ...req, provider: normalizeLaneId(req.provider || PRIMARY_MEDIA_LANE) };
   const p = provider(cfg, req.provider) || {};
@@ -953,6 +954,9 @@ async function generate(cfg, req) {
     },
   };
   const ctrl = new AbortController();
+  const signal = externalSignal && typeof AbortSignal.any === "function"
+    ? AbortSignal.any([ctrl.signal, externalSignal])
+    : externalSignal || ctrl.signal;
   const timer = setTimeout(() => ctrl.abort(), spec.modality === "video" ? 31 * 60_000 : 16 * 60_000);
   let fallbackReason = "provider_unavailable";
   let fallbackDetail = "";
@@ -971,7 +975,7 @@ async function generate(cfg, req) {
       body: JSON.stringify(backendLane
         ? { ...providerReq, async: true, approved: req.approved === true, credit_warning_shown: req.creditWarningShown === true }
         : providerReq),
-      signal: ctrl.signal,
+      signal,
     });
     let d = await r.json().catch(() => null);
     if (d && d.error === "approval_required") {
@@ -982,7 +986,7 @@ async function generate(cfg, req) {
     // short leash so the UI never sits frozen for the render-length timeout.
     if (d && d.job && !d.queued && !(Array.isArray(d.assets) && d.assets.length)) {
       const jobKind = d.transport === "hermes_mcp" ? "draft" : "render";
-      d = await pollStudioJob(d.job, spec, headers, jobKind);
+      d = await pollStudioJob(d.job, spec, headers, jobKind, signal);
     }
     // Draft transport: the brief is queued as a draft — no credits spent
     if (d && d.queued && d.transport === "hermes_mcp") {
@@ -999,6 +1003,7 @@ async function generate(cfg, req) {
     fallbackReason = d?.blocked ? "blocked" : (d?.error || `provider_http_${r.status}`);
     fallbackDetail = cleanBrief(d?.message || "", 220);
   } catch (err) {
+    if (externalSignal?.aborted) throw err;
     fallbackReason = err?.name === "AbortError" ? "provider_timeout" : "provider_unreachable";
   }
   finally { clearTimeout(timer); }
@@ -1014,14 +1019,21 @@ async function generate(cfg, req) {
    a short leash (3 min) instead of the render-length timeout, so a slow/dead
    MCP lane surfaces as an honest timeout instead of a silent, endless spinner.
    Callers show their own elapsed-time feedback while this awaits. */
-async function pollStudioJob(jobId, spec, headers, kind = "render") {
+async function pollStudioJob(jobId, spec, headers, kind = "render", signal = null) {
   const startedAt = Date.now();
   const deadline = kind === "draft" ? startedAt + 3 * 60_000 : startedAt + (spec.modality === "video" ? 31 : 16) * 60_000;
   let misses = 0;
   while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    if (signal?.aborted) throw new DOMException("Media generation cancelled.", "AbortError");
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, 5000);
+      signal?.addEventListener("abort", () => {
+        clearTimeout(timer);
+        reject(new DOMException("Media generation cancelled.", "AbortError"));
+      }, { once: true });
+    });
     try {
-      const r = await fetch(`/generate/job/${encodeURIComponent(jobId)}`, { headers });
+      const r = await fetch(`/generate/job/${encodeURIComponent(jobId)}`, { headers, signal });
       const d = await r.json().catch(() => null);
       if (r.status === 404) return { error: "job_lost", message: d?.message || "Media Lab restarted mid-render" };
       if (!d) continue;
@@ -1415,6 +1427,47 @@ function localAssetsSnapshotHash() {
   ])));
 }
 let pendingJobs = [];
+let recentMediaJobs = [];
+let pendingJobsLoadedTenant = "";
+const pendingJobControllers = new Map();
+
+function normalizePendingJob(job) {
+  return {
+    id: job.id,
+    prompt: job.prompt,
+    modality: job.modality,
+    aspect: job.parameters?.aspect || "custom",
+    style: job.parameters?.style || "Custom",
+    startedAt: Date.parse(job.startedAt || job.createdAt) || Date.now(),
+    status: job.status,
+    retryOf: job.retryOf || null,
+    attempt: Number(job.attempt) || 1,
+    provider: job.provider || PRIMARY_MEDIA_LANE,
+    model: job.model || "",
+    parameters: job.parameters || {},
+    referenceAssetIds: Array.isArray(job.referenceAssetIds) ? job.referenceAssetIds : [],
+    errorCode: job.errorCode || "",
+    errorMessage: job.errorMessage || "",
+    finishedAt: Date.parse(job.finishedAt || job.updatedAt) || 0,
+  };
+}
+
+async function hydratePendingJobs(root, opts) {
+  const tenant = currentTenantId();
+  if (pendingJobsLoadedTenant === tenant) return;
+  pendingJobsLoadedTenant = tenant;
+  try {
+    const jobs = (await listMediaJobs()).map(normalizePendingJob);
+    pendingJobs = jobs.filter((job) => job.status === "queued" || job.status === "running");
+    recentMediaJobs = jobs
+      .filter((job) => job.status === "failed" || job.status === "cancelled")
+      .sort((a, b) => b.finishedAt - a.finishedAt)
+      .slice(0, 6);
+    if (root?.isConnected) renderMediaStudio(root, opts);
+  } catch {
+    pendingJobsLoadedTenant = "";
+  }
+}
 
 export function renderMediaStudio(el, opts = {}) {
   if (opts.initialTab && el.dataset.mlInitialTab !== opts.initialTab) {
@@ -1425,6 +1478,7 @@ export function renderMediaStudio(el, opts = {}) {
   consumePromptIntent(opts);
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
+  hydratePendingJobs(el, opts);
   if (session.tab === "briefs") session.tab = "pending";
   if (activeDrawer !== "assets") localAssetsDrawerSynced = false;
   if (session.tab !== "edit") mlInlineAssetsSyncedKind = null;
@@ -1456,7 +1510,7 @@ export function renderMediaStudio(el, opts = {}) {
   wireDrawer(el, activeDrawer, cfg, opts, esc);
   const body = el.querySelector("[data-ml-body]");
   if (session.tab === "generate") renderGenerate(body, cfg, opts, el);
-  else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
+  else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body, cfg, opts, el));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderMediaPool(body, cfg, opts, el);
 }
@@ -1931,10 +1985,23 @@ function wireDrawer(el, kind, cfg, opts, esc) {
   }
 }
 
-function renderPending(body) {
+function applyJobToGenerator(job) {
+  genState.modality = job.modality === "video" ? "video" : "image";
+  genState.provider = job.provider || PRIMARY_MEDIA_LANE;
+  genState.model = job.model || "";
+  genState.prompt = job.prompt || "";
+  genState.aspect = job.parameters?.aspect || "1:1";
+  genState.style = job.parameters?.style || "Cinematic";
+  genState.quality = job.parameters?.quality || "standard";
+  genState.count = Math.max(1, Number(job.parameters?.count) || 1);
+  genState.duration = Math.max(1, Number(job.parameters?.duration) || 6);
+  genState.preset = "custom";
+}
+
+function renderPending(body, cfg, opts, root) {
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  if (pendingJobs.length) {
-    body.innerHTML = `
+  const activeHtml = pendingJobs.length
+    ? `
       <div class="ml-pending-list" aria-label="Pending media jobs">
         ${pendingJobs.map((job) => `
           <article class="ml-pending-card">
@@ -1942,17 +2009,67 @@ function renderPending(body) {
             <div class="ml-pending-copy">
               <span>Generating</span>
               <b>${esc(job.prompt || "Untitled media request")}</b>
-              <i>${esc(job.modality)} · ${esc(job.aspect)} · ${esc(job.style)} · started ${Math.max(1, Math.round((Date.now() - job.startedAt) / 60000))}m ago</i>
+              <i>${esc(job.modality)} · ${esc(job.aspect)} · ${esc(job.style)} · ${esc(job.status || "running")} · started ${Math.max(1, Math.round((Date.now() - job.startedAt) / 60000))}m ago</i>
             </div>
+            <button class="ml-pool-act is-danger" type="button" data-ml-cancel-job="${esc(job.id)}">Cancel</button>
           </article>`).join("")}
-      </div>`;
-    return;
-  }
-  body.innerHTML = `
-    <div class="ml-idle">
+      </div>`
+    : `<div class="ml-idle">
       <b>No pending media.</b>
       <i>Generate an image or video when you are ready. Active jobs wait here, then move into Media Pool when they finish.</i>
     </div>`;
+  const recentHtml = recentMediaJobs.length
+    ? `<section class="ml-recent-jobs" aria-label="Recent media attempts">
+        <div class="ml-section-head"><div><span>Recent attempts</span><b>Retry without rebuilding the brief</b></div></div>
+        <div class="ml-pending-list">
+          ${recentMediaJobs.map((job) => `
+            <article class="ml-pending-card is-terminal">
+              <img class="ml-pending-phantom" src="/app/assets/poses/inspect.webp" alt="" loading="lazy" />
+              <div class="ml-pending-copy">
+                <span>${esc(job.status)} · attempt ${esc(job.attempt)}</span>
+                <b>${esc(job.prompt || "Untitled media request")}</b>
+                <i>${esc(job.errorMessage || (job.status === "cancelled" ? "Cancelled before completion." : "No verified media output was returned."))}</i>
+              </div>
+              <button class="ml-pool-act" type="button" data-ml-retry-job="${esc(job.id)}">Retry</button>
+            </article>`).join("")}
+        </div>
+      </section>`
+    : "";
+  body.innerHTML = `<div class="ml-pending-stack">${activeHtml}${recentHtml}</div>`;
+  body.querySelectorAll("[data-ml-cancel-job]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const jobId = button.dataset.mlCancelJob;
+      const cancelledJob = pendingJobs.find((job) => job.id === jobId);
+      button.disabled = true;
+      pendingJobControllers.get(jobId)?.abort();
+      try {
+        const stored = await transitionMediaJob(jobId, "cancelled");
+        recentMediaJobs = [normalizePendingJob(stored), ...recentMediaJobs].slice(0, 6);
+      } catch {
+        if (cancelledJob) recentMediaJobs = [{ ...cancelledJob, status: "cancelled", finishedAt: Date.now() }, ...recentMediaJobs].slice(0, 6);
+      }
+      pendingJobs = pendingJobs.filter((job) => job.id !== jobId);
+      renderPending(body, cfg, opts, root);
+    });
+  });
+  body.querySelectorAll("[data-ml-retry-job]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const source = recentMediaJobs.find((job) => job.id === button.dataset.mlRetryJob);
+      if (!source) return;
+      button.disabled = true;
+      try {
+        const retry = await retryMediaJob(source.id);
+        applyJobToGenerator(normalizePendingJob(retry));
+        session.tab = "generate";
+        renderMediaStudio(root, opts);
+        const liveBody = root.querySelector("[data-ml-body]");
+        await runGenerate(liveBody, cfg, opts, root, esc, retry);
+      } catch (error) {
+        button.disabled = false;
+        opts.notify?.("Media Factory", `Retry did not start: ${error?.message || "unknown error"}.`);
+      }
+    });
+  });
 }
 
 /* ---- Generate ---- */
@@ -2608,8 +2725,11 @@ function paintJobLog(body, esc) {
   body.querySelector("[data-ml-joblog-clear]")?.addEventListener("click", () => { jobLog = []; paintJobLog(body, esc); });
 }
 
-async function runGenerate(body, cfg, opts, root, esc) {
+async function runGenerate(body, cfg, opts, root, esc, existingLifecycleJob = null) {
   let pendingJob = null;
+  let lifecycleJob = null;
+  let lifecycleController = null;
+  let lifecycleSettled = false;
   if (!genState.prompt.trim()) { const t = body.querySelector("[data-ml-prompt]"); if (t) { t.focus(); t.classList.add("shake"); setTimeout(() => t.classList.remove("shake"), 500); } return; }
   /* Approval is opt-in (Settings > "Require approval before paid generation",
      off by default) — the owner already knows they're spending their own
@@ -2625,14 +2745,32 @@ async function runGenerate(body, cfg, opts, root, esc) {
       return;
     }
   }
-  pendingJob = {
-    id: `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    prompt: genState.prompt,
-    modality: genState.modality,
-    aspect: genState.aspect,
-    style: genState.style,
-    startedAt: Date.now(),
+  const req = {
+    modality: genState.modality, provider: genState.provider, model: genState.model,
+    prompt: genState.prompt, negative: genState.negative, style: genState.style,
+    preset: activePreset()?.label || "Custom",
+    approved, creditWarningShown: spendLane,
+    ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
   };
+  try {
+    lifecycleJob = existingLifecycleJob || await createMediaJob({
+        idempotencyKey: `media-${Date.now()}-${crypto.randomUUID?.() || Math.random().toString(16).slice(2)}`,
+        modality: req.modality,
+        prompt: req.prompt,
+        provider: req.provider,
+        model: req.model,
+        parameters: { ...req.params, style: req.style, preset: req.preset },
+        referenceAssetIds: [],
+      });
+    lifecycleJob = await transitionMediaJob(lifecycleJob.id, "running");
+  } catch (error) {
+    logJob("warn", `Could not create a durable render job: ${error?.message || "backend unavailable"}`);
+    opts.notify?.("Media Factory", "Render did not start because its durable job record could not be created.");
+    return;
+  }
+  lifecycleController = new AbortController();
+  pendingJobControllers.set(lifecycleJob.id, lifecycleController);
+  pendingJob = normalizePendingJob(lifecycleJob);
   pendingJobs.unshift(pendingJob);
   refreshGeneratePanel(body, cfg, opts, root);
   /* A draft/render can legitimately take a while — a frozen "Rendering…"
@@ -2653,18 +2791,16 @@ async function runGenerate(body, cfg, opts, root, esc) {
   };
   const busyTimer = setInterval(busyTick, 1000);
   try {
-    const req = {
-      modality: genState.modality, provider: genState.provider, model: genState.model,
-      prompt: genState.prompt, negative: genState.negative, style: genState.style,
-      preset: activePreset()?.label || "Custom",
-      approved, creditWarningShown: spendLane,
-      ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
-    };
-    const out = await generate(cfg, req);
+    const out = await generate(cfg, req, lifecycleController.signal);
     if (out.approvalRequired) {
       // the backend refused to render without an explicit approval — honor it
       logJob("warn", "Awaiting your approval before this render can use credits");
       if (opts.notify) opts.notify("Media Factory", out.message || "This render needs your approval before it can use credits.");
+      await transitionMediaJob(lifecycleJob.id, "failed", {
+        errorCode: "approval_required",
+        errorMessage: out.message || "Provider approval is required before generation.",
+      });
+      lifecycleSettled = true;
       return;
     }
     const stamp = Date.now();
@@ -2698,6 +2834,16 @@ async function runGenerate(body, cfg, opts, root, esc) {
         asset.saved = true;
         saveMediaPoolSource(asset);
       });
+      await transitionMediaJob(lifecycleJob.id, "completed", { outputAssetIds: created.map((asset) => asset.id) });
+      lifecycleSettled = true;
+    } else {
+      await transitionMediaJob(lifecycleJob.id, "failed", {
+        errorCode: out.queued ? "provider_queued_without_verified_output" : out.fallbackReason || "provider_failed",
+        errorMessage: out.queued
+          ? "The provider accepted a draft but did not return a verified media asset."
+          : out.fallbackDetail || "The provider did not return a verified media asset.",
+      });
+      lifecycleSettled = true;
     }
     lastRenderIssue = out.live || out.queued
       ? null
@@ -2720,9 +2866,22 @@ async function runGenerate(body, cfg, opts, root, esc) {
       cfg.credits = Math.max(0, cfg.credits - estCredits());
       saveCfg(cfg);
     }
+  } catch (error) {
+    const cancelled = lifecycleController?.signal.aborted;
+    if (!lifecycleSettled && lifecycleJob) {
+      await transitionMediaJob(lifecycleJob.id, cancelled ? "cancelled" : "failed", {
+        errorCode: cancelled ? "cancelled_by_user" : "generation_exception",
+        errorMessage: cancelled ? "Cancelled by the operator." : (error?.message || "Media generation failed."),
+      }).catch(() => null);
+      lifecycleSettled = true;
+    }
+    logJob(cancelled ? "warn" : "error", cancelled ? "Render cancelled" : `Render failed: ${error?.message || "unknown error"}`);
+    opts.notify?.("Media Factory", cancelled ? "Render cancelled — no result was saved." : "Render failed before a verified output was returned.");
   } finally {
     clearInterval(busyTimer);
+    if (lifecycleJob) pendingJobControllers.delete(lifecycleJob.id);
     if (pendingJob) pendingJobs = pendingJobs.filter((job) => job.id !== pendingJob.id);
+    pendingJobsLoadedTenant = "";
     refreshGeneratePanel(body, cfg, opts, root);
   }
 }
@@ -3471,6 +3630,7 @@ function ensureVideoEditor(opts) {
       esc: opts.esc || ((s) => String(s)),
       notify: opts.notify,
       aspect: "16:9",
+      tenantId: currentTenantId(),
       sources: {
         poolImages: () => poolMediaRows("image"),
         poolVideos: () => poolMediaRows("video"),

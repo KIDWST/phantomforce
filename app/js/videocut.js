@@ -96,6 +96,9 @@ export function mountVideoEditor(host, opts = {}) {
   let exportRun = null;
   let raf = 0;
   let destroyed = false;
+  let projectSaveTimer = null;
+  let restoringProject = false;
+  const projectKey = `pf.phantomcut.project.v1:${String(opts.tenantId || "local").replace(/[^a-zA-Z0-9_.:-]+/g, "-")}`;
 
   host.innerHTML = `
     <div class="vc" data-vc-root>
@@ -120,6 +123,7 @@ export function mountVideoEditor(host, opts = {}) {
           <span class="vc-microlabel">Total</span>
           <b class="vc-total" data-vc-total>0:00</b>
         </div>
+        <button class="vc-save-project" data-vc-save-project type="button">Save project</button>
         <div class="vc-export-slot">
           <button class="vc-export-btn" data-vc-export-btn type="button" disabled>Export video</button>
           ${recorderMime ? "" : `<span class="vc-export-unsupported">This browser has no MediaRecorder webm support, so PhantomCut cannot render a file here. Preview still works.</span>`}
@@ -175,6 +179,95 @@ export function mountVideoEditor(host, opts = {}) {
     scrubFill: q("[data-vc-scrub-fill]"),
     time: q("[data-vc-time]"),
   };
+
+  function serializableClip(clip) {
+    const url = String(clip.url || "");
+    if (!url || url.startsWith("blob:") || url.length > 3_500_000) return null;
+    return {
+      id: clip.id,
+      kind: clip.kind,
+      url,
+      title: clip.title,
+      transition: clip.transition,
+      text: clip.text,
+      textPos: clip.textPos,
+      fit: clip.fit,
+      fadeIn: clip.fadeIn,
+      fadeOut: clip.fadeOut,
+      duration: clip.duration,
+      kenBurns: clip.kenBurns,
+      in: clip.in,
+      out: clip.out,
+      mute: clip.mute,
+      volume: clip.volume,
+    };
+  }
+
+  function saveProject({ announce = false } = {}) {
+    if (restoringProject || destroyed) return false;
+    const clips = state.clips.map(serializableClip).filter(Boolean);
+    const skipped = state.clips.length - clips.length;
+    try {
+      localStorage.setItem(projectKey, JSON.stringify({
+        schemaVersion: 1,
+        title: state.title,
+        aspect: state.aspect,
+        res: state.res,
+        clips,
+        updatedAt: new Date().toISOString(),
+      }));
+      if (announce) {
+        notify("PhantomCut", skipped
+          ? `Project saved. ${skipped} PC-only clip${skipped === 1 ? "" : "s"} must be re-added after a browser restart.`
+          : "Project saved and will restore after refresh.");
+      }
+      return true;
+    } catch {
+      if (announce) notify("PhantomCut", "Project could not be saved in this browser.");
+      return false;
+    }
+  }
+
+  function scheduleProjectSave() {
+    if (restoringProject || destroyed) return;
+    clearTimeout(projectSaveTimer);
+    projectSaveTimer = setTimeout(() => saveProject(), 350);
+  }
+
+  function restoreProject() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(projectKey) || "null"); } catch {}
+    if (!saved || saved.schemaVersion !== 1 || !Array.isArray(saved.clips)) return 0;
+    restoringProject = true;
+    state.title = String(saved.title || state.title).slice(0, 80);
+    state.aspect = ASPECTS[saved.aspect] ? saved.aspect : state.aspect;
+    state.res = saved.res === "1080p" ? "1080p" : "720p";
+    q("[data-vc-title]").value = state.title;
+    q("[data-vc-aspect]").value = state.aspect;
+    q("[data-vc-res]").value = state.res;
+    saved.clips.slice(0, MAX_CLIPS).forEach((stored) => {
+      if (!stored?.url || !["photo", "video"].includes(stored.kind)) return;
+      const clip = addClip(stored.kind, stored.url, stored.title, false);
+      if (!clip) return;
+      Object.assign(clip, {
+        id: String(stored.id || clip.id),
+        transition: stored.transition === "fade" ? "fade" : "none",
+        text: String(stored.text || "").slice(0, 160),
+        textPos: stored.textPos === "center" ? "center" : "bottom",
+        fit: stored.fit === "contain" ? "contain" : "cover",
+        fadeIn: clamp(Number(stored.fadeIn) || 0, 0, 3),
+        fadeOut: clamp(Number(stored.fadeOut) || 0, 0, 3),
+        duration: clamp(Number(stored.duration) || 3, 0.5, 15),
+        kenBurns: Boolean(stored.kenBurns),
+        in: Math.max(0, Number(stored.in) || 0),
+        out: Math.max(0, Number(stored.out) || 0),
+        mute: Boolean(stored.mute),
+        volume: clamp(Number(stored.volume ?? 100), 0, 100),
+      });
+    });
+    restoringProject = false;
+    return state.clips.length;
+  }
 
   /* ---------------- timeline math ---------------- */
   const selectedClip = () => state.clips.find((c) => c.id === state.selectedId) || null;
@@ -1222,7 +1315,7 @@ export function mountVideoEditor(host, opts = {}) {
     refs.exportBtn.disabled = !recorderMime || !state.clips.length || total <= 0 || !!exportRun;
     if (state.playhead > total) state.playhead = total;
   }
-  function renderAll() { renderTimeline(); renderInspector(); updateMeta(); }
+  function renderAll() { renderTimeline(); renderInspector(); updateMeta(); scheduleProjectSave(); }
 
   /* ---------------- static wiring ---------------- */
   q("[data-vc-title]").addEventListener("input", (e) => { state.title = e.target.value || "PhantomCut edit"; });
@@ -1238,6 +1331,9 @@ export function mountVideoEditor(host, opts = {}) {
     if (rect.width > 0) seekTo(((e.clientX - rect.left) / rect.width) * totalDuration());
   });
   refs.exportBtn.addEventListener("click", startExport);
+  q("[data-vc-save-project]").addEventListener("click", () => saveProject({ announce: true }));
+  root.addEventListener("input", scheduleProjectSave);
+  root.addEventListener("change", scheduleProjectSave);
   q("[data-vc-export-cancel]").addEventListener("click", () => stopRecorder(true));
   const isTypingTarget = (target) => !!(target && target.closest && target.closest("input, textarea, select, button, [contenteditable]"));
   const onKey = (e) => {
@@ -1268,7 +1364,9 @@ export function mountVideoEditor(host, opts = {}) {
 
   function destroy() {
     if (destroyed) return;
+    saveProject();
     destroyed = true;
+    clearTimeout(projectSaveTimer);
     cancelAnimationFrame(raf);
     document.removeEventListener("keydown", onKey);
     if (exportRun) {
@@ -1290,9 +1388,11 @@ export function mountVideoEditor(host, opts = {}) {
   }
   host.__phantomCutDestroy = destroy;
 
+  const restoredClips = restoreProject();
   setPreviewSize();
   renderAddRow();
   renderAll();
+  if (restoredClips) notify("PhantomCut", `Restored ${restoredClips} project clip${restoredClips === 1 ? "" : "s"}.`);
   raf = requestAnimationFrame(tick);
   return { destroy, addClip: (kind, url, title) => addClip(kind, url, title, false) };
 }
