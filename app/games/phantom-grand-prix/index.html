@@ -4,64 +4,63 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
-<title>Phantom Grand Prix - PhantomPlay</title>
+<title>Chicklet Grand Prix - PhantomPlay</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="stage" aria-label="First-person Phantom Grand Prix race view"></canvas>
+<canvas id="stage" aria-label="Chicklet Grand Prix roll-racing view"></canvas>
 
 <section class="overlay title-overlay" data-title-overlay>
   <div class="title-lockup">
-    <p class="kicker">PhantomPlay Motorsport</p>
-    <h1>Phantom<br><span>Grand Prix</span></h1>
-    <p>Drift the impossible line. Fire the boost. Take the flag.</p>
-    <button class="btn-primary" data-garage-btn>Enter Garage</button>
+    <p class="kicker">PhantomPlay Roll Racing</p>
+    <h1>Chicklet<br><span>Grand Prix</span></h1>
+    <p>Tilt the world. Roll the line. Little chicks, big momentum.</p>
+    <button class="btn-primary" data-play-btn>Start Rolling</button>
+    <p class="tagline">Steer to lean &middot; build Flow &middot; tap Space to burst</p>
   </div>
 </section>
 
 <section class="overlay" data-start-overlay hidden>
   <div class="panel setup-panel">
-    <p class="kicker">Race Setup</p>
-    <h2>Choose Your Circuit</h2>
+    <p class="kicker">Pick Your World</p>
+    <h2>Choose Circuit</h2>
     <div class="track-choice">
-      <button class="track-btn" data-track="ghostlight" aria-pressed="true"><strong>Ghostlight</strong><span>Night city &middot; boost pads</span></button>
-      <button class="track-btn" data-track="redwood" aria-pressed="false"><strong>Redwood Run</strong><span>Forest dawn &middot; dirt shortcut</span></button>
-      <button class="track-btn" data-track="aurora" aria-pressed="false"><strong>Aurora Ring</strong><span>Polar sky &middot; icy corners</span></button>
-      <button class="track-btn" data-track="meltdown" aria-pressed="false"><strong>Meltdown</strong><span>Caldera &middot; lava hazards</span></button>
+      <button class="track-btn" data-track="meadow" aria-pressed="true"><strong>Sunrise Meadow</strong><span>Warm hills &middot; easy flow</span></button>
+      <button class="track-btn" data-track="cloudtop" aria-pressed="false"><strong>Cloudtop Isles</strong><span>Pastel sky islands</span></button>
+      <button class="track-btn" data-track="aurora" aria-pressed="false"><strong>Aurora Ridge</strong><span>Night snow &middot; living sky</span></button>
     </div>
-    <h2>Starting Grid</h2>
+    <h2>Race Type</h2>
     <div class="mode-choice">
-      <button class="mode-btn" data-mode="1p"><strong>Single Race</strong><span>1 driver + 7 CPU rivals</span></button>
-      <button class="mode-btn" data-mode="cup"><strong>Grand Prix Cup</strong><span>4 circuits &middot; cumulative points</span></button>
-      <button class="mode-btn" data-mode="2p"><strong>Local Split Race</strong><span>2 drivers + 6 CPU rivals</span></button>
+      <button class="mode-btn" data-mode="single" aria-pressed="true"><strong>Single Race</strong><span>You + 5 chicklets &middot; 3 laps</span></button>
+      <button class="mode-btn" data-mode="cup" aria-pressed="false"><strong>Grand Prix Cup</strong><span>3 circuits &middot; podium points</span></button>
+      <button class="mode-btn" data-mode="time" aria-pressed="false"><strong>Time Trial</strong><span>Solo roll &middot; chase the clock</span></button>
     </div>
     <div class="controls-grid">
-      <div><b>Driver 1</b><span>WASD / Shift hop-drift / Space item</span></div>
-      <div><b>Driver 2</b><span>Arrows / Slash / Enter</span></div>
-      <div><b>Extras</b><span>Hold gas at "1" for a boost start / M mute</span></div>
+      <div><b>Steer</b><span>&larr; &rarr; or A / D (tilt)</span></div>
+      <div><b>Burst</b><span>Space (when Flow is full)</span></div>
+      <div><b>Brake</b><span>&darr; / S &middot; Pause: P</span></div>
     </div>
+    <button class="btn-primary" data-start-btn>Roll Out</button>
     <button class="btn-ghost" data-title-btn>Back</button>
   </div>
 </section>
 
-<div class="overlay countdown-overlay" data-countdown-overlay hidden><div class="countdown-num" data-countdown-num>3</div></div>
-
 <div class="overlay" data-pause-overlay hidden>
-  <div class="panel"><p class="kicker">Yellow Flag</p><h2>Race Paused</h2><button class="btn-primary" data-resume-btn>Resume</button></div>
+  <div class="panel"><p class="kicker">Cluck Break</p><h2>Paused</h2><button class="btn-primary" data-resume-btn>Resume</button></div>
 </div>
 
 <section class="overlay" data-finish-overlay hidden>
   <div class="panel results-panel">
-    <p class="kicker">Official Classification</p><h2 data-finish-title>Race Finished</h2><p data-finish-track></p>
+    <p class="kicker">Finish Line</p><h2 data-finish-title>Race Finished</h2><p data-finish-track></p>
     <div class="standings" data-standings></div>
-    <button class="btn-primary" data-next-btn hidden>Next Race</button>
-    <button class="btn-primary" data-restart-btn>Race Again</button><button class="btn-ghost" data-menu-btn>Change Setup</button>
+    <button class="btn-primary" data-next-btn hidden>Next Circuit</button>
+    <button class="btn-primary" data-restart-btn>Roll Again</button><button class="btn-ghost" data-menu-btn>Change Setup</button>
   </div>
 </section>
 
 <div class="touch-controls" data-touch-controls hidden>
-  <div class="touch-steer"><button data-touch="left" aria-label="Steer left">&#9664;</button><button data-touch="right" aria-label="Steer right">&#9654;</button></div>
-  <div class="touch-actions"><button data-touch="drift">Drift</button><button class="gas" data-touch="gas">Gas</button><button data-touch="item">Item</button></div>
+  <div class="touch-steer"><button data-touch="left" aria-label="Tilt left">&#9664;</button><button data-touch="right" aria-label="Tilt right">&#9654;</button></div>
+  <div class="touch-actions"><button class="boost" data-touch="boost">Flow</button></div>
 </div>
 
 <script src="game.js"></script>
