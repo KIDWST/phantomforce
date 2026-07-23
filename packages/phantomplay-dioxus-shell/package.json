@@ -1,0 +1,11 @@
+{
+  "name": "@phantomforce/phantomplay-dioxus-shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native Dioxus/Rust cross-platform shell for PhantomPlay, additive alongside the existing web app. Not wired into ship:live-admin's deploy gate yet — that is a later, explicit staged decision.",
+  "scripts": {
+    "build": "cargo build",
+    "dev": "cargo run",
+    "test": "cargo test"
+  }
+}
