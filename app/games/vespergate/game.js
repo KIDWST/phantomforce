@@ -237,7 +237,15 @@
   }
   function damageBoss(dmg) {
     if (!boss || boss.dead) return;
+    const prevPhase = boss.phase;
     boss.hp -= dmg; boss.hurt = 0.1; spawnParticles(boss.x, boss.y, "#ffd166", 5);
+    const newPhase = boss.hp > boss.maxHp * 0.66 ? 1 : boss.hp > boss.maxHp * 0.33 ? 2 : 3;
+    if (newPhase !== prevPhase && boss.hp > 0) {
+      VG.fx.hitStop(0.09); VG.camera.jolt(0.45);
+      VG.fx.spawnShockwave(boss.x, boss.y, { maxR: 320, speed: 180, color: "255,90,70" });
+      VG.sfxBell(140, 0.18);
+      toast(newPhase === 3 ? "THE BELLMOTHER WAKES FULLY" : "THE BRONZE STIRS", boss.x, boss.y - 26, "#ff8095");
+    }
     if (boss.hp <= 0) {
       boss.dead = true;
       state.flags.bellRestored = true;
@@ -246,6 +254,10 @@
       banner("RELIC — Bell Sigil");
       toast("THE BRONZE REMEMBERS ITS SONG", boss.x, boss.y - 24, "#8fe9ff");
       VG.sfxBell(220, 0.2);
+      VG.fx.hitStop(0.14); VG.camera.jolt(0.5);
+      VG.fx.spawnShockwave(boss.x, boss.y, { maxR: 420, speed: 210, color: "143,233,255" });
+      spawnParticles(boss.x, boss.y, "#c9d6e8", 26, 110);
+      spawnParticles(boss.x, boss.y, "#5a4020", 16, 70);
       state.score += 1000;
     }
   }
@@ -381,7 +393,8 @@
       b.ringCd = b.phase === 3 ? 1.5 : b.phase === 2 ? 2.1 : 2.7;
       rings.push({ x: b.x, y: b.y, r: 12, vr: 120, dmg: 1, life: 3, hostile: true });
       if (b.phase === 3) rings.push({ x: b.x, y: b.y, r: 2, vr: 85, dmg: 1, life: 3, hostile: true });
-      VG.sfxBell(90, 0.14); VG.camera.jolt(0.15);
+      VG.fx.spawnShockwave(b.x, b.y, { maxR: 220, speed: 150, color: b.phase >= 3 ? "255,70,70" : "220,150,90" });
+      VG.sfxBell(90, 0.14); VG.camera.jolt(0.15 + b.phase * 0.04);
     }
     b.cd -= dt;
     if (b.phase >= 2 && b.cd <= 0 && enemies.filter((e) => !e.dead).length < 3) {
@@ -624,6 +637,7 @@
   /* ================= simulate ================= */
   function simulate(dt) {
     state.t += dt;
+    VG.fx.tick(dt);
     updateAim();
     portals.update(dt);
     const pressed = VG.input.pressed, pad = VG.input.pad;
@@ -852,6 +866,53 @@
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath(); ctx.ellipse(x, y + 5, w2, w2 * 0.4, 0, 0, Math.PI * 2); ctx.fill();
   }
+  /* the ossuary's mirror-bone banks shots — and, up close, throws back a
+     silhouette that doesn't quite keep time with you. */
+  function drawMirrorGhosts() {
+    const tiles = state.room.mirrorTilesNear(player.x, player.y, 90);
+    if (!tiles.length) return;
+    for (const m of tiles) {
+      const dx = m.x - player.x, dy = m.y - player.y;
+      const desync = Math.floor(state.t * 0.7 + m.x * 0.13) % 5 === 0;
+      ctx.save();
+      ctx.translate(m.x, m.y);
+      ctx.scale(-1, 1);
+      ctx.translate(-dx * 0.15, -dy * 0.15 - 2);
+      ctx.globalAlpha = 0.32 + Math.sin(state.t * 2 + m.x) * 0.06;
+      ctx.rotate(desync ? -Math.atan2(player.fy, player.fx) : Math.atan2(player.fy, player.fx));
+      ctx.fillStyle = "#1c1830";
+      ctx.beginPath(); ctx.ellipse(0, 0, 5, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = desync ? "rgba(255,120,140,0.55)" : "rgba(143,233,255,0.35)";
+      ctx.beginPath(); ctx.arc(3, 0, 1.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+  /* ---------------- Living Darkness: mood + per-frame light gather ---------------- */
+  function moodColorAlpha() {
+    if (state.roomId === "hollowboss") {
+      const heat = boss ? (boss.phase - 1) / 2 : 0;
+      return [10 + heat * 40, 6 + heat * 4, 10 + heat * 6, 0.84];
+    }
+    if (state.roomId === "ossuary1") return [8, 16, 10, 0.86];
+    if (state.roomId === "ossuaryboss") return [10, 10, 26, 0.87];
+    return [6, 6, 12, 0.8];
+  }
+  function applyLighting() {
+    const biome = state.room && state.room.biome;
+    VG.fx.seedAtmosphere(VG.camera, biome);
+    if (!VG.fx.DARK_BIOMES.has(biome)) return;
+    const intensity = VG.settings.lighting ?? 1;
+    if (intensity <= 0.02) return;
+    VG.fx.pushLight(player.x, player.y, 46, { seed: 1 });
+    for (const l of state.room.collectLights(VG.camera)) VG.fx.pushLight(l.x, l.y, l.r, { seed: l.seed });
+    if (boss && !boss.dead) {
+      VG.fx.pushLight(boss.x, boss.y, 60 + boss.phase * 8, { seed: 99, boost: 1.1 });
+    }
+    for (const e of enemies) if (!e.dead && e.tag === "choir" && e.enrage > 0) VG.fx.pushLight(e.x, e.y, 20 + e.enrage * 4, { seed: e.homeX });
+    for (let i = 0; i < 2; i++) { const g = portals.gates[i]; if (g.active) VG.fx.pushLight(g.x, g.y, 26, { seed: 500 + i, flicker: false }); }
+    const [r, g, b, a] = moodColorAlpha();
+    VG.fx.renderDarkness(ctx, VG.camera, `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${(a * intensity).toFixed(3)})`);
+  }
   function drawScene() {
     const flags = roomFlags();
     state.room.draw(ctx, VG.camera, state.t, flags);
@@ -891,6 +952,8 @@
     actors.push({ y: player.y, draw: drawPlayer });
     actors.sort((a, b) => a.y - b.y);
     for (const a of actors) a.draw();
+    drawMirrorGhosts();
+    VG.fx.drawShockwaves(ctx);
     // rings
     for (const rg of rings) {
       ctx.strokeStyle = rg.hostile ? `rgba(255,120,90,${Math.min(0.6, rg.life)})` : `rgba(143,233,255,${Math.min(0.6, rg.life)})`;
@@ -904,6 +967,7 @@
     }
     drawGates();
     for (const p of particles) { ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.color; ctx.fillRect(p.x - 1, p.y - 1, 2, 2); ctx.globalAlpha = 1; }
+    VG.fx.drawAtmosphere(ctx, VG.camera);
     // dusk light pass
     state.room.drawLight(ctx, VG.camera, state.t, flags);
     // drifting cloud shadows over the open world
@@ -1020,7 +1084,15 @@
       ctx.beginPath(); ctx.moveTo(0, -9 * sc); ctx.lineTo(6 * sc, 7 * sc); ctx.lineTo(-6 * sc, 7 * sc); ctx.closePath(); ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(0, -3 * sc, 2.5 * sc, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#3a4a6a"; ctx.fillRect(-2 * sc, -4 * sc, 1.5, 2); ctx.fillRect(sc, -4 * sc, 1.5, 2);
-      if (e.enrage) { ctx.strokeStyle = `rgba(255,120,150,${0.3 + e.enrage * 0.2})`; ctx.beginPath(); ctx.arc(0, 0, 10 * sc, 0, Math.PI * 2); ctx.stroke(); }
+      if (e.enrage) {
+        const rippleN = Math.min(3, 1 + e.enrage);
+        for (let i = 0; i < rippleN; i++) {
+          const rr = (10 + i * 6) * sc + Math.sin(state.t * 3 + i + e.homeX) * 1.5;
+          ctx.strokeStyle = `rgba(255,120,150,${Math.max(0, 0.34 - i * 0.09) + e.enrage * 0.05})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
     }
     if (e.type === "wolf" && e.lungeT > 0) {
       ctx.strokeStyle = `rgba(255,207,107,${Math.min(1, e.lungeT * 3)})`; ctx.lineWidth = 1.2;
@@ -1038,15 +1110,54 @@
     ctx.restore();
   }
   function drawBoss(b) {
-    shadow(b.x, b.y + 8, 18);
+    shadow(b.x, b.y + 10, 20);
     ctx.save(); ctx.translate(b.x, b.y);
     if (b.hurt > 0) ctx.globalAlpha = 0.75;
-    ctx.fillStyle = "#3a2a12"; ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#7a5a20"; ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(255,220,120,0.3)"; ctx.beginPath(); ctx.arc(0, -4, 10, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#1a1420"; ctx.beginPath(); ctx.arc(-5, -2, 2.5, 0, Math.PI * 2); ctx.arc(5, -2, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = `rgba(143,233,255,${0.2 + b.phase * 0.12})`; ctx.lineWidth = 1;
-    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(0, 0, 12 + i * 4, b.sweep + i, b.sweep + i + 2); ctx.stroke(); }
+    const heat = (b.phase - 1) / 2; // 0 / 0.5 / 1 across the three phases
+    const bodyA = `rgb(${Math.round(48 + heat * 130)},${Math.round(40 - heat * 22)},${Math.round(30 - heat * 12)})`;
+    const bodyB = `rgb(${Math.round(110 + heat * 120)},${Math.round(70 - heat * 32)},${Math.round(38 - heat * 12)})`;
+    const eyeCol = `rgb(255,${Math.round(60 - heat * 40)},${Math.round(60 - heat * 40)})`;
+
+    // tattered shroud tendrils, swaying independent of the body sweep
+    ctx.strokeStyle = "rgba(18,12,10,0.6)"; ctx.lineWidth = 2.4;
+    for (let i = -3; i <= 3; i++) {
+      const sway = Math.sin(state.t * 1.6 + i * 1.3) * 4;
+      ctx.beginPath();
+      ctx.moveTo(i * 6, 14);
+      ctx.quadraticCurveTo(i * 6 + sway, 24, i * 6 + sway * 1.6, 34 + Math.abs(i) * 1.5);
+      ctx.stroke();
+    }
+
+    // bell-shaped body — a hooded matron cast in bronze
+    ctx.fillStyle = bodyA;
+    ctx.beginPath();
+    ctx.moveTo(-20, 14);
+    ctx.quadraticCurveTo(-22, -4, -8, -18);
+    ctx.quadraticCurveTo(0, -24, 8, -18);
+    ctx.quadraticCurveTo(22, -4, 20, 14);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = bodyB;
+    ctx.beginPath(); ctx.ellipse(0, -6, 12, 14, 0, 0, Math.PI * 2); ctx.fill();
+
+    // torn opening over the swinging clapper — her "heart"
+    const swing = Math.sin(b.sweep * 1.4) * 6;
+    ctx.fillStyle = "rgba(8,5,4,0.85)";
+    ctx.beginPath(); ctx.ellipse(0, 4, 6, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(${Math.round(200 + heat * 55)},${Math.round(90 - heat * 40)},${Math.round(50 - heat * 20)},0.9)`;
+    ctx.beginPath(); ctx.arc(swing * 0.5, 8, 2.6, 0, Math.PI * 2); ctx.fill();
+
+    // glowing eyes, tracking the player
+    const ea = Math.atan2(player.y - b.y, player.x - b.x);
+    const ex = Math.cos(ea) * 2, ey = Math.sin(ea) * 2;
+    ctx.fillStyle = eyeCol;
+    ctx.shadowColor = eyeCol; ctx.shadowBlur = 8 + heat * 6;
+    ctx.beginPath(); ctx.arc(-5 + ex, -8 + ey, 1.8, 0, Math.PI * 2); ctx.arc(5 + ex, -8 + ey, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // tolling sweep rings
+    ctx.strokeStyle = `rgba(255,${Math.round(140 - heat * 60)},${Math.round(100 - heat * 40)},${0.22 + heat * 0.18})`;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(0, 0, 14 + i * 5, b.sweep + i, b.sweep + i + 2); ctx.stroke(); }
     ctx.restore();
   }
   function drawGates() {
@@ -1316,6 +1427,7 @@
       el.innerHTML = `<div class="vg-panel vg-settings"><h1>Settings</h1>
         ${row("Volume", "volume", 0, 1, 0.05)}${row("Music", "music", 0, 1, 0.05)}
         ${row("Screenshake", "shake", 0, 1, 0.1)}${row("Motion", "motion", 0.3, 1, 0.1)}
+        ${row("Darkness", "lighting", 0, 1, 0.1)}
         ${row("Damage taken", "damageTaken", 0.25, 1, 0.25)}
         ${chk("Reduced effects", "reducedEffects")}${chk("Crisp HD rendering", "sharpRender")}
         <div class="vg-btns"><button class="vg-btn vg-primary" data-vg-settings-back>Back</button></div></div>`;
@@ -1406,7 +1518,7 @@
       else if (state.phase === "inventory" || state.phase === "shop") state.phase = "playing";
       pressed.delete("Escape");
     }
-    if (state.phase === "playing") { simulate(dt); pressed.clear(); }
+    if (state.phase === "playing") { simulate(VG.fx.scaleDt(dt)); pressed.clear(); }
     else if (state.phase === "dialog" || state.phase === "scene") {
       state.t += dt;
       if (pressed.has("KeyE") || pressed.has("Space") || pressed.has("M1") || pressed.has("PadA")) {
@@ -1428,6 +1540,7 @@
       VG.camera.apply(ctx);
       drawScene();
       VG.camera.reset(ctx);
+      applyLighting();
       drawHUD();
       drawScreenFx();
       if (state.phase === "dialog" || state.phase === "scene") drawDialog();

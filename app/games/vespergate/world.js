@@ -330,6 +330,33 @@
       }
       ctx.globalCompositeOperation = "source-over";
     }
+    /* Living Darkness support: world-space light sources (brass, saint-glass,
+       lanterns) and nearby mirror-tile centers, for effects.js/game.js to
+       consume — kept here since only Room knows the tile grid. */
+    collectLights(cam) {
+      const out = [];
+      const x0 = Math.max(0, Math.floor(cam.x / T) - 2), y0 = Math.max(0, Math.floor(cam.y / T) - 2);
+      const x1 = Math.min(this.w, Math.ceil((cam.x + VG.W) / T) + 2), y1 = Math.min(this.h, Math.ceil((cam.y + VG.H) / T) + 2);
+      for (let gy = y0; gy < y1; gy++) for (let gx = x0; gx < x1; gx++) {
+        const m = this.grid[gy][gx];
+        if (m === MAT.LANTERN) out.push({ x: gx * T + T / 2, y: gy * T + 6, r: 30, seed: this._hash(gx, gy) });
+        else if (m === MAT.BRASS) out.push({ x: gx * T + T / 2, y: gy * T + T / 2, r: 22, seed: this._hash(gx, gy) });
+        else if (m === MAT.SAINTGLASS) out.push({ x: gx * T + T / 2, y: gy * T + T / 2, r: 26, seed: this._hash(gx, gy) });
+      }
+      return out;
+    }
+    mirrorTilesNear(x, y, range) {
+      const gx0 = Math.max(0, Math.floor((x - range) / T)), gx1 = Math.min(this.w - 1, Math.floor((x + range) / T));
+      const gy0 = Math.max(0, Math.floor((y - range) / T)), gy1 = Math.min(this.h - 1, Math.floor((y + range) / T));
+      const out = [];
+      for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
+        if (this.grid[gy][gx] === MAT.MIRROR) {
+          const cx = gx * T + T / 2, cy = gy * T + T / 2;
+          if (VG.dist(cx, cy, x, y) <= range) out.push({ x: cx, y: cy });
+        }
+      }
+      return out;
+    }
   }
 
   VG.Room = Room;
