@@ -133,7 +133,7 @@ function stageAllowedChanges() {
   console.log(`\nStaged files:\n${staged}`);
 }
 
-async function fetchBuild(url, expectedBuild) {
+async function fetchBuildOnce(url, expectedBuild) {
   const response = await fetch(url, {
     headers: {
       "Cache-Control": "no-cache",
@@ -151,15 +151,36 @@ async function fetchBuild(url, expectedBuild) {
   };
 }
 
+const sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+
+/* Sync-AdminMain.ps1 (the step right before this) restarts Hermes when the
+   commit changed, and a freshly-spawned server takes a moment to bind its
+   port. Verifying immediately after that restart used to fail on a plain
+   connection-refused/timeout — not a real deploy failure, just a race — and
+   killed an otherwise-successful ship. Retry a few times before giving up. */
+async function fetchBuild(url, expectedBuild, attempts = 5, delayMs = 2000) {
+  let last;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      last = await fetchBuildOnce(url, expectedBuild);
+      if (last.ok) return last;
+    } catch (error) {
+      last = { url, status: 0, build: "", ok: false, error: error?.message || String(error) };
+    }
+    if (attempt < attempts) await sleep(delayMs);
+  }
+  return last;
+}
+
 async function verifyLiveBuild(expectedBuild) {
   console.log(`\nVerifying live admin build ${expectedBuild}...`);
   const results = await Promise.all(LIVE_URLS.map((url) => fetchBuild(url, expectedBuild)));
   for (const result of results) {
-    console.log(`${result.ok ? "OK" : "FAIL"} ${result.status} ${result.build || "NO_BUILD"} ${result.url}`);
+    console.log(`${result.ok ? "OK" : "FAIL"} ${result.status} ${result.build || "NO_BUILD"} ${result.url}${result.error ? ` (${result.error})` : ""}`);
   }
   const bad = results.filter((result) => !result.ok);
   if (bad.length) {
-    fail(`live URL(s) did not serve ${expectedBuild}: ${bad.map((result) => `${result.url}=${result.status}/${result.build || "NO_BUILD"}`).join(", ")}`);
+    fail(`live URL(s) did not serve ${expectedBuild}: ${bad.map((result) => `${result.url}=${result.status}/${result.build || result.error || "NO_BUILD"}`).join(", ")}`);
   }
 }
 
