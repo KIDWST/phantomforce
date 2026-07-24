@@ -636,6 +636,16 @@
     VG.sfx(480, 0.05, "triangle", 0.04);
     saveGame();
   }
+  function cycleAppearance(cat, dir) {
+    const inCat = D.COSMETICS.filter((c) => c.cat === cat && player.cosmetics.owned.includes(c.id));
+    if (!inCat.length) return;
+    const options = [null, ...inCat.map((c) => c.id)];
+    const idx = options.indexOf(player.cosmetics.equipped[cat]);
+    const next = (idx + dir + options.length) % options.length;
+    player.cosmetics.equipped[cat] = options[next];
+    VG.sfx(560, 0.05, "triangle", 0.04);
+    saveGame();
+  }
 
   /* ================= save ================= */
   function saveGame() {
@@ -1230,9 +1240,14 @@
     ctx.save();
     ctx.globalAlpha = (tr.life / tr.max) * 0.35;
     ctx.translate(tr.x, tr.y);
-    ctx.fillStyle = "#c9c2ff";
+    const trailCos = cosmeticOf("trail");
+    ctx.fillStyle = trailCos ? trailCos.color : "#c9c2ff";
     ctx.beginPath(); ctx.ellipse(0, -1, 4, 5, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+  }
+  function cosmeticOf(cat) {
+    const id = player.cosmetics.equipped[cat];
+    return id ? D.COSMETICS.find((c) => c.id === id) : null;
   }
   function drawPlayer() {
     const p = player;
@@ -1244,13 +1259,16 @@
     // start), driving a brief forward lunge + squash-stretch punch-through.
     const strikeK = p.strikeT > 0 ? p.strikeT / 0.14 : 0;
     const lunge = strikeK * 2.2;
-    const rimColor = state.flags.hasHand && p.ash > 10
-      ? (portals.selected === 0 ? "rgba(143,233,255,0.85)" : "rgba(255,154,208,0.85)")
-      : "rgba(201,190,255,0.55)";
+    const beamReady = state.flags.hasHand && p.hp === p.maxHp;
+    const glowCos = cosmeticOf("glow");
+    const glowColor = glowCos ? glowCos.color : (portals.selected === 0 ? "#8fe9ff" : "#ff9ad0");
+    const rimColor = beamReady ? `${glowColor}d9` : "rgba(201,190,255,0.55)";
     const rimBlur = 5 + strikeK * 6 + (p.rollT > 0 ? 4 : 0);
     ctx.save(); ctx.translate(p.x + p.fx * lunge, p.y + p.fy * lunge);
     const rollSquash = p.rollT > 0 ? 0.7 : 1;
     const punchStretch = 1 + strikeK * 0.18;
+    const cloakCos = cosmeticOf("cloak");
+    const cloakOuter = cloakCos ? cloakCos.outer : "#241a38", cloakInner = cloakCos ? cloakCos.inner : "#3a2c50";
 
     // trailing shroud tendrils, echoing the boss's shroud language at hero scale
     ctx.strokeStyle = "rgba(36,26,56,0.55)"; ctx.lineWidth = 1.4;
@@ -1264,9 +1282,9 @@
 
     // cloak + body, rim-lit against the dark
     glow(rimColor, rimBlur, () => {
-      ctx.fillStyle = "#241a38";
+      ctx.fillStyle = cloakOuter;
       ctx.beginPath(); ctx.ellipse(-p.fx * 2, -p.fy * 2 + 1, 6 * punchStretch, 7 * rollSquash, fa, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#3a2c50";
+      ctx.fillStyle = cloakInner;
       ctx.beginPath(); ctx.ellipse(0, -1, 4.5 * punchStretch, 5.5 * rollSquash, 0, 0, Math.PI * 2); ctx.fill();
     });
 
@@ -1283,13 +1301,19 @@
     ctx.beginPath(); ctx.moveTo(5, -0.6); ctx.lineTo(9 + strikeK * 3, 0); ctx.lineTo(5, 0.6); ctx.closePath(); ctx.fill();
     ctx.restore();
 
-    // THE VESPER HAND — gauntlet on the leading arm, glowing by ash
+    // THE VESPER HAND — gauntlet on the leading arm, glowing when the beam is ready (full HP)
     if (state.flags.hasHand) {
       ctx.save(); ctx.rotate(fa);
       ctx.fillStyle = "#0c0a12"; ctx.fillRect(3, -2, 7, 4);
-      ctx.fillStyle = p.ash > 10 ? (portals.selected === 0 ? "#8fe9ff" : "#ff9ad0") : "#565060";
+      ctx.fillStyle = beamReady ? glowColor : "#565060";
       ctx.fillRect(8, -1.5, 2.5, 3);
       ctx.restore();
+    }
+    // accessory: small silhouette near the head
+    const accCos = cosmeticOf("accessory");
+    if (accCos) {
+      ctx.fillStyle = accCos.color;
+      ctx.beginPath(); ctx.arc(p.fx * 1.7 + 3, -8.5 + p.fy * 1.3, 1.6, 0, Math.PI * 2); ctx.fill();
     }
     // strike flourish: thicker glowing blade-sweep arcs with a bright core + soft outer bloom
     if (p.strikeT > 0) {
@@ -1544,44 +1568,46 @@
   function drawHUD() {
     parchmentPanel(5, 5, 96, 31, { seed: 1 });
     for (let i = 0; i < player.maxHp; i++) drawHeart(8 + i * 10, 7, i < player.hp);
+    const beamReadyHUD = state.flags.hasHand && player.hp === player.maxHp;
     ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(8, 18, 70, 4);
-    const ashW = 70 * (player.ash / player.maxAsh);
-    ctx.fillStyle = "#ffcf6b"; ctx.fillRect(8, 18, ashW, 4);
-    if (ashW > 1) {
-      // a slow highlight streak sliding across the filled cinder bar
-      ctx.save();
-      ctx.beginPath(); ctx.rect(8, 18, ashW, 4); ctx.clip();
-      const sx = 8 + ((state.t * 26) % (ashW + 14)) - 10;
-      const shimmer = ctx.createLinearGradient(sx, 0, sx + 10, 0);
-      shimmer.addColorStop(0, "rgba(255,255,255,0)"); shimmer.addColorStop(0.5, "rgba(255,255,255,0.55)"); shimmer.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = shimmer; ctx.fillRect(8, 18, ashW, 4);
-      ctx.restore();
+    if (beamReadyHUD) {
+      const glowCosHUD = cosmeticOf("glow");
+      ctx.fillStyle = glowCosHUD ? glowCosHUD.color : (portals.selected === 0 ? "#8fe9ff" : "#ff9ad0");
+      ctx.fillRect(8, 18, 70, 4);
     }
-    ctx.fillStyle = "#8a9ac0"; ctx.font = "5px monospace"; ctx.fillText("CINDER", 81, 22);
-    // embers
+    ctx.fillStyle = "#8a9ac0"; ctx.font = "5px monospace"; ctx.fillText(beamReadyHUD ? "BEAM READY" : "BEAM — HEAL TO FULL", 81, 22);
+    // embers + vesper souls
     ctx.fillStyle = "#ffcf6b"; ctx.fillRect(8, 27, 4, 4);
     ctx.fillStyle = "#eaf2ff"; ctx.font = "7px monospace"; ctx.fillText(String(player.embers), 15, 32);
+    ctx.fillStyle = "#9c8fff"; ctx.beginPath(); ctx.arc(52, 29, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#eaf2ff"; ctx.fillText(String(player.vesperSouls), 57, 32);
 
     const roomName = VG.ROOMS[state.roomId]?.name || "Duskhollow";
-    parchmentPanel(VG.W - 176, 5, 171, 22, { seed: 2, fill: "rgba(5,4,13,0.68)" });
+    const hasHeartLine = state.vesperHearts > 0;
+    parchmentPanel(VG.W - 176, 5, 171, hasHeartLine ? 32 : 22, { seed: 2, fill: "rgba(5,4,13,0.68)" });
     ctx.textAlign = "right";
     ctx.fillStyle = "#eaf2ff"; ctx.font = "700 7px Georgia, serif"; ctx.fillText(roomName.toUpperCase(), VG.W - 10, 14);
     ctx.fillStyle = "#8a9ac0"; ctx.font = "5px monospace";
     ctx.fillText(`${enemies.filter((e) => !e.dead).length + (boss && !boss.dead ? 1 : 0)} THREATS · ${state.score} SCORE`, VG.W - 10, 22);
+    if (hasHeartLine) {
+      ctx.fillStyle = "#ff9ad0"; ctx.font = "6px monospace";
+      ctx.fillText(`♥ ${state.vesperHearts}/${state.heartsTotal} VESPER HEARTS`, VG.W - 10, 31);
+    }
     ctx.textAlign = "left";
-    // gate strain (only when a gate is up)
+    // gate strain (only when a gate is up) — shifted down a row once the hearts line is showing
+    const gateY = hasHeartLine ? 40 : 30;
     if (portals.gates.some((g) => g.active)) {
       const sw = 70;
-      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(VG.W - sw - 8, 30, sw, 5);
+      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(VG.W - sw - 8, gateY, sw, 5);
       const st = portals.strain;
       ctx.fillStyle = st > 0.8 ? "#ff5c74" : st > 0.5 ? "#ffcf6b" : "#8fe9ff";
-      ctx.fillRect(VG.W - sw - 8, 30, sw * st, 5);
-      ctx.textAlign = "right"; ctx.fillStyle = "#8a9ac0"; ctx.font = "6px monospace"; ctx.fillText("STRAIN", VG.W - 8, 43); ctx.textAlign = "left";
+      ctx.fillRect(VG.W - sw - 8, gateY, sw * st, 5);
+      ctx.textAlign = "right"; ctx.fillStyle = "#8a9ac0"; ctx.font = "6px monospace"; ctx.fillText("STRAIN", VG.W - 8, gateY + 13); ctx.textAlign = "left";
     }
     if (state.flags.hasHand) {
       ctx.textAlign = "right"; ctx.font = "6px monospace";
       ctx.fillStyle = portals.selected === 0 ? "#8fe9ff" : "#ff9ad0";
-      ctx.fillText(portals.selected === 0 ? "NEXT GATE: DAWN" : "NEXT GATE: DUSK", VG.W - 8, portals.gates.some((g) => g.active) ? 52 : 36);
+      ctx.fillText(portals.selected === 0 ? "NEXT GATE: DAWN" : "NEXT GATE: DUSK", VG.W - 8, portals.gates.some((g) => g.active) ? gateY + 22 : gateY + 6);
       ctx.textAlign = "left";
     }
     // quest tracker
@@ -1675,9 +1701,9 @@
     ctx.fillStyle = "#eaf2ff"; ctx.font = "700 12px Georgia, serif"; ctx.fillText("THE BEARER", x + 14, y + 20);
     for (let i = 0; i < player.maxHp; i++) drawHeart(x + 14 + i * 10, y + 28, i < player.hp);
     ctx.font = "7px monospace"; ctx.fillStyle = "#ffcf6b";
-    ctx.fillText(`◆ ${player.embers} embers`, x + 14, y + 50);
+    ctx.fillText(`◆ ${player.embers} embers   ● ${player.vesperSouls} vesper souls`, x + 14, y + 50);
     ctx.fillStyle = "#8a9ac0";
-    ctx.fillText(`ash ${Math.round(player.ash)}/${player.maxAsh}   wolf shards ${player.materials.wolfshard}   glass shards ${player.materials.glassshard}${state.flags.lantern && state.quests.q_lantern !== "done" ? "   pip's lantern" : ""}`, x + 14, y + 62);
+    ctx.fillText(`wolf shards ${player.materials.wolfshard}   glass shards ${player.materials.glassshard}${state.flags.lantern && state.quests.q_lantern !== "done" ? "   pip's lantern" : ""}`, x + 14, y + 62);
     // relics
     ctx.fillStyle = "#8fe9ff"; ctx.font = "700 9px Georgia, serif"; ctx.fillText("RELICS — equip two", x + 14, y + 82);
     invRects = [];
@@ -1685,7 +1711,7 @@
     if (!owned.length) { ctx.fillStyle = "#5a6a90"; ctx.font = "7px monospace"; ctx.fillText("none yet — the world is holding them for you", x + 14, y + 96); }
     owned.forEach((id, i) => {
       const ry = y + 92 + i * 22, on = relicOn(id);
-      const rect = { x: x + 14, y: ry - 9, w: 250, h: 20, id };
+      const rect = { x: x + 14, y: ry - 9, w: 250, h: 20, id, kind: "relic" };
       invRects.push(rect);
       ctx.fillStyle = on ? "rgba(143,233,255,0.12)" : "rgba(255,255,255,0.03)";
       ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
@@ -1694,6 +1720,26 @@
       ctx.fillText((on ? "◈ " : "◇ ") + D.RELICS[id].name, rect.x + 6, ry + 1);
       ctx.fillStyle = "#8a9ac0"; ctx.font = "6px monospace";
       ctx.fillText(D.RELICS[id].desc, rect.x + 6, ry + 9);
+    });
+    // appearance — cycle through owned cosmetics per slot (glints found in the world)
+    const apY = y + 220;
+    ctx.fillStyle = "#ffd166"; ctx.font = "700 9px Georgia, serif";
+    ctx.fillText(`APPEARANCE — ${player.cosmetics.owned.length}/${D.COSMETICS.length} found`, x + 14, apY);
+    ["cloak", "glow", "accessory", "trail"].forEach((cat, i) => {
+      const ry = apY + 18 + i * 16;
+      const inCat = D.COSMETICS.filter((c) => c.cat === cat && player.cosmetics.owned.includes(c.id));
+      const cur = cosmeticOf(cat);
+      const label = cat[0].toUpperCase() + cat.slice(1);
+      ctx.fillStyle = "#8a9ac0"; ctx.font = "7px monospace";
+      ctx.fillText(label + ":", x + 14, ry);
+      const leftRect = { x: x + 78, y: ry - 8, w: 10, h: 10, kind: "cosCycle", cat, dir: -1 };
+      const rightRect = { x: x + 220, y: ry - 8, w: 10, h: 10, kind: "cosCycle", cat, dir: 1 };
+      invRects.push(leftRect, rightRect);
+      ctx.fillStyle = inCat.length ? "#eaf2ff" : "#4a4a58";
+      ctx.fillText("◂", leftRect.x, ry); ctx.fillText("▸", rightRect.x, ry);
+      ctx.fillStyle = cur ? "#eaf2ff" : "#5a6a90";
+      ctx.font = "700 7px Georgia, serif";
+      ctx.fillText(cur ? cur.name : (inCat.length ? "— none equipped —" : "— none found yet —"), x + 92, ry);
     });
     // quest log
     const qx = x + w - 260;
@@ -1718,7 +1764,7 @@
       }
     }
     ctx.fillStyle = "#8a9ac0"; ctx.font = "6px monospace"; ctx.textAlign = "center";
-    ctx.fillText("TAB / I / ESC — close · click a relic to equip", x + w / 2, y + h - 8);
+    ctx.fillText("TAB / I / ESC — close · click a relic to equip · ◂▸ to change appearance", x + w / 2, y + h - 8);
     ctx.textAlign = "left";
   }
   let shopRects = [];
@@ -1771,7 +1817,7 @@
         </div>
         <div class="vg-controls" aria-label="Controls">
           <span class="vg-control"><b>WASD</b>Move</span><span class="vg-control"><b>LEFT CLICK</b>Strike</span>
-          <span class="vg-control"><b>F</b>Cinder bolt</span><span class="vg-control"><b>RIGHT CLICK</b>Place gate</span>
+          <span class="vg-control"><b>F</b>Beam (full HP only)</span><span class="vg-control"><b>RIGHT CLICK</b>Place gate</span>
           <span class="vg-control"><b>Q / R</b>Swap / vent</span><span class="vg-control"><b>SHIFT</b>Roll</span>
           <span class="vg-control"><b>E</b>Talk / use</span><span class="vg-control"><b>TAB</b>Inventory</span>
         </div>
@@ -1854,7 +1900,14 @@
   VG.cv.addEventListener("pointerdown", (e) => {
     const r = VG.cv.getBoundingClientRect();
     const cx2 = (e.clientX - r.left) / r.width * VG.W, cy2 = (e.clientY - r.top) / r.height * VG.H;
-    if (state.phase === "inventory") { for (const rc of invRects) if (cx2 >= rc.x && cx2 <= rc.x + rc.w && cy2 >= rc.y && cy2 <= rc.y + rc.h) { toggleEquip(rc.id); return; } }
+    if (state.phase === "inventory") {
+      for (const rc of invRects) {
+        if (cx2 >= rc.x && cx2 <= rc.x + rc.w && cy2 >= rc.y && cy2 <= rc.y + rc.h) {
+          if (rc.kind === "cosCycle") cycleAppearance(rc.cat, rc.dir); else toggleEquip(rc.id);
+          return;
+        }
+      }
+    }
     else if (state.phase === "shop") { for (const rc of shopRects) if (cx2 >= rc.x && cx2 <= rc.x + rc.w && cy2 >= rc.y && cy2 <= rc.y + rc.h) { buyItem(rc.item); return; } }
     else if (state.phase === "dialog") advanceDialog();
     else if (state.phase === "scene") advanceScene();
@@ -1934,7 +1987,8 @@
     state: () => ({
       phase: state.phase, room: state.roomId,
       px: +player.x.toFixed(1), py: +player.y.toFixed(1),
-      hp: player.hp, maxHp: player.maxHp, ash: Math.round(player.ash), embers: player.embers,
+      hp: player.hp, maxHp: player.maxHp, embers: player.embers, vesperSouls: player.vesperSouls,
+      vesperHearts: state.vesperHearts, cosmeticsOwned: player.cosmetics.owned.length,
       quests: { ...state.quests }, flags: Object.keys(state.flags),
       relics: Object.keys(player.relics), equipped: player.equipped.slice(),
       gates: portals.gates.map((g) => g.active), strain: +portals.strain.toFixed(2),
@@ -1949,6 +2003,8 @@
     grant: (flag) => { state.flags[flag] = true; },
     setQuest: (id, st) => { state.quests[id] = st; },
     embers: (n) => { player.embers += n; },
+    souls: (n) => { player.vesperSouls += n; checkSoulTiers(); },
+    grantCosmetic: (id) => { if (!player.cosmetics.owned.includes(id)) player.cosmetics.owned.push(id); },
     clearEnemies: () => { for (const e of enemies.slice()) if (!e.dead) killEnemy(e); },
     skipScene: () => { while (state.scene) advanceScene(); while (state.dialog) advanceDialog(); },
     placeGates: (x1, y1, d1, x2, y2, d2) => { portals.place(0, x1, y1, d1, true); portals.place(1, x2, y2, d2, true); portals.gates.forEach((g) => g.open = 1); },
