@@ -66,7 +66,7 @@ assert.match(main, /const FEATURE_BY_NAV_ID = \{/u,
   "Navigation must know which workspace features are plan-gated.");
 assert.match(main, /const PLAN_NAV_WORKFLOWS = \{/u,
   "Navigation must define tier-specific workspace workflows.");
-assert.match(main, /free: new Set\(\["dashboard", "phantomai", "sites", "phantomplay", "settings"\]\)/u,
+assert.match(main, /free: new Set\(\["dashboard", "phantomai", "phantomlive", "sites", "phantomplay", "settings"\]\)/u,
   "Free users must get a smaller, focused workflow instead of the whole business command sidebar.");
 assert.match(main, /developer: new Set\([\s\S]*"developer"[\s\S]*"phantomstore"[\s\S]*\)/u,
   "Developer users must get builder and PhantomPlay/Store workflows.");

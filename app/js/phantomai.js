@@ -10,10 +10,10 @@ import {
   uid,
   workspaceStorageGetItem,
   workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260723-57";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-57";
-import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260723-57";
-import { esc } from "./workspaces.js?v=phantom-live-20260723-57";
+} from "./store.js?v=phantom-live-20260723-58";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-58";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260723-58";
+import { esc } from "./workspaces.js?v=phantom-live-20260723-58";
 
 const TABS = ["chat", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -453,7 +453,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260723-57")
+  import("./brain.js?v=phantom-live-20260723-58")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }

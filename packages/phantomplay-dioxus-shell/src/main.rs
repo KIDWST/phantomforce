@@ -54,6 +54,59 @@ struct GameEntry {
     id: String,
     path: PathBuf,
     is_dir: bool,
+    blurb: Option<GameBlurb>,
+}
+
+/// Real store-card copy, pulled from each game's own `phantomGameKernel`
+/// config where present (its title/genre/one-line fantasy) rather than
+/// invented — most games don't have this yet, and the card just falls back
+/// to a plain title in that case instead of showing fabricated text.
+#[derive(Clone, PartialEq, Debug)]
+struct GameBlurb {
+    title: String,
+    genre: String,
+    fantasy: String,
+}
+
+/// Hand-rolled instead of a JSON parse because the kernel config appears in
+/// two shapes across the catalog: a strict-JSON `data-pgk-config='{...}'`
+/// attribute on some games, and a loose JS object literal passed straight to
+/// `PhantomGameKernel.init({...})` on others (unquoted keys — not valid
+/// JSON). Both use plain `"key": "value"` string fields, so a small
+/// substring scan covers both without a regex dependency.
+fn extract_quoted_field(text: &str, key: &str) -> Option<String> {
+    let patterns = [
+        format!("\"{key}\":\""),
+        format!("\"{key}\": \""),
+        format!("{key}: \""),
+        format!("{key}:\""),
+    ];
+    for pat in patterns {
+        if let Some(start) = text.find(pat.as_str()) {
+            let value_start = start + pat.len();
+            let rest = &text[value_start..];
+            let mut end = rest.find('"')?;
+            while end > 0 && rest.as_bytes()[end - 1] == b'\\' {
+                end = end + 1 + rest[end + 1..].find('"')?;
+            }
+            let raw = &rest[..end];
+            if !raw.is_empty() {
+                return Some(raw.replace("\\\"", "\"").replace("\\n", " "));
+            }
+        }
+    }
+    None
+}
+
+fn extract_game_blurb(entry_file: &Path) -> Option<GameBlurb> {
+    let text = fs::read_to_string(entry_file).ok()?;
+    if !text.contains("phantomGameKernel") {
+        return None; // game hasn't been through the kernel upgrade yet
+    }
+    let title = extract_quoted_field(&text, "title")?;
+    let genre = extract_quoted_field(&text, "genre").unwrap_or_default();
+    let fantasy = extract_quoted_field(&text, "fantasy").unwrap_or_default();
+    Some(GameBlurb { title, genre, fantasy })
 }
 
 fn list_games() -> Vec<GameEntry> {
@@ -69,10 +122,12 @@ fn list_games() -> Vec<GameEntry> {
             continue; // cross-game utility folder, not a game itself
         }
         if path.is_dir() {
-            games.push(GameEntry { id: name, path, is_dir: true });
+            let blurb = extract_game_blurb(&path.join("index.html"));
+            games.push(GameEntry { id: name, path, is_dir: true, blurb });
         } else if path.extension().and_then(|e| e.to_str()) == Some("html") {
             let id = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-            games.push(GameEntry { id, path, is_dir: false });
+            let blurb = extract_game_blurb(&path);
+            games.push(GameEntry { id, path, is_dir: false, blurb });
         }
     }
     games.sort_by(|a, b| a.id.cmp(&b.id));
@@ -375,6 +430,19 @@ mod tests {
     }
 
     #[test]
+    fn store_cards_pull_real_blurbs_from_kernel_upgraded_games() {
+        let games = list_games();
+        let crown = games.iter().find(|g| g.id == "crown-circuit").expect("crown-circuit.html must exist");
+        let blurb = crown.blurb.as_ref().expect("crown-circuit has a phantomGameKernel config and should yield a real blurb, not a fallback");
+        assert_eq!(blurb.title, "Crown Circuit");
+        assert!(!blurb.genre.is_empty(), "genre should be extracted from the kernel config");
+        assert!(!blurb.fantasy.is_empty(), "fantasy one-liner should be extracted from the kernel config");
+
+        let untouched = games.iter().find(|g| g.id == "neon-drift").expect("neon-drift.html must exist");
+        assert!(untouched.blurb.is_none(), "a game without the kernel upgrade must fall back to a plain title, not a fabricated blurb");
+    }
+
+    #[test]
     fn inject_dev_scripts_adds_mod_loader_and_hot_reload_poll() {
         let html = b"<html><body>hi</body></html>".to_vec();
         let out = String::from_utf8(inject_dev_scripts(html, "vespergate")).unwrap();
@@ -445,6 +513,7 @@ fn App() -> Element {
     let mut mods_game_id = use_signal(String::new);
     let mut mods_list = use_signal(Vec::<ModEntry>::new);
     let mut mods_enabled = use_signal(Vec::<String>::new);
+    let mut store_query = use_signal(String::new);
 
     let mut open_game = move |idx: usize| {
         selected_game.set(Some(idx));
@@ -639,17 +708,36 @@ fn App() -> Element {
                 button { class: "header-btn", onclick: open_dev_room, "👥 Dev Room" }
             }
             div { class: "columns",
-                nav { class: "games-pane",
-                    h2 { "Games ({games().len()})" }
+nav { class: "games-pane store-pane",
+                    h2 { "Store — {games().len()} games" }
+                    input {
+                        class: "store-search",
+                        placeholder: "Search the catalog…",
+                        value: "{store_query}",
+                        oninput: move |evt| store_query.set(evt.value()),
+                    }
                     for (idx , game) in games().iter().cloned().enumerate() {
-                        div {
-                            class: if selected_game() == Some(idx) { "row is-active" } else { "row" },
-                            span { class: "row-label", onclick: move |_| open_game(idx),
-                                "{game.id}"
-                                if game.is_dir { span { class: "tag", "dir" } }
+                        if store_query().trim().is_empty()
+                            || game.id.to_lowercase().contains(&store_query().to_lowercase())
+                            || game.blurb.as_ref().is_some_and(|b| b.title.to_lowercase().contains(&store_query().to_lowercase()))
+                        {
+                            div {
+                                class: if selected_game() == Some(idx) { "store-card is-active" } else { "store-card" },
+                                onclick: move |_| open_game(idx),
+                                div { class: "store-card-top",
+                                    span { class: "store-card-title", "{game.blurb.as_ref().map(|b| b.title.clone()).unwrap_or_else(|| game.id.clone())}" }
+                                    if game.is_dir { span { class: "tag", "dir" } }
+                                }
+                                if let Some(blurb) = game.blurb.as_ref() {
+                                    if !blurb.genre.is_empty() { span { class: "store-card-genre", "{blurb.genre}" } }
+                                    if !blurb.fantasy.is_empty() { p { class: "store-card-blurb", "{blurb.fantasy}" } }
+                                }
+                                div { class: "store-card-actions",
+                                    button { class: "mods-btn", onclick: move |evt| { evt.stop_propagation(); open_mods_panel(idx); }, title: "Quick-load mods", "🧩" }
+                                    button { class: "edit-btn", onclick: move |evt| { evt.stop_propagation(); open_game(idx); }, title: "Edit source", "✎" }
+                                    button { class: "play-btn", onclick: move |evt| { evt.stop_propagation(); play_game(idx); }, title: "Play standalone — no account, no server", "▶ Play" }
+                                }
                             }
-                            button { class: "mods-btn", onclick: move |_| open_mods_panel(idx), title: "Quick-load mods", "🧩" }
-                            button { class: "play-btn", onclick: move |_| play_game(idx), title: "Play standalone — no account, no server", "▶" }
                         }
                     }
                 }
@@ -791,6 +879,65 @@ const STYLE: &str = r#"
         border-right: 1px solid #143324;
         padding: 10px;
     }
+    .store-pane { width: 320px; }
+    .store-search {
+        width: 100%;
+        margin: 2px 0 10px;
+        padding: 8px 10px;
+        border: 1px solid #143324;
+        border-radius: 8px;
+        background: #030f0a;
+        color: #eafff3;
+        font: 12px ui-monospace, monospace;
+    }
+    .store-search:focus { outline: none; border-color: #2cff9b88; }
+    .store-card {
+        border: 1px solid #143324;
+        border-radius: 10px;
+        background: #061a12;
+        padding: 10px 11px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: border-color 120ms ease, background 120ms ease;
+    }
+    .store-card:hover { background: #0c2318; }
+    .store-card.is-active { border-color: #4bffa3aa; background: #0c2318; }
+    .store-card-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .store-card-title { font-weight: 800; font-size: 13px; color: #eafff3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .store-card-genre {
+        display: inline-block;
+        margin-top: 5px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid #2cff9b44;
+        color: #7dffbd;
+        font: 700 9px ui-monospace, monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .store-card-blurb {
+        margin: 6px 0 0;
+        font-size: 11px;
+        line-height: 1.4;
+        color: #8fb3a1;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .store-card-actions { display: flex; gap: 6px; margin-top: 9px; }
+    .store-card-actions .play-btn { flex: 1; text-align: center; font-weight: 800; }
+    .edit-btn {
+        flex-shrink: 0;
+        border: 1px solid #2cff9b55;
+        border-radius: 6px;
+        background: #0c2318;
+        color: #7dffbd;
+        font-size: 11px;
+        padding: 3px 8px;
+        cursor: pointer;
+    }
+    .edit-btn:hover { background: #14432c; color: #b7ffd6; }
     .editor-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b8577; margin: 4px 6px 8px; }
     .row {
