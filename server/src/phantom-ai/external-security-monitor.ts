@@ -2,8 +2,8 @@ import { Buffer } from "node:buffer";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promises as dns } from "node:dns";
-import { existsSync, readdirSync } from "node:fs";
-import { rm, writeFile } from "node:fs/promises";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import tls from "node:tls";
@@ -18,6 +18,30 @@ const MAX_EMAIL_COUNT = 12;
 const MAX_CONTENT_CHARS = 120_000;
 const FETCH_TIMEOUT_MS = 8000;
 const PROCESS_TIMEOUT_MS = 30_000;
+const HISTORY_STATE_DIR = path.join(process.cwd(), ".local", "security-scans");
+const HISTORY_STATE_FILE = path.join(HISTORY_STATE_DIR, "external-monitor-history.json");
+
+type ExternalMonitorHistory = { last_run_at: string; verdict: "clean" | "review" | "blocked"; findings_count: number };
+
+function readExternalMonitorHistory(): ExternalMonitorHistory | null {
+  try {
+    if (!existsSync(HISTORY_STATE_FILE)) return null;
+    const raw = JSON.parse(readFileSync(HISTORY_STATE_FILE, "utf8"));
+    if (!raw || typeof raw.last_run_at !== "string") return null;
+    return raw as ExternalMonitorHistory;
+  } catch {
+    return null;
+  }
+}
+
+async function writeExternalMonitorHistory(entry: ExternalMonitorHistory) {
+  try {
+    await mkdir(HISTORY_STATE_DIR, { recursive: true });
+    await writeFile(HISTORY_STATE_FILE, JSON.stringify(entry, null, 2), "utf8");
+  } catch {
+    /* history is best-effort local record-keeping; a failed write must never block the scan result */
+  }
+}
 
 type MonitorSeverity = "ok" | "info" | "warn" | "blocked";
 
@@ -113,6 +137,7 @@ export function getExternalSecurityMonitorStatus() {
     monitor_version: MONITOR_VERSION,
     configured: true,
     connectors: connectorStatus(),
+    history: readExternalMonitorHistory(),
     safety: {
       admin_only: true,
       destructive_action: false,
@@ -553,14 +578,16 @@ export async function runExternalSecurityMonitor(input: ExternalSecurityMonitorR
 
   const blocked = findings.some((finding) => finding.severity === "blocked");
   const warnings = findings.filter((finding) => finding.severity === "warn").length;
-  return {
+  const verdict: ExternalMonitorHistory["verdict"] = blocked ? "blocked" : warnings ? "review" : "clean";
+  const scannedAt = new Date().toISOString();
+  const result = {
     ok: true,
     monitor_version: MONITOR_VERSION,
-    scanned_at: new Date().toISOString(),
+    scanned_at: scannedAt,
     label: input.label || "PhantomForce external monitor",
     summary: {
-      verdict: blocked ? "blocked" : warnings ? "review" : "clean",
-      domains_checked: domainResults.filter((result) => "checked" in result && result.checked).length,
+      verdict,
+      domains_checked: domainResults.filter((domainResult) => "checked" in domainResult && domainResult.checked).length,
       emails_checked: hibp.filter((result) => result.checked).length,
       findings: findings.length,
       warnings,
@@ -582,4 +609,6 @@ export async function runExternalSecurityMonitor(input: ExternalSecurityMonitorR
       raw_credentials_returned: false,
     },
   };
+  await writeExternalMonitorHistory({ last_run_at: scannedAt, verdict, findings_count: findings.length });
+  return result;
 }

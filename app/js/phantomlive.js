@@ -1,4 +1,4 @@
-import { currentTenantId } from "./store.js?v=phantom-live-20260723-59";
+import { currentTenantId } from "./store.js?v=phantom-live-20260723-60";
 
 const STORAGE_KEY = "pf.phantomLiveAgents.v1";
 const esc = (value = "") => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));

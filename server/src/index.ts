@@ -8873,6 +8873,7 @@ app.get("/phantom-ai/security/external-monitor/status", async (request, reply) =
           configured: connector.configured,
           active: connector.active,
         })),
+        history: monitor.history ? { last_run_at: monitor.history.last_run_at, verdict: monitor.history.verdict } : null,
         safety: monitor.safety,
       },
     };

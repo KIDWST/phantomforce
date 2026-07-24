@@ -6,53 +6,56 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260723-59";
+} from "./store.js?v=phantom-live-20260723-60";
 import {
-  loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems,
-} from "./organizationpulse.js?v=phantom-live-20260723-59";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260723-59";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260723-59";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260723-59";
-import { renderAnalytics } from "./contenthub.js?v=phantom-live-20260723-59";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260723-59";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260723-59";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260723-59";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-59";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260723-59";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260723-59";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260723-59";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260723-59";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260723-59";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260723-59";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260723-59";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260723-59";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260723-59";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260723-59";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260723-59";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260723-59";
+  loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems, cachedOrganizationPulse,
+} from "./organizationpulse.js?v=phantom-live-20260723-60";
+import {
+  loadSecurityMonitorStatus, cachedSecurityMonitorStatus, securityMonitorIsAdmin, runSecurityMonitorScan, securityMonitorRunning,
+} from "./securitystatus.js?v=phantom-live-20260723-60";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260723-60";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260723-60";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260723-60";
+import { renderAnalytics } from "./contenthub.js?v=phantom-live-20260723-60";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260723-60";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260723-60";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260723-60";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-60";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260723-60";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260723-60";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260723-60";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260723-60";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260723-60";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260723-60";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260723-60";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260723-60";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260723-60";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260723-60";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260723-60";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260723-60";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260723-59";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260723-59";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260723-59";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260723-59";
-import { renderPhantomLiveAgent } from "./phantomlive.js?v=phantom-live-20260723-59";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260723-59";
+} from "./orgs.js?v=phantom-live-20260723-60";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260723-60";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260723-60";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260723-60";
+import { renderPhantomLiveAgent } from "./phantomlive.js?v=phantom-live-20260723-60";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260723-60";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260723-59";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260723-60";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260723-59";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260723-60";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260723-59";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260723-59";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260723-59";
-import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260723-59";
+} from "./customization.js?v=phantom-live-20260723-60";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260723-60";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260723-60";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260723-60";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1579,7 +1582,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260723-59";
+const POSE_VERSION = "phantom-live-20260723-60";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1919,51 +1922,83 @@ function connectedSocialCount() {
   }
 }
 
+function shortDate(iso) {
+  const d = iso ? new Date(iso) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "";
+}
+
+function opportunityCard() {
+  const pulse = cachedOrganizationPulse();
+  const growth = pulse?.managedGrowth;
+  if (!growth?.available) {
+    return { label: "New opportunities", value: "No signal yet", detail: "Add clients in Leads to see real opportunities here", open: "leads", tone: "idle" };
+  }
+  const proposalAction = growth.nextActions?.find((action) => action.surface === "proposals");
+  if (growth.proposalPipeline > 0) {
+    return {
+      label: "New opportunities",
+      value: `${growth.proposalPipeline} in proposal`,
+      detail: proposalAction?.title || "A lead moved to proposal and wants to move forward",
+      open: "proposals",
+      tone: "good",
+    };
+  }
+  if (growth.wonValue > 0) {
+    return { label: "New opportunities", value: signedMoney(growth.wonValue), detail: "Won this period — nothing new in proposal right now", open: "leads", tone: "good" };
+  }
+  if (growth.followUpsDue > 0) {
+    return { label: "New opportunities", value: `${growth.followUpsDue} follow-up${growth.followUpsDue === 1 ? "" : "s"} due`, detail: "No new proposals yet — these leads are waiting on you", open: "leads", tone: "warn" };
+  }
+  return { label: "New opportunities", value: "None open", detail: `${growth.openLeads || 0} lead${growth.openLeads === 1 ? "" : "s"} in the pipeline`, open: "leads", tone: "idle" };
+}
+
+function appointmentsCard() {
+  const bookings = visible(store.state.bookings || [])
+    .filter((b) => (b.status === "approved" || b.status === "confirmed") && new Date(b.when) > new Date())
+    .sort((a, b) => new Date(a.when) - new Date(b.when));
+  if (!bookings.length) {
+    return { label: "Upcoming appointments/calls", value: "None scheduled", detail: "No calendar connected yet — draft one in Bookings", open: "bookings", tone: "idle" };
+  }
+  const next = bookings[0];
+  return {
+    label: "Upcoming appointments/calls",
+    value: `${bookings.length} upcoming`,
+    detail: `Next: ${next.client} — ${shortDate(next.when)}`,
+    open: "bookings",
+    tone: "good",
+  };
+}
+
+function interactionsCard() {
+  const socialCount = connectedSocialCount();
+  if (!socialCount) {
+    return { label: "New comments/interactions", value: "Not connected", detail: "Connect a social account in Analytics to see real interactions here", open: "analytics", tone: "idle" };
+  }
+  return { label: "New comments/interactions", value: `${socialCount} account${socialCount === 1 ? "" : "s"} linked`, detail: "View Analytics for live engagement", open: "analytics", tone: "good" };
+}
+
+function securityCard() {
+  const monitor = cachedSecurityMonitorStatus();
+  const history = monitor?.history;
+  if (!history?.last_run_at) {
+    return { label: "Leaked password scanner", value: "Not yet scanned", detail: "Run the first local scan below", open: "settings", tone: "idle" };
+  }
+  const asOf = shortDate(history.last_run_at);
+  if (history.verdict === "clean") {
+    return { label: "Leaked password scanner", value: "No leak detected", detail: `As of ${asOf}`, open: "settings", tone: "good" };
+  }
+  return { label: "Leaked password scanner", value: "Needs review", detail: `Last scan ${asOf}`, open: "settings", tone: "warn" };
+}
+
 function renderDashboardIntel() {
   const host = $("[data-dashboard-intel]");
   if (!host) return;
-  const leads = visible(store.state.leads || []);
-  const media = visible(store.state.media || []);
-  const sites = visible(store.state.sites || []);
-  const approvals = visible(store.state.approvals || []).filter((item) => item.status === "pending");
-  const accounting = moneyView();
-  const socialCount = connectedSocialCount();
-  const competitorLimit = Number(navEntitlements.limits?.competitorProfiles || 0);
-  const pendingMedia = media.filter((item) => ["pending", "draft", "brief-ready", "generation-approved"].includes(item.status)).length;
-  const cards = [
-    {
-      label: "Analytics",
-      value: socialCount ? `${socialCount} linked` : "Connect",
-      detail: socialCount ? "live profiles ready for reporting" : "social stats are waiting on OAuth",
-      open: "analytics",
-      tone: socialCount ? "good" : "warn",
-    },
-    {
-      label: "Customer intel",
-      value: competitorLimit ? `${competitorLimit} lanes` : "Locked",
-      detail: competitorLimit ? "competitor profiles available in this tier" : "upgrade to unlock competitor coverage",
-      open: "intelligence",
-      tone: competitorLimit ? "good" : "warn",
-    },
-    {
-      label: "Content readiness",
-      value: `${media.length} media`,
-      detail: pendingMedia ? `${pendingMedia} pending item${pendingMedia === 1 ? "" : "s"}` : `${sites.length} site${sites.length === 1 ? "" : "s"} available`,
-      open: "assets",
-      tone: media.length || sites.length ? "good" : "idle",
-    },
-    {
-      label: "Business health",
-      value: leads.length ? `${leads.length} clients` : "No clients",
-      detail: approvals.length ? `${approvals.length} approval${approvals.length === 1 ? "" : "s"} waiting` : accounting.transactions.length ? `${signedMoney(accounting.netCash)} net cash` : "add clients or connect accounting",
-      open: approvals.length ? "approvals" : leads.length ? "leads" : "money",
-      tone: approvals.length ? "warn" : leads.length || accounting.transactions.length ? "good" : "idle",
-    },
-  ];
+  const cards = [opportunityCard(), appointmentsCard(), interactionsCard(), securityCard()];
+  const isAdminMonitor = securityMonitorIsAdmin();
   host.innerHTML = `
     <div class="dashboard-intel-head">
-      <span>Customer intelligence</span>
-      <b>Live workspace signals</b>
+      <span>Business signals</span>
+      <b>What's moving right now</b>
     </div>
     <div class="dashboard-intel-grid">
       ${cards.map((card) => `
@@ -1972,7 +2007,15 @@ function renderDashboardIntel() {
           <b>${esc(card.value)}</b>
           <i>${esc(card.detail)}</i>
         </button>`).join("")}
-    </div>`;
+    </div>
+    ${isAdminMonitor ? `<button class="dashboard-intel-scan" type="button" data-security-scan-run ${securityMonitorRunning() ? "disabled" : ""}>${securityMonitorRunning() ? "Scanning…" : "Run local scan now"}</button>` : ""}`;
+  if (isAdminMonitor) {
+    host.querySelector("[data-security-scan-run]")?.addEventListener("click", async () => {
+      renderDashboardIntel();
+      try { await runSecurityMonitorScan(); } catch { /* status card shows last-known state either way */ }
+      renderDashboardIntel();
+    });
+  }
 }
 
 /* ============================ decision cards ============================ */
@@ -2171,7 +2214,7 @@ function renderOrganizationPulse() {
 }
 function refreshOrganizationPulse() {
   return Promise.all([loadOrganizationPulse().catch(() => null), loadBrainContract().catch(() => null)])
-    .then(() => renderOrganizationPulse())
+    .then(() => { renderOrganizationPulse(); renderDashboardIntel(); })
     .catch(() => {});
 }
 
@@ -2490,6 +2533,7 @@ function renderConsole() {
   renderDashboardIntel();
   renderOrganizationPulse();
   refreshOrganizationPulse();
+  loadSecurityMonitorStatus().then(() => renderDashboardIntel()).catch(() => {});
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
   mountPhantomWire($("[data-phantomwire]") || $("[data-agent-ticker]"));
   mountDesktopContextWidget($("[data-desktop-context]"), {
@@ -2498,17 +2542,6 @@ function renderConsole() {
       store.save();
     },
   });
-  mountCompanion($("[data-chatbox] .chatbox-head"), {
-    onMode: applyCompanionMode,
-    canLoop: canUsePhantomLoop,
-    onLoopUnavailable: () => speak(phantomLoopUnavailableMessage(), "", "alert"),
-    renderSettings: renderChatSettingsPanel,
-    renderCore: renderConsoleCoreStatus,
-  });
-  renderChatLog();
-  bindChatboxToggle();
-  setChatboxMinimized(chatboxMinimized());
-  bindChatboxMobility();
   mountMissionControl($("[data-mission-control]"), {
     runBrain: (text) => handleSmartCommand(text),
   });
@@ -2517,190 +2550,6 @@ function renderConsole() {
 /* ============================ command run ============================ */
 const chatHistory = [];
 const chatLogEl = () => $("[data-chat-log]");
-const CHATBOX_MINIMIZED_KEY = "pf.command.chatbox.minimized";
-const CHATBOX_POSITION_KEY = "pf.command.chatbox.position";
-let chatboxDrag = null;
-let chatboxTypingTimer = 0;
-
-function chatboxMinimized() {
-  try { return localStorage.getItem(CHATBOX_MINIMIZED_KEY) === "1"; }
-  catch { return false; }
-}
-
-function setChatboxMinimized(minimized) {
-  const value = Boolean(minimized);
-  const root = $("[data-console]");
-  const chatbox = $("[data-chatbox]");
-  const button = $("[data-chatbox-toggle]");
-  if (root) root.dataset.chatboxMinimized = value ? "true" : "false";
-  chatbox?.classList.toggle("is-minimized", value);
-  if (button) {
-    button.setAttribute("aria-expanded", value ? "false" : "true");
-    button.setAttribute("aria-label", value ? "Restore Phantom Console" : "Minimize Phantom Console");
-    button.setAttribute("title", value ? "Restore Phantom Console" : "Minimize Phantom Console");
-    button.innerHTML = value ? `<span aria-hidden="true">+</span>` : `<span aria-hidden="true">-</span>`;
-  }
-  try { localStorage.setItem(CHATBOX_MINIMIZED_KEY, value ? "1" : "0"); }
-  catch { /* localStorage can be blocked in hardened browser contexts */ }
-}
-
-function setChatboxFloatingPosition(left, top) {
-  const chatbox = $("[data-chatbox]");
-  if (!chatbox) return;
-  const width = Math.min(Math.max(chatbox.offsetWidth || 520, 320), window.innerWidth - 24);
-  const height = Math.min(Math.max(chatbox.offsetHeight || 80, 64), window.innerHeight - 24);
-  const x = Math.max(12, Math.min(Math.round(left), window.innerWidth - width - 12));
-  const y = Math.max(12, Math.min(Math.round(top), window.innerHeight - height - 12));
-  chatbox.classList.add("is-floating");
-  chatbox.style.left = `${x}px`;
-  chatbox.style.top = `${y}px`;
-  chatbox.style.right = "auto";
-  chatbox.style.bottom = "auto";
-  try { localStorage.setItem(CHATBOX_POSITION_KEY, JSON.stringify({ left: x, top: y })); }
-  catch { /* localStorage can be blocked in hardened browser contexts */ }
-}
-
-function restoreChatboxPosition() {
-  const chatbox = $("[data-chatbox]");
-  if (!chatbox) return;
-  let position = null;
-  try { position = JSON.parse(localStorage.getItem(CHATBOX_POSITION_KEY) || "null"); }
-  catch { position = null; }
-  if (position && Number.isFinite(position.left) && Number.isFinite(position.top)) {
-    setChatboxFloatingPosition(position.left, position.top);
-  }
-}
-
-function resetChatboxPosition() {
-  const chatbox = $("[data-chatbox]");
-  if (!chatbox) return;
-  chatbox.classList.remove("is-floating");
-  chatbox.style.left = "";
-  chatbox.style.top = "";
-  chatbox.style.right = "";
-  chatbox.style.bottom = "";
-  try { localStorage.removeItem(CHATBOX_POSITION_KEY); }
-  catch { /* localStorage can be blocked in hardened browser contexts */ }
-}
-
-function focusChatboxInput() {
-  const input = $("[data-command-input]");
-  setChatboxMinimized(false);
-  restoreChatboxPosition();
-  requestAnimationFrame(() => input?.focus({ preventScroll: true }));
-}
-
-function showChatboxContextMenu(x, y) {
-  let menu = $("[data-chatbox-context]");
-  if (!menu) {
-    menu = document.createElement("div");
-    menu.className = "chatbox-context-menu";
-    menu.dataset.chatboxContext = "true";
-    menu.innerHTML = `
-      <button type="button" data-chatbox-action="focus">Focus chat</button>
-      <button type="button" data-chatbox-action="toggle">Minimize / restore</button>
-      <button type="button" data-chatbox-action="settings">Open settings</button>
-      <button type="button" data-chatbox-action="reset">Reset position</button>`;
-    document.body.appendChild(menu);
-  }
-  menu.hidden = false;
-  const menuWidth = 190;
-  const menuHeight = 158;
-  menu.style.left = `${Math.max(10, Math.min(x, window.innerWidth - menuWidth - 10))}px`;
-  menu.style.top = `${Math.max(10, Math.min(y, window.innerHeight - menuHeight - 10))}px`;
-}
-
-function hideChatboxContextMenu() {
-  const menu = $("[data-chatbox-context]");
-  if (menu) menu.hidden = true;
-}
-
-function bindChatboxToggle() {
-  const button = $("[data-chatbox-toggle]");
-  if (!button || button.dataset.bound === "true") return;
-  button.dataset.bound = "true";
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const chatbox = button.closest("[data-chatbox]") || $("[data-chatbox]");
-    setChatboxMinimized(!chatbox?.classList.contains("is-minimized"));
-  });
-}
-
-function bindChatboxMobility() {
-  const chatbox = $("[data-chatbox]");
-  const head = $("[data-chatbox] .chatbox-head");
-  if (!chatbox || !head || chatbox.dataset.mobilityBound === "true") return;
-  chatbox.dataset.mobilityBound = "true";
-  restoreChatboxPosition();
-  head.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || event.target?.closest?.("button, a, input, select, textarea, [data-pc-menu]")) return;
-    const rect = chatbox.getBoundingClientRect();
-    chatboxDrag = { pointerId: event.pointerId, dx: event.clientX - rect.left, dy: event.clientY - rect.top };
-    head.setPointerCapture?.(event.pointerId);
-    chatbox.classList.add("is-dragging");
-    event.preventDefault();
-  });
-  head.addEventListener("pointermove", (event) => {
-    if (!chatboxDrag || chatboxDrag.pointerId !== event.pointerId) return;
-    setChatboxFloatingPosition(event.clientX - chatboxDrag.dx, event.clientY - chatboxDrag.dy);
-  });
-  const endDrag = (event) => {
-    if (!chatboxDrag || chatboxDrag.pointerId !== event.pointerId) return;
-    chatboxDrag = null;
-    chatbox.classList.remove("is-dragging");
-  };
-  head.addEventListener("pointerup", endDrag);
-  head.addEventListener("pointercancel", endDrag);
-  chatbox.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
-    showChatboxContextMenu(event.clientX, event.clientY);
-  });
-  document.addEventListener("keydown", (event) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === "`") {
-      event.preventDefault();
-      focusChatboxInput();
-    }
-    if (event.key === "Escape") hideChatboxContextMenu();
-  });
-  window.addEventListener("resize", () => {
-    const rect = chatbox.getBoundingClientRect();
-    if (chatbox.classList.contains("is-floating")) setChatboxFloatingPosition(rect.left, rect.top);
-  });
-  const input = $("[data-command-input]");
-  input?.addEventListener("input", () => {
-    chatbox.classList.toggle("is-typing", Boolean(input.value.trim()));
-    clearTimeout(chatboxTypingTimer);
-    chatboxTypingTimer = setTimeout(() => chatbox.classList.remove("is-typing"), 1200);
-  });
-}
-
-document.addEventListener("click", (event) => {
-  const action = event.target?.closest?.("[data-chatbox-action]")?.dataset?.chatboxAction;
-  if (action) {
-    event.preventDefault();
-    hideChatboxContextMenu();
-    if (action === "focus") focusChatboxInput();
-    if (action === "toggle") setChatboxMinimized(!$("[data-chatbox]")?.classList.contains("is-minimized"));
-    if (action === "settings") $("[data-pc-settings]")?.click();
-    if (action === "reset") resetChatboxPosition();
-    return;
-  }
-  hideChatboxContextMenu();
-  const toggle = event.target?.closest?.("[data-chatbox-toggle]");
-  if (toggle) {
-    event.preventDefault();
-    event.stopPropagation();
-    const chatbox = toggle.closest("[data-chatbox]") || $("[data-chatbox]");
-    setChatboxMinimized(!chatbox?.classList.contains("is-minimized"));
-    return;
-  }
-  if (event.target?.closest?.('[data-chatbox].is-minimized')) {
-    event.preventDefault();
-    focusChatboxInput();
-  }
-});
-
 function msgHtml(m, i) {
   const cards = (m.cards || []).map((c, ci) => cardHtml(c, ci, i)).join("");
   const media = (m.media || []).map(chatMediaHtml).join("");

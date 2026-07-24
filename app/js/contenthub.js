@@ -9,14 +9,14 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260723-59";
-import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260723-59";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260723-59";
-import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260723-59";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260723-59";
+} from "./imagefilters.js?v=phantom-live-20260723-60";
+import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260723-60";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260723-60";
+import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260723-60";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260723-60";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260723-59";
+} from "./store.js?v=phantom-live-20260723-60";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";

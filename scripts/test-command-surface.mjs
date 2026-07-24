@@ -12,10 +12,15 @@ const count = (source, pattern) => source.match(pattern)?.length || 0;
 
 // Full chat (log + composer) moved off the dashboard into its own PhantomBot
 // tab (app/js/phantomai.js, the "phantomai" workspace, reachable from the
-// sidebar and the command rail). The dashboard keeps only the compact
-// "PhantomPet" status card (avatar, mode, settings) — no composer or log,
-// nothing here should compete with the PhantomBot tab for actual chatting.
-assert.match(index, /class="chatbox hero2-phantompet"/u, "Dashboard must keep the compact PhantomPet status card.");
+// sidebar and the command rail). The dashboard keeps only a compact
+// "PhantomPet" card (link into PhantomBot) — no composer or log, nothing here
+// should compete with the PhantomBot tab for actual chatting. An earlier pass
+// reused the old full companion.js chat-header widget (mountCompanion) here
+// under a "hero2-phantompet" CSS class, which read as an embedded chatbot
+// with no chat body under it — that regression is what this assertion now
+// guards against explicitly.
+assert.match(index, /class="phantompet-card"/u, "Dashboard must keep the compact PhantomPet status card.");
+assert.doesNotMatch(index, /data-chatbox/u, "Dashboard must not re-embed companion.js's mountCompanion chat-header widget.");
 assert.equal(count(index, /data-command-form/gu), 0, "Dashboard must not re-embed a command composer; PhantomBot is its own tab now.");
 assert.equal(count(index, /data-chat-log/gu), 0, "Dashboard must not re-embed a chat log; PhantomBot is its own tab now.");
 assert.match(main, /class="phantomai phantombot-os" data-phantombot-os/u, "PhantomBot must render as its own AI operating-system shell.");
@@ -55,12 +60,13 @@ assert.match(main, /const plan = todaysPlan\(\)/u, "Dashboard brief must use rea
 assert.match(main, /const leads = visible\(store\.state\.leads \|\| \[\]\)/u, "Dashboard brief must use organization-scoped leads.");
 assert.match(main, /const accounting = moneyView\(\)/u, "Dashboard brief must use confirmed accounting state.");
 assert.match(main, /renderDashboardBrief\(\);/u, "Console render must refresh the dashboard brief.");
-assert.match(main, /setChatboxMinimized\(!chatbox\?\.classList\.contains\("is-minimized"\)\)/u, "Console minimize must toggle from the live DOM state.");
-assert.match(main, /CHATBOX_POSITION_KEY/u, "Console position must persist when the user drags it.");
-assert.match(main, /bindChatboxMobility\(\);/u, "Console must bind drag, hotkey, and right-click behavior.");
-assert.match(main, /event\.key === "`"/u, "Console must support the Ctrl-backtick summon hotkey.");
-assert.match(main, /data-chatbox-action="reset"/u, "Console right-click menu must include reset position.");
-assert.match(main, /classList\.toggle\("is-typing"/u, "Console must expose a subtle typing state for Phantom presence.");
+// The drag/minimize/hotkey/right-click "Console" mobility subsystem
+// (setChatboxMinimized, bindChatboxMobility, CHATBOX_POSITION_KEY, the
+// Ctrl-backtick summon hotkey, etc.) only ever operated on the removed
+// [data-chatbox] element. It has been deleted along with that element —
+// see the phantompet-card assertions above — rather than left bound to
+// nothing.
+assert.doesNotMatch(main, /bindChatboxMobility/u, "Dead chatbox drag/hotkey subsystem must not come back once its target element is gone.");
 assert.match(main, /const bottomItems = items;/u, "The dedicated utility zone must remain the full navigation launcher while the main sidebar shows open tabs.");
 assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "crm", "assets", "sites", "money"\]/u, "Phone dock must keep the five core destinations stable.");
 assert.match(main, /data-mobile-more/u, "Phone dock must expose the complete navigation through More.");
