@@ -9,14 +9,14 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260723-62";
-import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260723-62";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260723-62";
-import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260723-62";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260723-62";
+} from "./imagefilters.js?v=phantom-live-20260723-63";
+import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260723-63";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260723-63";
+import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260723-63";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260723-63";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260723-62";
+} from "./store.js?v=phantom-live-20260723-63";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -718,7 +718,7 @@ export function analyze(posts) {
 }
 
 /* ---------------- formatting + thumbs ---------------- */
-const K = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : String(n || 0);
+export const K = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : String(n || 0);
 function ago(iso) { const s = (Date.now() - Date.parse(iso)) / 1000; if (s < 0) return "in " + rel(-s); return rel(s) + " ago"; }
 function rel(s) { if (s < 3600) return Math.max(1, Math.round(s / 60)) + "m"; if (s < 86400) return Math.round(s / 3600) + "h"; return Math.round(s / 86400) + "d"; }
 function cssUrl(value = "") {
@@ -779,7 +779,7 @@ let chSelectAnchor = null;
 let chLibraryKeyHandler = null;
 let chLastDeleted = null;
 
-function kpi(label, value, sub, tone) {
+export function kpi(label, value, sub, tone) {
   return `<div class="ch-kpi ${tone || ""}"><span class="ch-kpi-k">${label}</span><b class="ch-kpi-v">${value}</b><span class="ch-kpi-s">${sub || ""}</span></div>`;
 }
 
@@ -790,11 +790,6 @@ function kpi(label, value, sub, tone) {
    ========================================================================= */
 const LIVE_ANALYTICS_PLATFORMS = new Set(PLATFORMS.map((platform) => platform.id));
 const ANALYTICS_REFRESH_MS = 15 * 60 * 1000;
-const ANALYTICS_MONITOR_KEY = "pf.analytics.monitors.v1";
-const ANALYTICS_MONITORS = [
-  { id: "social", label: "Social media monitor", copy: "Live OAuth, reach, engagement, and channel readiness." },
-  { id: "products", label: "Product analytics monitor", copy: "PhantomStore products, listing health, interest, and launch gates." },
-];
 const PRODUCT_ANALYTICS_SEED = [
   { id: "termina", name: "Termina", lane: "Automation + Agents", status: "Launch QA", seller: "PhantomForce", views: 2140, clicks: 311, revenue: "$0", next: "Finish multi-CLI send reliability before public push." },
   { id: "phantom-vocal-ai", name: "Phantom Vocal AI", lane: "Audio Engineering", status: "Plugin QA", seller: "PhantomForce", views: 1280, clicks: 146, revenue: "$0", next: "Ship prompt-first sliders and Reaper refresh path." },
@@ -1064,52 +1059,7 @@ function analyticsChart(feedRows = [], emptyCopy = {}) {
       <div class="an-chart-legend">${rows.map((row) => `<span><i style="background:${row.account.color}"></i>${row.account.name}${row.feed ? "" : " · waiting"}</span>`).join("")}</div>
     </div>`;
 }
-function analyticsCoverage(feedRows = []) {
-  const count = feedRows.length || 1;
-  const live = feedRows.filter((row) => row.feed).length;
-  const stops = feedRows.map((row, index) => {
-    const start = (index / count * 100).toFixed(2);
-    const end = ((index + 1) / count * 100).toFixed(2);
-    return `${row.feed ? row.account.color : "rgba(140,135,165,.13)"} ${start}% ${end}%`;
-  }).join(",");
-  return `<div class="an-coverage">
-    <div class="an-coverage-ring" style="background:conic-gradient(${stops || "rgba(140,135,165,.13) 0 100%"})"><span><b>${live}/${feedRows.length}</b><i>reporting</i></span></div>
-    <div class="an-coverage-copy"><b>Channel coverage</b><p>${live ? `${live} verified data source${live === 1 ? "" : "s"} active.` : "Connect your channels to activate reporting."}</p></div>
-  </div>`;
-}
-
-function loadAnalyticsMonitorPrefs() {
-  const defaults = { social: true, products: true, customer: true };
-  try {
-    const saved = JSON.parse(workspaceStorageGetItem(ANALYTICS_MONITOR_KEY) || "{}") || {};
-    return ANALYTICS_MONITORS.reduce((prefs, monitor) => {
-      prefs[monitor.id] = saved[monitor.id] === undefined ? defaults[monitor.id] !== false : Boolean(saved[monitor.id]);
-      return prefs;
-    }, {});
-  } catch {
-    return defaults;
-  }
-}
-
-function saveAnalyticsMonitorPrefs(prefs = {}) {
-  try { workspaceStorageSetItem(ANALYTICS_MONITOR_KEY, JSON.stringify(prefs)); } catch {}
-}
-
-function analyticsMonitorControls(prefs = {}, esc) {
-  return `<section class="an-monitor-config" aria-label="Analytics monitor configuration">
-    <div>
-      <p class="ch-eyebrow">Analytics layout</p>
-      <h3>Choose what this page monitors.</h3>
-    </div>
-    <div class="an-monitor-toggles">
-      ${ANALYTICS_MONITORS.map((monitor) => `<button type="button" class="${prefs[monitor.id] ? "is-on" : ""}" data-an-monitor="${esc(monitor.id)}" aria-pressed="${prefs[monitor.id] ? "true" : "false"}">
-        <b>${esc(monitor.label)}</b><span>${esc(monitor.copy)}</span>
-      </button>`).join("")}
-    </div>
-  </section>`;
-}
-
-function productAnalyticsRows() {
+export function productAnalyticsRows() {
   const savedProducts = Array.isArray(store?.state?.products) ? store.state.products : [];
   const mapped = savedProducts.slice(0, 8).map((product, index) => ({
     id: product.id || `workspace-product-${index}`,
@@ -1126,45 +1076,7 @@ function productAnalyticsRows() {
   return [...mapped, ...PRODUCT_ANALYTICS_SEED.filter((product) => !ids.has(product.id))];
 }
 
-function renderProductAnalyticsMonitor(esc) {
-  const rows = productAnalyticsRows();
-  const totalViews = rows.reduce((sum, row) => sum + Number(row.views || 0), 0);
-  const totalClicks = rows.reduce((sum, row) => sum + Number(row.clicks || 0), 0);
-  const clickRate = totalViews ? Math.round(totalClicks / totalViews * 1000) / 10 : 0;
-  return `<section class="ch-card an-product-monitor" aria-label="Product analytics monitor">
-    <div class="ch-card-h"><div><p class="ch-eyebrow">Product analytics monitor</p><h3>PhantomStore performance</h3></div><span>${rows.length} products</span></div>
-    <div class="an-product-kpis">
-      ${kpi("Store views", K(totalViews), "product page interest")}
-      ${kpi("Buy clicks", K(totalClicks), "checkout intent")}
-      ${kpi("Click rate", `${clickRate}%`, "views to buy clicks")}
-      ${kpi("Launch gates", K(rows.filter((row) => /qa|preview|gate|finish|connect/i.test(`${row.status} ${row.next}`)).length), "needs work")}
-    </div>
-    <div class="an-product-table">
-      ${rows.map((row) => `<article>
-        <div><b>${esc(row.name)}</b><span>${esc(row.lane)} / ${esc(row.seller)}</span></div>
-        <strong>${esc(row.status)}</strong>
-        <span>${K(row.views)} views</span>
-        <span>${K(row.clicks)} clicks</span>
-        <em>${esc(row.next)}</em>
-      </article>`).join("")}
-    </div>
-  </section>`;
-}
 
-function renderSocialMediaMonitor({ feedRows = [], displayAccounts = [], configuredCount = 0, oauthReadyCount = 0, hasLiveMetrics = false, esc }) {
-  const live = feedRows.filter((row) => row.feed).length;
-  const waiting = Math.max(0, displayAccounts.length - live);
-  return `<section class="ch-card an-social-monitor" aria-label="Social media monitor">
-    <div class="ch-card-h"><div><p class="ch-eyebrow">Social media monitor</p><h3>${hasLiveMetrics ? "Cross-platform feed is live." : "Connect platforms to light up the graph."}</h3></div><span>${live}/${displayAccounts.length} live</span></div>
-    <div class="an-social-grid">
-      <span><b>${live}</b><i>live feeds</i></span>
-      <span><b>${waiting}</b><i>waiting</i></span>
-      <span><b>${configuredCount}</b><i>authorized</i></span>
-      <span><b>${oauthReadyCount}</b><i>apps ready</i></span>
-    </div>
-    <p>${esc(hasLiveMetrics ? "Official platform metrics are reporting from connected accounts. Personal Meta profiles stay separated from Page/Business targets." : "Use the account connection buttons below. Meta login is for business/page access only, not accidental personal posting.")}</p>
-  </section>`;
-}
 let analyticsNotice = "";
 let analyticsMount = null;
 let analyticsOpts = {};
@@ -1368,14 +1280,6 @@ function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount
 }
 
 function wireAnalyticsActions(el, accounts, opts) {
-  el.querySelectorAll("[data-an-monitor]").forEach((button) => button.onclick = () => {
-    const monitor = button.dataset.anMonitor || "";
-    const prefs = loadAnalyticsMonitorPrefs();
-    prefs[monitor] = !prefs[monitor];
-    if (!Object.values(prefs).some(Boolean)) prefs[monitor] = true;
-    saveAnalyticsMonitorPrefs(prefs);
-    renderAnalytics(el, opts, { skipAutoRefresh: true });
-  });
   el.querySelectorAll("[data-an-sync]").forEach((button) => button.onclick = async () => {
     button.disabled = true;
     analyticsNotice = `Syncing ${button.dataset.anSync}…`;
@@ -1498,51 +1402,25 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   const totals = analyticsTotals(liveRows);
   const hasLiveMetrics = liveRows.length > 0;
   const chartRows = feedRows;
-  const maxEngagement = Math.max(1, ...feedRows.map((row) => row.feed?.engagement || 0));
-  const monitorPrefs = loadAnalyticsMonitorPrefs();
   el.innerHTML = `
     <div class="an">
-      <div class="an-visual-grid an-top-visual-grid">
-        <section class="ch-card an-trend-card">
-          <div class="ch-card-h"><div><p class="ch-eyebrow">Performance trend</p><h3>Reach and views</h3></div><span class="an-live-label">${hasLiveMetrics ? "Platform data" : "Waiting for social data"}</span></div>
-          ${analyticsChart(chartRows, { title: "No social analytics connected yet", body: "Connect a social account and live platform data will fill this chart. Local uploads are not counted here." })}
-        </section>
-        <section class="ch-card an-coverage-card">
-          <p class="ch-eyebrow">Data coverage</p>
-          ${analyticsCoverage(feedRows)}
-        </section>
-      </div>
+      <section class="ch-card an-trend-card">
+        <div class="ch-card-h"><div><p class="ch-eyebrow">Social media analytics</p><h3>Reach and views</h3></div><span class="an-live-label">${hasLiveMetrics ? "Live" : "Waiting for social data"}</span></div>
+        ${analyticsChart(chartRows, { title: "No social analytics connected yet", body: "Connect a social account and live platform data will fill this chart." })}
+      </section>
       <div class="ch-kpis an-kpis">
         ${hasLiveMetrics
           ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`
           : `${kpi("Live channels", `0/${displayAccounts.length}`, "official OAuth reporting")}${kpi("OAuth apps", K(oauthReadyCount), "server apps ready")}${kpi("Authorized", K(configuredCount), "accounts connected")}${kpi("Next step", "Connect", "choose a platform below")}`}
       </div>
-      ${analyticsMonitorControls(monitorPrefs, esc)}
-      ${monitorPrefs.social ? renderSocialMediaMonitor({ feedRows, displayAccounts, configuredCount, oauthReadyCount, hasLiveMetrics, esc }) : ""}
-      ${monitorPrefs.products ? renderProductAnalyticsMonitor(esc) : ""}
-      <section class="an-hero">
-        <div>
-          <p class="ch-eyebrow">Social media analytics</p>
-          <h3>${hasLiveMetrics ? "Official social analytics are reporting." : "Connect your social accounts to start the live feed."}</h3>
-          <p>${hasLiveMetrics ? "This page shows live platform analytics from authorized social accounts. Local media files, drafts, and uploads are not counted as social performance." : "Authorize YouTube, Instagram, Facebook, TikTok, X, LinkedIn, or Pinterest once. PhantomForce stores the account token server-side, syncs real metrics, and keeps posting approval-gated."}</p>
-        </div>
-      </section>
-      <section class="an-toolbar" aria-label="Live analytics actions">
-        <div class="an-hero-actions">
-          ${analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCount, totalCount: displayAccounts.length || 1 }).action}
-          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live social · ${configuredCount}/${displayAccounts.length} accounts authorized · ${oauthReadyCount}/${displayAccounts.length} OAuth apps ready</span>
-        </div>
-      </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
       ${analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount, oauthReadyCount, hasLiveMetrics, esc })}
-      <section class="ch-card an-engagement-card">
-        <div class="ch-card-h"><div><p class="ch-eyebrow">Channel comparison</p><h3>Engagement by platform</h3></div></div>
-        <div class="ch-bars">${hasLiveMetrics ? feedRows.map((row) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${row.account.color}"></i>${esc(row.account.name)}</span><span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round((row.feed?.engagement || 0) / maxEngagement * 100)}%;background:${row.account.color}"></span></span><b class="ch-bar-val">${K(row.feed?.engagement || 0)}</b></div>`).join("") : `<div class="an-empty-note"><b>No platform engagement yet.</b><span>Once a channel is connected, this becomes your clean cross-platform comparison.</span></div>`}</div>
-      </section>
-      <div class="an-section-head" data-an-sources><div><p class="ch-eyebrow">Sources</p><h3>Social account connections</h3></div><span>Official OAuth reach/follower sync</span></div>
-      <section class="an-channel-list" aria-label="Social analytics channels">
-        ${feedRows.map((row) => accountAnalyticsRow(row, esc)).join("")}
-      </section>
+      <details class="an-connections">
+        <summary><b>Manage connections</b><span>${configuredCount}/${displayAccounts.length || 0} authorized</span></summary>
+        <section class="an-channel-list" aria-label="Social analytics channels" data-an-sources>
+          ${feedRows.map((row) => accountAnalyticsRow(row, esc)).join("")}
+        </section>
+      </details>
     </div>`;
   wireAnalyticsActions(el, accounts, opts);
   const syncAll = el.querySelector("[data-an-sync-all]");

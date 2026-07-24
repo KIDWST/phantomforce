@@ -25,6 +25,7 @@ import { prisma } from "../access/prisma-runtime.js";
 import { getContentAssetStorageProvider } from "./content-asset-storage.js";
 import { getSalesConnectorStatus } from "../connectors/sales-connector.js";
 import { getGuardStatus, getRecentAuditLogEntries, runGuardSelfTest } from "./prompt-injection-guard.js";
+import { runDueScheduledTasks } from "./scheduled-tasks.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -786,20 +787,35 @@ export function startAutomationEngine(logger: LoggerLike) {
     return () => undefined;
   }
 
-  void runDueAutomations("server_startup_catchup")
-    .then((result) => {
-      logger.info(
-        result.ran.length
-          ? `PhantomForce automation engine ran ${result.ran.length} due job(s) on startup: ${result.ran.join(", ")}.`
-          : "PhantomForce automation engine: no jobs due on startup.",
-      );
+  // Deferred/recurring "recheck in N hours" tasks ride the SAME tick as the
+  // fixed automation jobs, so agents never schedule a token-burning model
+  // self-wakeup. runAutomationJobNow is injected to avoid a circular import.
+  const scheduledTaskHandlers = { runAutomationJob: runAutomationJobNow };
+
+  const runTick = async (reason: string) => {
+    await runDueAutomations(reason);
+    try {
+      const scheduled = await runDueScheduledTasks(scheduledTaskHandlers, reason);
+      if (scheduled.ran.length) {
+        logger.info(
+          `PhantomForce scheduler fired ${scheduled.ran.length} deferred task(s) on ${reason} (0 tokens).`,
+        );
+      }
+    } catch (error) {
+      logger.warn(`PhantomForce deferred-task tick failed non-fatally: ${String(error)}`);
+    }
+  };
+
+  void runTick("server_startup_catchup")
+    .then(() => {
+      logger.info("PhantomForce automation engine + deferred scheduler ran startup catch-up.");
     })
     .catch((error) => {
       logger.warn(`PhantomForce automation engine startup run failed non-fatally: ${String(error)}`);
     });
 
   const timer = setInterval(() => {
-    void runDueAutomations("scheduled_tick").catch((error) => {
+    void runTick("scheduled_tick").catch((error) => {
       logger.warn(`PhantomForce automation engine tick failed non-fatally: ${String(error)}`);
     });
   }, TICK_MS);

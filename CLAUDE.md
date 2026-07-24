@@ -29,3 +29,25 @@ Navigation preference:
 - Main business modules in the upper list.
 - `Memory`, `Settings`, `Developer`, and `Away Mode` tucked at the bottom.
 - Do not collapse them back into one long ugly list.
+
+## NEVER schedule a Claude/Codex self-wakeup for deferred work
+
+Whenever the plan is "recheck / resync / re-run in N hours" (or any recurring
+timer), you MUST register it with PhantomForce's own deferred-task scheduler —
+NEVER as a model self-wakeup. A model sitting open to wait burns tokens for
+nothing; PhantomForce fires the same timer deterministically off its automation
+tick for 0 tokens. The whole point is that nothing recurring runs *outside*
+PhantomForce + n8n.
+
+Register via the native primitive (`server/src/phantom-ai/scheduled-tasks.ts`,
+exposed at `POST /phantom-ai/automations/scheduled`). A task can:
+- run an in-repo automation job (`action: {type:"automation", jobId}`), or
+- POST a local n8n webhook (`action: {type:"webhook", url}` — loopback / a host
+  in `PHANTOMFORCE_N8N_ALLOWED_HOSTS` only; external URLs are rejected), or
+- be a pure `noop` wake-marker.
+
+Give it `run_in_hours` (or `run_at` / `run_in_ms`) and, for recurring work,
+`every_hours`. Every fire is proof-logged to the Hermes ledger with
+`estimated_tokens: 0`. The only place a paid model may ever be involved is a
+single on-demand call *inside* the n8n workflow the task triggers — never a
+background agent left running. See `ops/n8n/DEFERRED_TASKS.md`.

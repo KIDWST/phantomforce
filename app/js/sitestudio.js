@@ -2,21 +2,24 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney, workspaceStorageGetItem,
-} from "./store.js?v=phantom-live-20260723-62";
+} from "./store.js?v=phantom-live-20260723-63";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
   SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
-} from "./workspaces.js?v=phantom-live-20260723-62";
+} from "./workspaces.js?v=phantom-live-20260723-63";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun, fetchServerSites,
   addServerSiteDomain, verifyServerSiteDomain, rollbackServerSite,
-} from "./orgs.js?v=phantom-live-20260723-62";
+} from "./orgs.js?v=phantom-live-20260723-63";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
   panel: "website", editorMode: "easy", inspectTarget: "hero",
   previewMode: "live", compareIndex: -1, proposal: null,
   editorOpen: true,
+  // Collapsible editor drawers. Regions + effects open by default so the tools
+  // are discoverable; the asset library starts tucked so the panel stays short.
+  drawers: { regions: true, effects: true, assets: false },
   cartOpen: false, checkoutOpen: false, confirmation: null,
   serverLoading: new Set(), notice: null,
 };
@@ -345,31 +348,43 @@ function selectedInspectTarget() {
   return SITE_INSPECT_TARGETS.find((target) => target.id === siteUi.inspectTarget) || SITE_INSPECT_TARGETS[0];
 }
 
-function siteAssetRailMarkup() {
+function siteAssetInfo() {
   const assets = loadSiteMediaAssets();
   const realAssets = assets.length ? assets : [];
+  const count = realAssets.length || SITE_QUICK_ELEMENTS.length;
+  const label = realAssets.length ? `${realAssets.length} Media Pool item${realAssets.length === 1 ? "" : "s"}` : "Template presets";
+  return { realAssets, count, label };
+}
+
+function siteAssetGridMarkup() {
+  const { realAssets } = siteAssetInfo();
+  return realAssets.length ? `
+    <div class="ss-asset-grid">
+      ${realAssets.slice(0, 4).map((asset) => `
+        <button type="button" class="ss-asset-card" data-ss-asset-preset="Use the Media Pool asset named '${esc(asset.title)}' in the selected website area. Make it crop-safe, add alt text, and keep the change approval-gated.">
+          ${asset.url ? `<img src="${esc(asset.url)}" alt="">` : `<span>${esc(String(asset.type || "asset").slice(0, 1).toUpperCase())}</span>`}
+          <b>${esc(asset.title)}</b>
+          <small>${esc(asset.source)} · ${esc(asset.type)}</small>
+        </button>`).join("")}
+    </div>` : `
+    <div class="ss-quick-grid">
+      ${SITE_QUICK_ELEMENTS.map(([id, label, prompt]) => `
+        <button type="button" data-ss-asset-preset="${esc(prompt)}" aria-label="${esc(label)}">
+          <b>${esc(label)}</b><span>${esc(id.replace(/-/g, " "))}</span>
+        </button>`).join("")}
+    </div>`;
+}
+
+/* A collapsible editor drawer. Native <details> so it toggles with no
+   re-render; state is mirrored back into siteUi.drawers on toggle so a full
+   re-render (after an edit) restores what the owner had open. */
+function editorDrawer(key, title, count, innerHtml) {
+  const open = siteUi.drawers[key] !== false;
   return `
-    <section class="ss-asset-bank" aria-label="Asset library and quick elements">
-      <div class="ss-editor-heading">
-        <p>Assets & quick elements</p>
-        <b>${realAssets.length ? `${realAssets.length} Media Pool item${realAssets.length === 1 ? "" : "s"}` : "Template presets"}</b>
-      </div>
-      ${realAssets.length ? `
-        <div class="ss-asset-grid">
-          ${realAssets.slice(0, 4).map((asset) => `
-            <button type="button" class="ss-asset-card" data-ss-asset-preset="Use the Media Pool asset named '${esc(asset.title)}' in the selected website area. Make it crop-safe, add alt text, and keep the change approval-gated.">
-              ${asset.url ? `<img src="${esc(asset.url)}" alt="">` : `<span>${esc(String(asset.type || "asset").slice(0, 1).toUpperCase())}</span>`}
-              <b>${esc(asset.title)}</b>
-              <small>${esc(asset.source)} · ${esc(asset.type)}</small>
-            </button>`).join("")}
-        </div>` : `
-        <div class="ss-quick-grid">
-          ${SITE_QUICK_ELEMENTS.map(([id, label, prompt]) => `
-            <button type="button" data-ss-asset-preset="${esc(prompt)}" aria-label="${esc(label)}">
-              <b>${esc(label)}</b><span>${esc(id.replace(/-/g, " "))}</span>
-            </button>`).join("")}
-        </div>`}
-    </section>`;
+    <details class="ss-editor-drawer" data-ss-drawer="${esc(key)}" ${open ? "open" : ""}>
+      <summary><span>${esc(title)}</span>${count != null ? `<b>${esc(String(count))}</b>` : ""}<i class="ss-drawer-caret" aria-hidden="true">▾</i></summary>
+      <div class="ss-editor-drawer-body">${innerHtml}</div>
+    </details>`;
 }
 
 function siteEasyEditorMarkup(site) {
@@ -377,6 +392,8 @@ function siteEasyEditorMarkup(site) {
   const design = ensureSiteDesign(site);
   const [field, fieldLabel] = SITE_DIRECT_FIELDS[target.id] || SITE_DIRECT_FIELDS.hero;
   const fieldValue = design[field] || "";
+  const asset = siteAssetInfo();
+  const anyOpen = ["regions", "effects", "assets"].some((key) => siteUi.drawers[key] !== false);
   return `
     <aside class="ss-site-editor-panel" aria-label="AI website editor">
       <div class="ss-editor-tabs" role="tablist" aria-label="Website editor mode">
@@ -387,26 +404,32 @@ function siteEasyEditorMarkup(site) {
         <div class="ss-editor-heading">
           <p>AI Website Editor</p>
           <h3>${esc(target.label)}</h3>
-          <span>Click a page region, choose a smart change, or type the exact outcome. Phantom drafts it first; publish still requires approval.</span>
-        </div>
-        <div class="ss-inspector-list" aria-label="Clickable page regions">
-          ${SITE_INSPECT_TARGETS.map((item) => `
-            <button type="button" class="${item.id === target.id ? "is-active" : ""}" data-ss-inspect-target="${esc(item.id)}">
-              <b>${esc(item.label)}</b><span>${esc(item.id)}</span>
-            </button>`).join("")}
+          <span>Pick a part of the page, type the outcome, or tap a smart effect. Phantom drafts it first — publishing still needs approval.</span>
         </div>
         <form class="ss-direct-editor" data-ss-direct-form data-field="${esc(field)}">
           <label for="ss-direct-${esc(field)}">${esc(fieldLabel)}</label>
-          <textarea id="ss-direct-${esc(field)}" data-ss-direct-value rows="3">${esc(fieldValue)}</textarea>
+          <textarea id="ss-direct-${esc(field)}" data-ss-direct-value rows="3" placeholder="Type the exact words or outcome you want here...">${esc(fieldValue)}</textarea>
           <button type="submit">Save ${esc(target.label)}</button>
         </form>
-        <div class="ss-ai-option-grid" aria-label="AI edit suggestions">
-          ${SITE_STYLE_ACTIONS.map(([id, label, prompt]) => `
-            <button type="button" data-ss-ai-style="${esc(`${target.prompt} ${prompt}`)}">
-              <b>${esc(label)}</b><span>${esc(id)}</span>
-            </button>`).join("")}
+        <div class="ss-editor-drawer-bar">
+          <span>Editor tools</span>
+          <button type="button" class="ss-drawers-toggle" data-ss-drawers-toggle="${anyOpen ? "collapse" : "expand"}">${anyOpen ? "Collapse all" : "Expand all"}</button>
         </div>
-        ${siteAssetRailMarkup()}
+        ${editorDrawer("regions", "Page regions", SITE_INSPECT_TARGETS.length, `
+          <div class="ss-inspector-list" aria-label="Clickable page regions">
+            ${SITE_INSPECT_TARGETS.map((item) => `
+              <button type="button" class="${item.id === target.id ? "is-active" : ""}" data-ss-inspect-target="${esc(item.id)}">
+                <b>${esc(item.label)}</b><span>${esc(item.id)}</span>
+              </button>`).join("")}
+          </div>`)}
+        ${editorDrawer("effects", "Smart effects", SITE_STYLE_ACTIONS.length, `
+          <div class="ss-ai-option-grid" aria-label="AI edit suggestions">
+            ${SITE_STYLE_ACTIONS.map(([id, label, prompt]) => `
+              <button type="button" data-ss-ai-style="${esc(`${target.prompt} ${prompt}`)}">
+                <b>${esc(label)}</b><span>${esc(id)}</span>
+              </button>`).join("")}
+          </div>`)}
+        ${editorDrawer("assets", `Assets & elements`, asset.count, siteAssetGridMarkup())}
       `}
     </aside>`;
 }
@@ -1048,6 +1071,33 @@ export function renderSiteStudio(el) {
       rerender();
     };
   });
+  /* Collapsible editor drawers — native <details>, no re-render on toggle so
+     the preview never flickers. State is mirrored so a later full re-render
+     restores what the owner had open. */
+  const drawerEls = el.querySelectorAll("[data-ss-drawer]");
+  drawerEls.forEach((drawer) => {
+    drawer.addEventListener("toggle", () => {
+      const key = drawer.dataset.ssDrawer;
+      if (key) siteUi.drawers[key] = drawer.open;
+      const bar = el.querySelector("[data-ss-drawers-toggle]");
+      if (bar) {
+        const anyOpen = Array.from(drawerEls).some((d) => d.open);
+        bar.dataset.ssDrawersToggle = anyOpen ? "collapse" : "expand";
+        bar.textContent = anyOpen ? "Collapse all" : "Expand all";
+      }
+    });
+  });
+  const drawersToggle = el.querySelector("[data-ss-drawers-toggle]");
+  if (drawersToggle) drawersToggle.onclick = () => {
+    const collapse = drawersToggle.dataset.ssDrawersToggle === "collapse";
+    drawerEls.forEach((drawer) => {
+      drawer.open = !collapse;
+      const key = drawer.dataset.ssDrawer;
+      if (key) siteUi.drawers[key] = !collapse;
+    });
+    drawersToggle.dataset.ssDrawersToggle = collapse ? "expand" : "collapse";
+    drawersToggle.textContent = collapse ? "Expand all" : "Collapse all";
+  };
   const applyPublicSitePrompt = (prompt, label = "AI website edit") => {
     if (!active || !prompt) return;
     siteUi.proposal = createSiteProposal(active, prompt, label, selectedInspectTarget().label);

@@ -31,7 +31,9 @@
 .workspace-page[data-workspace-page="sites"] .ss-public-source {
   width: 100%;
   grid-template-columns: minmax(0, 1fr) clamp(300px, 31vw, 420px);
-  align-items: start;
+  /* stretch so the website preview column runs the full height of the editor
+     panel — no more letterboxed, cut-off preview on desktop. */
+  align-items: stretch;
 }
 
 .workspace-page[data-workspace-page="sites"] .ss-public-source-frame iframe {
