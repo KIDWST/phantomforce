@@ -6,9 +6,9 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260723-61";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260723-61";
-import { getOperatorInfrastructureStatus } from "./settings.js?v=phantom-live-20260723-61";
+} from "./store.js?v=phantom-live-20260723-62";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260723-62";
+import { getOperatorInfrastructureStatus, renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260723-62";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -427,6 +427,9 @@ function syncCommandOS() {
   setOperatorModelStatus();
   setText("[data-os-memory-count]", `${memories.total} saved`);
   setText("[data-os-worker-count]", workers ? `${workers} scheduled` : "Needs work");
+  setText("[data-os-security-text]", riskRecords ? plural(riskRecords, "alert") : "No alerts");
+  const securityHost = $("[data-os-security-status]");
+  if (securityHost) securityHost.dataset.osTone = riskRecords ? "warn" : "ok";
 
   const core = $(".os-node-core");
   if (core) {
@@ -443,6 +446,7 @@ function syncCommandOS() {
   syncDecisionOffset();
   mountHud();
   mountSoundToggle();
+  mountModelSwitcher();
   maybePowerOn();
   checkOsEvents();
   refreshNodeCenters();
@@ -868,6 +872,36 @@ function osSound(kind) {
   else if (kind === "toast") { blip(784, 0.16, "sine", 0.045); blip(1047, 0.14, "sine", 0.026, 0.07); }
   else if (kind === "hover") { const now = Date.now(); if (now - lastHoverBlip < 90) return; lastHoverBlip = now; blip(1280, 0.04, "sine", 0.016); }
 }
+/* MODEL footer pill: switch AI infrastructure right from the bottom bar
+   instead of only pointing at Settings. Reuses the same mini-settings widget
+   already wired for the chat panel — no separate provider-switching logic. */
+function mountModelSwitcher() {
+  const toggle = $("[data-os-model-toggle]");
+  const popover = $("[data-os-model-popover]");
+  if (!toggle || !popover || toggle.dataset.osBound) return;
+  toggle.dataset.osBound = "1";
+
+  const close = () => {
+    popover.hidden = true;
+    toggle.setAttribute("aria-expanded", "false");
+  };
+  const open = () => {
+    renderOperatorMiniSettings(popover, {
+      openSettings: () => { close(); $('[data-nav-id="settings"]')?.click(); },
+      onChange: () => setOperatorModelStatus(),
+    });
+    popover.hidden = false;
+    toggle.setAttribute("aria-expanded", "true");
+  };
+  toggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (popover.hidden) open(); else close();
+  });
+  popover.addEventListener("click", (event) => event.stopPropagation());
+  document.addEventListener("click", () => { if (!popover.hidden) close(); });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !popover.hidden) close(); });
+}
+
 function mountSoundToggle() {
   const line = $(".os-system-line");
   if (!line || line.querySelector(".os-sound")) return;

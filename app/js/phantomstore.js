@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260723-61";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260723-62";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
@@ -284,19 +284,19 @@ function localFallbackSnapshot() {
       id: "product-phantom-live-agent",
       sellerId: seller.id,
       name: "Phantom Live Agent",
-      summary: "Create a living AI employee with a voice, avatar, memory boundary, permissions, and approval-safe handoff.",
-      category: "AI Suite",
-      priceLabel: "Included in PhantomForce",
-      buyLabel: "Open Live Agent",
-      buyUrl: "https://admin.phantomforce.online/app/?session=admin#page/phantomlive",
-      delivery: "PhantomForce workspace module",
+      summary: "A downloadable local AI worker builder and runtime: identity, voice, memory boundary, permissions, and real local execution — not a browser tab.",
+      category: "Desktop App",
+      priceLabel: "Free early access",
+      buyLabel: "Download Phantom Live Agent",
+      buyUrl: "https://phantomforce.online/phantomstore/phantom-live-agent",
+      delivery: "Windows desktop download",
       version: "0.1.0",
       status: "available",
-      qualityNote: "Local deterministic creator/runtime slice. Voice uses browser speech; external channels, tools, and public deployment require explicit setup and approval.",
+      qualityNote: "Early access: local Ollama routing and the local tool allowlist are new — sandbox test before turning Tools on for a real agent.",
       imageUrl: "/app/assets/phantomstore/phantom-live-agent-cover.svg?v=20260723",
       referenceImageUrl: "",
-      tags: ["live agent", "avatar", "voice", "memory", "approval-safe"],
-      badges: ["Agent creator", "Local sandbox", "Approval-gated"],
+      tags: ["live agent", "local ai", "desktop", "privacy", "approval-safe"],
+      badges: ["Local-first", "Desktop", "Approval-gated"],
       rating: 5,
       reviewCount: SEEDED_REVIEWS.liveagent.length,
       featured: true,

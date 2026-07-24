@@ -53,7 +53,7 @@ to users as an inert, orphaned chatbot.
 
 Fixed:
 - `app/index.html`: `.chatbox`/`mountCompanion` mount replaced with a static
-  `.phantompet-card` button linking to the real PhantomBot tab
+  `.phantompet-orb` button linking to the real PhantomBot tab
   (`data-open-ws="phantomai"`).
 - `app/js/main.js`: removed the `mountCompanion(...)` call and the entire
   drag/minimize/hotkey/right-click-menu subsystem that only ever operated on

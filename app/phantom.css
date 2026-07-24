@@ -3474,13 +3474,16 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
    idles with a gentle bob/glow and only reveals its tooltip on hover/focus,
    instead of permanently occupying a wide dashboard row shaped like a chat
    input. Click still opens PhantomBot (same data-open-ws hook). */
+.phantompet-orb-wrap {
+  position: relative; display: inline-flex; width: 52px; height: 52px; margin-top: 6px;
+}
 .phantompet-orb {
   position: relative;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 52px; height: 52px; margin-top: 6px; padding: 0;
+  width: 52px; height: 52px; padding: 0;
   border: 1px solid var(--line); border-radius: 50%;
   background: radial-gradient(60% 60% at 35% 30%, rgba(91, 76, 255, 0.22), var(--glass));
-  cursor: pointer; overflow: visible;
+  cursor: pointer; overflow: hidden;
   animation: phantompet-bob 3.2s ease-in-out infinite;
   transition: border-color 0.18s, box-shadow 0.18s, transform 0.15s;
 }
@@ -3502,7 +3505,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   opacity: 0; pointer-events: none; transition: opacity 0.15s, transform 0.15s;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
-.phantompet-orb:hover .phantompet-orb-tip, .phantompet-orb:focus-visible .phantompet-orb-tip {
+.phantompet-orb-wrap:hover .phantompet-orb-tip, .phantompet-orb:focus-visible ~ .phantompet-orb-tip {
   opacity: 1; transform: translateX(-50%) translateY(0);
 }
 @keyframes phantompet-bob {
@@ -7348,7 +7351,7 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-61") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-62") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -10721,16 +10724,6 @@ body .phantom .nav-item span {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px;
 }
 .ac-loading, .ac-empty { grid-column: 1 / -1; padding: 48px 16px; text-align: center; color: var(--dim); }
-/* Local Assets (Motion Array vault) view — re-homed from the former Media Lab drawer */
-.ac-local { display: flex; flex-direction: column; gap: 12px; }
-.ac-local-note { color: var(--dim); font-size: 12.5px; line-height: 1.5; margin: 0; }
-.ac-local-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.ac-local-controls .ac-search { flex: 1 1 220px; }
-.ac-local-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12px; color: var(--dim); }
-.ac-local-summary b { color: var(--ink); font-size: 13px; }
-.ac-local-grid { margin-top: 2px; }
-.ac-local-card { cursor: default; }
-.ac-local-card:hover { transform: none; border-color: rgba(91, 76, 255,0.28); }
 .ac-card {
   display: flex; flex-direction: column; gap: 0; border: 1px solid var(--line); border-radius: 14px;
   overflow: hidden; background: rgba(255,255,255,0.015); cursor: pointer; text-align: left;

@@ -5,7 +5,7 @@
    (store.js) — no fabricated business records. Self-contained: owns its own
    timers, guards against double-mount, and respects reduced-motion. */
 
-import { session, store, TOOL_SPINE } from "./store.js?v=phantom-live-20260723-61";
+import { session, store, TOOL_SPINE } from "./store.js?v=phantom-live-20260723-62";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -57,6 +57,12 @@ function modeForTicker(item) {
   return "active";
 }
 
+function formatWireTimestamp(value) {
+  const d = value ? new Date(value) : new Date();
+  if (Number.isNaN(d.getTime())) return formatWireTimestamp();
+  return d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 function wireItems(limit = 14) {
   const ticker = Array.isArray(workforceCache?.ticker) ? workforceCache.ticker : [];
   if (ticker.length) {
@@ -65,6 +71,7 @@ function wireItems(limit = 14) {
       internal: item.tone === "activity" ? "Agent receipt" : "Worker attention",
       activity: item.text || "Status recorded.",
       mode: modeForTicker(item),
+      at: formatWireTimestamp(item.timestamp),
     }));
   }
   const jobs = Number(workforceCache?.summary?.enabled_automation_jobs || 0);
@@ -75,6 +82,7 @@ function wireItems(limit = 14) {
       internal: "Worker status",
       activity: `${jobs} scheduled workers configured; ${attention} need attention.`,
       mode: attention ? "standby" : "active",
+      at: formatWireTimestamp(),
     }];
   }
   return TOOL_SPINE.map((t) => ({
@@ -82,6 +90,7 @@ function wireItems(limit = 14) {
     internal: t.internal,
     activity: `${t.activity} (${t.mode}; no live worker receipt yet)`,
     mode: t.mode,
+    at: formatWireTimestamp(),
   })).slice(0, limit);
 }
 

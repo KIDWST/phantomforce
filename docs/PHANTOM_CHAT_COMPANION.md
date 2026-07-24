@@ -13,7 +13,7 @@ that exact merge is what caused the "chatbot on the dashboard" regression
    nav tab (`data-nav-id="phantomai"`), mounted via `mountPhantomAI`.
 
 The dashboard hero (`app/index.html`, `.hero2-copy`) must only contain a
-**compact `.phantompet-card` button** (`data-open-ws="phantomai"`) that links
+**compact `.phantompet-orb` button** (`data-open-ws="phantomai"`) that links
 to the real chat tab — never an embedded chat surface, never a mounted
 `companion.js` widget.
 

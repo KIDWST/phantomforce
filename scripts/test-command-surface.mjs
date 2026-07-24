@@ -19,7 +19,7 @@ const count = (source, pattern) => source.match(pattern)?.length || 0;
 // under a "hero2-phantompet" CSS class, which read as an embedded chatbot
 // with no chat body under it — that regression is what this assertion now
 // guards against explicitly.
-assert.match(index, /class="phantompet-card"/u, "Dashboard must keep the compact PhantomPet status card.");
+assert.match(index, /class="phantompet-orb"/u, "Dashboard must keep the compact PhantomPet status widget.");
 assert.doesNotMatch(index, /data-chatbox/u, "Dashboard must not re-embed companion.js's mountCompanion chat-header widget.");
 assert.equal(count(index, /data-command-form/gu), 0, "Dashboard must not re-embed a command composer; PhantomBot is its own tab now.");
 assert.equal(count(index, /data-chat-log/gu), 0, "Dashboard must not re-embed a chat log; PhantomBot is its own tab now.");
@@ -64,7 +64,7 @@ assert.match(main, /renderDashboardBrief\(\);/u, "Console render must refresh th
 // (setChatboxMinimized, bindChatboxMobility, CHATBOX_POSITION_KEY, the
 // Ctrl-backtick summon hotkey, etc.) only ever operated on the removed
 // [data-chatbox] element. It has been deleted along with that element —
-// see the phantompet-card assertions above — rather than left bound to
+// see the phantompet-orb assertion above — rather than left bound to
 // nothing.
 assert.doesNotMatch(main, /bindChatboxMobility/u, "Dead chatbox drag/hotkey subsystem must not come back once its target element is gone.");
 assert.match(main, /const bottomItems = items;/u, "The dedicated utility zone must remain the full navigation launcher while the main sidebar shows open tabs.");

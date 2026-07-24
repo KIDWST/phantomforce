@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260723-61";
+      window.PHANTOM_BUILD = "phantom-live-20260723-62";
       (function keepLiveBuildFresh() {
         const currentBuild = window.PHANTOM_BUILD || "";
         if (!currentBuild || location.protocol === "file:") return;
@@ -32,7 +32,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260723-61" />
+    <meta name="phantom-build" content="phantom-live-20260723-62" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#f3f2fa" />
     <style>
@@ -113,21 +113,20 @@
 
 
     </style>
-    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260723-61" />
+    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260723-62" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260723-61" />
-    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260723-61" />
-    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260723-61" />
-    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260723-61" />
-    <link rel="stylesheet" href="/app/phantomlive.css?v=phantom-live-20260723-61" />
-    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260723-61" />
-    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260723-61" />
-    <link rel="stylesheet" href="/app/phantom-skin.css?v=phantom-live-20260723-61" />
-    <link rel="stylesheet" href="/app/command-os.css?v=phantom-live-20260723-61" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260723-62" />
+    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260723-62" />
+    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260723-62" />
+    <link rel="stylesheet" href="/app/phantomstore.css?v=phantom-live-20260723-62" />
+    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260723-62" />
+    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260723-62" />
+    <link rel="stylesheet" href="/app/phantom-skin.css?v=phantom-live-20260723-62" />
+    <link rel="stylesheet" href="/app/command-os.css?v=phantom-live-20260723-62" />
     <link rel="stylesheet" href="/app/site-studio-responsive.css?v=site-studio-responsive-20260723-01" />
-    <link rel="stylesheet" href="/app/workspace-mobile-integrity.css?v=phantom-live-20260723-61" />
+    <link rel="stylesheet" href="/app/workspace-mobile-integrity.css?v=phantom-live-20260723-62" />
   </head>
   <body>
     <a class="pf-skip-link" href="#phantom-main">Skip to main workspace</a>
@@ -167,7 +166,6 @@
         <nav class="os-primary-nav" aria-label="Operating divisions">
           <button data-nav-id="dashboard" type="button">Overview</button>
           <button data-nav-id="phantomai" type="button">PhantomBot</button>
-          <button data-nav-id="phantomlive" type="button">Live Agent</button>
           <button data-nav-id="phantomplay" type="button">PhantomPlay</button>
           <button data-nav-id="phantomstore" type="button">PhantomStore</button>
           <button data-nav-id="assets" type="button">Asset Cloud</button>
@@ -192,7 +190,7 @@
 
       <header class="mobile-admin-homebar" aria-label="Mobile admin home">
         <button class="mobile-admin-brand" data-mobile-home type="button" aria-label="Open Dashboard">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260723-61" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260723-62" alt="" aria-hidden="true" />
           <span>
             <b>PhantomForce</b>
             <i>Business</i>
@@ -203,7 +201,7 @@
       <!-- ---------- sidebar ---------- -->
       <aside class="sidebar" aria-label="Primary">
         <div class="side-brand">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260723-61" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260723-62" alt="" aria-hidden="true" />
           <span class="side-brand-text">
             <b>PHANTOMFORCE</b>
             <i>BUSINESS MANAGER</i>
@@ -316,15 +314,17 @@
                   <button data-os-execution="monitor" type="button">Monitor</button>
                 </div>
 
-                <button class="phantompet-orb" type="button" data-open-ws="phantomai" aria-label="Open PhantomBot — PhantomPet is ready">
-                  <img class="phantompet-orb-img" src="/app/assets/brand-phantom.png?v=phantom-live-20260723-61" alt="" aria-hidden="true" />
-                  <span class="phantompet-orb-status" aria-hidden="true"></span>
-                  <span class="phantompet-orb-tip" role="tooltip">PhantomPet &mdash; ready when you are</span>
-                </button>
+                <div class="phantompet-orb-wrap">
+                  <button class="phantompet-orb" type="button" data-open-ws="phantomai" aria-label="Open PhantomBot — PhantomPet is ready">
+                    <img class="phantompet-orb-img" src="/app/assets/brand-phantom.png?v=phantom-live-20260723-62" alt="" aria-hidden="true" />
+                    <span class="phantompet-orb-status" aria-hidden="true"></span>
+                  </button>
+                  <span class="phantompet-orb-tip" aria-hidden="true">PhantomPet &mdash; ready when you are</span>
+                </div>
               </div>
 
               <div class="hero2-stage">
-                <img class="os-earth-horizon" src="/app/assets/command-earth-horizon.png?v=phantom-live-20260723-61" alt="" aria-hidden="true" />
+                <img class="os-earth-horizon" src="/app/assets/command-earth-horizon.png?v=phantom-live-20260723-62" alt="" aria-hidden="true" />
                 <div class="os-gravity-map" data-os-gravity-map aria-label="Business gravity map">
                   <span class="os-radar" aria-hidden="true"></span>
                   <span class="os-orbit os-orbit-a" aria-hidden="true"></span>
@@ -377,7 +377,7 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260723-61"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260723-62"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
@@ -425,13 +425,15 @@
       </div>
       <div class="canopy" aria-hidden="true"></div>
       <footer class="os-system-line" aria-label="System status line">
-        <span data-os-model-status data-os-tone="warn"><b>MODEL</b><i data-os-system-health>Checking</i></span>
-        <span><b>MEMORY</b><i data-os-memory-count>0 saved</i></span>
-        <span><b>WORKFORCE</b><i data-os-worker-count>0 active</i></span>
-        <span><b>APPROVAL POLICY</b><i>External actions reviewed</i></span>
-        <span><b>LOCAL BRIDGE</b><i data-os-bottom-bridge>Waiting</i></span>
+        <button type="button" data-os-model-status data-os-tone="warn" data-os-model-toggle aria-haspopup="true" aria-expanded="false" title="Switch AI infrastructure"><b>MODEL</b><i data-os-system-health>Checking</i></button>
+        <button type="button" data-nav-id="memory"><b>MEMORY</b><i data-os-memory-count>0 saved</i></button>
+        <button type="button" data-nav-id="workers"><b>WORKFORCE</b><i data-os-worker-count>0 active</i></button>
+        <button type="button" data-nav-id="dashboard" data-os-security-status data-os-tone="ok"><b>SECURITY</b><i data-os-security-text>Checking</i></button>
+        <button type="button" data-nav-id="approvals"><b>APPROVAL POLICY</b><i>External actions reviewed</i></button>
+        <button type="button" data-nav-id="settings"><b>LOCAL BRIDGE</b><i data-os-bottom-bridge>Waiting</i></button>
         <span class="os-system-time"><b data-os-live-time>—</b><i>America / Chicago</i></span>
       </footer>
+      <div class="os-model-popover" data-os-model-popover hidden></div>
       <nav class="mobile-bottom-nav" data-mobile-bottom-nav aria-label="Mobile sections"></nav>
     </div>
 
@@ -563,6 +565,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260723-61"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260723-62"></script>
   </body>
 </html>
