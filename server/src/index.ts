@@ -406,6 +406,13 @@ import {
   setAutomationJobEnabled,
   startAutomationEngine,
 } from "./phantom-ai/automation-engine.js";
+import {
+  registerScheduledTask,
+  listScheduledTasks,
+  cancelScheduledTask,
+  runScheduledTaskNow,
+  type ScheduledTaskAction,
+} from "./phantom-ai/scheduled-tasks.js";
 import { screenText } from "./phantom-ai/prompt-injection-guard.js";
 import {
   approveAgentRun,
@@ -8448,6 +8455,93 @@ app.post("/phantom-ai/automations/:id/run", async (request, reply) => {
     last_status: result.last_status,
     last_summary: result.last_summary,
   };
+});
+
+/* ---------------- deferred / recurring scheduled tasks ----------------------
+   The native "recheck / resync in N hours" primitive. Agents (Claude, Codex)
+   and PhantomForce code register timers here instead of scheduling a model
+   self-wakeup that burns tokens to sit and wait. Every registered task fires
+   deterministically off the automation engine's own tick loop for 0 tokens,
+   and can either run an in-repo automation job or POST to a local n8n webhook
+   (loopback / configured host only — never an arbitrary external URL). Every
+   fire is proof-logged to the Hermes ledger with estimated_tokens: 0. */
+const ScheduledTaskActionSchema = z.union([
+  z.object({ type: z.literal("automation"), jobId: z.string().min(1).max(120) }),
+  z.object({
+    type: z.literal("webhook"),
+    url: z.string().min(1).max(500),
+    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).optional(),
+    body: z.unknown().optional(),
+    headers: z.record(z.string()).optional(),
+  }),
+  z.object({ type: z.literal("noop"), note: z.string().max(300).optional() }),
+]);
+
+const ScheduledTaskRegisterSchema = z
+  .object({
+    label: z.string().min(1).max(160),
+    action: ScheduledTaskActionSchema,
+    source: z.enum(["claude", "codex", "phantomforce", "user", "n8n"]).optional(),
+    created_by: z.string().max(120).optional(),
+    run_at: z.string().max(60).optional(),
+    run_in_ms: z.number().finite().optional(),
+    run_in_hours: z.number().finite().optional(),
+    every_ms: z.number().finite().nullable().optional(),
+    every_hours: z.number().finite().nullable().optional(),
+    enabled: z.boolean().optional(),
+  })
+  .refine(
+    (value) =>
+      value.run_at !== undefined || value.run_in_ms !== undefined || value.run_in_hours !== undefined,
+    { message: "one of run_at, run_in_ms, or run_in_hours is required" },
+  );
+
+app.get("/phantom-ai/automations/scheduled", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return { ok: true, session, tasks: await listScheduledTasks() };
+});
+
+app.post("/phantom-ai/automations/scheduled", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = ScheduledTaskRegisterSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+
+  const result = await registerScheduledTask({
+    ...parsed.data,
+    action: parsed.data.action as ScheduledTaskAction,
+    created_by: parsed.data.created_by ?? session.id,
+  });
+  if (!result.ok) {
+    return reply.code(400).send({ ok: false, error: result.error });
+  }
+  return { ok: true, session, task: result.task };
+});
+
+app.delete("/phantom-ai/automations/scheduled/:id", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const { id } = request.params as { id: string };
+  const result = await cancelScheduledTask(id);
+  if (!result.ok) {
+    return reply.code(404).send({ ok: false, error: result.error ?? "unknown_task" });
+  }
+  return { ok: true, session, cancelled: id };
+});
+
+app.post("/phantom-ai/automations/scheduled/:id/run", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const { id } = request.params as { id: string };
+  const result = await runScheduledTaskNow(id, { runAutomationJob: runAutomationJobNow });
+  if (result.error) {
+    return reply.code(404).send({ ok: false, error: result.error });
+  }
+  return { ok: true, session, ran: id, summary: result.summary };
 });
 
 app.get("/phantom-ai/deployment/model/status", async (request, reply) => {
