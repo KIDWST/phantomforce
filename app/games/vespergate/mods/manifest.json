@@ -1,0 +1,15 @@
+[
+  { "id": "vg_god_mode", "file": "god-mode.mod.js", "name": "God Mode", "desc": "Take zero damage from anything." },
+  { "id": "vg_one_hit_kill", "file": "one-hit-kill.mod.js", "name": "One-Hit Kill", "desc": "Every strike deletes whatever it touches." },
+  { "id": "vg_infinite_embers", "file": "infinite-embers.mod.js", "name": "Infinite Embers", "desc": "Keeps your ember count topped at 999." },
+  { "id": "vg_max_souls", "file": "max-souls.mod.js", "name": "Max Vesper Souls", "desc": "Grants 9999 vesper souls, unlocking every soul tier." },
+  { "id": "vg_all_cosmetics", "file": "all-cosmetics.mod.js", "name": "All Cosmetics Unlocked", "desc": "Every cloak, glow, accessory, and trail is yours." },
+  { "id": "vg_speed_demon", "file": "speed-demon.mod.js", "name": "Speed Demon", "desc": "1.8x movement speed." },
+  { "id": "vg_molasses", "file": "molasses.mod.js", "name": "Molasses Mode", "desc": "Half movement speed challenge run." },
+  { "id": "vg_glass_cannon", "file": "glass-cannon.mod.js", "name": "Glass Cannon", "desc": "1 HP challenge run." },
+  { "id": "vg_iron_hide", "file": "iron-hide.mod.js", "name": "Iron Hide", "desc": "Doubles max HP and heals to full." },
+  { "id": "vg_beam_always_ready", "file": "beam-always-ready.mod.js", "name": "Beam Always Ready", "desc": "Keeps HP topped so the beam is always charged." },
+  { "id": "vg_panic_clear", "file": "panic-clear.mod.js", "name": "Panic Button (K)", "desc": "Press K to clear every enemy in the room." },
+  { "id": "vg_cutscene_skip", "file": "cutscene-skip.mod.js", "name": "Skip Cutscenes (N)", "desc": "Press N to skip the current scene or dialog." },
+  { "id": "vg_room_warp", "file": "room-warp.mod.js", "name": "Room Warp Menu (M)", "desc": "Press M for a quick teleport list to any room." }
+]

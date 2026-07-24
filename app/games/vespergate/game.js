@@ -213,7 +213,7 @@
   function damageEnemy(e, dmg, fromBehind) {
     if (e.dead) return;
     if (e.type === "guard" && e.shield && !fromBehind) { spawnParticles(e.x, e.y, "#8aa", 3, 30); VG.sfx(320, 0.04, "square", 0.03); return; }
-    e.hp -= dmg; e.hurt = 0.12; spawnParticles(e.x, e.y, "#ffd166", 6, 70);
+    e.hp -= dmg * (VG.settings.damageDealtMul || 1); e.hurt = 0.12; spawnParticles(e.x, e.y, "#ffd166", 6, 70);
     VG.sfx(500, 0.03, "triangle", 0.03);
     if (e.hp <= 0) killEnemy(e);
   }
@@ -773,7 +773,7 @@
       VG.sfx(300, 0.06, "sine", 0.04);
       spawnParticles(player.x, player.y, "#c9c2ff", 4, 40);
     }
-    const speed = 92 * (relicOn("swiftsoles") ? 1.12 : 1);
+    const speed = 92 * (relicOn("swiftsoles") ? 1.12 : 1) * (VG.settings.speedMul || 1);
     if (player.rollT > 0) {
       player.rollT -= dt;
       player.vx = player.rollDir.x * 195; player.vy = player.rollDir.y * 195;
@@ -2005,6 +2005,10 @@
     embers: (n) => { player.embers += n; },
     souls: (n) => { player.vesperSouls += n; checkSoulTiers(); },
     grantCosmetic: (id) => { if (!player.cosmetics.owned.includes(id)) player.cosmetics.owned.push(id); },
+    grantAllCosmetics: () => { for (const c of D.COSMETICS) if (!player.cosmetics.owned.includes(c.id)) player.cosmetics.owned.push(c.id); },
+    cosmeticIds: () => D.COSMETICS.map((c) => c.id),
+    hp: (n) => { player.hp = Math.max(0, Math.min(player.maxHp, n)); },
+    maxHp: (n) => { player.maxHp = Math.max(1, n); player.hp = Math.min(player.hp, player.maxHp); },
     clearEnemies: () => { for (const e of enemies.slice()) if (!e.dead) killEnemy(e); },
     skipScene: () => { while (state.scene) advanceScene(); while (state.dialog) advanceDialog(); },
     placeGates: (x1, y1, d1, x2, y2, d2) => { portals.place(0, x1, y1, d1, true); portals.place(1, x2, y2, d2, true); portals.gates.forEach((g) => g.open = 1); },

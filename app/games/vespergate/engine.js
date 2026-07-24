@@ -61,7 +61,7 @@ window.VG = window.VG || {};
     volume: 0.8, music: 0.7, shake: 1, flash: 1, motion: 1,
     snapStrength: 1, aimAssist: 0.5, softScale: false, sharpRender: true,
     reducedEffects: false, holdToCharge: true, damageTaken: 1, timingWindow: 1,
-    lighting: 1,
+    lighting: 1, speedMul: 1, damageDealtMul: 1,
   }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); } catch { return {}; } })());
   VG.saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(VG.settings)); } catch {} };
 
