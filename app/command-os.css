@@ -1169,7 +1169,22 @@ html[data-command-os="2040"] .workspace-page textarea::placeholder {
 
 .os-system-line b { color: #586772; font: 500 7px "Spline Sans Mono", monospace; letter-spacing: 0.12em; }
 .os-system-line i { overflow: hidden; color: #9babb6; font-size: 9px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
-.os-system-line > span:first-child i { color: #65e6a7; }
+.os-system-line > span[data-os-model-status] { min-width: min(290px, 28vw); }
+.os-system-line > span[data-os-model-status]::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #e8b85a;
+  box-shadow: 0 0 12px rgba(232, 184, 90, 0.65);
+}
+.os-system-line > span[data-os-tone="ok"]::before { background: #65e6a7; box-shadow: 0 0 12px rgba(101, 230, 167, 0.68); }
+.os-system-line > span[data-os-tone="warn"]::before { background: #e8b85a; box-shadow: 0 0 12px rgba(232, 184, 90, 0.65); }
+.os-system-line > span[data-os-tone="error"]::before { background: #ff5964; box-shadow: 0 0 12px rgba(255, 89, 100, 0.72); }
+.os-system-line > span[data-os-tone="ok"] i { color: #65e6a7; }
+.os-system-line > span[data-os-tone="warn"] i { color: #e8b85a; }
+.os-system-line > span[data-os-tone="error"] i { color: #ff7f8a; }
 .os-system-line .os-system-time { margin-left: auto; border-right: 0; }
 .os-system-time b { color: #e5ecef; font-size: 10px; letter-spacing: 0; }
 

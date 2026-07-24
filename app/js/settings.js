@@ -220,12 +220,60 @@ function loadOperatorSettings() {
   }
 }
 
+function rawOperatorSettingsSaved() {
+  try {
+    const raw = workspaceStorageGetItem(AI_SETTINGS_KEY);
+    return Boolean(raw && raw.trim() && raw.trim() !== "{}");
+  } catch {
+    return false;
+  }
+}
+
 function saveOperatorSettings(settings) {
   try { workspaceStorageSetItem(AI_SETTINGS_KEY, JSON.stringify(normalizeSettings(settings))); } catch {}
 }
 
 export function getOperatorSettings() {
   return loadOperatorSettings();
+}
+
+export function getOperatorInfrastructureStatus() {
+  const saved = rawOperatorSettingsSaved();
+  const settings = loadOperatorSettings();
+  const activeProvider = providerFor(settings.provider);
+  const activeModels = providerModels(activeProvider);
+  const activeModel = settings.models[activeProvider.id] || activeModels[0] || activeProvider.models[0] || "";
+  const modelLabel = activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel);
+  if (!saved || !activeProvider?.id || !activeModel) {
+    return {
+      label: "Needs configuration",
+      detail: "Choose a model in Settings",
+      tone: "error",
+      configured: false,
+    };
+  }
+  if (settings.providerMode === "smart") {
+    return {
+      label: `Hybrid · ${modelDisplayLabel(settings.models.claude || "claude-cli")}`,
+      detail: `${settings.selectedProviders.length} provider lanes allowed`,
+      tone: "warn",
+      configured: true,
+    };
+  }
+  if (activeProvider.id === "local" && activeModel === "local-auto" && localModelStatus.loaded && !localModelStatus.models.length) {
+    return {
+      label: "Local needs model",
+      detail: "Ollama reachable, no models found",
+      tone: "error",
+      configured: false,
+    };
+  }
+  return {
+    label: `${activeProvider.name} · ${modelLabel}`,
+    detail: `${activeProvider.name} / ${modelLabel}`,
+    tone: activeProvider.id === "local" && localModelStatus.error ? "error" : "ok",
+    configured: true,
+  };
 }
 
 function optionList(options, selected) {

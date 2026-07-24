@@ -8,6 +8,7 @@ import {
   fmtMoney,
 } from "./store.js?v=phantom-live-20260723-54";
 import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260723-54";
+import { getOperatorInfrastructureStatus } from "./settings.js?v=phantom-live-20260723-54";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -22,6 +23,17 @@ const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selec
 function setText(selector, value) {
   const element = $(selector);
   if (element && element.textContent !== String(value)) element.textContent = String(value);
+}
+
+function setOperatorModelStatus() {
+  const status = getOperatorInfrastructureStatus();
+  const value = status.label || "Needs configuration";
+  const element = $("[data-os-system-health]");
+  const host = element?.closest("[data-os-model-status]");
+  setText("[data-os-system-health]", value);
+  if (!host) return;
+  host.dataset.osTone = status.tone || "warn";
+  host.title = status.detail || value;
 }
 
 function plural(count, singular, pluralLabel = `${singular}s`) {
@@ -410,7 +422,7 @@ function syncCommandOS() {
   setText("[data-os-agent-state]", plan.length || pendingApprovals ? "Attention ready" : "Ready");
   setText("[data-os-bridge-state]", bridge);
   setText("[data-os-bottom-bridge]", bridge);
-  setText("[data-os-system-health]", health.short);
+  setOperatorModelStatus();
   setText("[data-os-memory-count]", `${memories.total} saved`);
   setText("[data-os-worker-count]", `${workers} online`);
 
