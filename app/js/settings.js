@@ -62,6 +62,13 @@ const PROVIDERS = [
     models: ["private-default", "private-high", "private-fast"],
   },
   {
+    id: "chatgpt",
+    name: "ChatGPT",
+    short: "CG",
+    role: "User-owned ChatGPT Plus bridge for fast thinking, answers, and Hermes handoff.",
+    models: ["chatgpt-instant", "chatgpt-standard", "chatgpt-deep"],
+  },
+  {
     id: "openrouter",
     name: "OpenRouter",
     short: "OR",
@@ -115,11 +122,12 @@ function providerModels(provider) {
 const DEFAULT_SETTINGS = {
   provider: "claude",
   providerMode: "smart",
-  selectedProviders: ["claude", "private", "openrouter", "local"],
-  brainMode: "api",
+  selectedProviders: ["claude", "private", "chatgpt", "openrouter", "local"],
+  brainMode: "subscription",
   models: {
     claude: "claude-cli",
     private: "private-default",
+    chatgpt: "chatgpt-standard",
     openrouter: "openrouter-auto",
     local: "local-auto",
   },
@@ -253,8 +261,11 @@ export function getOperatorInfrastructureStatus() {
     };
   }
   if (settings.providerMode === "smart") {
+    const leadModel = settings.selectedProviders.includes("chatgpt")
+      ? modelDisplayLabel(settings.models.chatgpt || "chatgpt-standard")
+      : modelDisplayLabel(settings.models.claude || "claude-cli");
     return {
-      label: `Hybrid · ${modelDisplayLabel(settings.models.claude || "claude-cli")}`,
+      label: `Hybrid · ${leadModel}`,
       detail: `${settings.selectedProviders.length} provider lanes allowed`,
       tone: "warn",
       configured: true,
@@ -806,13 +817,14 @@ function renderChatGptBridgeTab() {
         <div class="set-sec-head">
           <div>
             <h3>ChatGPT Bridge</h3>
-            <p class="set-note">Universal assist layer for Codex, PhantomBot, Phantom AI, and agent workforce reviews. Current build can always prepare a relay packet; live ChatGPT/OpenAI calls require an approved local adapter or API key path.</p>
+            <p class="set-note">Universal assist layer for Codex, PhantomBot, Phantom AI, and the agent workforce. Pick ChatGPT in Model settings for direct thinking/no-hands answers; Hermes stays responsible for approved hands-on work.</p>
           </div>
           <button class="btn btn-quiet" type="button" data-agent-assist-refresh>${agentAssistBridgeStatus.loading ? "Checking..." : "Refresh bridge"}</button>
         </div>
         ${error ? `<p class="set-status-pill">${esc(error)}</p>` : ""}
         <div class="set-status-grid">
           <span><b>Status</b><i>${esc(bridgeStatusLabel(status))}</i></span>
+          <span><b>Effort</b><i>${esc((status.effort_levels || ["instant", "standard", "deep"]).join(" / "))}</i></span>
           <span><b>Adapter URL</b><i>${status.bridge_url_configured ? "Configured" : "Missing"}</i></span>
           <span><b>OpenAI API key</b><i>${optionById("openai_api_key").ready ? "Configured" : "Not configured"}</i></span>
           <span><b>Credential safety</b><i>No ChatGPT password stored</i></span>

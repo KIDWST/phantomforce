@@ -112,8 +112,8 @@ function loadRuntimeAiSettings() {
   const defaults = {
     provider: "claude",
     providerMode: "smart",
-    selectedProviders: ["claude", "private", "openrouter", "local"],
-    brainMode: "api",
+    selectedProviders: ["claude", "private", "chatgpt", "openrouter", "local"],
+    brainMode: "subscription",
     responseStyle: "operator",
     responseLength: "balanced",
     memoryMode: "business",
@@ -132,6 +132,7 @@ function loadRuntimeAiSettings() {
 const PROVIDER_TO_BACKEND = {
   claude: "claude_cli",
   private: "co" + "dex_cli",
+  chatgpt: "chatgpt_bridge",
   openrouter: "openrouter_glm",
   local: "local_ollama",
 };
@@ -220,13 +221,16 @@ function providerIdForRequest(settings, intent, deepReasoning = false) {
 
 function modelLaneForProvider(providerId) {
   if (providerId === "claude") return "claude_cli";
+  if (providerId === "chatgpt") return "chatgpt_bridge";
   if (providerId === "openrouter") return "glm_5_2";
   if (providerId === "local") return "local_ollama";
   return "private";
 }
 
 function providerForRequest(providerId) {
-  return providerId === "openrouter" ? "openrouter_glm" : "phantom";
+  if (providerId === "openrouter") return "openrouter_glm";
+  if (providerId === "chatgpt") return "chatgpt_bridge";
+  return "phantom";
 }
 
 function selectedModelForProvider(settings, providerId, routeProfile = null) {
@@ -242,7 +246,7 @@ function selectedModelForProvider(settings, providerId, routeProfile = null) {
 function allowedProvidersForSettings(settings, routeProfile = null) {
   if (Array.isArray(routeProfile?.allowedProviders)) return routeProfile.allowedProviders;
   const selected = settings.providerMode === "smart"
-    ? ["claude", "private", "openrouter", "local"]
+    ? ["claude", "private", "chatgpt", "openrouter", "local"]
     : Array.isArray(settings.selectedProviders) && settings.selectedProviders.length
       ? settings.selectedProviders
       : [settings.provider || "private"];
@@ -291,7 +295,7 @@ function chatRouteProfileForRequest(raw, intent, settings) {
     providerId: normalProviderId,
     requestedModel: selectedModelForProvider(settings, normalProviderId),
     allowedProviders: allowedProvidersForSettings(settings),
-    allowFallback: true,
+    allowFallback: settings.providerMode !== "single",
     maxProviderMs: null,
   };
 }

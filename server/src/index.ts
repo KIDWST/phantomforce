@@ -4159,7 +4159,7 @@ function parsePhantomAiChatProvider(value: unknown) {
   return value === "openrouter_glm" ? "openrouter_glm" : "phantom";
 }
 
-type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli" | "local_ollama";
+type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli" | "chatgpt_bridge" | "local_ollama";
 /* "mission" never takes the actionFreeConversation fast path (see the
    isSafe*ConversationRequest gates below) — a mission proposal needs full
    business context and, above everything else, the approval gate, so it
@@ -4171,6 +4171,7 @@ function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
   if (value === "local_ollama" || value === "ollama" || value === "local") return "local_ollama";
   if (value === "claude_cli" || value === "claude") return "claude_cli";
+  if (value === "chatgpt_bridge" || value === "chatgpt" || value === "chatgpt_plus") return "chatgpt_bridge";
   return "codex";
 }
 
@@ -4205,6 +4206,7 @@ function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
   if (lane === "glm_5_2") return "Local GLM";
   if (lane === "local_ollama") return "Local Ollama";
   if (lane === "claude_cli") return "Claude CLI";
+  if (lane === "chatgpt_bridge") return "ChatGPT Assist";
   return "Private Brain";
 }
 
@@ -4216,6 +4218,7 @@ function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
   if (lane === "local_ollama") return "local" as const;
   if (lane === "glm_5_2") return "local" as const;
   if (lane === "claude_cli") return "claude" as const;
+  if (lane === "chatgpt_bridge") return "router" as const;
   return "local" as const;
 }
 
@@ -4229,12 +4232,13 @@ type AdminPhantomAiProviderId = AdminProviderId;
 function parseAllowedAdminProviders(value: unknown): AdminPhantomAiProviderId[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const providers = Array.from(new Set(value.filter((item: unknown): item is AdminPhantomAiProviderId =>
-    item === "codex_cli" || item === "claude_cli" || item === "openrouter_glm" || item === "local_ollama")));
+    item === "codex_cli" || item === "claude_cli" || item === "chatgpt_bridge" || item === "openrouter_glm" || item === "local_ollama")));
   return providers.length ? providers : undefined;
 }
 
 function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPhantomAiProviderId {
   if (lane === "claude_cli") return "claude_cli";
+  if (lane === "chatgpt_bridge") return "chatgpt_bridge";
   if (lane === "local_ollama") return "local_ollama";
   if (lane === "glm_5_2") return process.env.PHANTOM_FORCE_OPENROUTER_GLM === "true" ? "openrouter_glm" : "local_ollama";
   return "codex_cli";
@@ -4242,6 +4246,7 @@ function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPh
 
 function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): AdminPhantomAiModelLane {
   if (providerId === "claude_cli") return "claude_cli";
+  if (providerId === "chatgpt_bridge") return "chatgpt_bridge";
   if (providerId === "codex_cli") return "codex";
   if (providerId === "local_ollama") return "local_ollama";
   return "glm_5_2";
@@ -4250,6 +4255,7 @@ function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): 
 function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
   if (providerId === "codex_cli") return "Private Brain (Codex)";
   if (providerId === "claude_cli") return "Claude CLI";
+  if (providerId === "chatgpt_bridge") return "ChatGPT Assist";
   if (providerId === "openrouter_glm") return "OpenRouter GLM 5.2";
   return "Phantom Instant";
 }
@@ -4277,6 +4283,7 @@ type AdminPhantomAiChatContext = {
 const ADMIN_CHAT_FALLBACK_TIMEOUT_MS = {
   codex_cli: 30000,
   claude_cli: 30000,
+  chatgpt_bridge: 30000,
   openrouter_glm: 20000,
   local_ollama: 25000,
 } as const;
@@ -4284,6 +4291,7 @@ const ADMIN_CHAT_FALLBACK_TIMEOUT_MS = {
 const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
   codex_cli: 5000,
   claude_cli: 7000,
+  chatgpt_bridge: 8000,
   openrouter_glm: 5000,
   /* Keep PhantomBot's local lane bounded. Heavy models can still be selected
      explicitly, but the default qwen3:4b path should fail fast to the local
@@ -4295,6 +4303,7 @@ const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
 const ADMIN_CHAT_REASONING_TIMEOUT_MS = {
   codex_cli: 12000,
   claude_cli: 12000,
+  chatgpt_bridge: 12000,
   openrouter_glm: 12000,
   local_ollama: 12000,
 } as const;
@@ -4371,6 +4380,45 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
         },
       },
     );
+  }
+  if (providerId === "chatgpt_bridge") {
+    const effort = ctx.routeTier === "instant" ? "instant" : ctx.routeTier === "deep" || ctx.routeTier === "mission" ? "deep" : "standard";
+    const assist = await requestAgentAssist({
+      caller: "phantom_ai",
+      mode: ctx.routeTier === "deep" || ctx.routeTier === "mission" ? "strategy" : "instant",
+      effort,
+      task: ctx.userMessage,
+      context: [
+        `Business: ${ctx.businessName}`,
+        `Task type: ${ctx.taskType}`,
+        `Execution mode: ${ctx.executionMode}`,
+        `Approval required: ${ctx.approvalRequired ? "yes" : "no"}`,
+        "",
+        ctx.compactContext,
+      ].join("\n").slice(0, 5200),
+      constraints: [
+        "Answer only. Do not perform hands-on work directly.",
+        "If hands are needed, tell Hermes what action to prepare and keep external actions approval/autopilot-gated.",
+        "Do not claim browser, file, deploy, post, send, upload, scan, payment, or integration work happened unless Hermes provides a receipt.",
+      ],
+      desired_output: "Return the concise answer PhantomForce should show in chat. If hands-on work is needed, include the Hermes handoff as the next step.",
+      execute_bridge: true,
+    });
+    return {
+      provider_id: "chatgpt_bridge" as const,
+      model_id: ctx.requestedModelId || ctx.requestedModel || `chatgpt-${effort}`,
+      status: "called" as const,
+      output_text: assist.output_text,
+      provider_called: assist.provider_called,
+      network_call_performed: assist.network_call_performed,
+      request_body_prepared: true,
+      bridge_status: assist.status,
+      relay_packet: assist.relay_packet,
+      error_message: assist.error_message,
+      external_action_executed: false,
+      queue_written: false,
+      approval_executed: false,
+    };
   }
   return callLocalOllamaChat(
     {
@@ -5178,6 +5226,7 @@ app.get("/phantom-ai/provider-readiness", async (request, reply) => {
 const AgentAssistBridgeBodySchema = z.object({
   caller: z.string().trim().max(80).optional(),
   mode: z.string().trim().max(80).optional(),
+  effort: z.string().trim().max(80).optional(),
   task: z.string().trim().min(1).max(2200),
   context: z.string().trim().max(5200).optional(),
   constraints: z.array(z.string().trim().max(320)).max(20).optional(),
@@ -10782,6 +10831,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       local_ollama:
         "provider_id" in modelResult && modelResult.provider_id === "local_ollama" ? modelResult : null,
       claude_cli: respondingProviderId === "claude_cli" ? modelResult : null,
+      chatgpt_bridge: respondingProviderId === "chatgpt_bridge" ? modelResult : null,
       fallback: {
         used: fallbackSwitched,
         all_failed: allProvidersFailed,

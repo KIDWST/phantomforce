@@ -1,10 +1,11 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
+import { getAgentAssistBridgeStatus } from "./agent-assist-bridge.js";
 import { sanitizeProviderDetail } from "./provider-error.js";
 
-export type AdminProviderId = "codex_cli" | "claude_cli" | "openrouter_glm" | "local_ollama";
-export type PublicAdminProviderId = "private" | "claude" | "openrouter" | "local";
+export type AdminProviderId = "codex_cli" | "claude_cli" | "chatgpt_bridge" | "openrouter_glm" | "local_ollama";
+export type PublicAdminProviderId = "private" | "claude" | "chatgpt" | "openrouter" | "local";
 export type AdminProviderAvailability = "unknown" | "online" | "offline" | "checking";
 export type AdminProviderQuota = "unknown" | "available" | "exhausted";
 
@@ -40,7 +41,7 @@ export type PublicAdminProviderState = Pick<
 };
 
 const execFileAsync = promisify(execFile);
-const PROVIDER_PRIORITY: AdminProviderId[] = ["codex_cli", "claude_cli", "openrouter_glm", "local_ollama"];
+const PROVIDER_PRIORITY: AdminProviderId[] = ["codex_cli", "claude_cli", "chatgpt_bridge", "openrouter_glm", "local_ollama"];
 const DEFAULT_CLAUDE_PS1 = "C:\\Users\\jorda\\AppData\\Local\\hermes\\node\\claude.ps1";
 
 function initialState(providerId: AdminProviderId): AdminProviderState {
@@ -81,6 +82,7 @@ function quotaFromFailure(detail: string): AdminProviderQuota {
 function publicProviderMeta(providerId: AdminProviderId): { display_id: PublicAdminProviderId; display_name: string } {
   if (providerId === "codex_cli") return { display_id: "private", display_name: "Private" };
   if (providerId === "claude_cli") return { display_id: "claude", display_name: "Claude" };
+  if (providerId === "chatgpt_bridge") return { display_id: "chatgpt", display_name: "ChatGPT" };
   if (providerId === "openrouter_glm") return { display_id: "openrouter", display_name: "OpenRouter" };
   return { display_id: "local", display_name: "Local" };
 }
@@ -215,6 +217,16 @@ async function checkProvider(providerId: AdminProviderId) {
       () => fetchHealth("https://openrouter.ai/api/v1/auth/key", { headers: { Authorization: `Bearer ${key}` } }),
       "Cloud route is reachable.",
     );
+  }
+  if (providerId === "chatgpt_bridge") {
+    const status = getAgentAssistBridgeStatus();
+    return {
+      online: status.executable,
+      latencyMs: 0,
+      detail: status.executable
+        ? "User-owned ChatGPT assist adapter is callable."
+        : "ChatGPT bridge is relay-only until the local adapter env is configured.",
+    };
   }
   const baseUrl = process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434";
   return timedCheck(() => fetchHealth(`${baseUrl.replace(/\/$/, "")}/api/tags`), "Local model service is reachable.");

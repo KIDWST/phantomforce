@@ -1334,6 +1334,7 @@ const PHANTOM_LOOP_KEY = "pf.phantomloop.v1";
    page, never in Settings, chat, or any other admin/employee-visible text. */
 export const LOOP_PROVIDERS = [
   { id: "openai", name: "OpenAI", models: ["gpt-4o", "gpt-4o-mini", "o3"] },
+  { id: "chatgpt", name: "ChatGPT Plus Bridge", models: ["chatgpt-instant", "chatgpt-standard", "chatgpt-deep"] },
   { id: "claude", name: "Claude", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
   { id: "glm", name: "OpenRouter", models: ["glm-5", "openrouter-auto"] },
   { id: "local", name: "Local", models: ["llama3", "mistral", "custom-local"] },
@@ -1344,6 +1345,7 @@ export function loopProviderName(id) {
 }
 const MODEL_DISPLAY_LABELS = {
   "gpt-4o": "Fast", "gpt-4o-mini": "Lightweight", "o3": "Deep reasoning",
+  "chatgpt-instant": "Instant", "chatgpt-standard": "Standard", "chatgpt-deep": "Deep",
   "claude-sonnet-5": "Balanced", "claude-opus-4-8": "Deep", "claude-haiku-4-5": "Fast",
   "glm-5": "Standard", "openrouter-auto": "Auto-routed",
   "claude-cli": "Claude default", "claude-sonnet": "Sonnet", "claude-opus": "Opus",
@@ -1361,12 +1363,14 @@ const PHANTOM_LANE_KEY = "pf.phantomlanes.v1";
 export const PHANTOM_LANES = [
   { id: "claude", name: "Phantom Reasoning", role: "Strategy, copy, review", defaultTarget: "claude_cli" },
   { id: "private", name: "Phantom Code", role: "Code, repo work, implementation", defaultTarget: "private" },
+  { id: "chatgpt", name: "Phantom ChatGPT", role: "Fast thinking, answers, Hermes handoff", defaultTarget: "chatgpt_bridge" },
   { id: "openrouter", name: "Phantom Router", role: "Flexible cloud routing", defaultTarget: "glm_5_2" },
   { id: "local", name: "Phantom Local", role: "Private/local-first work", defaultTarget: "local_ollama" },
 ];
 export const PHANTOM_LANE_TARGETS = [
   { id: "claude_cli", name: "Claude CLI", provider: "phantom", models: ["claude-cli", "claude-sonnet", "claude-opus"] },
   { id: "private", name: "Private Operator", provider: "phantom", models: ["private-default", "private-high", "private-fast"] },
+  { id: "chatgpt_bridge", name: "ChatGPT Assist Bridge", provider: "chatgpt_plus", models: ["chatgpt-instant", "chatgpt-standard", "chatgpt-deep"] },
   { id: "glm_5_2", name: "GLM / OpenRouter Route", provider: "openrouter_glm", models: ["z-ai/glm-5.2", "openrouter-auto", "local-glm"] },
   { id: "local_ollama", name: "Ollama / Local PC", provider: "local_ollama", models: ["local-auto"], allowCustomModel: true },
 ];

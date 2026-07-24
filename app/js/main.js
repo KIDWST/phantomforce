@@ -1242,8 +1242,8 @@ function loadConsoleSettingsSnapshot() {
 function renderConsoleCoreStatus(activeCompanionMode = companionMode()) {
   const settings = loadConsoleSettingsSnapshot();
   const loop = loadPhantomLoop();
-  const providerNames = { claude: "Claude", private: "Private Operator", openrouter: "OpenRouter", local: "Local Ollama" };
-  const selected = Array.isArray(settings.selectedProviders) && settings.selectedProviders.length ? settings.selectedProviders : ["claude", "private", "openrouter", "local"];
+  const providerNames = { claude: "Claude", private: "Private Operator", chatgpt: "ChatGPT", openrouter: "OpenRouter", local: "Local Ollama" };
+  const selected = Array.isArray(settings.selectedProviders) && settings.selectedProviders.length ? settings.selectedProviders : ["claude", "private", "chatgpt", "openrouter", "local"];
   const brainMode = settings.brainMode === "local"
     ? "Ghost/local"
     : settings.providerMode === "single"
@@ -3380,7 +3380,7 @@ async function fetchLocalModelStatus() {
 
 function providerManagerMarkup(manager) {
   if (!manager?.providers?.length) return `<p class="dev-provider-empty">Provider state is waiting for the local backend.</p>`;
-  const labels = { ["co" + "dex_cli"]: "Private", claude_cli: "Claude", openrouter_glm: "OpenRouter", local_ollama: "Local" };
+  const labels = { ["co" + "dex_cli"]: "Private", claude_cli: "Claude", chatgpt_bridge: "ChatGPT", openrouter_glm: "OpenRouter", local_ollama: "Local" };
   return `<div class="dev-provider-monitor">
     ${manager.providers.map((provider) => {
       const tone = provider.status === "online" ? "on" : provider.status === "offline" ? "off" : "warn";

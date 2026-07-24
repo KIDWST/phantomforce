@@ -9,10 +9,12 @@ export type AgentAssistCaller =
   | "unknown";
 
 export type AgentAssistMode = "instant" | "review" | "strategy" | "copy" | "debug";
+export type AgentAssistEffort = "instant" | "standard" | "deep";
 
 export type AgentAssistRequest = {
   caller?: AgentAssistCaller | string;
   mode?: AgentAssistMode | string;
+  effort?: AgentAssistEffort | string;
   task: string;
   context?: string;
   constraints?: string[];
@@ -25,6 +27,7 @@ export type AgentAssistStatus = {
   label: "Universal ChatGPT Assist Bridge";
   intended_provider: "chatgpt_plus";
   intended_mode: "instant";
+  effort_levels: AgentAssistEffort[];
   universal: true;
   session_scoped: false;
   configured: boolean;
@@ -62,9 +65,10 @@ export type AgentAssistBridgeResult = {
   bridge_id: AgentAssistStatus["bridge_id"];
   caller: AgentAssistCaller;
   mode: AgentAssistMode;
+  effort: AgentAssistEffort;
   status: "relay_packet_ready" | "bridge_called" | "bridge_unavailable" | "bridge_error";
   provider: "chatgpt_plus";
-  provider_mode: "instant";
+  provider_mode: AgentAssistEffort;
   output_text: string;
   relay_packet: {
     title: string;
@@ -88,6 +92,7 @@ const MAX_CONSTRAINT_CHARS = 260;
 const MAX_OUTPUT_CHARS = 2200;
 const VALID_CALLERS: AgentAssistCaller[] = ["codex", "phantombot", "phantom_ai", "agent_workforce", "operator", "unknown"];
 const VALID_MODES: AgentAssistMode[] = ["instant", "review", "strategy", "copy", "debug"];
+const VALID_EFFORTS: AgentAssistEffort[] = ["instant", "standard", "deep"];
 
 function clean(value: unknown, maxChars: number) {
   return redactSensitiveText(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, maxChars);
@@ -105,6 +110,11 @@ function safeCaller(value: unknown): AgentAssistCaller {
 function safeMode(value: unknown): AgentAssistMode {
   const candidate = clean(value, 80).toLowerCase().replace(/[^a-z0-9_]+/g, "_") as AgentAssistMode;
   return VALID_MODES.includes(candidate) ? candidate : "instant";
+}
+
+function safeEffort(value: unknown): AgentAssistEffort {
+  const candidate = clean(value, 80).toLowerCase().replace(/[^a-z0-9_]+/g, "_") as AgentAssistEffort;
+  return VALID_EFFORTS.includes(candidate) ? candidate : "standard";
 }
 
 function bridgeUrl() {
@@ -142,6 +152,7 @@ export function getAgentAssistBridgeStatus(): AgentAssistStatus {
     label: "Universal ChatGPT Assist Bridge",
     intended_provider: "chatgpt_plus",
     intended_mode: "instant",
+    effort_levels: [...VALID_EFFORTS],
     universal: true,
     session_scoped: false,
     configured: !!url,
@@ -149,7 +160,7 @@ export function getAgentAssistBridgeStatus(): AgentAssistStatus {
     transport: executable ? "http" : "relay_packet",
     bridge_url_configured: !!url,
     setup_required: !executable,
-    subscription_billing_note: "ChatGPT Plus/Pro subscriptions are for ChatGPT apps. OpenAI API/Codex automation requires an approved adapter or API key billing path; PhantomForce never stores a ChatGPT password.",
+    subscription_billing_note: "ChatGPT Plus/Pro subscriptions are for ChatGPT apps. PhantomForce can use a user-owned local ChatGPT adapter when configured; OpenAI API/Codex automation remains a separate billing path. PhantomForce never stores a ChatGPT password.",
     setup_options: [
       {
         id: "relay_packet",
@@ -161,7 +172,7 @@ export function getAgentAssistBridgeStatus(): AgentAssistStatus {
         id: "local_chatgpt_adapter",
         label: "Local ChatGPT adapter",
         ready: executable,
-        note: "Requires PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED=true and PHANTOM_AGENT_ASSIST_BRIDGE_URL pointing at an approved local/HTTP adapter.",
+        note: "Requires PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED=true and PHANTOM_AGENT_ASSIST_BRIDGE_URL pointing at an approved user-owned local/HTTP adapter.",
       },
       {
         id: "openai_api_key",
@@ -194,6 +205,7 @@ export function getAgentAssistBridgeStatus(): AgentAssistStatus {
 export function buildAgentAssistRelayPacket(input: AgentAssistRequest) {
   const caller = safeCaller(input.caller);
   const mode = safeMode(input.mode);
+  const effort = safeEffort(input.effort);
   const task = cleanMultiline(input.task, MAX_TASK_CHARS);
   const context = cleanMultiline(input.context, MAX_CONTEXT_CHARS);
   const desiredOutput = clean(input.desired_output || "Return a concise verdict, recommendation, or replacement wording that the calling agent can use.", 500);
@@ -202,6 +214,7 @@ export function buildAgentAssistRelayPacket(input: AgentAssistRequest) {
     "You are ChatGPT Plus acting as the universal assist brain for PhantomForce agents.",
     `Caller: ${caller}`,
     `Mode: ${mode}`,
+    `Effort: ${effort}`,
     "",
     "Task:",
     task || "No task text provided.",
@@ -216,6 +229,7 @@ export function buildAgentAssistRelayPacket(input: AgentAssistRequest) {
   return {
     caller,
     mode,
+    effort,
     relay_packet: {
       title: `ChatGPT Plus ${mode} assist for ${caller}`,
       prompt: prompt.slice(0, MAX_CONTEXT_CHARS + MAX_TASK_CHARS + 1400),
@@ -225,7 +239,7 @@ export function buildAgentAssistRelayPacket(input: AgentAssistRequest) {
   };
 }
 
-async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPacket>["relay_packet"]) {
+async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPacket>["relay_packet"], effort: AgentAssistEffort) {
   const url = bridgeUrl();
   if (!bridgeEnabled() || !url) {
     return { ok: false as const, status: "bridge_unavailable" as const, output_text: "", error_message: "ChatGPT assist bridge is not configured for execution." };
@@ -243,7 +257,8 @@ async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPac
       },
       body: JSON.stringify({
         provider: "chatgpt_plus",
-        mode: "instant",
+        mode: effort,
+        effort,
         packet,
       }),
       signal: controller.signal,
@@ -272,9 +287,9 @@ async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPac
 }
 
 export async function requestAgentAssist(input: AgentAssistRequest): Promise<AgentAssistBridgeResult> {
-  const { caller, mode, relay_packet } = buildAgentAssistRelayPacket(input);
+  const { caller, mode, effort, relay_packet } = buildAgentAssistRelayPacket(input);
   const shouldExecute = input.execute_bridge === true;
-  const bridge = shouldExecute ? await callHttpBridge(relay_packet) : null;
+  const bridge = shouldExecute ? await callHttpBridge(relay_packet, effort) : null;
   const status = bridge?.status ?? (getAgentAssistBridgeStatus().executable ? "relay_packet_ready" : "bridge_unavailable");
   const called = bridge?.status === "bridge_called";
   const outputText = called
@@ -286,9 +301,10 @@ export async function requestAgentAssist(input: AgentAssistRequest): Promise<Age
     bridge_id: "phantom-agent-assist-chatgpt",
     caller,
     mode,
+    effort,
     status,
     provider: "chatgpt_plus",
-    provider_mode: "instant",
+    provider_mode: effort,
     output_text: outputText,
     relay_packet,
     bridge_called: called,
