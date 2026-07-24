@@ -10,10 +10,10 @@ import {
   uid,
   workspaceStorageGetItem,
   workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260723-56";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-56";
-import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260723-56";
-import { esc } from "./workspaces.js?v=phantom-live-20260723-56";
+} from "./store.js?v=phantom-live-20260723-57";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-57";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260723-57";
+import { esc } from "./workspaces.js?v=phantom-live-20260723-57";
 
 const TABS = ["chat", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -104,10 +104,10 @@ function persistTaskState() {
       ...task,
       messages: task.messages.slice(-MAX_MESSAGES).map((message) => ({
         ...message,
-        say: message.pending && !message.say ? INTERRUPTED_REPLY : message.say,
+        say: message.say,
         media: serializableMedia(message.media),
-        pending: false,
-        error: message.pending || !!message.error,
+        pending: !!message.pending,
+        error: !!message.error,
       })),
     })),
   };
@@ -453,7 +453,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260723-56")
+  import("./brain.js?v=phantom-live-20260723-57")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }
@@ -567,7 +567,10 @@ export function mountPhantomAI(root) {
   if (!root || root.dataset.phantomaiMounted) return;
   root.dataset.phantomaiMounted = "1";
   rootEl = root;
-  loadTaskState(true);
+  // Main-shell refreshes can remount this page while a response is still in
+  // flight. Keep the live in-memory request instead of re-reading its
+  // crash-recovery snapshot and incorrectly marking it interrupted.
+  loadTaskState(false);
 
   const memoryTab = root.querySelector('[data-phantomai-tab="memory"]');
   if (memoryTab && !isOwnerOperator()) memoryTab.hidden = true;
