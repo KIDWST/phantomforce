@@ -552,6 +552,13 @@ import {
   voidFinanceTransaction,
 } from "./finance/finance-ledger-store.js";
 import {
+  createInvoice,
+  getInvoiceDocument,
+  publicInvoices,
+  setInvoiceStatus,
+  type InvoiceStatus,
+} from "./finance/invoice-store.js";
+import {
   createMediaGenerationJob,
   listMediaGenerationJobs,
   retryMediaGenerationJob,
@@ -1477,6 +1484,59 @@ app.delete("/api/finance/transactions/:transactionId", async (request, reply) =>
     return { ok: true, tenant_id: tenantId, transaction: result.result, document: publicFinanceLedger(result.document), ...workspaceRecordSafety };
   } catch (error) {
     return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Transaction not found." });
+  }
+});
+
+/* ---- Invoices -------------------------------------------------------------
+   PhantomBot creates invoices here (from chat or an analyzed document). This
+   only ever persists structured invoice data to the per-tenant JSON store —
+   it never emails a client or charges a card; sending stays a separate,
+   approval-gated action. Read is open to the workspace; create/status are
+   owner/admin only, like the accounting ledger. */
+app.get("/api/invoices", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const document = await getInvoiceDocument(tenantId, session.id);
+  return { ok: true, tenant_id: tenantId, ...publicInvoices(document), ...workspaceRecordSafety };
+});
+
+app.post("/api/invoices", { bodyLimit: 2 * 1024 * 1024 }, async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { tenant_id?: unknown; invoice?: unknown };
+  const tenantId = customizationTenantForSession(session, typeof body.tenant_id === "string" ? body.tenant_id : undefined);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Owner or admin access is required to create invoices." });
+  }
+  try {
+    const result = await createInvoice({ tenantId, actor: session.id, invoice: body.invoice ?? body });
+    return { ok: true, tenant_id: tenantId, invoice: result.result.invoice, document: publicInvoices(result.document), ...workspaceRecordSafety };
+  } catch (error) {
+    return reply.status(400).send({ ok: false, error: error instanceof Error ? error.message : "Invoice could not be created." });
+  }
+});
+
+app.post("/api/invoices/:invoiceId/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = (request.params ?? {}) as { invoiceId?: string };
+  const body = (request.body ?? {}) as { tenant_id?: unknown; status?: unknown };
+  const tenantId = customizationTenantForSession(session, typeof body.tenant_id === "string" ? body.tenant_id : undefined);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Owner or admin access is required to update invoices." });
+  }
+  const status = String(body.status || "");
+  if (!["draft", "sent", "paid", "void"].includes(status)) {
+    return reply.status(400).send({ ok: false, error: "status must be one of draft, sent, paid, void." });
+  }
+  try {
+    const result = await setInvoiceStatus({ tenantId, actor: session.id, invoiceId: String(params.invoiceId || ""), status: status as InvoiceStatus });
+    return { ok: true, tenant_id: tenantId, invoice: result.result.invoice, document: publicInvoices(result.document), ...workspaceRecordSafety };
+  } catch (error) {
+    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Invoice not found." });
   }
 });
 

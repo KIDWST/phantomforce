@@ -12,9 +12,10 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260723-58";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260723-58";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260723-58";
+} from "./store.js?v=phantom-live-20260723-59";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260723-59";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260723-59";
+import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260723-59";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -1636,6 +1637,51 @@ async function runAgentFromChat(text, intent) {
   };
 }
 
+/* Invoicing — PhantomBot can create a real invoice from a plain-language
+   request ("invoice Acme Corp $1,200 for the June retainer, net 30"). It
+   parses the request, persists a structured invoice via the invoice store,
+   and hands back a rich card. It never emails the client or charges a card. */
+const INVOICE_INTENT = /\b(?:create|make|draft|generate|send me|build|write|raise|issue|start)\s+(?:an?\s+|a\s+new\s+)?invoice\b|\binvoice\s+(?:for\s+)?[a-z0-9]|\bbill\s+[a-z0-9].{0,40}\$?\d/i;
+export function isInvoiceRequest(text = "") {
+  const t = String(text);
+  if (!/\binvoice\b|\bbill\b/i.test(t)) return false;
+  // don't hijack informational questions ("what is an invoice")
+  if (/^\s*(?:what|how|why|when|explain|define|tell me about)\b/i.test(t)) return false;
+  return INVOICE_INTENT.test(t);
+}
+
+export async function handleInvoiceRequest(text, extraDraft = null) {
+  const parsed = extraDraft || parseInvoiceRequest(text);
+  if (!parsed.hasEnough && (!parsed.lineItems || !parsed.lineItems.length)) {
+    return shapeResponse({
+      say: "I can create that invoice — I just need a client and an amount. Try: \"invoice Acme Corp $1,200 for the June retainer, net 30\", or drop a bill/receipt and I'll pull the details.",
+      cards: [], media: [], open: null, intent: classifyPhantomIntent(text),
+    }, loadRuntimeAiSettings());
+  }
+  if (!isOwnerOperator() && !isAdmin()) {
+    return shapeResponse({
+      say: "Creating invoices needs owner or admin access on this workspace. I drafted the details, but I can't save it under your current role.",
+      cards: [], media: [], open: null, intent: classifyPhantomIntent(text),
+    }, loadRuntimeAiSettings());
+  }
+  try {
+    const inv = await createInvoiceFromDraft(parsed, extraDraft ? "document_analysis" : "phantom_ai");
+    const card = invoiceCard(inv);
+    return {
+      say: `Done — invoice ${inv.number} for ${inv.clientName} at ${fmtMoneyMinor(inv.totalMinor, inv.currency)} is saved as a ${inv.status}. Open it to print or send. Nothing was emailed or charged.`,
+      cards: [card],
+      media: [],
+      open: "money",
+      intent: classifyPhantomIntent(text),
+    };
+  } catch (error) {
+    return shapeResponse({
+      say: `I couldn't save that invoice: ${error?.message || "the accounting store didn't respond"}. Your details are safe — try again in a moment.`,
+      cards: [], media: [], open: null, intent: classifyPhantomIntent(text),
+    }, loadRuntimeAiSettings());
+  }
+}
+
 export async function handleSmartCommand(raw) {
   const text = (raw || "").trim();
   const intent = classifyPhantomIntent(text);
@@ -1643,6 +1689,10 @@ export async function handleSmartCommand(raw) {
 
   if (intent.primaryIntent === "run_agent") {
     return runAgentFromChat(text, intent);
+  }
+
+  if (isInvoiceRequest(text)) {
+    return handleInvoiceRequest(text);
   }
 
   if (isCrmProspectBuildout(text)) {

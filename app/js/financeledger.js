@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260723-58";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260723-59";
 
 const authHeaders = (json = false) => {
   const token = session.token();
@@ -60,6 +60,23 @@ export async function reconcileFinanceLedgerTransaction(transactionId, status = 
 export async function voidFinanceLedgerTransaction(transactionId) {
   return api(`/api/finance/transactions/${encodeURIComponent(transactionId)}?${financeTenantQuery()}`, {
     method: "DELETE",
+  });
+}
+
+/* ---- Invoices ---- */
+export async function loadInvoices() {
+  return api(`/api/invoices?${financeTenantQuery()}`);
+}
+export async function createInvoiceOnServer(invoice) {
+  return api("/api/invoices", {
+    method: "POST",
+    body: JSON.stringify({ tenant_id: currentTenantId(), invoice }),
+  });
+}
+export async function setInvoiceStatusOnServer(invoiceId, status) {
+  return api(`/api/invoices/${encodeURIComponent(invoiceId)}/status`, {
+    method: "POST",
+    body: JSON.stringify({ tenant_id: currentTenantId(), status }),
   });
 }
 
