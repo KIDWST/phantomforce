@@ -118,11 +118,11 @@ function safeEffort(value: unknown): AgentAssistEffort {
 }
 
 function bridgeUrl() {
-  return clean(process.env.PHANTOM_AGENT_ASSIST_BRIDGE_URL, 500);
+  return clean(process.env.PHANTOM_AGENT_ASSIST_BRIDGE_URL || "http://127.0.0.1:8791/assist", 500);
 }
 
 function bridgeEnabled() {
-  return process.env.PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED === "true";
+  return process.env.PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED !== "false";
 }
 
 function bridgeTimeoutMs() {
@@ -172,7 +172,7 @@ export function getAgentAssistBridgeStatus(): AgentAssistStatus {
         id: "local_chatgpt_adapter",
         label: "Local ChatGPT adapter",
         ready: executable,
-        note: "Requires PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED=true and PHANTOM_AGENT_ASSIST_BRIDGE_URL pointing at an approved user-owned local/HTTP adapter.",
+        note: "Defaults to http://127.0.0.1:8791/assist. Start server/scripts/chatgpt-assist-adapter.mjs and connect a user-owned ChatGPT session/adapter command.",
       },
       {
         id: "openai_api_key",
