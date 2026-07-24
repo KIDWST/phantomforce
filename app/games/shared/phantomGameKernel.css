@@ -7,6 +7,7 @@
 .pgk-root {
   --pgk-accent: #39ff9d;
   --pgk-accent-2: #77f7ff;
+  --pgk-accent-3: #ffffff;
   --pgk-warn: #ffd166;
   --pgk-danger: #ff5468;
   --pgk-panel: rgba(4, 10, 12, 0.78);
@@ -22,6 +23,45 @@
   color: var(--pgk-ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+.pgk-screen-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.pgk-screen-frame i {
+  position: absolute;
+  display: block;
+  opacity: 0.76;
+}
+
+.pgk-screen-frame i:nth-child(1),
+.pgk-screen-frame i:nth-child(2) {
+  top: max(8px, env(safe-area-inset-top));
+  width: min(18vw, 220px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--pgk-accent));
+}
+
+.pgk-screen-frame i:nth-child(1) { left: max(8px, env(safe-area-inset-left)); }
+.pgk-screen-frame i:nth-child(2) {
+  right: max(8px, env(safe-area-inset-right));
+  transform: scaleX(-1);
+}
+
+.pgk-screen-frame i:nth-child(3),
+.pgk-screen-frame i:nth-child(4) {
+  bottom: max(8px, env(safe-area-inset-bottom));
+  width: 1px;
+  height: min(24vh, 220px);
+  background: linear-gradient(0deg, transparent, var(--pgk-accent));
+}
+
+.pgk-screen-frame i:nth-child(3) { left: max(8px, env(safe-area-inset-left)); }
+.pgk-screen-frame i:nth-child(4) { right: max(8px, env(safe-area-inset-right)); }
 
 body[data-pgk-theme="crown"] .pgk-root {
   --pgk-accent: #ffd66f;
@@ -88,6 +128,17 @@ body[data-pgk-theme="kingdom"] .pgk-root {
   padding: clamp(20px, 5vw, 34px);
   overflow: hidden;
   position: relative;
+}
+
+.pgk-boot-sigil {
+  position: absolute;
+  right: clamp(14px, 4vw, 28px);
+  top: clamp(12px, 3vw, 22px);
+  color: color-mix(in srgb, var(--pgk-accent) 34%, transparent);
+  font-size: clamp(42px, 13vw, 110px);
+  line-height: 1;
+  text-shadow: 0 0 42px color-mix(in srgb, var(--pgk-accent) 42%, transparent);
+  transform: rotate(-8deg);
 }
 
 .pgk-boot-card::before {
@@ -159,10 +210,124 @@ body[data-pgk-theme="kingdom"] .pgk-root {
 }
 
 .pgk-command-button,
+.pgk-live-strip,
+.pgk-action-ribbon,
+.pgk-bottom-telemetry,
 .pgk-advisor,
 .pgk-panel,
 .pgk-toast {
   pointer-events: auto;
+}
+
+.pgk-live-strip {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  top: max(10px, env(safe-area-inset-top));
+  transition: opacity 200ms ease;
+  display: grid;
+  grid-template-columns: 42px minmax(0, auto) minmax(72px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: min(640px, calc(100vw - 82px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  min-height: 46px;
+  padding: 6px 9px;
+  border: 1px solid var(--pgk-line);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--pgk-panel-strong), color-mix(in srgb, var(--pgk-panel) 76%, transparent));
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.32), inset 0 1px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.pgk-sigil {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--pgk-line);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--pgk-accent) 24%, transparent), rgba(255, 255, 255, 0.03));
+  color: var(--pgk-accent);
+  font-size: 19px;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--pgk-accent) 22%, transparent);
+}
+
+.pgk-strip-copy {
+  min-width: 0;
+}
+
+.pgk-strip-copy p {
+  margin: 0;
+  color: var(--pgk-accent);
+  font: 900 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.pgk-strip-copy strong {
+  display: block;
+  overflow: hidden;
+  max-width: 180px;
+  color: var(--pgk-ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pgk-scene-rail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pgk-scene-rail i {
+  width: clamp(14px, 4vw, 48px);
+  max-width: 48px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.pgk-scene-rail i.is-active {
+  background: linear-gradient(90deg, var(--pgk-accent), var(--pgk-accent-2));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--pgk-accent) 40%, transparent);
+}
+
+.pgk-live-strip output {
+  color: var(--pgk-muted);
+  font: 850 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.pgk-action-ribbon {
+  position: fixed;
+  left: 50%;
+  top: max(64px, calc(env(safe-area-inset-top) + 64px));
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  transform: translateX(-50%);
+  backdrop-filter: blur(10px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.pgk-action-ribbon b {
+  min-width: 64px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: var(--pgk-muted);
+  font: 950 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.pgk-action-ribbon b.is-hot {
+  background: var(--pgk-accent);
+  color: #03100c;
+  box-shadow: 0 0 22px color-mix(in srgb, var(--pgk-accent) 38%, transparent);
 }
 
 .pgk-command-button {
@@ -178,6 +343,7 @@ body[data-pgk-theme="kingdom"] .pgk-root {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
   font: 950 20px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   cursor: pointer;
+  transition: opacity 200ms ease, transform 200ms ease;
   backdrop-filter: blur(14px);
 }
 
@@ -236,6 +402,33 @@ body[data-pgk-theme="kingdom"] .pgk-root {
 body.pgk-scene-play .pgk-advisor {
   opacity: 0.36;
   transform: scale(0.92);
+}
+
+/* Focus mode: the game itself is the HUD once play starts. The kernel's own
+   generic chrome (status pill, verb ribbon, corner frame, telemetry footer)
+   fully retreats rather than merely dimming — a semi-transparent floating
+   header still competed for the same screen space as each game's own
+   native HUD, which is exactly the "webpage bolted onto a game" anti-pattern
+   this shell exists to remove. Only the small corner command button stays,
+   as the discoverable way back into the panel/pause menu. */
+body.pgk-focus-play .pgk-action-ribbon,
+body.pgk-focus-play .pgk-live-strip,
+body.pgk-focus-play .pgk-bottom-telemetry {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+body.pgk-focus-play .pgk-action-ribbon {
+  transform: translateX(-50%) translateY(-14px) scale(0.92);
+}
+
+body.pgk-focus-play .pgk-screen-frame {
+  opacity: 0;
+}
+
+body.pgk-focus-play .pgk-command-button {
+  opacity: 0.85;
 }
 
 body.pgk-scene-play .pgk-advisor:hover,
@@ -297,6 +490,22 @@ body.pgk-scene-play .pgk-advisor:focus-within {
   margin: 0;
   color: var(--pgk-accent);
   font: 900 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.pgk-surface-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.pgk-surface-list span {
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--pgk-muted);
+  font: 850 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-transform: uppercase;
 }
 
@@ -367,6 +576,59 @@ body.pgk-scene-play .pgk-advisor:focus-within {
   box-shadow: 0 18px 70px rgba(0, 0, 0, 0.42);
 }
 
+.pgk-bottom-telemetry {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transition: opacity 200ms ease;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  max-width: calc(100vw - 24px);
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.pgk-bottom-telemetry span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--pgk-muted);
+  font: 850 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.pgk-toast[data-pgk-toast-kind="warn"] {
+  border-color: var(--pgk-warn);
+  color: var(--pgk-warn);
+}
+
+.pgk-toast[data-pgk-toast-kind="spectacle"],
+.pgk-root[data-pgk-spectacle] .pgk-toast {
+  border-color: var(--pgk-accent);
+  background: linear-gradient(90deg, var(--pgk-accent), var(--pgk-accent-2));
+  color: #03100c;
+}
+
+.pgk-root[data-pgk-spectacle] .pgk-screen-frame i {
+  opacity: 1;
+  box-shadow: 0 0 34px var(--pgk-accent);
+}
+
+body[data-pgk-density="0"] .pgk-live-strip,
+body[data-pgk-density="0"] .pgk-action-ribbon,
+body[data-pgk-density="0"] .pgk-bottom-telemetry {
+  scale: 0.9;
+}
+
+body[data-pgk-density="2"] .pgk-action-ribbon,
+body[data-pgk-density="2"] .pgk-bottom-telemetry {
+  opacity: 0.95;
+}
+
 body.pgk-contrast .pgk-root {
   --pgk-panel: rgba(0, 0, 0, 0.92);
   --pgk-panel-strong: rgba(0, 0, 0, 0.98);
@@ -392,6 +654,40 @@ body.pgk-reduced .pgk-root *::after {
 }
 
 @media (max-width: 720px) {
+  .pgk-live-strip {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    width: min(100vw - 72px, 430px);
+    min-height: 40px;
+  }
+
+  .pgk-scene-rail,
+  .pgk-live-strip output {
+    display: none;
+  }
+
+  .pgk-sigil {
+    width: 28px;
+    height: 28px;
+    font-size: 15px;
+  }
+
+  .pgk-strip-copy strong {
+    max-width: 170px;
+    font-size: 12px;
+  }
+
+  .pgk-action-ribbon {
+    top: auto;
+    bottom: max(58px, calc(env(safe-area-inset-bottom) + 58px));
+    max-width: calc(100vw - 24px);
+  }
+
+  .pgk-action-ribbon b {
+    min-width: 0;
+    padding: 6px 8px;
+    font-size: 9px;
+  }
+
   .pgk-command-button {
     width: 42px;
     height: 42px;
@@ -411,7 +707,11 @@ body.pgk-reduced .pgk-root *::after {
   .pgk-panel {
     inset: auto max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
     width: auto;
-    max-height: 70vh;
+    max-height: min(78vh, 620px);
+  }
+
+  .pgk-bottom-telemetry {
+    display: none;
   }
 
   .pgk-row {

@@ -10,7 +10,9 @@
     muted: false,
     advisor: 2,
     shake: 2,
-    flash: 2
+    flash: 2,
+    density: 1,
+    focus: true
   };
 
   const DEFAULT_TIPS = [
@@ -98,6 +100,20 @@
     return { ensure, play };
   }
 
+  const THEME_PROFILES = {
+    crown: { sigil: "♛", lane: "Broadcast circuit", verbs: ["Draft", "Pressure", "Crown"], posture: "championship", surfaces: ["ribbon", "podium", "commentary"] },
+    skyguard: { sigil: "⌁", lane: "Aerial command", verbs: ["Scan", "Build", "Intercept"], posture: "tactical", surfaces: ["radar", "tower net", "threat lane"] },
+    strike: { sigil: "⌖", lane: "Kill-space", verbs: ["Enter", "Clear", "Extract"], posture: "lethal", surfaces: ["reticle", "signal", "after-action"] },
+    prix: { sigil: "◉", lane: "Grand prix", verbs: ["Lean", "Flow", "Podium"], posture: "joyful", surfaces: ["pit wall", "track cam", "rival"] },
+    ages: { sigil: "◬", lane: "Timeline front", verbs: ["Gather", "Advance", "Rewrite"], posture: "temporal", surfaces: ["chronicle", "era rail", "council"] },
+    kingdom: { sigil: "⚒", lane: "Siege table", verbs: ["Aim", "Break", "Hold"], posture: "weighty", surfaces: ["rampart", "war scroll", "engine crew"] },
+    default: { sigil: "◆", lane: "PhantomPlay", verbs: ["Read", "Act", "Win"], posture: "responsive", surfaces: ["hud", "advisor", "session"] }
+  };
+
+  function profileFor(config) {
+    return Object.assign({}, THEME_PROFILES.default, THEME_PROFILES[config.theme] || {}, config.profile || {});
+  }
+
   function resolveScene(config) {
     const bodyScene = document.body.dataset.pgkScene || document.body.dataset.screen || document.body.dataset.stage;
     if (bodyScene) return normalizeScene(bodyScene, config);
@@ -183,7 +199,9 @@
       lastFpsAt: performance.now(),
       lastTipAt: 0,
       tipIndex: 0,
-      panelOpen: false
+      panelOpen: false,
+      lastEventAt: 0,
+      lastSpectacleAt: 0
     };
 
     const root = document.createElement("div");
@@ -195,9 +213,13 @@
     state.root = root;
     state.advisorCopy = root.querySelector("[data-pgk-advisor-copy]");
     state.sceneLabel = root.querySelector("[data-pgk-scene]");
-    state.inputLabel = root.querySelector("[data-pgk-input]");
+    state.inputLabels = root.querySelectorAll("[data-pgk-input]");
     state.fpsLabel = root.querySelector("[data-pgk-fps]");
     state.longFrameLabel = root.querySelector("[data-pgk-longframes]");
+    state.scenePips = root.querySelectorAll("[data-pgk-scene-pip]");
+    state.verbNodes = root.querySelectorAll("[data-pgk-verb]");
+    state.statusLabel = root.querySelector("[data-pgk-status]");
+    state.densityLabel = root.querySelector("[data-pgk-density-label]");
 
     bindKernel(state);
     setTimeout(() => {
@@ -211,21 +233,39 @@
   }
 
   function renderKernel(config, settings) {
+    const profile = profileFor(config);
     const stages = (config.stages || []).slice(0, 4).map((stage) => `<li>${escapeHtml(stage)}</li>`).join("");
+    const verbs = (profile.verbs || []).slice(0, 3).map((verb, index) => `<b data-pgk-verb="${index}">${escapeHtml(verb)}</b>`).join("");
+    const surfaces = (profile.surfaces || []).slice(0, 3).map((surface) => `<span>${escapeHtml(surface)}</span>`).join("");
+    const scenePips = ["menu", "loadout", "play", "pause", "results"].map((scene) => `<i data-pgk-scene-pip="${scene}" title="${escapeHtml(config.scenes?.[scene] || DEFAULT_SCENES[scene] || scene)}"></i>`).join("");
     const title = escapeHtml(config.title);
     const genre = escapeHtml(config.genre);
     const fantasy = escapeHtml(config.fantasy);
     const advisorName = escapeHtml(config.advisorName);
+    const lane = escapeHtml(profile.lane);
+    const sigil = escapeHtml(profile.sigil);
     return `
       <div class="pgk-boot" data-pgk-boot aria-hidden="true">
         <div class="pgk-boot-card">
+          <div class="pgk-boot-sigil">${sigil}</div>
           <p class="pgk-kicker">${genre}</p>
           <h1>${title}</h1>
           <p>${fantasy}</p>
           <ul class="pgk-stage-list">${stages}</ul>
         </div>
       </div>
-      <button class="pgk-command-button" type="button" data-pgk-command aria-label="Open game command center">?</button>
+      <div class="pgk-screen-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <header class="pgk-live-strip" aria-label="Game shell status">
+        <div class="pgk-sigil" aria-hidden="true">${sigil}</div>
+        <div class="pgk-strip-copy">
+          <p>${lane}</p>
+          <strong>${title}</strong>
+        </div>
+        <div class="pgk-scene-rail" aria-label="Scene progress">${scenePips}</div>
+        <output data-pgk-status>booting</output>
+      </header>
+      <nav class="pgk-action-ribbon" aria-label="Game loop verbs">${verbs}</nav>
+      <button class="pgk-command-button" type="button" data-pgk-command aria-label="Open game command center">⌘</button>
       <aside class="pgk-advisor" aria-live="polite">
         <i class="pgk-avatar" aria-hidden="true"></i>
         <p><b>${advisorName}</b><span data-pgk-advisor-copy>Reading the room...</span></p>
@@ -254,6 +294,12 @@
           <label class="pgk-row"><span>Advisor density</span><input type="range" min="0" max="3" value="${settings.advisor}" data-pgk-range="advisor"></label>
           <label class="pgk-row"><span>Camera shake cap</span><input type="range" min="0" max="3" value="${settings.shake}" data-pgk-range="shake"></label>
           <label class="pgk-row"><span>Flash intensity cap</span><input type="range" min="0" max="3" value="${settings.flash}" data-pgk-range="flash"></label>
+          <label class="pgk-row"><span>HUD density</span><input type="range" min="0" max="2" value="${settings.density}" data-pgk-range="density"></label>
+          <label class="pgk-toggle"><input type="checkbox" data-pgk-setting="focus" ${settings.focus ? "checked" : ""}> Focus mode during play</label>
+        </div>
+        <div class="pgk-section">
+          <h3>Native language</h3>
+          <div class="pgk-surface-list">${surfaces}</div>
         </div>
         <div class="pgk-section">
           <h3>Session health</h3>
@@ -264,6 +310,11 @@
           </div>
         </div>
       </section>
+      <footer class="pgk-bottom-telemetry" aria-hidden="true">
+        <span data-pgk-density-label>balanced hud</span>
+        <span data-pgk-input>keyboard</span>
+        <span>private session</span>
+      </footer>
       <div class="pgk-toast" data-pgk-toast hidden></div>
     `;
   }
@@ -320,6 +371,19 @@
       toast(state, "Controller detected");
     });
 
+    window.addEventListener("phantom-game-kernel:event", (event) => {
+      const detail = event.detail || {};
+      if (detail.message) toast(state, detail.message, detail.kind);
+      state.lastEventAt = performance.now();
+    });
+
+    window.addEventListener("phantom-game-kernel:spectacle", (event) => {
+      const detail = event.detail || {};
+      state.root.dataset.pgkSpectacle = detail.kind || "major";
+      state.lastSpectacleAt = performance.now();
+      if (detail.message) toast(state, detail.message, "spectacle");
+    });
+
     window.addEventListener("message", (event) => {
       const data = event.data;
       if (!data || typeof data !== "object") return;
@@ -348,7 +412,18 @@
     }
 
     if (navigator.getGamepads && Array.from(navigator.getGamepads()).some(Boolean)) state.input = "controller";
-    if (state.inputLabel) state.inputLabel.textContent = state.input;
+    state.inputLabels?.forEach((label) => { label.textContent = state.input; });
+    if (state.statusLabel) state.statusLabel.textContent = state.fps ? `${state.fps} fps · ${state.input}` : state.input;
+    if (state.densityLabel) {
+      const labels = ["compact hud", "balanced hud", "cinematic hud"];
+      state.densityLabel.textContent = labels[state.settings.density] || labels[1];
+    }
+    document.body.dataset.pgkDensity = String(state.settings.density);
+    document.body.classList.toggle("pgk-focus-play", state.scene === "play" && !!state.settings.focus);
+    if (state.lastSpectacleAt && time - state.lastSpectacleAt > 900) {
+      delete state.root.dataset.pgkSpectacle;
+      state.lastSpectacleAt = 0;
+    }
     updateScene(state, false);
     requestAnimationFrame((nextTime) => frame(state, nextTime));
   }
@@ -359,11 +434,17 @@
 
     state.scene = nextScene;
     document.body.classList.toggle("pgk-scene-play", nextScene === "play");
+    document.body.classList.toggle("pgk-focus-play", nextScene === "play" && !!state.settings.focus);
     document.body.dataset.pgkKernelScene = nextScene;
 
     const label = state.config.scenes?.[nextScene] || DEFAULT_SCENES[nextScene] || nextScene;
     if (state.sceneLabel) state.sceneLabel.textContent = "Scene: " + label;
     if (state.advisorCopy) state.advisorCopy.textContent = chooseAdvisorLine(state, nextScene);
+    state.scenePips?.forEach((pip) => pip.classList.toggle("is-active", pip.dataset.pgkScenePip === nextScene));
+    state.verbNodes?.forEach((node, index) => {
+      const hot = (nextScene === "play" && index === 1) || (nextScene === "results" && index === 2) || (nextScene !== "play" && nextScene !== "results" && index === 0);
+      node.classList.toggle("is-hot", hot);
+    });
 
     window.dispatchEvent(new CustomEvent("phantom-game-kernel:scene", {
       detail: { id: state.config.id, scene: nextScene, label }
@@ -383,10 +464,11 @@
     return next;
   }
 
-  function toast(state, message) {
+  function toast(state, message, kind) {
     const node = state.root.querySelector("[data-pgk-toast]");
     if (!node) return;
     node.textContent = message;
+    node.dataset.pgkToastKind = kind || "info";
     node.hidden = false;
     clearTimeout(state.toastTimer);
     state.toastTimer = setTimeout(() => {
