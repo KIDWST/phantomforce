@@ -636,8 +636,12 @@ export async function getOrganizationOpportunities(
   if (pulse.competitors.available) {
     const c = pulse.competitors;
     if (!c.businessName) {
+      // Onboarding gap, not an operational failure — a fresh tenant always
+      // starts here. "high" made first login read as an error-filled
+      // dashboard instead of a normal setup step; "medium" still surfaces it
+      // without the alarm.
       push({
-        id: "profile-missing", impact: "high",
+        id: "profile-missing", impact: "medium",
         title: "Phantom doesn't know what your business is yet",
         why: "Competitor discovery, deep dives, and tailored recommendations all start from the business profile.",
         provenance: { source: "competitor-intelligence.businessProfile" },
@@ -645,7 +649,7 @@ export async function getOrganizationOpportunities(
       });
     } else if (c.competitorCount === 0 && c.discoveryRuns === 0) {
       push({
-        id: "discovery-never-run", impact: "high",
+        id: "discovery-never-run", impact: "medium",
         title: "You aren't tracking any competitors",
         why: `The profile for ${c.businessName} is set, but discovery has never run — you're operating without competitive awareness.`,
         provenance: { source: "competitor-intelligence.discoveryRuns" },
