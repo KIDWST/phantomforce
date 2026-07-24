@@ -3376,3 +3376,767 @@ html[data-command-os="2040"] .phantom.command-os-enabled .console[data-chatbox-m
     max-height: 132px !important;
   }
 }
+
+/* ============================================================= */
+/* ============== PHANTOMBOT — DEDICATED AI OS ================= */
+/* Page-scoped by design: this layer must never restyle another product. */
+body:has(.workspace-page[data-workspace-page="phantomai"]) .os-command-rail [data-cmdk-open],
+body:has(.workspace-page[data-workspace-page="phantomai"]) .os-command-rail .os-rail-action[data-cmdk-open],
+.workspace-page[data-workspace-page="phantomai"] > [data-page-worker="phantomai"] {
+  display: none !important;
+}
+
+body:has(.workspace-page[data-workspace-page="phantomai"]) .buddy {
+  display: none !important;
+}
+
+body:has(.workspace-page[data-workspace-page="phantomai"]) .phantom.command-os-enabled {
+  padding-bottom: 0;
+}
+
+body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
+  height: calc(100dvh - 70px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.console-workspace:has(.workspace-page[data-workspace-page="phantomai"]) {
+  height: 100%;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.workspace-page[data-workspace-page="phantomai"],
+.workspace-page[data-workspace-page="phantomai"] .workspace-page-body {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-page[data-workspace-page="phantomai"] .workspace-page-body {
+  padding: 0 !important;
+}
+
+.phantombot-os {
+  --pbot-bg: #05080d;
+  --pbot-panel: #080d14;
+  --pbot-panel-2: #0b111a;
+  --pbot-hover: rgba(255,255,255,.045);
+  --pbot-line: rgba(155,181,201,.13);
+  --pbot-line-strong: rgba(130,167,198,.28);
+  --pbot-text: #edf3f7;
+  --pbot-muted: #8c9aa6;
+  --pbot-faint: #5e6b76;
+  --pbot-live: #67edb3;
+  --pbot-brain: #8a79ff;
+  position: relative;
+  display: grid;
+  grid-template-columns: 252px minmax(0,1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: radial-gradient(56% 90% at 70% -18%,rgba(111,91,255,.08),transparent 70%),var(--pbot-bg);
+  color: var(--pbot-text);
+  font-family: "Instrument Sans",system-ui,sans-serif;
+}
+
+/* Task rail */
+.phantombot-taskrail {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 12px 12px;
+  border-right: 1px solid var(--pbot-line);
+  background: linear-gradient(180deg,rgba(14,20,29,.98),rgba(6,10,16,.985)),var(--pbot-panel);
+}
+
+.phantombot-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 46px;
+  padding: 2px 7px 12px;
+}
+
+.phantombot-brand-mark {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(103,237,179,.24);
+  border-radius: 10px;
+  background: rgba(103,237,179,.07);
+  box-shadow: 0 0 22px rgba(103,237,179,.08);
+}
+
+.phantombot-brand-mark img { width: 24px; height: 24px; object-fit: contain; }
+.phantombot-brand > span:last-child { display: grid; min-width: 0; gap: 1px; }
+.phantombot-brand b {
+  overflow: hidden;
+  color: var(--pbot-text);
+  font-size: 14px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phantombot-brand small {
+  overflow: hidden;
+  color: var(--pbot-faint);
+  font: 500 8.5px "Spline Sans Mono",monospace;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phantombot-new-task {
+  display: grid;
+  grid-template-columns: 22px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  margin: 4px 0 18px;
+  padding: 8px 10px;
+  border: 1px solid var(--pbot-line-strong);
+  border-radius: 9px;
+  background: rgba(255,255,255,.025);
+  color: var(--pbot-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease,background 160ms ease,transform 160ms ease;
+}
+.phantombot-new-task:hover {
+  border-color: rgba(138,121,255,.5);
+  background: rgba(138,121,255,.09);
+  transform: translateY(-1px);
+}
+.phantombot-new-task > span { color: var(--pbot-live); font-size: 20px; font-weight: 300; }
+.phantombot-new-task b { font-size: 12px; font-weight: 650; }
+.phantombot-new-task kbd {
+  padding: 2px 5px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 5px;
+  background: rgba(255,255,255,.025);
+  color: var(--pbot-faint);
+  font: 500 8px "Spline Sans Mono",monospace;
+}
+
+.phantombot-task-section { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.phantombot-task-section > p {
+  margin: 0 8px 7px;
+  color: var(--pbot-faint);
+  font: 600 8.5px "Spline Sans Mono",monospace;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.phantombot-task-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding-right: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(138,121,255,.28) transparent;
+}
+.phantombot-task {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--pbot-muted);
+  text-align: left;
+  cursor: pointer;
+}
+.phantombot-task:hover { background: var(--pbot-hover); color: var(--pbot-text); }
+.phantombot-task.is-active {
+  background: rgba(138,121,255,.105);
+  color: var(--pbot-text);
+  box-shadow: inset 2px 0 var(--pbot-brain);
+}
+.phantombot-task span {
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phantombot-task small { color: var(--pbot-faint); font: 500 8.5px "Spline Sans Mono",monospace; }
+
+.phantombot-rail-tabs.phantomai-tabs {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid var(--pbot-line);
+  border-radius: 0;
+  background: transparent;
+}
+.phantombot-rail-tabs .phantomai-tab {
+  justify-content: flex-start;
+  min-height: 36px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  color: var(--pbot-muted);
+  font: 560 11.5px "Instrument Sans",system-ui,sans-serif;
+  letter-spacing: 0;
+}
+.phantombot-rail-tabs .phantomai-tab > span { width: 18px; color: var(--pbot-faint); text-align: center; }
+.phantombot-rail-tabs .phantomai-tab > b { font-weight: 560; }
+.phantombot-rail-tabs .phantomai-tab:hover { background: var(--pbot-hover); color: var(--pbot-text); }
+.phantombot-rail-tabs .phantomai-tab.is-active {
+  background: rgba(138,121,255,.1);
+  color: var(--pbot-text);
+  box-shadow: inset 2px 0 var(--pbot-brain);
+}
+
+/* Conversation stage and titlebar */
+.phantombot-stage {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(125,148,166,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(125,148,166,.014) 1px,transparent 1px),
+    var(--pbot-bg);
+  background-size: 64px 64px;
+}
+.phantombot-titlebar {
+  position: relative;
+  z-index: 12;
+  display: grid;
+  flex: 0 0 58px;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--pbot-line);
+  background: rgba(5,8,13,.89);
+  backdrop-filter: blur(18px) saturate(1.1);
+}
+.phantombot-rail-toggle {
+  display: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pbot-muted);
+  cursor: pointer;
+}
+.phantombot-title { display: flex; min-width: 0; align-items: baseline; gap: 9px; }
+.phantombot-title > span {
+  color: var(--pbot-faint);
+  font: 600 8.5px "Spline Sans Mono",monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.phantombot-title > b {
+  overflow: hidden;
+  color: var(--pbot-text);
+  font-size: 12.5px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phantombot-title-actions { display: flex; align-items: center; gap: 8px; }
+.phantombot-title-actions > button,.phantombot-panel-head > button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.025);
+  color: var(--pbot-muted);
+  cursor: pointer;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.phantombot-title-actions > button:hover,.phantombot-panel-head > button:hover {
+  border-color: var(--pbot-line-strong);
+  color: var(--pbot-text);
+}
+.phantombot-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pbot-muted);
+  font: 550 9px "Spline Sans Mono",monospace;
+}
+.phantombot-ready i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pbot-live);
+  box-shadow: 0 0 10px rgba(103,237,179,.62);
+}
+.phantombot-os[data-busy] .phantombot-ready i {
+  background: var(--pbot-brain);
+  box-shadow: 0 0 12px rgba(138,121,255,.72);
+  animation: pbotPulse 1.1s ease-in-out infinite;
+}
+.phantombot-stage > .phantomai-pane { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+.phantombot-stage .phantomai-chat,.phantombot-chat-pane {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0,1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.phantombot-stage .phantomai-chat-log {
+  min-width: 0;
+  min-height: 0;
+  padding: 34px max(24px,calc((100% - 900px)/2)) 160px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(138,121,255,.28) transparent;
+}
+
+/* Empty state */
+.phantombot-empty {
+  display: grid;
+  width: min(720px,100%);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 8vh 0 7vh;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+}
+.phantombot-empty-mark {
+  position: relative;
+  display: grid;
+  width: 92px;
+  height: 92px;
+  margin-bottom: 24px;
+  place-items: center;
+  border: 1px solid rgba(103,237,179,.16);
+  border-radius: 28px;
+  background: radial-gradient(circle,rgba(103,237,179,.12),transparent 68%),rgba(8,15,20,.78);
+  box-shadow: 0 0 58px rgba(103,237,179,.11);
+}
+.phantombot-empty-mark::before,.phantombot-empty-mark::after {
+  position: absolute;
+  content: "";
+  inset: -18px;
+  border: 1px solid rgba(138,121,255,.13);
+  border-radius: 50%;
+  animation: pbotOrbit 12s linear infinite;
+}
+.phantombot-empty-mark::after {
+  inset: -31px;
+  border-color: rgba(103,237,179,.09);
+  animation-direction: reverse;
+  animation-duration: 18s;
+}
+.phantombot-empty-mark img {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  opacity: .82;
+  filter: saturate(1.1) drop-shadow(0 0 14px rgba(103,237,179,.26));
+}
+.phantombot-empty > p {
+  margin: 0 0 9px;
+  color: var(--pbot-live);
+  font: 600 9px "Spline Sans Mono",monospace;
+  letter-spacing: .18em;
+}
+.phantombot-empty > h1 {
+  margin: 0;
+  color: var(--pbot-text);
+  font: 640 clamp(28px,3vw,42px)/1.08 "Bricolage Grotesque",sans-serif;
+  letter-spacing: -.035em;
+}
+.phantombot-empty > span {
+  max-width: 560px;
+  margin-top: 12px;
+  color: var(--pbot-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.phantombot-starters {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  width: min(650px,100%);
+  margin-top: 28px;
+  gap: 8px;
+}
+.phantombot-starters button {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 10px;
+  background: rgba(255,255,255,.02);
+  color: var(--pbot-muted);
+  text-align: left;
+  cursor: pointer;
+  font-size: 11.5px;
+}
+.phantombot-starters button:hover {
+  border-color: rgba(138,121,255,.42);
+  background: rgba(138,121,255,.065);
+  color: var(--pbot-text);
+}
+.phantombot-starters i { color: var(--pbot-faint); font-style: normal; }
+
+/* Conversation turns */
+.phantombot-exchange,.phantombot-message {
+  display: grid;
+  width: min(900px,100%);
+  margin: 0 auto;
+  gap: 22px;
+}
+.phantombot-exchange + .phantombot-exchange { margin-top: 34px; }
+.phantombot-turn { display: flex; min-width: 0; gap: 12px; }
+.phantombot-turn.is-user { justify-content: flex-end; }
+.phantombot-avatar {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  margin-top: 2px;
+  place-items: center;
+  border: 1px solid rgba(103,237,179,.18);
+  border-radius: 9px;
+  background: rgba(103,237,179,.055);
+}
+.phantombot-avatar img { width: 20px; height: 20px; object-fit: contain; }
+.phantombot-turn-content { min-width: 0; max-width: min(760px,calc(100% - 46px)); }
+.phantombot-turn-content > header { display: flex; align-items: center; gap: 9px; min-height: 22px; }
+.phantombot-turn-content > header b { color: var(--pbot-text); font-size: 11px; font-weight: 650; }
+.phantombot-turn-content > header span {
+  color: var(--pbot-live);
+  font: 500 8px "Spline Sans Mono",monospace;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.phantombot-turn.is-user .phantombot-turn-content {
+  max-width: min(680px,78%);
+  padding: 10px 13px;
+  border: 1px solid rgba(138,121,255,.18);
+  border-radius: 15px 15px 4px 15px;
+  background: rgba(138,121,255,.085);
+}
+.phantombot-turn.is-user .phantombot-turn-content > header { display: none; }
+.phantombot-turn .phantomai-chat-user,.phantombot-turn .phantomai-chat-reply {
+  max-width: none;
+  margin: 0;
+  color: var(--pbot-text);
+  font: 430 14px/1.62 "Instrument Sans",system-ui,sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.phantombot-turn .phantomai-chat-status { margin-top: 8px; color: var(--pbot-live); }
+.phantombot-turn.is-error .phantombot-turn-content {
+  padding: 12px;
+  border: 1px solid rgba(255,95,114,.25);
+  border-radius: 10px;
+  background: rgba(255,95,114,.055);
+}
+.phantombot-turn-actions {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.phantombot-turn:hover .phantombot-turn-actions,.phantombot-turn:focus-within .phantombot-turn-actions { opacity: 1; }
+.phantombot-turn-actions button {
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pbot-faint);
+  cursor: pointer;
+  font-size: 9.5px;
+}
+.phantombot-turn-actions button:hover { background: var(--pbot-hover); color: var(--pbot-text); }
+.phantombot-thinking { display: flex; align-items: center; gap: 4px; min-height: 30px; }
+.phantombot-thinking i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--pbot-brain);
+  animation: pbotThink 1s ease-in-out infinite;
+}
+.phantombot-thinking i:nth-child(2) { animation-delay: 120ms; }
+.phantombot-thinking i:nth-child(3) { animation-delay: 240ms; }
+
+/* Sticky/floating composer */
+.phantombot-stage .phantomai-chat-form,.phantombot-composer {
+  position: absolute;
+  z-index: 10;
+  right: max(18px,calc((100% - 900px)/2));
+  bottom: 18px;
+  left: max(18px,calc((100% - 900px)/2));
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px 10px 8px 14px;
+  overflow: hidden;
+  border: 1px solid var(--pbot-line-strong);
+  border-radius: 16px;
+  background: rgba(11,17,26,.94);
+  box-shadow: 0 24px 65px rgba(0,0,0,.46),inset 0 1px rgba(255,255,255,.035);
+  backdrop-filter: blur(22px) saturate(1.1);
+}
+.phantombot-stage .phantomai-chat-form:focus-within,.phantombot-composer:focus-within {
+  border-color: rgba(138,121,255,.56);
+  box-shadow: 0 24px 65px rgba(0,0,0,.46),0 0 0 1px rgba(138,121,255,.12);
+}
+.phantombot-stage .phantomai-chat-input {
+  width: 100%;
+  min-height: 34px;
+  max-height: 168px;
+  padding: 5px 3px;
+  overflow-y: auto;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--pbot-text);
+  font: 430 14px/1.48 "Instrument Sans",system-ui,sans-serif;
+}
+.phantombot-stage .phantomai-chat-input::placeholder { color: var(--pbot-faint); }
+.phantombot-composer-foot {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.phantombot-composer-foot > span {
+  overflow: hidden;
+  color: var(--pbot-faint);
+  font: 500 8px "Spline Sans Mono",monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phantombot-send {
+  display: grid;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: var(--pbot-text);
+  color: #071019;
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 800;
+  transition: opacity 140ms ease,transform 140ms ease;
+}
+.phantombot-send:hover:not(:disabled) { transform: translateY(-1px); }
+.phantombot-send:disabled { cursor: wait; opacity: .32; }
+.phantombot-jump,.phantombot-jump-latest {
+  position: absolute;
+  z-index: 11;
+  right: 50%;
+  bottom: 128px;
+  min-height: 30px;
+  padding: 6px 11px;
+  transform: translateX(50%);
+  border: 1px solid var(--pbot-line-strong);
+  border-radius: 999px;
+  background: rgba(11,17,26,.94);
+  color: var(--pbot-muted);
+  box-shadow: 0 8px 28px rgba(0,0,0,.36);
+  cursor: pointer;
+  font-size: 9.5px;
+}
+.phantombot-jump[hidden],.phantombot-jump-latest[hidden] { display: none; }
+
+/* Memory/activity panes and optional execution/context drawer. */
+.phantombot-panel-pane { overflow-x: hidden !important; overflow-y: auto !important; scrollbar-width: thin; }
+.phantombot-panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 64px;
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--pbot-line);
+  background: rgba(5,8,13,.94);
+  backdrop-filter: blur(18px);
+}
+.phantombot-panel-head > div { display: grid; gap: 1px; }
+.phantombot-panel-head span {
+  color: var(--pbot-live);
+  font: 600 8px "Spline Sans Mono",monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.phantombot-panel-head h2 { margin: 0; font-size: 18px; }
+.phantombot-panel-pane .phantomai-memory-mount,.phantombot-panel-pane .phantomai-activity-mount {
+  padding: 18px 22px 34px;
+}
+.phantombot-context-pane {
+  position: absolute;
+  z-index: 30;
+  top: 58px;
+  right: 0;
+  bottom: 0;
+  width: min(380px,38vw);
+  overflow: auto;
+  transform: translateX(102%);
+  border-left: 1px solid var(--pbot-line);
+  background: rgba(8,13,20,.985);
+  box-shadow: -24px 0 70px rgba(0,0,0,.4);
+  transition: transform 200ms ease;
+}
+.phantombot-os.is-context-open .phantombot-context-pane,.phantombot-context-pane.is-open { transform: translateX(0); }
+
+@keyframes pbotThink {
+  0%,70%,100% { opacity: .28; transform: translateY(0); }
+  35% { opacity: 1; transform: translateY(-3px); }
+}
+@keyframes pbotPulse { 50% { opacity: .45; transform: scale(.75); } }
+@keyframes pbotOrbit { to { transform: rotate(360deg); } }
+
+/* Task rail becomes a drawer without shrinking the reading column. */
+@media (max-width: 1100px) {
+  .phantombot-os { grid-template-columns: minmax(0,1fr); }
+  .phantombot-taskrail {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(294px,86vw);
+    transform: translateX(-104%);
+    border-right-color: var(--pbot-line-strong);
+    box-shadow: 26px 0 80px rgba(0,0,0,.54);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 210ms ease,opacity 170ms ease;
+  }
+  .phantombot-os.is-rail-open .phantombot-taskrail {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .phantombot-rail-toggle { display: grid; place-items: center; }
+}
+
+@media (max-width: 900px) {
+  body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main { height: calc(100svh - 74px); }
+  .workspace-page[data-workspace-page="phantomai"] { min-height: 0 !important; border-radius: 0 !important; }
+  .phantombot-titlebar { padding-inline: 14px; }
+  .phantombot-stage .phantomai-chat-log { padding-inline: max(18px,calc((100% - 780px)/2)); }
+  .phantombot-stage .phantomai-chat-form,.phantombot-composer {
+    right: max(14px,calc((100% - 780px)/2));
+    left: max(14px,calc((100% - 780px)/2));
+  }
+  .phantombot-context-pane { top: 58px; width: min(420px,92vw); }
+}
+
+@media (max-width: 680px) {
+  body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
+    height: calc(100svh - 72px);
+    min-height: 0;
+    padding-bottom: 0 !important;
+  }
+  .phantombot-titlebar { flex-basis: 54px; min-height: 54px; gap: 9px; padding: 0 11px; }
+  .phantombot-title { display: grid; gap: 0; }
+  .phantombot-title > span { font-size: 7px; }
+  .phantombot-title > b { max-width: 48vw; font-size: 11px; }
+  .phantombot-title-actions > button { display: none; }
+  .phantombot-ready { font-size: 0; }
+  .phantombot-ready i { width: 8px; height: 8px; }
+  .phantombot-stage .phantomai-chat-log {
+    padding: 24px 14px calc(154px + env(safe-area-inset-bottom,0px));
+    scrollbar-gutter: auto;
+  }
+  .phantombot-empty { padding: 5vh 2px; }
+  .phantombot-empty-mark { width: 72px; height: 72px; margin-bottom: 19px; border-radius: 22px; }
+  .phantombot-empty-mark img { width: 56px; height: 56px; }
+  .phantombot-empty-mark::before { inset: -12px; }
+  .phantombot-empty-mark::after { inset: -21px; }
+  .phantombot-empty > h1 { font-size: clamp(25px,8vw,32px); }
+  .phantombot-empty > span { max-width: 330px; font-size: 11.5px; }
+  .phantombot-starters { grid-template-columns: 1fr; width: min(370px,100%); margin-top: 22px; }
+  .phantombot-starters button { min-height: 42px; padding: 9px 11px; font-size: 10.5px; }
+  .phantombot-exchange + .phantombot-exchange { margin-top: 28px; }
+  .phantombot-turn { gap: 9px; }
+  .phantombot-avatar { flex-basis: 27px; width: 27px; height: 27px; }
+  .phantombot-avatar img { width: 18px; height: 18px; }
+  .phantombot-turn-content { max-width: calc(100% - 36px); }
+  .phantombot-turn.is-user .phantombot-turn-content { max-width: 88%; }
+  .phantombot-turn .phantomai-chat-user,.phantombot-turn .phantomai-chat-reply {
+    font-size: 13.5px;
+    line-height: 1.58;
+  }
+  .phantombot-turn-actions { opacity: 1; }
+  .phantombot-stage .phantomai-chat-form,.phantombot-composer {
+    right: 10px;
+    bottom: calc(9px + env(safe-area-inset-bottom,0px));
+    left: 10px;
+    padding: 9px 9px 7px 12px;
+    border-radius: 14px;
+  }
+  .phantombot-composer-foot > span { max-width: calc(100% - 44px); font-size: 7px; }
+  .phantombot-jump,.phantombot-jump-latest { bottom: calc(121px + env(safe-area-inset-bottom,0px)); }
+  .phantombot-panel-head { min-height: 56px; padding: 9px 13px; }
+  .phantombot-panel-pane .phantomai-memory-mount,.phantombot-panel-pane .phantomai-activity-mount {
+    padding: 12px 10px calc(28px + env(safe-area-inset-bottom,0px));
+  }
+  .phantombot-context-pane { top: 54px; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phantombot-os *,.phantombot-os *::before,.phantombot-os *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  .phantombot-empty-mark::before,.phantombot-empty-mark::after { display: none; }
+}

@@ -7,6 +7,8 @@ const css = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8")
 const command = readFileSync(new URL("../app/js/command.js", import.meta.url), "utf8");
 const mediaLab = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const commandOsCss = readFileSync(new URL("../app/command-os.css", import.meta.url), "utf8");
+const phantomAi = readFileSync(new URL("../app/js/phantomai.js", import.meta.url), "utf8");
+const pageWorker = readFileSync(new URL("../app/js/pageworker.js", import.meta.url), "utf8");
 const count = (source, pattern) => source.match(pattern)?.length || 0;
 
 // Full chat (log + composer) moved off the dashboard into its own PhantomBot
@@ -17,6 +19,20 @@ const count = (source, pattern) => source.match(pattern)?.length || 0;
 assert.match(index, /class="chatbox hero2-phantompet"/u, "Dashboard must keep the compact PhantomPet status card.");
 assert.equal(count(index, /data-command-form/gu), 0, "Dashboard must not re-embed a command composer; PhantomBot is its own tab now.");
 assert.equal(count(index, /data-chat-log/gu), 0, "Dashboard must not re-embed a chat log; PhantomBot is its own tab now.");
+assert.match(main, /class="phantomai phantombot-os" data-phantombot-os/u, "PhantomBot must render as its own AI operating-system shell.");
+assert.match(main, /data-phantombot-taskrail[\s\S]*data-phantombot-task-list/u, "PhantomBot must include a dedicated task rail and persistent task list.");
+assert.match(main, /data-phantombot-new-task/u, "PhantomBot must provide an explicit new-task action.");
+assert.match(main, /<textarea class="phantomai-chat-input" data-phantomai-chat-input/u, "PhantomBot must use a multiline composer instead of a single-line search-style input.");
+assert.match(main, /Enter sends · Shift \+ Enter adds a line/u, "The multiline composer must explain its keyboard behavior.");
+assert.doesNotMatch(main, /data-phantomai-chat-input type="text"/u, "PhantomBot must not regress to a single-line text field.");
+assert.match(phantomAi, /const TASKS_KEY = "pf\.phantombot\.tasks\.v1"/u, "PhantomBot tasks must have a stable workspace persistence key.");
+assert.match(phantomAi, /workspaceStorageGetItem\(TASKS_KEY,[\s\S]*workspaceStorageSetItem\(TASKS_KEY/u, "PhantomBot must load and save its task history through workspace-scoped storage.");
+assert.match(phantomAi, /taskState\.tasks[\s\S]*activeId/u, "PhantomBot must track multiple tasks and one active task.");
+assert.match(phantomAi, /event\.key === "Enter" && !event\.shiftKey && !event\.isComposing/u, "Enter must send while Shift+Enter remains available for a newline.");
+assert.match(phantomAi, /Math\.min\(Math\.max\(input\.scrollHeight, 28\), 168\)/u, "The multiline composer must grow with its content while remaining bounded.");
+assert.match(phantomAi, /data-phantombot-jump/u, "Long task conversations must provide a jump-to-latest control.");
+assert.match(phantomAi, /event\.key\.toLowerCase\(\) === "n"/u, "PhantomBot must support the Ctrl/Cmd+N new-task shortcut.");
+assert.match(pageWorker, /const SKIP_PAGES = new Set\(\[[\s\S]*"phantomai"[\s\S]*\]\);/u, "PhantomBot must skip the generic page-intelligence prompt because chat is the native primary surface.");
 assert.doesNotMatch(index, /data-chatbox-toggle/u, "Phantom Console minimize belongs inside the rendered header, not stranded in static markup.");
 assert.match(index, /data-dashboard-brief-title/u, "Dashboard must keep a data-backed business brief.");
 assert.match(index, /data-dashboard-brief-status/u, "Dashboard must explain the real organization state.");

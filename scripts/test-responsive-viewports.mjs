@@ -22,6 +22,7 @@ const chromeCandidates = [
 
 const pages = [
   { id: "dashboard", label: "dashboard" },
+  { id: "phantomai", label: "phantombot" },
   { id: "leads", label: "clients" },
   { id: "media", label: "media-lab" },
   { id: "content", label: "content-hub" },
@@ -352,12 +353,26 @@ function auditPage() {
   const analyticsGraph = document.querySelector("[data-workspace-page='analytics'] .an-top-visual-grid");
   const analyticsTrendCard = document.querySelector("[data-workspace-page='analytics'] .an-trend-card");
   const dashboardIntel = document.querySelector("[data-dashboard-intel]");
+  const phantomBotShell = document.querySelector("[data-phantombot-os]");
+  const phantomBotTaskRail = document.querySelector("[data-phantombot-taskrail]");
+  const phantomBotTaskList = document.querySelector("[data-phantombot-task-list]");
+  const phantomBotComposer = document.querySelector("[data-phantomai-chat-input]");
+  const phantomBotRailToggle = document.querySelector("[data-phantombot-rail-toggle]");
+  const commandRailSearch = document.querySelector("[data-os-command-rail] [data-cmdk-open]");
   const isVisible = (el) => {
     if (!el) return false;
     if (el.closest('[aria-hidden="true"]')) return false;
     const style = getComputedStyle(el);
     const rect = el.getBoundingClientRect();
-    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 1 && rect.height > 1;
+    return style.display !== "none"
+      && style.visibility !== "hidden"
+      && Number(style.opacity || "1") > 0.01
+      && rect.width > 1
+      && rect.height > 1
+      && rect.right > 0
+      && rect.bottom > 0
+      && rect.left < window.innerWidth
+      && rect.top < window.innerHeight;
   };
   const clipsOverflow = (node) => {
     const style = getComputedStyle(node);
@@ -591,6 +606,17 @@ function auditPage() {
       reviewAllVisible: isVisible(decisionReviewAll),
       composerBottom: dashboardComposer && isVisible(dashboardComposer) ? Math.round(dashboardComposer.getBoundingClientRect().bottom) : null,
     },
+    phantomBot: {
+      shellVisible: isVisible(phantomBotShell),
+      taskRailVisible: isVisible(phantomBotTaskRail),
+      taskListPresent: !!phantomBotTaskList,
+      taskCount: phantomBotTaskList?.querySelectorAll("[data-phantombot-task]").length || 0,
+      composerVisible: isVisible(phantomBotComposer),
+      composerTag: phantomBotComposer?.tagName || "",
+      railToggleVisible: isVisible(phantomBotRailToggle),
+      pageWorkerVisible: isVisible(pageWorker),
+      topSearchVisible: isVisible(commandRailSearch),
+    },
     textProbe: document.body.innerText.slice(0, 300),
   };
 }
@@ -683,6 +709,21 @@ function assertCase(result) {
   }
   if (page === "phantomplay") {
     assert.deepEqual(audit.phantomPlay.clippedActions, [], `${label} ${viewport.width}: PhantomPlay card actions must not be clipped inside game cards.`);
+  }
+  if (page === "phantomai") {
+    assert.equal(audit.phantomBot.shellVisible, true, `${label} ${viewport.width}: dedicated PhantomBot OS shell must be visible.`);
+    assert.equal(audit.phantomBot.taskListPresent, true, `${label} ${viewport.width}: task history rail must remain mounted.`);
+    assert.ok(audit.phantomBot.taskCount >= 1, `${label} ${viewport.width}: PhantomBot must start with a usable active task.`);
+    assert.equal(audit.phantomBot.composerVisible, true, `${label} ${viewport.width}: message composer must be visible on initial load.`);
+    assert.equal(audit.phantomBot.composerTag, "TEXTAREA", `${label} ${viewport.width}: composer must be multiline.`);
+    assert.equal(audit.phantomBot.pageWorkerVisible, false, `${label} ${viewport.width}: generic page-intelligence prompt must not duplicate PhantomBot chat.`);
+    assert.equal(audit.phantomBot.topSearchVisible, false, `${label} ${viewport.width}: global top Search control must stay out of the dedicated PhantomBot OS.`);
+    if (viewport.width <= 1100) {
+      assert.equal(audit.phantomBot.taskRailVisible, false, `${label} ${viewport.width}: compact PhantomBot must keep the task rail collapsed by default.`);
+      assert.equal(audit.phantomBot.railToggleVisible, true, `${label} ${viewport.width}: compact PhantomBot needs a visible task-rail toggle.`);
+    } else {
+      assert.equal(audit.phantomBot.taskRailVisible, true, `${label} ${viewport.width}: desktop PhantomBot must show the task rail.`);
+    }
   }
   if (page === "analytics") {
     assert.equal(audit.analytics.pageWorkerVisible, false, `${label} ${viewport.width}: Analytics must not render the generic prompt before the stats graph.`);
