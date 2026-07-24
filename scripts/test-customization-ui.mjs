@@ -9,7 +9,7 @@ assert.match(source, /activeConfiguration = defaultConfiguration\(\)/u, "Customi
 assert.match(source, /Modules are available now; publishing waits for the server/u, "Fallback mode needs a clear operator message.");
 assert.doesNotMatch(source, /Workspace Studio could not load/u, "Workspace Studio must not dead-end when the backend is temporarily unavailable.");
 
-for (const id of ["dashboard", "crm", "media", "sites", "money", "phantomplay", "intelligence", "analytics", "customize", "settings"]) {
+for (const id of ["dashboard", "crm", "sites", "money", "phantomplay", "intelligence", "analytics", "customize", "settings"]) {
   assert.match(source, new RegExp(`\\["${id}"`, "u"), `${id} must be present in the local Workspace Modules fallback.`);
 }
 

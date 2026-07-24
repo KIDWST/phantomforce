@@ -349,7 +349,7 @@ function siteAssetRailMarkup() {
   const assets = loadSiteMediaAssets();
   const realAssets = assets.length ? assets : [];
   return `
-    <section class="ss-asset-bank" aria-label="Media Lab assets and quick elements">
+    <section class="ss-asset-bank" aria-label="Asset library and quick elements">
       <div class="ss-editor-heading">
         <p>Assets & quick elements</p>
         <b>${realAssets.length ? `${realAssets.length} Media Pool item${realAssets.length === 1 ? "" : "s"}` : "Template presets"}</b>

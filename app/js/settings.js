@@ -1,7 +1,7 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260723-55";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260723-55";
 import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260723-55";
 import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260723-55";
 import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260723-55";
@@ -23,10 +23,10 @@ const SETTINGS_TABS = [
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
   { id: "modules", label: "Workspace Modules", category: "Workspace" },
   { id: "companion", label: "Companion", category: "Workspace" },
-  { id: "media", label: "Media & social", category: "Media" },
+  { id: "media", label: "Social accounts", category: "Social" },
 ];
 
-const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Media"];
+const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Social"];
 const SETTINGS_CONTEXT = {
   clientsetup: { title: "Workspace setup", note: "Configure the organization before lead, content, approval, and reporting work starts." },
   organization: { title: "Organization & access", note: "Manage employees, roles, invitations, and module access for this workspace." },
@@ -1135,7 +1135,7 @@ async function renderWorkspaceModulesTab(el, opts = {}) {
               <p class="set-eyebrow">Optional module</p>
               <h3>PhantomPlay</h3>
               <p class="set-note">Give your team an optional place to recharge, compete, and participate in workspace activities. PhantomPlay remains completely separate from core business operations.</p>
-              <p class="set-note">Disabling it does not affect Clients, Accounting, Automations, Approvals, Workforce, Analytics, Media Lab, or any core PhantomForce feature.</p>
+              <p class="set-note">Disabling it does not affect Clients, Accounting, Automations, Approvals, Workforce, Analytics, Asset Cloud, or any core PhantomForce feature.</p>
             </div>
           </div>
           <div class="set-grid set-grid-two">
@@ -1424,7 +1424,7 @@ export function renderOperatorSettings(el, opts = {}) {
   });
 
   const mediaMount = el.querySelector(`#${mediaMountId}`);
-  if (mediaMount) renderMediaSettings(mediaMount, opts);
+  if (mediaMount) renderSocialSettings(mediaMount, opts);
 
   const clientSetupMount = el.querySelector(`#${clientSetupMountId}`);
   if (clientSetupMount) renderClientSetupConsole(clientSetupMount);

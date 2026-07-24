@@ -43,7 +43,7 @@ function flowNodes() {
   return [
     { id: "leads", ws: "leads", icon: "◉", label: "Leads", stat: `${openLeads.length} open` },
     { id: "quotes", ws: "proposals", icon: "◆", label: "Quotes", stat: `${m.open.length} live` },
-    { id: "delivery", ws: "media", icon: "▶", label: "Delivery", stat: `${moving.length} moving` },
+    { id: "delivery", ws: "assets", icon: "▶", label: "Delivery", stat: `${moving.length} moving` },
     { id: "site", ws: "sites", icon: "▦", label: "Sites", stat: `${builds.length} live` },
     { id: "money", ws: "money", icon: "◈", label: "Accounting", stat: m.transactions.length ? signedMoney(m.netCash) : "books", size: 24 },
     { id: "protect", ws: "protect", icon: "⬡", label: "Protection", stat: secClean ? "clean" : "attention", alert: !secClean },

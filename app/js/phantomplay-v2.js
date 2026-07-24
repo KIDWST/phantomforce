@@ -372,7 +372,7 @@ function renderDeveloper() {
       ${ui.v2Offline ? v2Note("Analytics need the PhantomForce server.") : analytics ? (analytics.games.length ? `<div class="pp2-table-wrap"><table class="pp2-table"><thead><tr><th>Game</th><th>Plays</th><th>Players</th><th>DAU</th><th>MAU</th><th>Hours</th><th>Avg session</th><th>Returning</th><th>Rating</th><th>Wishlists</th></tr></thead><tbody>${analytics.games.map((row) => `<tr><td>${esc(row.title)}</td><td>${row.plays}</td><td>${row.players}</td><td>${row.dau}</td><td>${row.mau}</td><td>${row.totalHours}</td><td>${row.avgSessionMinutes}m</td><td>${row.returningPlayers}</td><td>${row.averageRating ?? "—"} (${row.reviewCount})</td><td>${row.wishlists}</td></tr>`).join("")}</tbody></table></div>` : empty("No analytics yet", "Numbers appear once your published games are played.")) : `<button type="button" class="pp2-ghost" data-pp2-load-analytics>Load analytics</button>`}
     </section>
     <section class="pp2-panel"><h3>Publishing assists</h3>
-      <p class="pp2-fine">Each button copies a production-ready brief to your clipboard — paste it into Media Lab (art, trailers), Content Hub (posts), or Phantom chat (copy, patch notes). Honest by design: nothing is generated behind your back.</p>
+      <p class="pp2-fine">Each button copies a production-ready brief to your clipboard — paste it into your creative tools (art, trailers), Asset Cloud (posts), or Phantom chat (copy, patch notes). Honest by design: nothing is generated behind your back.</p>
       ${assistGames.length ? `<div class="pp2-assist"><select data-pp2-assist-game>${assistGames.map((game) => `<option value="${esc(game.id)}">${esc(game.title)}</option>`).join("")}</select>
       <div class="pp2-assist-buttons">${Object.entries({ icon: "Icon brief", trailer: "Trailer brief", copy: "Store copy brief", social: "Social posts brief", patch: "Patch notes brief" }).map(([key, label]) => `<button type="button" class="pp2-ghost" data-pp2-assist="${key}">${label}</button>`).join("")}</div></div>
       ${ui.assistMessage ? `<p class="pp2-fine">${esc(ui.assistMessage)}</p>` : ""}` : empty("No games yet", "Save a submission below and the assists unlock.")}
@@ -1314,7 +1314,7 @@ async function copyAssist(kind) {
   const game = gameById(id) || ui.snapshot.submissions.map((s) => ({ id: `community:${s.id}`, title: s.title, summary: s.summary, category: s.category })).find((g) => g.id === id);
   if (!game) return;
   const brief = ASSIST_BRIEFS[kind]?.(game) || "";
-  try { await navigator.clipboard.writeText(brief); ui.assistMessage = `Brief copied — paste it into ${kind === "icon" || kind === "trailer" ? "Media Lab" : kind === "social" ? "Content Hub" : "Phantom chat"}.`; }
+  try { await navigator.clipboard.writeText(brief); ui.assistMessage = `Brief copied — paste it into ${kind === "icon" || kind === "trailer" ? "your creative tools" : kind === "social" ? "Asset Cloud" : "Phantom chat"}.`; }
   catch { ui.assistMessage = brief; }
   render();
 }

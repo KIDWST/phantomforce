@@ -187,7 +187,7 @@ canvas[data-ghost],
 
 /* Cards and consoles: dark glass, gentle violet depth */
 .card, .panel, .console, .side-plan, .cust-panel, .cust-ai,
-.hero, .pc, .ml-next-card, .mg-module, .mc-setup {
+.hero, .pc, .mg-module, .mc-setup {
   box-shadow: var(--skin-shadow);
 }
 
