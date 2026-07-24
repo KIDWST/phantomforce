@@ -344,7 +344,7 @@ function auditPage() {
   const dashboardBrief = document.querySelector(".dashboard-brief");
   const decisionDeck = document.querySelector(".decision-deck");
   const dashboardHero = consoleRoot?.querySelector(".hero2");
-  const dashboardComposer = consoleRoot?.querySelector(".hero2-phantompet");
+  const dashboardComposer = consoleRoot?.querySelector(".phantompet-card");
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
   const phantomPlayActions = [...document.querySelectorAll(".pp-game-actions button")];

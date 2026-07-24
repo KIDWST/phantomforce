@@ -1,14 +1,33 @@
 # Phantom Chat Companion
 
-Phantom lives inside the chat panel as a contained presence, not a floating mascot.
-The user should feel like they are working with Phantom, while the interface stays
-clear, mobile-safe, and honest about approval gates.
+There are two separate Phantom presences. Do not merge them back together —
+that exact merge is what caused the "chatbot on the dashboard" regression
+(commits `09732cff`/`eae26c27` tried to retire/replace it and failed; see
+`app/js/main.js` git blame around the dashboard render function for history).
 
-## Files
+1. **PhantomPet (`app/js/buddy.js`, `mountBuddy()`)** — the real, site-wide
+   ambient presence. Sidebar-docked, drag-safe, reacts to chat/notification
+   state via `buddyReact()`. This is "the PhantomPet."
+2. **Real chat (`app/js/phantomai.js`)** — the actual PhantomBot conversation:
+   message log, composer, memory/activity tabs. Lives only on the `phantomai`
+   nav tab (`data-nav-id="phantomai"`), mounted via `mountPhantomAI`.
 
-- `app/js/companion.js` mounts the portrait and owns the state machine.
-- `app/js/main.js` drives companion states from chat, typing, and Phantom Loop mode.
-- `app/phantom.css` styles the portrait, status labels, starter actions, and trust line.
+The dashboard hero (`app/index.html`, `.hero2-copy`) must only contain a
+**compact `.phantompet-card` button** (`data-open-ws="phantomai"`) that links
+to the real chat tab — never an embedded chat surface, never a mounted
+`companion.js` widget.
+
+## `app/js/companion.js` — legacy, not currently mounted
+
+`companion.js` (`mountCompanion`, "PhantomPresence") renders a full chat-header
+widget (avatar canvas, Brain/Hands status, Phantom Loop toggle, settings gear).
+It used to be mounted into the dashboard's `.chatbox` div, but that div and its
+`data-chat-log`/`data-command-input` composer were removed in an earlier pass
+while the `mountCompanion(...)` call and `.chatbox` wrapper were left behind —
+producing an orphaned status bar with no chat body under it, which read to
+users as "a chatbot on the dashboard." It has been removed again. Before ever
+re-mounting `companion.js` anywhere, confirm there is a real chat log/composer
+underneath it — otherwise you've recreated the same bug a third time.
 
 ## States
 

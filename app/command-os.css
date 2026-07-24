@@ -1081,6 +1081,14 @@ html[data-command-os="2040"] .workspace-page textarea::placeholder {
 }
 .dashboard-intel-card.is-warn b { color: #ffd58a; }
 .dashboard-intel-card.is-idle b { color: #8aa0ae; }
+.dashboard-intel-scan {
+  grid-column: 1 / -1; display: block; width: 100%; padding: 8px 18px; border: 0;
+  border-top: 1px solid rgba(133, 171, 198, 0.08);
+  background: transparent; color: #7c6cff; font: 700 9px "Spline Sans Mono", monospace; letter-spacing: 0.14em;
+  text-transform: uppercase; text-align: left; cursor: pointer;
+}
+.dashboard-intel-scan:hover, .dashboard-intel-scan:focus-visible { color: #a79bff; outline: none; }
+.dashboard-intel-scan:disabled { color: #55606a; cursor: default; }
 
 /* Context stream */
 .command-os-enabled .console-rail {

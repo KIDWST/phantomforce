@@ -3470,7 +3470,48 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .hero2-title span[data-hero-name] { background: linear-gradient(180deg, #9c92ff, var(--neon)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero2-sub { margin: 0 0 16px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
 .cmd-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 400px; margin-bottom: 16px; }
-.hero2-phantompet, #phantom-main.console .chatbox.hero2-phantompet { width: min(100%, 440px) !important; flex-grow: 0 !important; flex-shrink: 0 !important; flex-basis: auto !important; align-self: flex-start !important; height: 104px !important; max-height: 104px !important; min-height: 0 !important; }
+/* A little companion, not a chat-preview bar: a small round pet orb that
+   idles with a gentle bob/glow and only reveals its tooltip on hover/focus,
+   instead of permanently occupying a wide dashboard row shaped like a chat
+   input. Click still opens PhantomBot (same data-open-ws hook). */
+.phantompet-orb {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 52px; height: 52px; margin-top: 6px; padding: 0;
+  border: 1px solid var(--line); border-radius: 50%;
+  background: radial-gradient(60% 60% at 35% 30%, rgba(91, 76, 255, 0.22), var(--glass));
+  cursor: pointer; overflow: visible;
+  animation: phantompet-bob 3.2s ease-in-out infinite;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.15s;
+}
+.phantompet-orb:hover, .phantompet-orb:focus-visible {
+  border-color: var(--neon); box-shadow: 0 8px 22px rgba(91, 76, 255, 0.28); outline: none;
+  animation-play-state: paused; transform: translateY(-2px) scale(1.04);
+}
+.phantompet-orb-img { width: 26px; height: 26px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(91, 76, 255, 0.45)); pointer-events: none; }
+.phantompet-orb-status {
+  position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px;
+  border-radius: 50%; background: #3ddc84; border: 2px solid var(--bg, #0a0a0f);
+  box-shadow: 0 0 6px rgba(61, 220, 132, 0.7);
+}
+.phantompet-orb-tip {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%) translateY(4px);
+  width: max-content; max-width: 200px; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel, #12121a); color: var(--ink);
+  font: 500 11.5px "Instrument Sans", sans-serif; text-align: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.15s, transform 0.15s;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+.phantompet-orb:hover .phantompet-orb-tip, .phantompet-orb:focus-visible .phantompet-orb-tip {
+  opacity: 1; transform: translateX(-50%) translateY(0);
+}
+@keyframes phantompet-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phantompet-orb { animation: none; }
+}
 .cmd-chip {
   display: flex; align-items: center; gap: 8px; padding: 11px 13px; cursor: pointer;
   border: 1px solid var(--line); border-radius: 12px; background: var(--glass); color: var(--ink);
@@ -7307,7 +7348,7 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-59") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260723-61") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
