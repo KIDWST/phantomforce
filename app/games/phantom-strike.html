@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; media-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; media-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Phantom Strike</title>
+  <link rel="stylesheet" href="shared/phantomGameKernel.css?v=1.0.0">
   <style>
     :root{color-scheme:dark;--ink:#edf8f2;--muted:#9baba5;--green:#43f7a0;--cyan:#38dffc;--red:#ff5468;--gold:#ffd45a;--panel:#0a1111;--line:#253c37}
     *{box-sizing:border-box;letter-spacing:0}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#030707;color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}button{font:inherit;color:inherit;cursor:pointer}button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
@@ -484,6 +485,43 @@ window.__PhantomStrikeLegacyTest={state(){return{screen:$('.screen.active')?.dat
  setHp(v){if(players[0])players[0].hp=v},teleport(x,y){if(players[0]){players[0].x=x;players[0].y=y}},setDiff(k){if(DIFFS[k])diffKey=k}};
 renderWeapons();host('ready',{title:'Phantom Strike'});host('score',{score:0});
 })();
-</script>
+  </script>
+  <script src="shared/phantomGameKernel.js?v=1.0.0"></script>
+  <script>
+    PhantomGameKernel.init({
+      id: "phantom-strike",
+      title: "Phantom Strike",
+      theme: "strike",
+      genre: "Neon tactical shooter",
+      fantasy: "Lock the field, tune the rifle, and clear hostile lanes with local split-screen support.",
+      advisorName: "Strike handler",
+      stages: ["Optics calibrated", "Pointer lock guarded", "Split-screen bus ready"],
+      scenes: {
+        menu: "Ops briefing",
+        loadout: "Loadout bench",
+        play: "Contact",
+        pause: "Cease fire",
+        results: "Debrief"
+      },
+      sceneSelectors: {
+        menu: "[data-screen='menu'].active",
+        loadout: "[data-screen='loadout'].active",
+        play: "[data-screen='game'].active",
+        pause: "[data-screen='pause'].active",
+        results: "[data-screen='results'].active"
+      },
+      advisor: {
+        menu: "Pick the map and difficulty before the weapon. Terrain decides the kit.",
+        loadout: "Accuracy comes from recoil control, not panic clicks.",
+        play: "Contact live. I am staying tiny so the reticle owns the screen.",
+        results: "Score, deaths, accuracy. One number is lying to your pride."
+      },
+      tips: [
+        "Tap fire at range. Spray only when the target is already punished.",
+        "Duel mode is about angles. Solo mode is about pacing.",
+        "Pointer lock should release cleanly when the host exits."
+      ]
+    });
+  </script>
 </body>
 </html>

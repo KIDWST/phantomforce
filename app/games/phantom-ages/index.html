@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Phantom Ages</title>
     <link rel="stylesheet" href="style.css?v=2.1.2" />
+    <link rel="stylesheet" href="../shared/phantomGameKernel.css?v=1.0.0" />
   </head>
   <body>
     <div class="wrap">
@@ -80,5 +81,40 @@
     <script src="../shared/phantomScore.js?v=1.0.0"></script>
     <script src="theme.js?v=1.0.0"></script>
     <script src="game.js?v=2.1.2"></script>
+    <script src="../shared/phantomGameKernel.js?v=1.0.0"></script>
+    <script>
+      PhantomGameKernel.init({
+        id: "phantom-ages",
+        title: "Phantom Ages",
+        theme: "ages",
+        genre: "Era war evolution",
+        fantasy: "Start primitive, survive pressure, branch your civilization, and drag the battlefield into the future.",
+        advisorName: "Era oracle",
+        stages: ["Timeline seeded", "Economy clock synced", "Branch choice guarded"],
+        scenes: {
+          menu: "Battlefield wake",
+          loadout: "Era branch",
+          play: "Timeline clash",
+          pause: "Time held",
+          results: "History written"
+        },
+        sceneSelectors: {
+          results: "[data-end-modal]:not([hidden])",
+          loadout: "[data-branch-modal]:not([hidden])",
+          play: "#battlefield"
+        },
+        advisor: {
+          menu: "Your first minute is economy discipline. The flashy army arrives after the math behaves.",
+          loadout: "Military wins through body count. Tech wins through tempo. Pick the future you can defend.",
+          play: "Timeline is live. Keep income climbing while your cannon buys time.",
+          results: "History remembers the winner. It also remembers the upgrade you forgot."
+        },
+        tips: [
+          "Advance only when your frontline can survive the bill.",
+          "Cannon upgrades are insurance against bad unit timing.",
+          "Income compounds harder than panic."
+        ]
+      });
+    </script>
   </body>
 </html>

@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
   <title>Skyguard Arena</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../shared/phantomGameKernel.css?v=1.0.0">
 </head>
 <body data-screen="title" data-commander="astra">
 <div id="app" class="sg-app">
@@ -239,5 +240,42 @@
 <script src="../shared/phantomScore.js?v=1.0.0"></script>
 <script src="theme.js?v=1.0.0"></script>
 <script src="game.js"></script>
+<script src="../shared/phantomGameKernel.js?v=1.0.0"></script>
+<script>
+PhantomGameKernel.init({
+  id: "skyguard-arena",
+  title: "Skyguard Arena",
+  theme: "skyguard",
+  genre: "Formation tower defense",
+  fantasy: "Draft four defenses, appoint a commander, and hold the sky route against formation raids.",
+  advisorName: "Sky marshal",
+  stages: ["Route grid scanned", "Defense wing checked", "Raid director online"],
+  scenes: {
+    menu: "Mission select",
+    loadout: "Command bay",
+    play: "Raid wave",
+    pause: "Command paused",
+    results: "Sky report"
+  },
+  sceneSelectors: {
+    pause: "[data-overlay-pause]:not([hidden])",
+    results: "#screenResults:not([hidden])",
+    loadout: "#screenLoadout:not([hidden])",
+    menu: "#screenMenu:not([hidden])",
+    play: "#screenGame:not([hidden])"
+  },
+  advisor: {
+    menu: "Campaign teaches counters. Endless teaches greed control. Skirmish teaches humility.",
+    loadout: "Four defenses is enough if each one has a job.",
+    play: "Raid is live. Watch formations, not just health bars.",
+    results: "If the route leaked, fix coverage before chasing damage."
+  },
+  tips: [
+    "Anti-air without slow is hope wearing a uniform.",
+    "Commanders change tower behavior. Build around them.",
+    "Boss waves punish beautiful but brittle layouts."
+  ]
+});
+</script>
 </body>
 </html>

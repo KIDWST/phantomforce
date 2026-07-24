@@ -6,6 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
 <title>Chicklet Grand Prix - PhantomPlay</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../shared/phantomGameKernel.css?v=1.0.0">
 </head>
 <body>
 <canvas id="stage" aria-label="Chicklet Grand Prix roll-racing view"></canvas>
@@ -64,5 +65,42 @@
 </div>
 
 <script src="game.js"></script>
+<script src="../shared/phantomGameKernel.js?v=1.0.0"></script>
+<script>
+PhantomGameKernel.init({
+  id: "phantom-grand-prix",
+  title: "Chicklet Grand Prix",
+  theme: "prix",
+  genre: "Momentum roll racer",
+  fantasy: "Tiny racers, oversized speed, pastel tracks, and enough drift chaos to make a podium matter.",
+  advisorName: "Pit wall",
+  stages: ["Track cameras warmed", "Flow meter armed", "Podium save ready"],
+  scenes: {
+    menu: "Title garage",
+    loadout: "Race setup",
+    play: "Green flag",
+    pause: "Pit stop",
+    results: "Podium"
+  },
+  sceneSelectors: {
+    pause: "[data-pause-overlay]:not([hidden])",
+    results: "[data-finish-overlay]:not([hidden])",
+    menu: "[data-title-overlay]:not([hidden])",
+    loadout: "[data-start-overlay]:not([hidden])",
+    play: "#stage"
+  },
+  advisor: {
+    menu: "Pick a circuit that matches your mood: mellow, risky, or full cartoon insurance claim.",
+    loadout: "Cup for pressure. Time Trial for perfection. Single Race for instant nonsense.",
+    play: "Race is live. Build Flow, then spend it where the corner stops being polite.",
+    results: "Podium truth: fast laps beat lucky boosts over time."
+  },
+  tips: [
+    "Burst after the apex, not before it.",
+    "Cloudtop rewards smooth steering more than full throttle.",
+    "A tiny brake tap can save a giant lap."
+  ]
+});
+</script>
 </body>
 </html>
