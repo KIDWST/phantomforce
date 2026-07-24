@@ -3,6 +3,7 @@ import "./load-env.js";
 import { execFileSync } from "node:child_process";
 
 import cors from "@fastify/cors";
+import fastifyWebsocket from "@fastify/websocket";
 import fastifyRawBody from "fastify-raw-body";
 import { Prisma } from "@prisma/client";
 import {
@@ -347,6 +348,8 @@ import {
 } from "./phantom-ai/phantomstore.js";
 import { buildBeatForgePreview } from "./phantom-ai/beatforge.js";
 import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
+import { registerPhantomPlayDevRooms, devRoomStats } from "./phantomplay-devroom.js";
+import { requestPhantomPlayAiEdit } from "./phantomplay-ai-edit.js";
 import {
   getPhantomPlayDeveloperAnalytics,
   getPhantomPlayDiscovery,
@@ -785,6 +788,8 @@ async function moduleAccessForSession(session: AccessSession, moduleId: string, 
     configurationVersion: state.configuration.version,
   };
 }
+
+await app.register(fastifyWebsocket);
 
 await app.register(cors, {
   origin: [
@@ -6511,6 +6516,27 @@ if (phantomPlayV2Enabled()) registerPhantomPlayV2Games();
 // only lands here in a later step (PHANTOMPLAY_FLAGSHIP_GAMES is empty for
 // now) — the call site is wired now so registration order is settled.
 registerPhantomPlayFlagshipGames();
+
+// ---- PhantomPlay native shell (Dioxus): dev-room WS + AI code-edit routes.
+// No requireAccessSession gate — same local-dev trust model as the shell's
+// file editor, which already writes straight to disk with no auth. Not
+// user-facing on the public site; only the native shell calls these.
+registerPhantomPlayDevRooms(app);
+
+app.get("/api/phantomplay/devroom/stats", async () => ({ ok: true, ...devRoomStats() }));
+
+app.post("/api/phantomplay/ai-edit", { bodyLimit: 4 * 1024 * 1024 }, async (request, reply) => {
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  const gameId = typeof body.gameId === "string" ? body.gameId : "";
+  const filePath = typeof body.filePath === "string" ? body.filePath : "";
+  const fileContent = typeof body.fileContent === "string" ? body.fileContent : "";
+  const instruction = typeof body.instruction === "string" ? body.instruction : "";
+  const cwd = typeof body.cwd === "string" && body.cwd ? body.cwd : appStaticRoot;
+  if (!gameId || !filePath) return reply.code(400).send({ ok: false, error: "gameId and filePath are required." });
+  const result = await requestPhantomPlayAiEdit({ gameId, filePath, fileContent, instruction, cwd });
+  if (!result.ok) return reply.code(422).send({ ok: false, error: result.error });
+  return { ok: true, newContent: result.newContent, changed: result.changed };
+});
 
 function phantomPlayV2Gate(reply: FastifyReply) {
   if (phantomPlayV2Enabled()) return true;
