@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 dioxus = { version = "0.7.9", features = ["desktop"] }
+notify = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json"] }

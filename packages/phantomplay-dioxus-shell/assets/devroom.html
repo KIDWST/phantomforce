@@ -1,0 +1,248 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PhantomPlay Dev Room</title>
+<style>
+  html,body{margin:0;height:100%;background:#03110c;color:#eafff3;font:13px ui-monospace,monospace;}
+  * { box-sizing: border-box; }
+  .wrap{display:flex;flex-direction:column;height:100%;}
+  .row{display:flex;gap:6px;padding:10px;border-bottom:1px solid #143324;}
+  input{background:#030f0a;border:1px solid #2a3b32;color:#eafff3;border-radius:6px;padding:6px 8px;font:inherit;flex:1;min-width:0;}
+  button{background:#0c2318;border:1px solid #2cff9b55;color:#7dffbd;border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit;}
+  button:hover{background:#14432c;color:#b7ffd6;}
+  button.danger{border-color:#ff5c7466;color:#ff9aab;}
+  button.on{background:#14432c;color:#b7ffd6;border-color:#4bffa3;}
+  .code{font-weight:900;font-size:16px;letter-spacing:.12em;color:#61ffb0;}
+  .members{padding:8px 10px;border-bottom:1px solid #143324;display:flex;gap:6px;flex-wrap:wrap;}
+  .member{padding:3px 8px;border-radius:999px;border:1px solid #2cff9b44;font-size:11px;}
+  .member.me{border-color:#4bffa3;color:#b7ffd6;}
+  .log{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:4px;}
+  .msg b{color:#7dffbd;}
+  .sys{opacity:.55;font-style:italic;}
+  .chatrow{display:flex;gap:6px;padding:8px 10px;border-top:1px solid #143324;}
+  .hint{opacity:.55;padding:0 10px 10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row" id="joinRow">
+    <input id="nameInput" placeholder="your name" maxlength="40">
+    <input id="codeInput" placeholder="room code" maxlength="12" style="text-transform:uppercase;flex:0 0 110px;">
+    <button id="newCodeBtn" title="Generate a fresh code">New</button>
+    <button id="joinBtn">Join</button>
+  </div>
+  <div class="row" id="roomRow" style="display:none;">
+    <span>Room <span class="code" id="roomCode"></span></span>
+    <span style="flex:1;"></span>
+    <button id="micBtn">🎙 Mic off</button>
+    <button id="leaveBtn" class="danger">Leave</button>
+  </div>
+  <div class="members" id="members" style="display:none;"></div>
+  <div class="log" id="log"></div>
+  <div class="hint">Full-mesh voice via WebRTC, signaling over the local PhantomPlay dev-room server. Text-sync of saved files from the shell's editor will echo here as file-sync events.</div>
+  <div class="chatrow" id="chatRow" style="display:none;">
+    <input id="chatInput" placeholder="message the room">
+    <button id="sendBtn">Send</button>
+  </div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var WS_URL = "ws://127.0.0.1:5190/ws/phantomplay/devroom/";
+  var NEW_CODE_URL = "http://127.0.0.1:5190/api/phantomplay/devroom/new-code";
+
+  var els = {
+    nameInput: document.getElementById("nameInput"),
+    codeInput: document.getElementById("codeInput"),
+    newCodeBtn: document.getElementById("newCodeBtn"),
+    joinBtn: document.getElementById("joinBtn"),
+    joinRow: document.getElementById("joinRow"),
+    roomRow: document.getElementById("roomRow"),
+    roomCode: document.getElementById("roomCode"),
+    micBtn: document.getElementById("micBtn"),
+    leaveBtn: document.getElementById("leaveBtn"),
+    members: document.getElementById("members"),
+    log: document.getElementById("log"),
+    chatRow: document.getElementById("chatRow"),
+    chatInput: document.getElementById("chatInput"),
+    sendBtn: document.getElementById("sendBtn"),
+  };
+
+  var ws = null, myId = null, myName = "dev", roomCode = "";
+  var peers = {}; // clientId -> { pc, audioEl }
+  var micStream = null, micOn = false;
+
+  function logLine(html, cls) {
+    var d = document.createElement("div");
+    d.className = "msg" + (cls ? " " + cls : "");
+    d.innerHTML = html;
+    els.log.appendChild(d);
+    els.log.scrollTop = els.log.scrollHeight;
+  }
+
+  els.newCodeBtn.addEventListener("click", function () {
+    fetch(NEW_CODE_URL, { method: "POST" }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.code) els.codeInput.value = d.code;
+    }).catch(function () { logLine("Couldn't reach the dev-room server — is the PhantomForce API running on :5190?", "sys"); });
+  });
+
+  els.joinBtn.addEventListener("click", function () {
+    var code = (els.codeInput.value || "").trim().toUpperCase();
+    myName = (els.nameInput.value || "").trim() || "dev";
+    if (!code) { logLine("Enter or generate a room code first.", "sys"); return; }
+    joinRoom(code);
+  });
+  els.leaveBtn.addEventListener("click", leaveRoom);
+  els.chatInput.addEventListener("keydown", function (e) { if (e.key === "Enter") sendChat(); });
+  els.sendBtn.addEventListener("click", sendChat);
+  els.micBtn.addEventListener("click", toggleMic);
+
+  function joinRoom(code) {
+    roomCode = code;
+    ws = new WebSocket(WS_URL + encodeURIComponent(code));
+    ws.onopen = function () { ws.send(JSON.stringify({ type: "join", name: myName })); };
+    ws.onclose = function () { logLine("Disconnected from the room.", "sys"); resetUi(); };
+    ws.onerror = function () { logLine("Connection error.", "sys"); };
+    ws.onmessage = function (evt) {
+      var msg;
+      try { msg = JSON.parse(evt.data); } catch (e) { return; }
+      handleMessage(msg);
+    };
+  }
+
+  function handleMessage(msg) {
+    if (msg.type === "joined") {
+      myId = msg.clientId;
+      els.joinRow.style.display = "none";
+      els.roomRow.style.display = "flex";
+      els.members.style.display = "flex";
+      els.chatRow.style.display = "flex";
+      els.roomCode.textContent = roomCode;
+      renderMembers(msg.members);
+      logLine("Joined room <b>" + roomCode + "</b> as " + myName, "sys");
+      msg.members.forEach(function (m) { if (m.clientId !== myId) maybeConnectPeer(m.clientId); });
+      return;
+    }
+    if (msg.type === "presence") {
+      var known = Object.keys(peers);
+      var now = msg.members.map(function (m) { return m.clientId; });
+      known.forEach(function (id) { if (now.indexOf(id) === -1) dropPeer(id); });
+      renderMembers(msg.members);
+      msg.members.forEach(function (m) { if (m.clientId !== myId) maybeConnectPeer(m.clientId); });
+      return;
+    }
+    if (msg.type === "chat") {
+      logLine("<b>" + escapeHtml(msg.name) + "</b>: " + escapeHtml(msg.text));
+      return;
+    }
+    if (msg.type === "file-sync") {
+      logLine("<b>" + msg.from.slice(0, 6) + "</b> saved <code>" + escapeHtml(msg.path) + "</code> (" + msg.content.length + " chars)", "sys");
+      return;
+    }
+    if (msg.type === "signal") { handleSignal(msg.from, msg.data); return; }
+    if (msg.type === "error") { logLine("Error: " + escapeHtml(msg.message), "sys"); }
+  }
+
+  function renderMembers(members) {
+    els.members.innerHTML = "";
+    members.forEach(function (m) {
+      var span = document.createElement("span");
+      span.className = "member" + (m.clientId === myId ? " me" : "");
+      span.textContent = m.name + (m.clientId === myId ? " (you)" : "");
+      els.members.appendChild(span);
+    });
+  }
+
+  function sendChat() {
+    var text = (els.chatInput.value || "").trim();
+    if (!text || !ws) return;
+    ws.send(JSON.stringify({ type: "chat", text: text }));
+    els.chatInput.value = "";
+  }
+
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  // ---- WebRTC full mesh: lower clientId always initiates the offer, so a
+  // pair of peers never race each other into two simultaneous offers. -----
+  function maybeConnectPeer(peerId) {
+    if (peers[peerId] || peerId === myId) return;
+    var initiator = myId < peerId;
+    var pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+    peers[peerId] = { pc: pc, audioEl: null };
+    if (micStream) micStream.getTracks().forEach(function (t) { pc.addTrack(t, micStream); });
+    pc.onicecandidate = function (e) { if (e.candidate) sendSignal(peerId, { kind: "ice", candidate: e.candidate }); };
+    pc.ontrack = function (e) {
+      var audio = document.createElement("audio");
+      audio.autoplay = true;
+      audio.srcObject = e.streams[0];
+      document.body.appendChild(audio);
+      peers[peerId].audioEl = audio;
+    };
+    if (initiator) {
+      pc.onnegotiationneeded = function () {
+        pc.createOffer().then(function (offer) { return pc.setLocalDescription(offer); }).then(function () {
+          sendSignal(peerId, { kind: "offer", sdp: pc.localDescription });
+        });
+      };
+    }
+  }
+  function dropPeer(peerId) {
+    var p = peers[peerId];
+    if (!p) return;
+    try { p.pc.close(); } catch (e) {}
+    if (p.audioEl) p.audioEl.remove();
+    delete peers[peerId];
+  }
+  function sendSignal(to, data) { if (ws) ws.send(JSON.stringify({ type: "signal", to: to, data: data })); }
+  function handleSignal(from, data) {
+    maybeConnectPeer(from);
+    var pc = peers[from].pc;
+    if (data.kind === "offer") {
+      pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
+        .then(function () { return pc.createAnswer(); })
+        .then(function (answer) { return pc.setLocalDescription(answer); })
+        .then(function () { sendSignal(from, { kind: "answer", sdp: pc.localDescription }); });
+    } else if (data.kind === "answer") {
+      pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    } else if (data.kind === "ice") {
+      pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(function () {});
+    }
+  }
+
+  function toggleMic() {
+    if (!micOn) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+        micStream = stream;
+        micOn = true;
+        els.micBtn.textContent = "🎙 Mic on";
+        els.micBtn.classList.add("on");
+        Object.keys(peers).forEach(function (id) { stream.getTracks().forEach(function (t) { peers[id].pc.addTrack(t, stream); }); });
+      }).catch(function () { logLine("Microphone permission was denied.", "sys"); });
+    } else {
+      if (micStream) micStream.getTracks().forEach(function (t) { t.stop(); });
+      micStream = null;
+      micOn = false;
+      els.micBtn.textContent = "🎙 Mic off";
+      els.micBtn.classList.remove("on");
+    }
+  }
+
+  function leaveRoom() {
+    if (ws) ws.close();
+    Object.keys(peers).forEach(dropPeer);
+    if (micStream) micStream.getTracks().forEach(function (t) { t.stop(); });
+    micStream = null; micOn = false;
+    resetUi();
+  }
+  function resetUi() {
+    els.joinRow.style.display = "flex";
+    els.roomRow.style.display = "none";
+    els.members.style.display = "none";
+    els.chatRow.style.display = "none";
+    els.log.innerHTML = "";
+  }
+})();
+</script>
+</body>
+</html>

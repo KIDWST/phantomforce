@@ -1,0 +1,6 @@
+[application]
+name = "PhantomPlay"
+
+[bundle]
+identifier = "online.phantomforce.phantomplay"
+publisher = "PhantomForce"
