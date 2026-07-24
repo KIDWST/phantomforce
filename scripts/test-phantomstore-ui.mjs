@@ -24,6 +24,14 @@ assert.match(storeSource, /\/api\/phantomstore\/products\/\$\{encodeURIComponent
 assert.match(storeSource, /This is not Site Builder\. This is not Store Builder\. PhantomStore is its own AI marketplace\./u, "UI must name PhantomStore as separate from Site Builder and Store Builder.");
 assert.match(storeSource, /Seller directory/u, "Discovery must include a seller directory.");
 assert.match(storeSource, /Ready to buy/u, "Discovery must expose ready-to-buy products before community tools.");
+assert.match(storeSource, /const MARKET_FILTERS/u, "PhantomStore must expose buyer lane filters.");
+assert.match(storeSource, /Audio Engineering/u, "PhantomStore must include an Audio Engineering buyer lane.");
+assert.match(storeSource, /Game Development/u, "PhantomStore must include a Game Development buyer lane.");
+assert.match(storeSource, /data-ps-product-filter/u, "PhantomStore buyer lanes must be clickable filters, not decoration.");
+assert.match(storeSource, /function activeSellerProfiles\(\)/u, "Seller tab must only show active product sellers, developers, or seller profiles.");
+assert.match(storeSource, /function renderSellers\(\)/u, "PhantomStore must render a dedicated Sellers tab.");
+assert.match(storeSource, /\["discover", "Discover"\][\s\S]*\["sellers", "Sellers"\][\s\S]*\["library", "Library"\]/u, "PhantomStore tabs must expose Sellers before Library.");
+assert.match(storeSource, /ps-storefront/u, "PhantomStore discover must start with a storefront hero, not a plain admin list.");
 assert.match(storeSource, /const PRODUCT_ART_FALLBACKS/u, "PhantomStore must provide product artwork fallbacks when listings are missing images.");
 assert.match(storeSource, /beatforge-cover\.svg/u, "PhantomStore must have BeatForge product art instead of reusing PhantomForce OS art.");
 assert.match(storeSource + backendSource, /phantombot-cover\.svg/u, "PhantomStore must give Phantombot products real cover art instead of blank cards.");
@@ -84,6 +92,9 @@ for (const selector of [".ps-shell", ".ps-market-hero", ".ps-tool", ".ps-product
 }
 for (const selector of [".ps-library", ".ps-library-grid", ".ps-library-card", ".ps-library-note"]) {
   assert.ok(storeCss.includes(selector), `${selector} lifecycle style must be present.`);
+}
+for (const selector of [".ps-filterbar", ".ps-feature-strip", ".ps-domain", ".ps-seller-products", ".ps-seller-market"]) {
+  assert.ok(storeCss.includes(selector), `${selector} marketplace filter style must be present.`);
 }
 assert.match(storeCss, /\.ps-product-media img\{[^}]*object-fit:contain/u, "PhantomStore product images must show the full cover art instead of cropped/zoomed media.");
 assert.match(storeCss, /\.ps-product-media img\{[^}]*transform:none/u, "PhantomStore product images must not be zoomed with transforms.");

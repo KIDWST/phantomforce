@@ -2,6 +2,15 @@ import { currentTenantId, friendlyBackendError, session } from "./store.js?v=pha
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
+const MARKET_FILTERS = [
+  { id: "all", label: "All", hint: "Everything live" },
+  { id: "audio", label: "Audio Engineering", hint: "DAW, vocals, beats", match: /beat|drum|kit|midi|daw|producer|vocal|vox|voice|autotune|pitch|song|reaper|audio/i },
+  { id: "game-dev", label: "Game Development", hint: "Games, mods, engines", match: /game|phantomplay|sprite|unity|unreal|webgl|level|mod|devroom|sandbox/i },
+  { id: "automation", label: "Automation + Agents", hint: "CLI, local AI, workflows", match: /agent|automation|terminal|cli|workflow|coding|local ai|self-hosted|orchestrat/i },
+  { id: "creator", label: "Creator Tools", hint: "Media, video, social", match: /media|video|image|caption|creator|social|content|plugin/i },
+  { id: "business", label: "Business Ops", hint: "CRM, analytics, command", match: /business|crm|analytics|workspace|admin|command|approval|store|website/i },
+  { id: "local", label: "Local + Privacy", hint: "Offline and private", match: /local|privacy|self-hosted|desktop|offline|private/i },
+];
 const INSTALL_METHODS = ["manual", "npm", "pip", "git", "docker", "brew", "binary"];
 const cssEscape = (value) => globalThis.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, "\\$&");
 const safeHref = (value) => {
@@ -23,6 +32,7 @@ const ui = {
   message: "",
   query: "",
   category: "All",
+  productFilter: "all",
   snapshot: null,
   installToolId: "",
   installMessage: "",
@@ -96,21 +106,65 @@ function visibleCatalog() {
   }).sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || Number(b.installClicks || 0) - Number(a.installClicks || 0) || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
+function allProducts() {
+  return Array.isArray(ui.snapshot?.products) ? ui.snapshot.products : [];
+}
+
+function productSearchText(product = {}) {
+  const seller = product.seller || {};
+  return `${product.name || ""} ${product.summary || ""} ${product.description || ""} ${product.category || ""} ${product.delivery || ""} ${(product.tags || []).join(" ")} ${(product.badges || []).join(" ")} ${seller.name || ""}`.toLowerCase();
+}
+
+function productDomain(product = {}) {
+  const text = productSearchText(product);
+  return MARKET_FILTERS.find((filter) => filter.id !== "all" && filter.match?.test(text))?.label || product.category || "Marketplace";
+}
+
+function productMatchesMarket(product = {}) {
+  const filter = MARKET_FILTERS.find((item) => item.id === ui.productFilter) || MARKET_FILTERS[0];
+  return filter.id === "all" || Boolean(filter.match?.test(productSearchText(product)));
+}
+
+function filterCount(filter, products = allProducts()) {
+  if (filter.id === "all") return products.length;
+  return products.filter((product) => filter.match?.test(productSearchText(product))).length;
+}
+
+function liveProducts() {
+  return allProducts().filter((product) => product.status === "available");
+}
+
+function sellerActiveProducts(sellerId) {
+  return liveProducts().filter((product) => product.sellerId === sellerId || product.seller?.id === sellerId);
+}
+
+function activeSellerProfiles() {
+  const sellers = Array.isArray(ui.snapshot?.sellers) ? ui.snapshot.sellers : [];
+  return sellers.filter((seller) => {
+    const activeCount = sellerActiveProducts(seller.id).length;
+    const roleText = `${seller.role || ""} ${seller.type || ""} ${seller.tagline || ""} ${seller.summary || ""}`;
+    return activeCount > 0 || /developer|seller/i.test(roleText);
+  });
+}
+
 function visibleProducts() {
-  const products = Array.isArray(ui.snapshot?.products) ? ui.snapshot.products : [];
+  const products = allProducts();
   const q = ui.query.trim().toLowerCase();
   return products.filter((product) => {
-    const haystack = `${product.name || ""} ${product.summary || ""} ${product.description || ""} ${(product.tags || []).join(" ")} ${product.seller?.name || ""}`.toLowerCase();
-    return !q || haystack.includes(q);
+    const haystack = productSearchText(product);
+    return productMatchesMarket(product) && (!q || haystack.includes(q));
   }).sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || Number(b.rating || 0) - Number(a.rating || 0));
 }
 
 function visibleSellers() {
-  const sellers = Array.isArray(ui.snapshot?.sellers) ? ui.snapshot.sellers : [];
+  const sellers = activeSellerProfiles();
   const q = ui.query.trim().toLowerCase();
   return sellers.filter((seller) => {
-    const haystack = `${seller.name || ""} ${seller.tagline || ""} ${seller.summary || ""}`.toLowerCase();
-    return !q || haystack.includes(q);
+    const products = sellerActiveProducts(seller.id);
+    const matchesMarket = ui.productFilter === "all" || products.some(productMatchesMarket);
+    const productText = products.map(productSearchText).join(" ");
+    const haystack = `${seller.name || ""} ${seller.tagline || ""} ${seller.summary || ""} ${productText}`.toLowerCase();
+    return matchesMarket && (!q || haystack.includes(q));
   }).sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || Number(b.rating || 0) - Number(a.rating || 0));
 }
 
@@ -323,6 +377,7 @@ function productCard(product) {
       <div>
         <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")}</p>
         <h3>${esc(product.name)}</h3>
+        <i class="ps-domain">${esc(productDomain(product))}</i>
       </div>
       <span>${esc(product.priceLabel || "Contact")}</span>
     </header>
@@ -394,6 +449,7 @@ function renderLibrary() {
 function sellerCard(seller) {
   const websiteUrl = safeHref(seller.websiteUrl);
   const supportUrl = safeHref(seller.supportUrl);
+  const active = sellerActiveProducts(seller.id);
   return `<article class="ps-seller">
     <header>
       <div>
@@ -403,13 +459,57 @@ function sellerCard(seller) {
       <span>${esc(seller.rating || "New")} / 5</span>
     </header>
     <p>${esc(seller.tagline || seller.summary || "")}</p>
-    <small>${Number(seller.productCount || 0)} products / ${Number(seller.reviewCount || 0)} seller reviews</small>
+    <small>${active.length || Number(seller.productCount || 0)} active products / ${Number(seller.reviewCount || 0)} seller reviews</small>
+    ${active.length ? `<div class="ps-seller-products">${active.slice(0, 4).map((product) => `<button type="button" data-ps-product-filter="${esc(MARKET_FILTERS.find((filter) => filter.label === productDomain(product))?.id || "all")}"><b>${esc(product.name)}</b><span>${esc(productDomain(product))}</span></button>`).join("")}</div>` : ""}
     ${reviewList(seller.reviews || [])}
     <div class="ps-card-actions">
       ${websiteUrl ? `<a class="ps-secondary" href="${esc(websiteUrl)}" target="_blank" rel="noopener noreferrer">Website</a>` : ""}
       ${supportUrl ? `<a class="ps-secondary" href="${esc(supportUrl)}" target="_blank" rel="noopener noreferrer">Support</a>` : ""}
     </div>
   </article>`;
+}
+
+function marketFilterBar(products = allProducts()) {
+  return `<div class="ps-filterbar" aria-label="Product lanes">
+    ${MARKET_FILTERS.map((filter) => `<button type="button" class="${ui.productFilter === filter.id ? "is-active" : ""}" data-ps-product-filter="${esc(filter.id)}">
+      <b>${esc(filter.label)}</b><span>${esc(filter.hint)} / ${filterCount(filter, products)}</span>
+    </button>`).join("")}
+  </div>`;
+}
+
+function storeFrontStats(products = allProducts(), sellers = activeSellerProfiles()) {
+  const productCount = products.length;
+  const reviews = products.reduce((sum, product) => sum + Number(product.reviewCount || 0), 0);
+  const lanes = MARKET_FILTERS.filter((filter) => filter.id !== "all" && filterCount(filter, products)).length;
+  return `<div class="ps-feature-strip" aria-label="Storefront stats">
+    <span><b>${productCount}</b><i>live products</i></span>
+    <span><b>${sellers.length}</b><i>active sellers</i></span>
+    <span><b>${lanes}</b><i>buyer lanes</i></span>
+    <span><b>${reviews}</b><i>reviews</i></span>
+  </div>`;
+}
+
+function renderSellers() {
+  const sellers = visibleSellers();
+  const products = liveProducts();
+  return `<section class="ps-sellers-page">
+    <div class="ps-market-hero ps-sellers-hero">
+      <div>
+        <p class="ps-kicker">SELLERS</p>
+        <h2>Active makers only.</h2>
+        <p>Seller profiles show up when they have live products, developer status, or a seller role. No empty storefronts, no fake shelf space.</p>
+      </div>
+      ${storeFrontStats(products, sellers)}
+    </div>
+    <div class="ps-tools">
+      <label class="ps-search">
+        <span>Search sellers</span>
+        <input data-ps-search value="${esc(ui.query)}" placeholder="Seller, product, audio engineering, game development..." />
+      </label>
+      ${marketFilterBar(products)}
+    </div>
+    <div class="ps-seller-grid ps-seller-market">${sellers.length ? sellers.map(sellerCard).join("") : emptyState("No active sellers match", "Clear filters or list a product before a seller appears here.")}</div>
+  </section>`;
 }
 
 function toolCard(tool) {
@@ -463,17 +563,27 @@ function renderDiscover() {
   const catalog = visibleCatalog();
   const products = visibleProducts();
   const sellers = visibleSellers();
+  const allLiveProducts = liveProducts();
   return `<section class="ps-discover">
     ${ui.snapshot?.readOnlyFallback ? `<div class="ps-fallback-note"><b>Live sync is offline.</b><span>Showing the local PhantomStore product catalog. Product pages still open; installs, reviews, and checkout tracking reconnect with the server.</span></div>` : ""}
+    <div class="ps-market-hero ps-storefront">
+      <div>
+        <p class="ps-kicker">PHANTOMSTORE</p>
+        <h2>Software worth buying.</h2>
+        <p>Browse real PhantomForce products, seller proof, reviews, and operator tools by lane. Audio engineering, game development, automation, creator tooling, and local-first apps live in one marketplace.</p>
+      </div>
+      ${storeFrontStats(allLiveProducts, sellers)}
+    </div>
     <div class="ps-tools">
       <label class="ps-search">
         <span>Search store</span>
-        <input data-ps-search value="${esc(ui.query)}" placeholder="Termina, sellers, agents, CLI, templates..." />
+        <input data-ps-search value="${esc(ui.query)}" placeholder="Termina, vocal tools, game dev, automation, sellers..." />
       </label>
+      ${marketFilterBar(allLiveProducts)}
     </div>
     <div class="ps-section-head ps-section-gap">
       <div>
-        <p class="ps-kicker">PRODUCTS</p>
+        <p class="ps-kicker">PRODUCTS / ${esc(MARKET_FILTERS.find((filter) => filter.id === ui.productFilter)?.label || "All")}</p>
         <h2>Ready to buy</h2>
       </div>
       <span>${products.length} products</span>
@@ -484,7 +594,7 @@ function renderDiscover() {
         <p class="ps-kicker">SELLERS</p>
         <h2>Seller directory</h2>
       </div>
-      <span>${sellers.length} sellers</span>
+      <button type="button" class="ps-secondary ps-open-sellers" data-ps-tab-jump="sellers">${sellers.length} sellers</button>
     </div>
     <div class="ps-seller-grid">${sellers.length ? sellers.map(sellerCard).join("") : emptyState("No sellers match", "Seller profiles appear here with their products and reviews.")}</div>
     <div class="ps-market-hero ps-section-gap">
@@ -637,6 +747,7 @@ function renderSubmissions() {
 function renderContent() {
   if (ui.loading) return `<div class="ps-loading"><i></i><b>Loading PhantomStore...</b></div>`;
   if (ui.error) return `<div class="ps-error"><b>PhantomStore is not available.</b><span>${esc(ui.error)}</span><button type="button" data-ps-refresh>Try again</button></div>`;
+  if (ui.tab === "sellers") return renderSellers();
   if (ui.tab === "library") return renderLibrary();
   if (ui.tab === "submit") return renderSubmit();
   if (ui.tab === "review") return renderSubmissions();
@@ -660,7 +771,7 @@ function render() {
       </div>
     </header>
     <nav class="ps-tabs" aria-label="PhantomStore sections">
-      ${[["discover", "Discover"], ["library", "Library"], ["submit", "Submit"], ["review", ui.snapshot?.canModerate ? "Review" : "My tools"]].map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-ps-tab="${id}">${label}</button>`).join("")}
+      ${[["discover", "Discover"], ["sellers", "Sellers"], ["library", "Library"], ["submit", "Submit"], ["review", ui.snapshot?.canModerate ? "Review" : "My tools"]].map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-ps-tab="${id}">${label}</button>`).join("")}
     </nav>
     ${renderContent()}
   </section>`;
@@ -851,6 +962,9 @@ function bind() {
   mountedRoot.querySelectorAll("[data-ps-tab]").forEach((button) => {
     button.onclick = () => { ui.tab = button.dataset.psTab || "discover"; ui.message = ""; if (ui.tab !== "submit") ui.editingToolId = ""; render(); };
   });
+  mountedRoot.querySelectorAll("[data-ps-tab-jump]").forEach((button) => {
+    button.onclick = () => { ui.tab = button.dataset.psTabJump || "discover"; ui.message = ""; render(); };
+  });
   mountedRoot.querySelectorAll("[data-ps-edit]").forEach((button) => {
     button.onclick = () => { ui.editingToolId = button.dataset.psEdit || ""; ui.message = ""; ui.tab = "submit"; render(); };
   });
@@ -885,6 +999,9 @@ function bind() {
   });
   mountedRoot.querySelectorAll("[data-ps-category]").forEach((button) => {
     button.onclick = () => { ui.category = button.dataset.psCategory || "All"; render(); };
+  });
+  mountedRoot.querySelectorAll("[data-ps-product-filter]").forEach((button) => {
+    button.onclick = () => { ui.productFilter = button.dataset.psProductFilter || "all"; render(); };
   });
   mountedRoot.querySelectorAll("[data-ps-install]").forEach((button) => {
     button.onclick = () => recordInstall(button.dataset.psInstall || "");

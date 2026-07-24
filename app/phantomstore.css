@@ -156,6 +156,145 @@ html[data-org-color-mode="light"] .ps-product-media{
 .ps-card-actions{
   margin-top:auto;
 }
+.ps-storefront,
+.ps-sellers-hero{
+  margin-bottom:16px;
+  border-radius:18px;
+  background:
+    radial-gradient(620px 280px at 80% 12%,rgba(66,233,255,.16),transparent 58%),
+    radial-gradient(480px 240px at 18% 0,rgba(65,255,161,.18),transparent 56%),
+    linear-gradient(135deg,rgba(7,20,15,.98),rgba(2,8,7,.99));
+}
+html[data-org-color-mode="light"] .ps-storefront,
+html[data-org-color-mode="light"] .ps-sellers-hero{
+  background:
+    radial-gradient(620px 280px at 80% 12%,rgba(66,150,255,.13),transparent 58%),
+    radial-gradient(480px 240px at 18% 0,rgba(35,185,120,.18),transparent 56%),
+    linear-gradient(135deg,rgba(255,255,255,.98),rgba(241,247,244,.98));
+}
+.ps-feature-strip{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  align-content:center;
+}
+.ps-feature-strip span{
+  min-width:0;
+  padding:14px;
+  border:1px solid rgba(65,255,161,.22);
+  border-radius:14px;
+  background:rgba(0,0,0,.22);
+}
+html[data-org-color-mode="light"] .ps-feature-strip span{
+  background:rgba(33,48,42,.045);
+}
+.ps-feature-strip b,
+.ps-feature-strip i{
+  display:block;
+}
+.ps-feature-strip b{
+  color:var(--neon);
+  font-size:clamp(20px,2vw,31px);
+  line-height:1;
+}
+.ps-feature-strip i{
+  margin-top:5px;
+  color:var(--ps-soft);
+  font:900 9px "Spline Sans Mono",monospace;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.ps-filterbar{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:9px;
+}
+.ps-filterbar button{
+  min-width:0;
+  display:grid;
+  gap:4px;
+  justify-items:start;
+  padding:12px 13px;
+  border:1px solid rgba(129,180,158,.2);
+  border-radius:13px;
+  background:rgba(255,255,255,.025);
+  color:var(--ink);
+  cursor:pointer;
+  text-align:left;
+}
+html[data-org-color-mode="light"] .ps-filterbar button{
+  background:rgba(33,48,42,.035);
+}
+.ps-filterbar button.is-active{
+  border-color:rgba(65,255,161,.72);
+  background:linear-gradient(135deg,rgba(65,255,161,.2),rgba(66,233,255,.08));
+  box-shadow:0 0 0 1px rgba(65,255,161,.16),0 18px 36px rgba(65,255,161,.08);
+}
+.ps-filterbar b{
+  font-size:13px;
+  line-height:1.1;
+}
+.ps-filterbar span{
+  color:var(--ps-soft);
+  font:800 9px "Spline Sans Mono",monospace;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.ps-domain{
+  display:inline-flex;
+  width:max-content;
+  max-width:100%;
+  margin-top:8px;
+  padding:5px 8px;
+  border:1px solid rgba(66,233,255,.24);
+  border-radius:999px;
+  background:rgba(66,233,255,.07);
+  color:#8beeff;
+  font:900 9px "Spline Sans Mono",monospace;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  font-style:normal;
+}
+html[data-org-color-mode="light"] .ps-domain{
+  color:#157a8a;
+}
+.ps-seller-market{
+  grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));
+}
+.ps-seller-products{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:7px;
+}
+.ps-seller-products button{
+  min-width:0;
+  display:grid;
+  gap:3px;
+  padding:9px 10px;
+  border:1px solid rgba(65,255,161,.2);
+  border-radius:10px;
+  background:rgba(65,255,161,.06);
+  color:var(--ink);
+  cursor:pointer;
+  text-align:left;
+}
+.ps-seller-products b{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:11px;
+}
+.ps-seller-products span{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--ps-soft);
+  font:800 8px "Spline Sans Mono",monospace;
+  text-transform:uppercase;
+}
+.ps-open-sellers{
+  min-height:34px;
+}
 .ps-primary,
 .ps-secondary{
   border-radius:10px;
@@ -201,6 +340,16 @@ html[data-org-color-mode="light"] .ps-secondary{
   }
 }
 @media(max-width:640px){
+  .ps-filterbar{
+    grid-template-columns:1fr 1fr;
+  }
+  .ps-feature-strip{
+    grid-template-columns:1fr 1fr;
+  }
+  .ps-storefront,
+  .ps-sellers-hero{
+    border-radius:14px;
+  }
   .ps-product{
     border-radius:14px;
     padding:14px;

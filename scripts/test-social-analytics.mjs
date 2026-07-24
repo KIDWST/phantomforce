@@ -45,6 +45,13 @@ assert.ok(
 assert.match(contentHubSource, /officialchicagoshots/, "Social handles should default to Jordan's ChicagoShots handle.");
 assert.match(contentHubSource, /LIVE_ANALYTICS_PLATFORMS = new Set\(PLATFORMS\.map/, "Analytics should show every social channel, not only the original four.");
 assert.match(contentHubSource, /data-an-oauth/, "Analytics rows should start official account authorization when OAuth is ready.");
+assert.match(contentHubSource, /ANALYTICS_MONITOR_KEY/, "Analytics monitor visibility must persist per workspace.");
+assert.match(contentHubSource, /data-an-monitor/, "Analytics must let users toggle visible monitors.");
+assert.match(contentHubSource, /Product analytics monitor/, "Analytics must include a PhantomStore product analytics monitor.");
+assert.match(contentHubSource, /Social media monitor/, "Analytics must include a social media monitor.");
+assert.match(contentHubSource, /renderProductAnalyticsMonitor/, "Product analytics monitor must render from a dedicated function.");
+assert.match(contentHubSource, /renderSocialMediaMonitor/, "Social analytics monitor must render from a dedicated function.");
+assert.match(contentHubSource, /PRODUCT_ANALYTICS_SEED/, "Analytics must have useful PhantomStore product signals before checkout telemetry is fully live.");
 assert.match(contentHubSource, /data-open-ws="settings" data-settings-target="media"/, "Provider app setup belongs in Settings, not duplicated on Analytics.");
 assert.doesNotMatch(contentHubSource, /data-an-show-oauth-setup/, "Analytics must not expose inline provider app setup controls.");
 assert.doesNotMatch(contentHubSource, /data-an-oauth-setup/, "Analytics must not render the owner-only provider credentials form.");
@@ -64,8 +71,8 @@ assert.doesNotMatch(contentHubSource, /OAuth is required before real stats appea
 assert.match(mediaLabSource, /Editable handle or profile URL/, "Media settings must let Jordan change handles per channel.");
 assert.match(mediaLabSource, /cross-posting remain locked until OAuth\/API authorization/, "Profile handles must not imply cross-posting is authorized.");
 assert.match(mediaLabSource, /refreshSocialOAuthStatus/, "Media settings must preload backend OAuth readiness instead of discovering it only after clicks.");
-assert.match(mediaLabSource, /OAuth app ready for authorization/, "Media settings should show when a provider app is ready for real OAuth.");
-assert.match(mediaLabSource, /OAuth setup needed/, "Media settings should clearly show missing provider app setup.");
+assert.match(mediaLabSource, /OAuth app ready\. Click connect and approve once\./, "Media settings should show when a provider app is ready for real OAuth.");
+assert.match(mediaLabSource, /No OAuth-ready provider apps are available yet\. Open Developer provider setup once/u, "Media settings should clearly show missing provider app setup.");
 assert.match(mediaLabSource, /data-oauth-setup-form/, "Media settings must include the owner-only OAuth app setup form.");
 assert.match(mediaLabSource, /\/phantom-ai\/ops\/social-oauth\/setup/, "Media settings must save provider OAuth app credentials server-side.");
 assert.match(mediaLabSource, /Callback URL for provider consoles/, "Media settings must show the exact callback URL to paste into provider consoles.");
@@ -81,4 +88,7 @@ assert.match(serverSource, /saveSocialOAuthSetup/, "Server must write OAuth app 
 assert.match(serverSource, /window\.opener.*postMessage/, "OAuth callback should notify the opener when available.");
 assert.match(serverSource, /pf\.social\.oauth\.last/, "OAuth callback should write a same-origin completion marker for noopener popups.");
 assert.match(phantomCss, /Mobile shell cleanup: bottom dock only\./, "Old horizontal mobile sidebar rules must stay disabled.");
+assert.match(phantomCss, /\.an-monitor-config/u, "Analytics monitor controls must be styled.");
+assert.match(phantomCss, /\.an-product-monitor/u, "Product analytics monitor must be styled.");
+assert.match(phantomCss, /\.an-social-monitor/u, "Social analytics monitor must be styled.");
 console.log("Social analytics live OAuth checks passed.");

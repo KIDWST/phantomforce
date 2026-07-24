@@ -3482,6 +3482,18 @@ function openPost(p, esc) {
    ========================================================================= */
 const LIVE_ANALYTICS_PLATFORMS = new Set(PLATFORMS.map((platform) => platform.id));
 const ANALYTICS_REFRESH_MS = 15 * 60 * 1000;
+const ANALYTICS_MONITOR_KEY = "pf.analytics.monitors.v1";
+const ANALYTICS_MONITORS = [
+  { id: "social", label: "Social media monitor", copy: "Live OAuth, reach, engagement, and channel readiness." },
+  { id: "products", label: "Product analytics monitor", copy: "PhantomStore products, listing health, interest, and launch gates." },
+];
+const PRODUCT_ANALYTICS_SEED = [
+  { id: "termina", name: "Termina", lane: "Automation + Agents", status: "Launch QA", seller: "PhantomForce", views: 2140, clicks: 311, revenue: "$0", next: "Finish multi-CLI send reliability before public push." },
+  { id: "phantom-vocal-ai", name: "Phantom Vocal AI", lane: "Audio Engineering", status: "Plugin QA", seller: "PhantomForce", views: 1280, clicks: 146, revenue: "$0", next: "Ship prompt-first sliders and Reaper refresh path." },
+  { id: "beatforge", name: "BeatForge", lane: "Audio Engineering", status: "Product page", seller: "PhantomForce", views: 980, clicks: 119, revenue: "$0", next: "Connect accurate drum-pack mapping proof." },
+  { id: "phantombot", name: "Phantombot", lane: "Automation + Agents", status: "Private release", seller: "PhantomForce", views: 760, clicks: 84, revenue: "$0", next: "Package stable local-only release notes." },
+  { id: "phantomplay-dev", name: "PhantomPlay Dev Mode", lane: "Game Development", status: "Dev preview", seller: "PhantomForce", views: 630, clicks: 77, revenue: "$0", next: "Finalize code editor autosave and sandbox mode." },
+];
 const analyticsConnectorState = {
   loaded: false,
   loading: false,
@@ -3757,6 +3769,94 @@ function analyticsCoverage(feedRows = []) {
     <div class="an-coverage-copy"><b>Channel coverage</b><p>${live ? `${live} verified data source${live === 1 ? "" : "s"} active.` : "Connect your channels to activate reporting."}</p></div>
   </div>`;
 }
+
+function loadAnalyticsMonitorPrefs() {
+  const defaults = { social: true, products: true, customer: true };
+  try {
+    const saved = JSON.parse(workspaceStorageGetItem(ANALYTICS_MONITOR_KEY) || "{}") || {};
+    return ANALYTICS_MONITORS.reduce((prefs, monitor) => {
+      prefs[monitor.id] = saved[monitor.id] === undefined ? defaults[monitor.id] !== false : Boolean(saved[monitor.id]);
+      return prefs;
+    }, {});
+  } catch {
+    return defaults;
+  }
+}
+
+function saveAnalyticsMonitorPrefs(prefs = {}) {
+  try { workspaceStorageSetItem(ANALYTICS_MONITOR_KEY, JSON.stringify(prefs)); } catch {}
+}
+
+function analyticsMonitorControls(prefs = {}, esc) {
+  return `<section class="an-monitor-config" aria-label="Analytics monitor configuration">
+    <div>
+      <p class="ch-eyebrow">Analytics layout</p>
+      <h3>Choose what this page monitors.</h3>
+    </div>
+    <div class="an-monitor-toggles">
+      ${ANALYTICS_MONITORS.map((monitor) => `<button type="button" class="${prefs[monitor.id] ? "is-on" : ""}" data-an-monitor="${esc(monitor.id)}" aria-pressed="${prefs[monitor.id] ? "true" : "false"}">
+        <b>${esc(monitor.label)}</b><span>${esc(monitor.copy)}</span>
+      </button>`).join("")}
+    </div>
+  </section>`;
+}
+
+function productAnalyticsRows() {
+  const savedProducts = Array.isArray(store?.state?.products) ? store.state.products : [];
+  const mapped = savedProducts.slice(0, 8).map((product, index) => ({
+    id: product.id || `workspace-product-${index}`,
+    name: product.name || product.title || `Workspace product ${index + 1}`,
+    lane: product.category || product.type || "Business Ops",
+    status: product.status || "Configured",
+    seller: wsName?.() || "Workspace",
+    views: Number(product.views || product.analytics?.views || 0),
+    clicks: Number(product.clicks || product.analytics?.clicks || 0),
+    revenue: product.revenueLabel || product.priceLabel || "$0",
+    next: product.nextAction || "Add storefront analytics, reviews, and purchase tracking.",
+  }));
+  const ids = new Set(mapped.map((product) => product.id));
+  return [...mapped, ...PRODUCT_ANALYTICS_SEED.filter((product) => !ids.has(product.id))];
+}
+
+function renderProductAnalyticsMonitor(esc) {
+  const rows = productAnalyticsRows();
+  const totalViews = rows.reduce((sum, row) => sum + Number(row.views || 0), 0);
+  const totalClicks = rows.reduce((sum, row) => sum + Number(row.clicks || 0), 0);
+  const clickRate = totalViews ? Math.round(totalClicks / totalViews * 1000) / 10 : 0;
+  return `<section class="ch-card an-product-monitor" aria-label="Product analytics monitor">
+    <div class="ch-card-h"><div><p class="ch-eyebrow">Product analytics monitor</p><h3>PhantomStore performance</h3></div><span>${rows.length} products</span></div>
+    <div class="an-product-kpis">
+      ${kpi("Store views", K(totalViews), "product page interest")}
+      ${kpi("Buy clicks", K(totalClicks), "checkout intent")}
+      ${kpi("Click rate", `${clickRate}%`, "views to buy clicks")}
+      ${kpi("Launch gates", K(rows.filter((row) => /qa|preview|gate|finish|connect/i.test(`${row.status} ${row.next}`)).length), "needs work")}
+    </div>
+    <div class="an-product-table">
+      ${rows.map((row) => `<article>
+        <div><b>${esc(row.name)}</b><span>${esc(row.lane)} / ${esc(row.seller)}</span></div>
+        <strong>${esc(row.status)}</strong>
+        <span>${K(row.views)} views</span>
+        <span>${K(row.clicks)} clicks</span>
+        <em>${esc(row.next)}</em>
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function renderSocialMediaMonitor({ feedRows = [], displayAccounts = [], configuredCount = 0, oauthReadyCount = 0, hasLiveMetrics = false, esc }) {
+  const live = feedRows.filter((row) => row.feed).length;
+  const waiting = Math.max(0, displayAccounts.length - live);
+  return `<section class="ch-card an-social-monitor" aria-label="Social media monitor">
+    <div class="ch-card-h"><div><p class="ch-eyebrow">Social media monitor</p><h3>${hasLiveMetrics ? "Cross-platform feed is live." : "Connect platforms to light up the graph."}</h3></div><span>${live}/${displayAccounts.length} live</span></div>
+    <div class="an-social-grid">
+      <span><b>${live}</b><i>live feeds</i></span>
+      <span><b>${waiting}</b><i>waiting</i></span>
+      <span><b>${configuredCount}</b><i>authorized</i></span>
+      <span><b>${oauthReadyCount}</b><i>apps ready</i></span>
+    </div>
+    <p>${esc(hasLiveMetrics ? "Official platform metrics are reporting from connected accounts. Personal Meta profiles stay separated from Page/Business targets." : "Use the account connection buttons below. Meta login is for business/page access only, not accidental personal posting.")}</p>
+  </section>`;
+}
 let analyticsNotice = "";
 let analyticsMount = null;
 let analyticsOpts = {};
@@ -3960,6 +4060,14 @@ function analyticsReadinessPanel({ displayAccounts, liveApiRows, configuredCount
 }
 
 function wireAnalyticsActions(el, accounts, opts) {
+  el.querySelectorAll("[data-an-monitor]").forEach((button) => button.onclick = () => {
+    const monitor = button.dataset.anMonitor || "";
+    const prefs = loadAnalyticsMonitorPrefs();
+    prefs[monitor] = !prefs[monitor];
+    if (!Object.values(prefs).some(Boolean)) prefs[monitor] = true;
+    saveAnalyticsMonitorPrefs(prefs);
+    renderAnalytics(el, opts, { skipAutoRefresh: true });
+  });
   el.querySelectorAll("[data-an-sync]").forEach((button) => button.onclick = async () => {
     button.disabled = true;
     analyticsNotice = `Syncing ${button.dataset.anSync}…`;
@@ -4083,6 +4191,7 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   const hasLiveMetrics = liveRows.length > 0;
   const chartRows = feedRows;
   const maxEngagement = Math.max(1, ...feedRows.map((row) => row.feed?.engagement || 0));
+  const monitorPrefs = loadAnalyticsMonitorPrefs();
   el.innerHTML = `
     <div class="an">
       <div class="an-visual-grid an-top-visual-grid">
@@ -4100,6 +4209,9 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
           ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`
           : `${kpi("Live channels", `0/${displayAccounts.length}`, "official OAuth reporting")}${kpi("OAuth apps", K(oauthReadyCount), "server apps ready")}${kpi("Authorized", K(configuredCount), "accounts connected")}${kpi("Next step", "Connect", "choose a platform below")}`}
       </div>
+      ${analyticsMonitorControls(monitorPrefs, esc)}
+      ${monitorPrefs.social ? renderSocialMediaMonitor({ feedRows, displayAccounts, configuredCount, oauthReadyCount, hasLiveMetrics, esc }) : ""}
+      ${monitorPrefs.products ? renderProductAnalyticsMonitor(esc) : ""}
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Social media analytics</p>
