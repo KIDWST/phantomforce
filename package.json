@@ -54,6 +54,7 @@
     "test:command-surface": "node scripts/test-command-surface.mjs",
     "test:game-visuals": "node scripts/test-game-runtime-visuals.mjs",
     "test:claude-live-ship": "node scripts/test-claude-live-ship.mjs",
+    "test:phantom-live-agent": "node scripts/test-phantom-live-agent.mjs",
     "security:secrets": "node scripts/secret-scan.mjs",
     "security:secrets:strict": "node scripts/secret-scan.mjs --results=verified,unknown",
     "verify:live-admin": "node scripts/ship-live-admin.mjs --verify-only",

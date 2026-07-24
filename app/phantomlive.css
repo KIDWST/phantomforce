@@ -1,0 +1,344 @@
+.pla-shell {
+  display: grid;
+  gap: 18px;
+  color: #e9fff5;
+}
+
+.pla-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 16px;
+}
+
+.pla-hero-card,
+.pla-panel {
+  border: 1px solid rgba(41, 255, 165, 0.22);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(12, 45, 35, 0.9), rgba(4, 12, 20, 0.94)),
+    radial-gradient(circle at 18% 0%, rgba(44, 255, 180, 0.18), transparent 34%);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.pla-hero-card {
+  position: relative;
+  min-height: 330px;
+  overflow: hidden;
+  padding: 28px;
+}
+
+.pla-hero-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -12% -34% 36%;
+  height: 320px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 42% 34%, rgba(42, 255, 177, 0.42), transparent 4%),
+    radial-gradient(circle at 48% 42%, rgba(111, 83, 255, 0.28), transparent 8%),
+    radial-gradient(circle at 50% 56%, rgba(42, 255, 177, 0.18), transparent 28%),
+    conic-gradient(from 130deg, transparent, rgba(42, 255, 177, 0.22), transparent, rgba(111, 83, 255, 0.15), transparent);
+  filter: blur(2px);
+  opacity: 0.7;
+  animation: plaPulse 3.6s ease-in-out infinite;
+}
+
+.pla-kicker,
+.pla-eyebrow {
+  margin: 0;
+  color: #57ffc0;
+  font: 800 12px/1.2 "Spline Sans Mono", ui-monospace, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.pla-hero h2 {
+  max-width: 760px;
+  margin: 16px 0 12px;
+  font: 800 clamp(38px, 5vw, 74px)/0.94 "Bricolage Grotesque", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.pla-hero p {
+  max-width: 760px;
+  margin: 0;
+  color: #9cb7b6;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.pla-actions,
+.pla-tabs,
+.pla-builder,
+.pla-ranges,
+.pla-permissions,
+.pla-channel-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pla-actions {
+  position: relative;
+  z-index: 1;
+  margin-top: 22px;
+}
+
+.pla-actions button,
+.pla-tabs button,
+.pla-template,
+.pla-form button {
+  border: 1px solid rgba(41, 255, 165, 0.26);
+  border-radius: 13px;
+  background: rgba(10, 27, 31, 0.78);
+  color: #ddfff0;
+  cursor: pointer;
+  font: 800 13px/1 "Instrument Sans", system-ui, sans-serif;
+  padding: 12px 14px;
+}
+
+.pla-actions button:first-child,
+.pla-tabs button.is-active {
+  color: #02120e;
+  background: linear-gradient(135deg, #43ffc0, #54c7ff);
+  box-shadow: 0 12px 34px rgba(67, 255, 192, 0.22);
+}
+
+.pla-tabs {
+  padding: 8px;
+  border: 1px solid rgba(143, 164, 255, 0.18);
+  border-radius: 16px;
+  background: rgba(3, 8, 15, 0.72);
+}
+
+.pla-tabs button {
+  flex: 1 1 140px;
+}
+
+.pla-message {
+  border: 1px solid rgba(143, 164, 255, 0.22);
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: #cde4ff;
+  background: rgba(67, 56, 160, 0.16);
+}
+
+.pla-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.06fr) minmax(300px, 0.94fr);
+  gap: 16px;
+}
+
+.pla-panel {
+  padding: 18px;
+}
+
+.pla-panel h3 {
+  margin: 0 0 12px;
+  font: 800 22px/1.1 "Bricolage Grotesque", system-ui, sans-serif;
+}
+
+.pla-panel p,
+.pla-panel li,
+.pla-panel span,
+.pla-note {
+  color: #9cb7b6;
+}
+
+.pla-builder {
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.pla-field {
+  display: grid;
+  flex: 1 1 210px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pla-field label,
+.pla-range label,
+.pla-permission b {
+  color: #7f9aa0;
+  font: 800 11px/1.2 "Spline Sans Mono", ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pla-field input,
+.pla-field textarea,
+.pla-field select,
+.pla-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(143, 164, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(2, 7, 12, 0.8);
+  color: #f5fff9;
+  font: 700 15px/1.35 "Instrument Sans", system-ui, sans-serif;
+  padding: 12px 13px;
+  outline: none;
+}
+
+.pla-wide {
+  flex-basis: 100%;
+}
+
+.pla-template {
+  flex: 1 1 170px;
+  text-align: left;
+}
+
+.pla-template small,
+.pla-template span {
+  display: block;
+  margin-top: 5px;
+  color: #8eb5b7;
+  font-weight: 700;
+}
+
+.pla-range,
+.pla-permission {
+  flex: 1 1 180px;
+  padding: 13px;
+  border: 1px solid rgba(143, 164, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(2, 7, 12, 0.5);
+}
+
+.pla-range input {
+  width: 100%;
+  accent-color: #43ffc0;
+}
+
+.pla-permission {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pla-permission input {
+  width: 20px;
+  height: 20px;
+  accent-color: #43ffc0;
+}
+
+.pla-boundary,
+.pla-checks li {
+  border: 1px solid rgba(255, 209, 102, 0.22);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 190, 70, 0.08);
+  color: #ffe8ad;
+}
+
+.pla-presence {
+  display: grid;
+  gap: 14px;
+}
+
+.pla-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(3, 8, 16, 0.2), rgba(3, 8, 16, 0.9)),
+    radial-gradient(circle at 50% 44%, rgba(42, 255, 177, 0.2), transparent 28%);
+}
+
+.pla-avatar i {
+  width: 108px;
+  height: 126px;
+  border-radius: 50% 50% 38% 38%;
+  background:
+    radial-gradient(circle at 36% 43%, #ffe9da 0 5px, transparent 6px),
+    radial-gradient(circle at 64% 43%, #ffe9da 0 5px, transparent 6px),
+    radial-gradient(circle at 50% 50%, rgba(255, 87, 104, 0.28), transparent 50%),
+    #130e13;
+  box-shadow: 0 0 34px rgba(255, 82, 102, 0.35), 0 0 80px rgba(125, 95, 255, 0.28);
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 85% 100%, 68% 84%, 50% 100%, 31% 84%, 14% 100%, 0 82%);
+  animation: plaFloat 4.5s ease-in-out infinite;
+}
+
+.pla-readiness {
+  display: grid;
+  gap: 10px;
+}
+
+.pla-readiness b {
+  font-size: 34px;
+}
+
+.pla-readiness meter {
+  width: 100%;
+  height: 12px;
+  accent-color: #43ffc0;
+}
+
+.pla-json,
+.pla-transcript {
+  max-height: 380px;
+  overflow: auto;
+  border: 1px solid rgba(143, 164, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(2, 7, 12, 0.72);
+  color: #b8fff0;
+  padding: 14px;
+  white-space: pre-wrap;
+}
+
+.pla-sandbox {
+  display: grid;
+  gap: 12px;
+}
+
+.pla-checks {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.pla-checks li.is-pass {
+  border-color: rgba(67, 255, 192, 0.2);
+  background: rgba(67, 255, 192, 0.07);
+  color: #cffff0;
+}
+
+.pla-package {
+  display: grid;
+  gap: 12px;
+}
+
+.pla-channel-list span {
+  border: 1px solid rgba(143, 164, 255, 0.16);
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: rgba(8, 18, 26, 0.72);
+  color: #bde2df;
+  font-weight: 800;
+}
+
+@keyframes plaPulse {
+  50% { opacity: 1; transform: translateY(-10px) scale(1.03); }
+}
+
+@keyframes plaFloat {
+  50% { transform: translateY(-10px); }
+}
+
+@media (max-width: 900px) {
+  .pla-hero,
+  .pla-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pla-hero-card {
+    min-height: 260px;
+  }
+}

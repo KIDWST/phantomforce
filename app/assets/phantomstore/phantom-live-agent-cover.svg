@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">Phantom Live Agent cover</title>
+  <desc id="desc">A holographic AI worker with voice, memory, permissions, and approval-safe runtime panels.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#041018"/>
+      <stop offset=".55" stop-color="#061d18"/>
+      <stop offset="1" stop-color="#120b24"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".48" cy=".44" r=".46">
+      <stop offset="0" stop-color="#33ffc4" stop-opacity=".55"/>
+      <stop offset=".42" stop-color="#2cffb7" stop-opacity=".13"/>
+      <stop offset="1" stop-color="#2cffb7" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect x="42" y="38" width="1196" height="644" rx="34" fill="#051019" stroke="#1affad" stroke-opacity=".28"/>
+  <circle cx="615" cy="337" r="282" fill="url(#glow)"/>
+  <g opacity=".22" stroke="#55ffd1" stroke-width="1">
+    <path d="M120 151h1040M120 242h1040M120 333h1040M120 424h1040M120 515h1040"/>
+    <path d="M207 100v520M336 100v520M465 100v520M594 100v520M723 100v520M852 100v520M981 100v520"/>
+  </g>
+  <g transform="translate(505 156)">
+    <ellipse cx="137" cy="189" rx="170" ry="188" fill="#53ffd0" opacity=".08"/>
+    <path d="M70 78c24-34 111-35 140 2 22 27 29 71 28 120v88c-18 23-36 7-50-11-18 29-43 29-63 0-18 28-45 28-64-1-13 17-29 30-48 10v-83c0-49 17-97 57-125Z" fill="#0d0a10" stroke="#ff5f75" stroke-width="5"/>
+    <circle cx="101" cy="177" r="12" fill="#ffe0d4"/>
+    <circle cx="172" cy="177" r="12" fill="#ffe0d4"/>
+    <circle cx="106" cy="176" r="5" fill="#14080f"/>
+    <circle cx="177" cy="176" r="5" fill="#14080f"/>
+    <path d="M78 114c27-17 99-21 128 0" fill="none" stroke="#5affd1" stroke-width="3" opacity=".8"/>
+    <path d="M78 286c45 28 95 29 151-1" fill="none" stroke="#5affd1" stroke-width="2" opacity=".36"/>
+  </g>
+  <g fill="none" stroke-linecap="round">
+    <path d="M262 186c82-58 157-69 224-31" stroke="#56ffd1" stroke-width="6" opacity=".55"/>
+    <path d="M794 152c82 25 145 81 189 168" stroke="#8d75ff" stroke-width="6" opacity=".58"/>
+    <path d="M275 504c105 62 226 76 365 42" stroke="#56ffd1" stroke-width="5" opacity=".42"/>
+  </g>
+  <g font-family="Inter, Arial, sans-serif" font-weight="800">
+    <text x="86" y="118" fill="#eafff6" font-size="42" letter-spacing="8">PHANTOM LIVE AGENT</text>
+    <text x="88" y="164" fill="#54ffd0" font-size="18" letter-spacing="4">VOICE  MEMORY  PERMISSIONS  SANDBOX</text>
+  </g>
+  <g transform="translate(78 468)">
+    <rect width="360" height="112" rx="22" fill="#08131d" stroke="#38ffc3" stroke-opacity=".36"/>
+    <text x="28" y="42" fill="#eafff6" font-family="Inter, Arial" font-size="22" font-weight="800">Agent Creator</text>
+    <text x="28" y="74" fill="#91b7b5" font-family="Inter, Arial" font-size="17">Identity, voice, goals, disclosure</text>
+  </g>
+  <g transform="translate(836 444)">
+    <rect width="344" height="136" rx="22" fill="#08131d" stroke="#8d75ff" stroke-opacity=".42"/>
+    <text x="26" y="40" fill="#eafff6" font-family="Inter, Arial" font-size="22" font-weight="800">Approval-Safe Runtime</text>
+    <text x="26" y="73" fill="#91b7b5" font-family="Inter, Arial" font-size="17">Talks, tests, and hands work off</text>
+    <rect x="26" y="92" width="132" height="28" rx="14" fill="#123329" stroke="#3dffbf"/>
+    <text x="43" y="112" fill="#54ffd0" font-family="Inter, Arial" font-size="13" font-weight="800">NO FAKE ACTIONS</text>
+  </g>
+</svg>

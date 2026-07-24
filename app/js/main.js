@@ -39,6 +39,7 @@ import {
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260723-57";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260723-57";
 import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260723-57";
+import { renderPhantomLiveAgent } from "./phantomlive.js?v=phantom-live-20260723-57";
 import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260723-57";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
@@ -463,6 +464,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
 const BASE_NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "phantomai",  label: "PhantomBot",   icon: "chat",  ws: "phantomai" },
+  { id: "phantomlive", label: "Live Agent",  icon: "spark", ws: "phantomlive" },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true, dashboardWidget: true },
@@ -494,12 +496,12 @@ const FEATURE_BY_NAV_ID = {
   phantomplay: "phantomPlay",
 };
 const PLAN_NAV_WORKFLOWS = {
-  free: new Set(["dashboard", "phantomai", "media", "sites", "phantomplay", "settings"]),
-  starter: new Set(["dashboard", "phantomai", "crm", "media", "sites", "phantomplay", "settings"]),
-  professional: new Set(["dashboard", "phantomai", "crm", "media", "sites", "money", "intelligence", "analytics", "approvals", "phantomplay", "settings", "vacation"]),
-  developer: new Set(["dashboard", "phantomai", "media", "sites", "assets", "automation", "developer", "phantomplay", "phantomstore", "settings"]),
-  elite: new Set(["dashboard", "phantomai", "crm", "media", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "phantomplay", "phantomstore", "settings", "vacation"]),
-  developer_elite: new Set(["dashboard", "phantomai", "crm", "media", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "developer", "phantomplay", "phantomstore", "settings", "vacation"]),
+  free: new Set(["dashboard", "phantomai", "phantomlive", "media", "sites", "phantomplay", "settings"]),
+  starter: new Set(["dashboard", "phantomai", "phantomlive", "crm", "media", "sites", "phantomplay", "settings"]),
+  professional: new Set(["dashboard", "phantomai", "phantomlive", "crm", "media", "sites", "money", "intelligence", "analytics", "approvals", "phantomplay", "settings", "vacation"]),
+  developer: new Set(["dashboard", "phantomai", "phantomlive", "media", "sites", "assets", "automation", "developer", "phantomplay", "phantomstore", "settings"]),
+  elite: new Set(["dashboard", "phantomai", "phantomlive", "crm", "media", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "phantomplay", "phantomstore", "settings", "vacation"]),
+  developer_elite: new Set(["dashboard", "phantomai", "phantomlive", "crm", "media", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "developer", "phantomplay", "phantomstore", "settings", "vacation"]),
   enterprise: null,
   internal: null,
   phantom: null,
@@ -535,6 +537,7 @@ const MOBILE_LABEL_OVERRIDES = {
   media: "Media",
   phantomplay: "Play",
   phantomstore: "Store",
+  phantomlive: "Agent",
   automation: "Auto",
   approvals: "Approvals",
   analytics: "Analytics",
@@ -3925,6 +3928,7 @@ const CUSTOM = {
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   phantomstore: { title: "PhantomStore", kicker: "AI marketplace", custom: true, wide: true, render: (body) => renderPhantomStore(body, mediaOpts()) },
+  phantomlive: { title: "Phantom Live Agent", kicker: "Create, test, and supervise AI workers", custom: true, wide: true, render: (body) => renderPhantomLiveAgent(body) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalyticsSuite(body) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },

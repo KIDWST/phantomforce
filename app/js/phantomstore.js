@@ -178,6 +178,7 @@ function reviewList(reviews = []) {
 }
 
 const PRODUCT_ART_FALLBACKS = [
+  [/live agent|avatar|voice|presence|employee|representative|operator/i, "/app/assets/phantomstore/phantom-live-agent-cover.svg"],
   [/unleashed|self-hosted|local-only|fully local/i, "/app/assets/phantomstore/phantombot-unleashed-cover.svg"],
   [/phantombot|falcon|agent|coding/i, "/app/assets/phantomstore/phantombot-cover.svg"],
   [/termina|terminal|cli|automation/i, "/app/assets/phantomstore/termina-cover-ai.webp"],
@@ -189,6 +190,7 @@ const PRODUCT_ART_FALLBACKS = [
 const SEEDED_REVIEWS = {
   termina: [{ id: "review-termina-local", authorName: "PhantomForce QA", rating: 5, title: "The terminal wall finally feels like a product.", body: "Multi-agent launches, isolated worktrees, mission ledgers, and replayable reports make Termina feel like a command center.", verified: true }],
   beatforge: [{ id: "review-beatforge-local", authorName: "Producer tester", rating: 5, title: "The kit mapping is the point.", body: "Getting the beat structure back as MIDI lanes with my own kick, snare, hats, and arrangement notes saves the hard part.", verified: true }],
+  liveagent: [{ id: "review-live-agent-local", authorName: "Operator tester", rating: 5, title: "The agent finally has a body and rules.", body: "Identity, voice, permissions, sandbox testing, and Store packaging are in one place instead of scattered settings.", verified: true }],
   vocal: [{ id: "review-vocal-local", authorName: "Studio tester", rating: 4, title: "Fast vocal-chain starting point.", body: "Prompting a vocal tone and getting a usable chain is exactly the right direction for creators who do not want to babysit knobs.", verified: true }],
   seller: [{ id: "review-seller-local", authorName: "Launch desk", rating: 5, title: "Ships ambitious tools with buyer safety gates.", body: "The catalog is strongest when products have honest readiness notes, clear support paths, and visible review proof.", verified: true }],
 };
@@ -276,6 +278,29 @@ function localFallbackSnapshot() {
       reviewCount: SEEDED_REVIEWS.vocal.length,
       featured: false,
       reviews: SEEDED_REVIEWS.vocal,
+      seller,
+    },
+    {
+      id: "product-phantom-live-agent",
+      sellerId: seller.id,
+      name: "Phantom Live Agent",
+      summary: "Create a living AI employee with a voice, avatar, memory boundary, permissions, and approval-safe handoff.",
+      category: "AI Suite",
+      priceLabel: "Included in PhantomForce",
+      buyLabel: "Open Live Agent",
+      buyUrl: "https://admin.phantomforce.online/app/?session=admin#page/phantomlive",
+      delivery: "PhantomForce workspace module",
+      version: "0.1.0",
+      status: "available",
+      qualityNote: "Local deterministic creator/runtime slice. Voice uses browser speech; external channels, tools, and public deployment require explicit setup and approval.",
+      imageUrl: "/app/assets/phantomstore/phantom-live-agent-cover.svg?v=20260723",
+      referenceImageUrl: "",
+      tags: ["live agent", "avatar", "voice", "memory", "approval-safe"],
+      badges: ["Agent creator", "Local sandbox", "Approval-gated"],
+      rating: 5,
+      reviewCount: SEEDED_REVIEWS.liveagent.length,
+      featured: true,
+      reviews: SEEDED_REVIEWS.liveagent,
       seller,
     },
     {

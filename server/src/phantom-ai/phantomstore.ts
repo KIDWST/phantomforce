@@ -205,6 +205,17 @@ const seededReviews = {
       verified: true,
     },
   ],
+  liveagent: [
+    {
+      id: "review-live-agent",
+      authorName: "Operator tester",
+      rating: 5,
+      title: "The agent finally has a body and rules.",
+      body: "Identity, voice, permissions, sandbox testing, and Store packaging are in one place instead of scattered settings.",
+      createdAt: "2026-07-23T00:00:00.000Z",
+      verified: true,
+    },
+  ],
   vocal: [
     {
       id: "review-vocal-ai",
@@ -247,6 +258,32 @@ const SEEDED_SELLERS: PhantomStoreSeller[] = [
 ];
 
 const SEEDED_PRODUCTS: PhantomStoreProduct[] = [
+  {
+    id: "product-phantom-live-agent",
+    sellerId: "seller-phantomforce",
+    name: "Phantom Live Agent",
+    summary: "Create a living AI employee with a voice, avatar, memory boundary, permissions, runtime state, and approval-safe handoff.",
+    description:
+      "Phantom Live Agent is the first-class workspace for designing AI workers: configure identity, model route, voice style, memory scope, goals, permissions, safe disclosures, sandbox tests, and future Store/Arsenal packaging from one place. The v0.1 slice is local and deterministic; remote channels and real tools require explicit setup and approval policy.",
+    category: "AI Suite",
+    priceLabel: "Included in PhantomForce",
+    buyLabel: "Open Live Agent",
+    buyUrl: "https://admin.phantomforce.online/app/?session=admin#page/phantomlive",
+    delivery: "PhantomForce workspace module",
+    version: "0.1.0",
+    status: "available",
+    qualityNote: "Local deterministic creator/runtime slice. Voice uses browser speech; external channels, tools, and public deployment require explicit setup and approval.",
+    imageUrl: "/app/assets/phantomstore/phantom-live-agent-cover.svg?v=20260723",
+    referenceImageUrl: "",
+    tags: ["live agent", "avatar", "voice", "memory", "approval-safe"],
+    badges: ["Agent creator", "Local sandbox", "Approval-gated"],
+    rating: 5,
+    reviewCount: seededReviews.liveagent.length,
+    featured: true,
+    updatedAt: "2026-07-23T00:00:00.000Z",
+    reviews: seededReviews.liveagent,
+    compatiblePlatforms: ["web"],
+  },
   {
     id: "product-termina",
     sellerId: "seller-phantomforce",
