@@ -96,30 +96,68 @@ function wireItems(limit = 14) {
 
 /* ======================================================================
    PHANTOMWIRE TICKER  (thin band under the topbar)
+   One statement at a time, not an endless scroll: each item holds for
+   WIRE_ROTATE_MS, stamped with when it actually happened, then swaps to the
+   next. Pauses on hover/focus so a statement you're reading doesn't get
+   yanked away, and holds still under reduced motion.
    ====================================================================== */
+const WIRE_ROTATE_MS = 7000;
+
 export function mountPhantomWire(el) {
   if (!el || el.dataset.mounted) return;
   el.dataset.mounted = "1";
-  const render = () => {
-    const items = wireItems().map((t) => {
-      const m = modeMeta(t.mode);
-      return `<span class="atk-item">
+  let items = [];
+  let index = 0;
+  let paused = false;
+
+  const renderCurrent = (advancing) => {
+    if (!items.length) {
+      el.innerHTML = `<div class="atk-label">PHANTOMWIRE</div><div class="atk-view"><span class="atk-item atk-empty">No worker activity yet.</span></div>`;
+      return;
+    }
+    index = ((index % items.length) + items.length) % items.length;
+    const t = items[index];
+    const m = modeMeta(t.mode);
+    const box = el.querySelector(".atk-view");
+    const html = `<span class="atk-item">
         <i class="atk-led atk-${m.tone}"></i>
         <b>${esc(t.worker)}</b>
-        <em>${esc(t.internal)}</em>
         <span class="atk-txt">${esc(t.activity)}</span>
+        <time class="atk-time">${esc(t.at)}</time>
       </span>`;
-    }).join(`<span class="atk-sep">/</span>`);
-    // duplicated track for a seamless marquee loop
-    el.innerHTML = `<div class="atk-label">PHANTOMWIRE</div>
-      <div class="atk-view"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-loop-copy" aria-hidden="true"><span class="atk-sep">/</span>${items}</span></div></div>`;
+    if (!box) {
+      el.innerHTML = `<div class="atk-label">PHANTOMWIRE</div><div class="atk-view">${html}</div>`;
+      return;
+    }
+    if (advancing && !reduceMotion) {
+      box.classList.add("is-swapping");
+      setTimeout(() => { box.innerHTML = html; box.classList.remove("is-swapping"); }, 160);
+    } else {
+      box.innerHTML = html;
+    }
   };
-  void fetchWorkforce().then(render);
-  const refresh = setInterval(() => void fetchWorkforce().then(render), 30000);
-  render();
+
+  const refreshItems = () => {
+    items = wireItems();
+    renderCurrent(false);
+  };
+
+  el.addEventListener("pointerenter", () => { paused = true; });
+  el.addEventListener("pointerleave", () => { paused = false; });
+  el.addEventListener("focusin", () => { paused = true; });
+  el.addEventListener("focusout", () => { paused = false; });
+
+  void fetchWorkforce().then(refreshItems);
+  refreshItems();
+  const dataRefresh = setInterval(() => void fetchWorkforce().then(refreshItems), 30000);
+  const rotate = setInterval(() => {
+    if (paused || items.length < 2) return;
+    index += 1;
+    renderCurrent(true);
+  }, WIRE_ROTATE_MS);
   const off = store.onChange(() => {
-    if (!el.isConnected) { off(); clearInterval(refresh); return; }
-    render();
+    if (!el.isConnected) { off(); clearInterval(dataRefresh); clearInterval(rotate); return; }
+    refreshItems();
   });
 }
 
