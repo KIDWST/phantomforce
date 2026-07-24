@@ -760,7 +760,33 @@ function labelForRecord(record: HermesLedgerRecord, workers: ReturnType<typeof b
   return matched?.name ?? "PhantomAI";
 }
 
-function buildTicker(records: HermesLedgerRecord[], workers: ReturnType<typeof buildWorkerMetrics>[]) {
+function automationAttentionItem(job: Awaited<ReturnType<typeof listAutomationJobs>>[number]) {
+  if (!job.enabled) return null;
+  if (job.last_status === "error") {
+    return `${job.name} needs attention: ${job.last_summary ?? "last run failed"}`;
+  }
+  if (!job.last_run_at) {
+    return `${job.name} is enabled but has not logged a run yet.`;
+  }
+  return null;
+}
+
+function buildTicker(
+  records: HermesLedgerRecord[],
+  workers: ReturnType<typeof buildWorkerMetrics>[],
+  automationJobs: Awaited<ReturnType<typeof listAutomationJobs>>,
+) {
+  const attention = automationJobs
+    .map((job) => ({ job, text: automationAttentionItem(job) }))
+    .filter((item): item is { job: Awaited<ReturnType<typeof listAutomationJobs>>[number]; text: string } => Boolean(item.text))
+    .slice(0, 6)
+    .map((item) => ({
+      id: `automation-attention-${item.job.id}`,
+      label: item.job.name,
+      text: item.text,
+      timestamp: item.job.last_run_at ?? new Date().toISOString(),
+      tone: item.job.last_status === "error" ? "error" : "attention",
+    }));
   const recentRecords = [...records]
     .sort((left, right) => parseTime(right.timestamp) - parseTime(left.timestamp))
     .slice(0, 8)
@@ -772,22 +798,12 @@ function buildTicker(records: HermesLedgerRecord[], workers: ReturnType<typeof b
         record.estimated_tokens || 0,
       )} tokens`,
       timestamp: record.timestamp,
+      tone: "activity",
     }));
 
   return [
+    ...attention,
     ...recentRecords,
-    {
-      id: "n8n-status",
-      label: "Automation Bay",
-      text: "n8n is scaffolded for dry-run workflow drafts; execution is still blocked.",
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: "client-redaction",
-      label: "Client View",
-      text: "Clients see agent count and outcomes, not internal tools, tokens, or worker plumbing.",
-      timestamp: new Date().toISOString(),
-    },
   ];
 }
 
@@ -957,8 +973,10 @@ export async function buildAgentWorkforceStatus(options: {
   const recent = recordsSince(allRecords, windowHours);
   const workers = workerDefinitions.map((definition) => buildWorkerMetrics(definition, allRecords));
   const automationEngineEnabled = process.env.PHANTOMFORCE_AUTOMATION_ENGINE_ENABLED !== "false";
+  const enabledAutomationJobs = automationJobs.filter((job) => job.enabled);
+  const automationJobsNeedingAttention = enabledAutomationJobs.filter((job) => automationAttentionItem(job));
   const enabledAutomationCategories = new Set(
-    automationJobs.filter((job) => job.enabled).map((job) => job.category),
+    enabledAutomationJobs.map((job) => job.category),
   );
   for (const worker of workers) {
     const category = worker.id.startsWith("autopilot-") ? worker.id.slice("autopilot-".length) : null;
@@ -1053,7 +1071,7 @@ export async function buildAgentWorkforceStatus(options: {
     tokens_in_window: sumTokens(recent),
     estimated_cost_usd_in_window: Number(sumCost(recent).toFixed(6)),
     active_workers: workers.filter((worker) => worker.state === "active").length,
-    baseline_workers_online: workers.filter((worker) => worker.state === "active").length,
+    baseline_workers_online: enabledAutomationJobs.length,
     runtime_active_workers: workers.filter((worker) => worker.tasks_last_24h > 0).length,
     parent_workers: workers.length,
     total_workers: workers.length,
@@ -1071,13 +1089,16 @@ export async function buildAgentWorkforceStatus(options: {
     neural_cells_mapped: generatedNeuralCellDefinitions.length,
     generated_neural_cell_instances: generatedNeuralCellDefinitions.length,
     automation_job_definitions: automationSubagentDefinitions.length,
-    enabled_automation_jobs: automationJobs.filter((job) => job.enabled).length,
+    enabled_automation_jobs: enabledAutomationJobs.length,
+    automation_jobs_needing_attention: automationJobsNeedingAttention.length,
+    automation_jobs_never_run: enabledAutomationJobs.filter((job) => !job.last_run_at).length,
+    automation_jobs_last_error: enabledAutomationJobs.filter((job) => job.last_status === "error").length,
     automation_engine_enabled: automationEngineEnabled,
     template_definitions: swarmSubagentTemplates.length + neuralCellTemplates.length,
     template_generated_nodes: generatedSwarmSubagentDefinitions.length + generatedNeuralCellDefinitions.length,
     swarm_subagent_templates: swarmSubagentTemplates.length,
     neural_cell_templates: neuralCellTemplates.length,
-    worker_node_floor: 1000,
+    worker_node_floor: 0,
     generated_nodes_independently_executable: false,
     truth_label: "Mapped workforce topology; generated cells are processing contracts, not autonomous running workers.",
     n8n_scaffolded: n8nPreview.n8n_status.n8n_scaffolded,
@@ -1088,7 +1109,7 @@ export async function buildAgentWorkforceStatus(options: {
     operator_harness_hidden: internalHarness.hidden_infrastructure,
   };
   const clientSummary = buildClientSummary(workers);
-  const ticker = buildTicker(allRecords, workers);
+  const ticker = buildTicker(allRecords, workers, automationJobs);
   const programs = buildProgramUse(toolStack);
 
   if (!options.admin) {
@@ -1121,6 +1142,10 @@ export async function buildAgentWorkforceStatus(options: {
       executable_nodes: summary.executable_nodes,
       runtime_executable_actions: summary.runtime_executable_actions,
       active_runtime_instances: summary.active_runtime_instances,
+      enabled_automation_jobs: summary.enabled_automation_jobs,
+      automation_jobs_needing_attention: summary.automation_jobs_needing_attention,
+      automation_jobs_never_run: summary.automation_jobs_never_run,
+      automation_jobs_last_error: summary.automation_jobs_last_error,
       routable_nodes: summary.routable_nodes,
       generated_nodes_independently_executable: false,
       label: summary.truth_label,

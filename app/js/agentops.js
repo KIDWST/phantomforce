@@ -1,11 +1,11 @@
 /* PhantomForce — PhantomWire layer.
-   A live, honest picture of users and the internal worker spine: a scrolling report
+   A live, honest picture of the internal worker spine: a scrolling report
    ticker, a tail-style operations log, a worker roster with status LEDs, and
    session telemetry. Everything here is driven by the real TOOL_SPINE workers
    (store.js) — no fabricated business records. Self-contained: owns its own
    timers, guards against double-mount, and respects reduced-motion. */
 
-import { store, visible, TOOL_SPINE } from "./store.js?v=phantom-live-20260723-55";
+import { session, store, TOOL_SPINE } from "./store.js?v=phantom-live-20260723-55";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -26,47 +26,63 @@ function agentCode(worker) {
   return String(worker || "AGT").slice(0, 3).toUpperCase();
 }
 
-/* a pool of realistic, domain-specific report fragments per worker.
-   The first entry is always the worker's canonical activity from the store. */
-const EXTRA_LINES = {
-  "private-gateway": ["private route verified · 0 exposed ports", "rotated tunnel handshake", "edge probe rejected — unsolicited", "latency nominal on admin route"],
-  "memory-core": ["compiled owner context bundle", "redacted 3 receipts before indexing", "refreshed memory hints for Phantom AI", "pruned context older than 30d"],
-  "process-vault": ["indexed Command Center vault", "wrote verification log for last decision", "linked process notes to active missions", "snapshotted operating memory"],
-  "automation-desk": ["holding ChicagoShots dry-run draft", "workflow scaffold validated — no live calls", "1 automation queued pending approval", "standby: no approved workflows"],
-  "build-planner": ["standing by for next build request", "scoped guardrails for feature intake", "drafted task breakdown", "spec schema validated"],
-  "operating-standards": ["standards pass: 11/11 workers compliant", "audited last worker handoff — clean", "checked owner-safe execution rules", "enforcing standards on command routing"],
-  "code-intelligence": ["mapped repo graph (read-only)", "indexed module boundaries", "0 write operations — read lane only", "navigation index cached"],
-  "squad-planner": ["contained in planning mode", "squad pattern generated · no autonomy", "multi-agent plan sandboxed", "held: live autonomy disabled"],
-  "media-engine": ["staged for approved Media Lab runs", "editor bridge prepared", "paid generation gated — awaiting approval", "render pipeline dry-run ok"],
-  "brain-router": ["routed request → review lane", "tool names hidden from user view", "load balanced across brain lanes", "model lane health verified"],
-};
-
-function linePool(tool) {
-  const extras = EXTRA_LINES[tool.id] || [];
-  return [tool.activity, ...extras].filter(Boolean);
-}
-
-const pick = (a) => a[Math.floor((reduceMotion ? 0.5 : Math.random()) * a.length) % a.length];
 const now2 = () => {
   const d = new Date();
   const p = (n) => String(n).padStart(2, "0");
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 
+let workforceCache = null;
+let workforceLoading = false;
+
+async function fetchWorkforce() {
+  if (workforceLoading) return;
+  workforceLoading = true;
+  try {
+    const token = session.token();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await fetch("/phantom-ai/agents/status?window_hours=24", { headers });
+    const payload = await response.json().catch(() => null);
+    if (response.ok && payload?.ok) workforceCache = payload.workforce;
+  } catch {
+    workforceCache = null;
+  } finally {
+    workforceLoading = false;
+  }
+}
+
+function modeForTicker(item) {
+  if (item?.tone === "error") return "gated";
+  if (item?.tone === "attention") return "standby";
+  return "active";
+}
+
 function wireItems(limit = 14) {
-  const recent = visible(store.state.activity || []).slice(0, 8).map((a) => ({
-    worker: a.who || "Phantom",
-    internal: a.toolId ? "Worker activity" : "User activity",
-    activity: a.text || "activity recorded.",
-    mode: "active",
-  }));
-  const workers = TOOL_SPINE.map((t) => ({
+  const ticker = Array.isArray(workforceCache?.ticker) ? workforceCache.ticker : [];
+  if (ticker.length) {
+    return ticker.slice(0, limit).map((item) => ({
+      worker: item.label || "Worker",
+      internal: item.tone === "activity" ? "Agent receipt" : "Worker attention",
+      activity: item.text || "Status recorded.",
+      mode: modeForTicker(item),
+    }));
+  }
+  const jobs = Number(workforceCache?.summary?.enabled_automation_jobs || 0);
+  const attention = Number(workforceCache?.summary?.automation_jobs_needing_attention || 0);
+  if (jobs) {
+    return [{
+      worker: "Automation Engine",
+      internal: "Worker status",
+      activity: `${jobs} scheduled workers configured; ${attention} need attention.`,
+      mode: attention ? "standby" : "active",
+    }];
+  }
+  return TOOL_SPINE.map((t) => ({
     worker: t.worker,
     internal: t.internal,
-    activity: t.activity,
+    activity: `${t.activity} (${t.mode}; no live worker receipt yet)`,
     mode: t.mode,
-  }));
-  return (recent.length ? [...recent, ...workers] : workers).slice(0, limit);
+  })).slice(0, limit);
 }
 
 /* ======================================================================
@@ -89,9 +105,11 @@ export function mountPhantomWire(el) {
     el.innerHTML = `<div class="atk-label">PHANTOMWIRE</div>
       <div class="atk-view"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-loop-copy" aria-hidden="true"><span class="atk-sep">/</span>${items}</span></div></div>`;
   };
+  void fetchWorkforce().then(render);
+  const refresh = setInterval(() => void fetchWorkforce().then(render), 30000);
   render();
   const off = store.onChange(() => {
-    if (!el.isConnected) { off(); return; }
+    if (!el.isConnected) { off(); clearInterval(refresh); return; }
     render();
   });
 }
@@ -105,11 +123,13 @@ let logTimer = 0;
 let uptimeTimer = 0;
 
 function telemetryRow() {
-  const online = TOOL_SPINE.filter((t) => t.mode === "active").length;
+  const summary = workforceCache?.summary;
+  const online = Number(summary?.enabled_automation_jobs || TOOL_SPINE.filter((t) => t.mode === "active").length);
+  const attention = Number(summary?.automation_jobs_needing_attention || 0);
   return `
     <div class="aops-tele">
-      <div class="aops-t"><span class="aops-t-k">Workers online</span><b class="aops-t-v" data-tele-online>${online}</b><i>of ${TOOL_SPINE.length}</i></div>
-      <div class="aops-t"><span class="aops-t-k">Reports streamed</span><b class="aops-t-v" data-tele-reports>0</b><i>this session</i></div>
+      <div class="aops-t"><span class="aops-t-k">Scheduled workers</span><b class="aops-t-v" data-tele-online>${online}</b><i>real jobs</i></div>
+      <div class="aops-t"><span class="aops-t-k">Needs attention</span><b class="aops-t-v ${attention ? "aops-warn" : "aops-ok"}">${attention}</b><i>setup/failures</i></div>
       <div class="aops-t"><span class="aops-t-k">Session uptime</span><b class="aops-t-v" data-tele-uptime>0:00</b><i>live</i></div>
       <div class="aops-t"><span class="aops-t-k">Routing lane</span><b class="aops-t-v aops-ok" data-tele-lane>Nominal</b><i>brain router</i></div>
     </div>`;
@@ -137,12 +157,11 @@ function logLineHtml(entry) {
 }
 
 function seedLog() {
-  // a few believable lines already on the wire so the log never starts empty
-  return TOOL_SPINE.slice(0, 5).map((t, i) => {
+  return wireItems(8).map((t, i) => {
     const m = modeMeta(t.mode);
     const d = new Date(Date.now() - (5 - i) * 4200);
     const p = (n) => String(n).padStart(2, "0");
-    return { at: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`, code: agentCode(t.worker), msg: pick(linePool(t)), tone: m.tone };
+    return { at: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`, code: agentCode(t.worker), msg: t.activity, tone: m.tone };
   });
 }
 
@@ -154,13 +173,13 @@ export function mountAgentConsole(el) {
       <div class="aops-title">
         <span class="aops-live"><i></i>LIVE</span>
         <h2>PhantomWire</h2>
-        <span class="aops-sub">Recent activity from workers and users</span>
+        <span class="aops-sub">Agent receipts, scheduled jobs, and worker attention</span>
       </div>
       <span class="aops-scan" aria-hidden="true"></span>
     </div>
     ${telemetryRow()}
     <div class="aops-grid">
-      <div class="aops-roster" data-aops-roster>${TOOL_SPINE.map(rosterRow).join("")}</div>
+      <div class="aops-roster" data-aops-roster>${wireItems(12).map(rosterRow).join("")}</div>
       <div class="aops-log-wrap">
         <div class="aops-log-head"><span>PHANTOMWIRE LOG</span><i data-aops-tail>tail -f</i></div>
         <div class="aops-log" data-aops-log></div>
@@ -169,12 +188,10 @@ export function mountAgentConsole(el) {
 
   const logEl = el.querySelector("[data-aops-log]");
   const buffer = seedLog();
-  let reports = 0;
   const render = () => { logEl.innerHTML = buffer.map(logLineHtml).join(""); logEl.scrollTop = logEl.scrollHeight; };
   render();
 
-  // telemetry: count-up "reports streamed" + live uptime
-  const reportsEl = el.querySelector("[data-tele-reports]");
+  // telemetry: worker counts come from the backend; this just keeps uptime live.
   const uptimeEl = el.querySelector("[data-tele-uptime]");
   const t0 = Date.now();
   const paintUptime = () => {
@@ -186,17 +203,14 @@ export function mountAgentConsole(el) {
   uptimeTimer = setInterval(paintUptime, 1000);
   paintUptime();
 
-  // count-up the initial seeded reports for a bit of animated life
-  reports = buffer.length;
-  countUp(reportsEl, reports, 700);
-
   if (reduceMotion) return; // no streaming under reduced-motion; static roster + seeded log stand
 
   const emit = () => {
     if (document.hidden || !el.isConnected) return;
-    const t = TOOL_SPINE[Math.floor(Math.random() * TOOL_SPINE.length)];
+    const items = wireItems(12);
+    const t = items[Math.floor(Math.random() * items.length)];
     const m = modeMeta(t.mode);
-    buffer.push({ at: now2(), code: agentCode(t.worker), msg: pick(linePool(t)), tone: m.tone });
+    buffer.push({ at: now2(), code: agentCode(t.worker), msg: t.activity, tone: m.tone });
     if (buffer.length > 40) buffer.shift();
     // append just the new line for smooth scroll instead of full repaint
     logEl.insertAdjacentHTML("beforeend", logLineHtml(buffer[buffer.length - 1]));
@@ -204,8 +218,6 @@ export function mountAgentConsole(el) {
     const last = logEl.lastElementChild;
     if (last) last.classList.add("is-fresh");
     logEl.scrollTop = logEl.scrollHeight;
-    reports += 1;
-    if (reportsEl) reportsEl.textContent = String(reports);
   };
   clearInterval(logTimer);
   logTimer = setInterval(emit, 2600 + Math.random() * 900);
@@ -218,9 +230,11 @@ let heroTimer = 0;
 export function mountHeroTicker(el) {
   if (!el || el.dataset.mounted) return;
   el.dataset.mounted = "1";
+  void fetchWorkforce();
+  const live = wireItems(5);
   const phrases = [
-    "Everything below is real work — never just chat.",
-    ...TOOL_SPINE.filter((t) => t.mode === "active").slice(0, 5).map((t) => `${t.worker} ${t.activity}`),
+    "Worker feed shows agent receipts and attention only.",
+    ...live.map((t) => `${t.worker}: ${t.activity}`),
     "Ask for anything. It lands as a draft, a brief, or a plan.",
   ].map((s) => (s.length > 68 ? s.slice(0, 65).trimEnd() + "…" : s));
 
@@ -254,21 +268,6 @@ export function mountHeroTicker(el) {
     }
   };
   step();
-}
-
-/* small count-up helper for telemetry numbers */
-function countUp(el, target, ms = 600) {
-  if (!el) return;
-  target = Number(target) || 0;
-  if (reduceMotion || target <= 0) { el.textContent = String(target); return; }
-  const start = performance.now();
-  const tick = (t) => {
-    const k = Math.min(1, (t - start) / ms);
-    const eased = 1 - Math.pow(1 - k, 3);
-    el.textContent = String(Math.round(target * eased));
-    if (k < 1) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
 }
 
 /* one call to wire everything the dashboard needs */

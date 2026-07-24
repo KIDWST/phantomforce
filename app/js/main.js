@@ -903,11 +903,11 @@ let topbarWorkforceChecked = false;
 function topbarBaselineWorkers() {
   const summary = topbarWorkforce?.summary;
   if (!summary) return null;
-  let count = Number(summary.baseline_workers_online ?? summary.active_workers ?? 0);
-  const workers = Array.isArray(topbarWorkforce?.workers) ? topbarWorkforce.workers : [];
-  const gatekeeperActive = workers.some((worker) => worker.id === "gatekeeper" && worker.state === "active");
-  if (/(^|\.)admin\.phantomforce\.online$/i.test(location.hostname) && !gatekeeperActive) count += 1;
-  return { count, jobs: Number(summary.tasks_in_window || 0) };
+  return {
+    scheduled: Number(summary.enabled_automation_jobs ?? summary.baseline_workers_online ?? 0),
+    attention: Number(summary.automation_jobs_needing_attention ?? 0),
+    jobs: Number(summary.tasks_in_window || 0),
+  };
 }
 
 function topbarFallbackWorkers() {
@@ -947,9 +947,12 @@ function orgSwitchOptions() {
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
   const workforce = topbarBaselineWorkers();
+  const workforceValue = workforce
+    ? `${workforce.scheduled} scheduled · ${workforce.attention} attention`
+    : (topbarWorkforceChecked ? `${topbarFallbackWorkers()} core ready` : "Checking…");
   const pills = [
     { label: "System", value: attention ? "Attention needed" : "Operational", tone: attention ? "warn" : "ok", dot: true },
-    { label: "Workforce", value: workforce ? `${workforce.count} baseline · ${workforce.jobs} jobs` : (topbarWorkforceChecked ? `${topbarFallbackWorkers()} core ready` : "Checking…"), tone: "ok", dot: true, open: "workforce" },
+    { label: "Workforce", value: workforceValue, tone: workforce?.attention ? "warn" : "ok", dot: true, open: "workforce" },
   ];
   $("[data-status-pills]").innerHTML = pills.map((p) => `
     <div class="pill pill-${p.tone} ${p.open ? "pill-link" : ""}" ${p.open ? `data-pill-open="${p.open}" role="button" tabindex="0"` : ""}>

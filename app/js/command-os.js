@@ -322,6 +322,8 @@ function liveSystemHealth() {
 
 function liveWorkerCount() {
   const status = ($("[data-status-pills]")?.textContent || "").replace(/\s+/g, " ");
+  const scheduled = status.match(/workforce\D{0,30}(\d+)\s+scheduled/i);
+  if (scheduled) return Number(scheduled[1]);
   const match = status.match(/workers online\D{0,20}(\d+)/i);
   if (match) return Number(match[1]);
   return visible(store.state.agents || []).filter((agent) => ["active", "working", "ready"].includes(agent.status)).length;
@@ -424,7 +426,7 @@ function syncCommandOS() {
   setText("[data-os-bottom-bridge]", bridge);
   setOperatorModelStatus();
   setText("[data-os-memory-count]", `${memories.total} saved`);
-  setText("[data-os-worker-count]", `${workers} online`);
+  setText("[data-os-worker-count]", workers ? `${workers} scheduled` : "Needs work");
 
   const core = $(".os-node-core");
   if (core) {

@@ -2510,10 +2510,7 @@ function privateAdminRouteReached() {
 
 function baselineWorkerCount(runtime) {
   if (!runtime) return LOCAL_CORE_WORKERS.length + (privateAdminRouteReached() ? 1 : 0);
-  const workers = Array.isArray(runtime?.workers) ? runtime.workers : [];
-  const reported = Number(runtime?.summary?.baseline_workers_online ?? runtime?.summary?.active_workers ?? 0);
-  const routeAlreadyCounted = workers.some((worker) => worker.id === "gatekeeper" && worker.state === "active");
-  return reported + (privateAdminRouteReached() && !routeAlreadyCounted ? 1 : 0);
+  return Number(runtime?.summary?.enabled_automation_jobs ?? runtime?.summary?.baseline_workers_online ?? 0);
 }
 
 // The interactive network stays inside the Workforce page. Smaller screens
@@ -2833,7 +2830,7 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
         ` : ""}
         <div class="worker-mesh-foot">
           <div class="worker-web-legend" aria-label="Legend">
-            <span><i class="worker-legend-dot worker-legend-live"></i>Active</span>
+            <span><i class="worker-legend-dot worker-legend-live"></i>Ledger activity</span>
             <span><i class="worker-legend-dot worker-legend-approval"></i>Waiting on you</span>
             <span><i class="worker-legend-dot worker-legend-ready"></i>Mapped</span>
             <span><i class="worker-legend-dot worker-legend-cell"></i>Helper lane</span>
@@ -2873,6 +2870,9 @@ function renderBaselineWorkers(runtime) {
   const online = workers.filter((worker) => worker.state === "active");
   const recentJobs = Number(runtime.summary?.tasks_in_window || 0);
   const baselineOnline = baselineWorkerCount(runtime);
+  const attentionJobs = Number(runtime.summary?.automation_jobs_needing_attention || 0);
+  const neverRun = Number(runtime.summary?.automation_jobs_never_run || 0);
+  const lastError = Number(runtime.summary?.automation_jobs_last_error || 0);
   const privateHostReached = privateAdminRouteReached();
   const services = [
     ...online.slice(0, 9).map((worker) => ({ name: worker.name, note: worker.role, live: true })),
@@ -2884,9 +2884,9 @@ function renderBaselineWorkers(runtime) {
   return `
     <section class="worker-baseline">
       <div class="worker-baseline-copy">
-        <p class="worker-kicker">Always-on force</p>
-        <h4>${baselineOnline} baseline workers online</h4>
-        <p>${recentJobs ? `${recentJobs} real job${recentJobs === 1 ? "" : "s"} logged in the last 24 hours. The rest stays mapped, guarded, and ready without pretending to run work.` : "No customer jobs logged yet. Core services are still scanning, guarding, remembering, and routing."}</p>
+        <p class="worker-kicker">Real worker engine</p>
+        <h4>${baselineOnline} scheduled workers · ${attentionJobs} need attention</h4>
+        <p>${recentJobs ? `${recentJobs} real job${recentJobs === 1 ? "" : "s"} logged in the last 24 hours.` : "No worker jobs logged in the last 24 hours."} ${attentionJobs ? `${lastError} failed and ${neverRun} have not produced a first receipt yet.` : "No attention blockers reported by the automation engine."}</p>
       </div>
       <div class="worker-baseline-grid">
         ${services.map((service) => `<span class="worker-baseline-service"><i></i><b>${esc(service.name)}</b><small>${esc(service.note)}</small></span>`).join("")}
