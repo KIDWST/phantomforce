@@ -8,7 +8,7 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260723-57";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260723-57";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
@@ -216,7 +216,6 @@ function dailyIdeaEditPanel(config, missingProfile) {
     <div class="au-config-actions">
       <button class="btn btn-primary" data-di-save type="button">Save automation</button>
       <button class="btn btn-quiet" data-di-refresh type="button">Regenerate today's ${esc(config.count)}</button>
-      <button class="btn btn-quiet" data-di-open-ideas data-open-ws="content" type="button">Open New Ideas</button>
     </div>
     <p class="bm-hint">Daily ideas are replaced each day. If the user saves an idea in Creator Hub, that saved idea stays; the disposable batch does not.</p>
   </div>`;
@@ -761,10 +760,6 @@ export function renderAutomation(el, opts = {}) {
     store.save();
     notify("Automation", `Refreshed today's ${next.count} ideas.`);
     paint();
-  });
-
-  el.querySelector("[data-di-open-ideas]")?.addEventListener("click", () => {
-    try { workspaceStorageSetItem("pf.contenthub.openTab.v1", "ideas"); } catch {}
   });
 
   el.querySelectorAll("[data-au-recipe]").forEach((btn) => {

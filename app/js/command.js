@@ -39,49 +39,6 @@ const LOCAL_FIRST_INTENTS = new Set([
 ]);
 const PROVIDER_FAILURE_MESSAGE = "I couldn't complete that just now. Your request is still here";
 
-/* A visual request is an immediate, explicitly authorized Media Lab job.
-   It must not become a placeholder card or take a detour through a chat
-   model before the user sees their media. */
-const CHAT_MEDIA_ARTIFACT = /\b(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\b/i;
-const CHAT_MEDIA_CREATE = /\b(?:create|make|generate|produce|design|shoot|render|animate)\b/i;
-const CHAT_MEDIA_DIRECT_ASK = /\b(?:i\s+(?:want|need)|give\s+me|show\s+me)\s+(?:an?\s+)?(?:image|photo|picture|portrait|graphic|illustration|artwork|art|thumbnail|cover|poster|banner|video|reel|clip|short|film|animation|motion|tiktok|story)\b/i;
-/* "story" is ambiguous: a social Story asset (Media Lab) vs. a narrative
-   ("tell me a story about..."). Only the narrative reading has "story about/of/
-   regarding/where/in which" with no platform or ad-format qualifier nearby. */
-const CHAT_NARRATIVE_STORY = /\bstory\s+(?:about|of|regarding|around|where|in which)\b/i;
-const CHAT_MEDIA_STORY_QUALIFIER = /\b(?:instagram|ig|insta|tiktok|facebook|fb|snapchat|snap|social|post|ad|poster|reel|banner|cover|vertical|9:16)\b/i;
-
-function isDirectChatMediaRequest(text = "") {
-  const value = String(text || "").trim();
-  if (/^(?:how|what|why|when|where)\b/i.test(value)) return false;
-  if (CHAT_NARRATIVE_STORY.test(value) && !CHAT_MEDIA_STORY_QUALIFIER.test(value)) return false;
-  return CHAT_MEDIA_ARTIFACT.test(value) && (CHAT_MEDIA_CREATE.test(value) || CHAT_MEDIA_DIRECT_ASK.test(value));
-}
-
-async function generateMediaFromChat(text, intent, settings) {
-  try {
-    const mediaLab = await import("./medialab.js?v=phantom-live-20260723-57");
-    const result = await mediaLab.generateMediaFromChat(text);
-    if (!result?.handled) return null;
-    const media = Array.isArray(result.media) ? result.media : [];
-    const cards = result.state === "saved"
-      ? [card("Media Pool", result.title || "Generated media", "Saved from this chat and ready to reuse in Content Hub or Publish.", [openAction("Open Media Pool", "content")], "Generated through Media Lab")]
-      : result.state === "queued"
-        ? [card("Media Lab draft", result.title || "Creative brief", "The preview is visible here. Final rendering remains in Media Lab's review lane.", [openAction("Open Media Lab", "media")], "Not yet saved")]
-        : result.state === "preview"
-          ? [card("Media Lab preview", result.title || "Creative brief", "This is an honest local preview, not a completed render. Open Media Lab to check the engine.", [openAction("Open Media Lab", "media")], "Not saved")]
-          : [];
-    return shapeResponse({ say: result.say, cards, media, intent }, settings);
-  } catch {
-    return shapeResponse({
-      say: "Media Lab could not load for that request, so no render was started and nothing was saved.",
-      cards: [card("Media Lab", "Render not started", "The generation path was unavailable. Open Media Lab to inspect the connection.", [openAction("Open Media Lab", "media")], "No credits spent")],
-      media: [],
-      intent,
-    }, settings);
-  }
-}
-
 /* Pull a subject out of phrases like "draft a proposal for Sarah's gym". */
 function subjectOf(text) {
   const m = text.match(/\b(?:for|to|about|called|named)\s+(.{2,60})$/i);
@@ -665,21 +622,6 @@ function createProposal(subject) {
   return p;
 }
 
-function createPendingMedia(subject) {
-  const t = subject ? title(subject) : "New creative";
-  const m = {
-    id: uid("med"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(),
-    title: `${t} — pending video`, type: "Video generation", status: "pending",
-    angle: "Hook in 2 seconds, one idea, end on the offer.",
-    shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"],
-    caption: `${t} — caption starter. Punch it up before approval.`, proof: null, updated: new Date().toISOString(),
-  };
-  store.state.media.unshift(m);
-  pushActivity("Media Factory", `added pending media: ${m.title}.`, m.ws);
-  store.save();
-  return m;
-}
-
 /* One website system, two doors: this creates EXACTLY the record shape the
    Websites page (sitestudio.js) edits — baseSiteDraft + design + the user's
    own description applied as the first AI edit pass. The full request text
@@ -1040,8 +982,8 @@ function localQuestionAnswer(text, settings = null) {
     const media = visible(store.state.media || []);
     return {
       say: media.length
-        ? `${media.length} media item${media.length === 1 ? "" : "s"} loaded in Media Lab. Tell me what to create or edit and I'll get moving — nothing sends or posts without your OK.`
-        : "Media Lab is ready and empty. Tell me what to create and I'll get moving.",
+        ? `${media.length} media item${media.length === 1 ? "" : "s"} in your library. Manage and reuse them in Asset Cloud — nothing sends or posts without your OK.`
+        : "No media in your library yet. Add assets in Asset Cloud whenever you're ready.",
       cards: [],
       open: null,
     };
@@ -1443,25 +1385,6 @@ function routeCommand(raw, settings) {
   }
 
   /* --- media / content / video --- */
-  if (/(video|reel|content|post|caption|shoot|media|creative|tiktok|short|thumbnail|image|photo|graphic)/.test(s)) {
-    /* A record is only created on an explicit creation verb aimed at a media
-       artifact. "our content could be better" or "I have an idea for a
-       video" is conversation/brainstorm — talking about media must never
-       silently mint pending-media records. */
-    const explicitMediaCreate = /\b(create|make|generate|draft|produce|design|shoot)\b[^.?!]{0,40}\b(video|reel|post|caption|thumbnail|image|photo|graphic|short|tiktok)\b/i.test(text);
-    if (explicitMediaCreate && !["brainstorm", "feedback", "question"].includes(intent.primaryIntent)) {
-      const m = createPendingMedia(subject);
-      return {
-        say: `On it — starting a Media Lab edit for "${m.title}". I'll show a preview before anything's final.`,
-        cards: [card("Pending media", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
-        open: "media",
-      };
-    }
-    /* mentioning media in conversation never yanks the user out of chat —
-       only an explicit "open/show media lab" navigates */
-    return { say: "Media Lab is ready. Tell me exactly what to create — a video, a post, a thumbnail — and I'll start it.", cards: [], open: /\b(open|show|go to|take me to)\b[^.?!]{0,20}\b(media|lab)\b/.test(s) ? "media" : null };
-  }
-
   /* --- store --- */
   if (/(store|shop|product|catalog|merch|sell|checkout)/.test(s)) {
     if (/(build|create|draft|make|new|add)/.test(s)) {
@@ -1724,11 +1647,6 @@ export async function handleSmartCommand(raw) {
 
   if (isCrmProspectBuildout(text)) {
     return handleCommand(text);
-  }
-
-  if (isDirectChatMediaRequest(text)) {
-    const media = await generateMediaFromChat(text, intent, settings);
-    if (media) return media;
   }
 
   const actionFreeConversation = isActionFreeModelRequest(text, intent);

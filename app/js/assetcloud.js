@@ -10,6 +10,7 @@ import {
   assetsAvailable, canManageActiveOrg, uploadAsset, listAssets, fetchAsset,
   patchAsset, assetLifecycle, deleteAsset, restoreAssetVersion,
   listAssetFolders, createAssetFolder, assetBlobUrl, saveToAssetCloud,
+  listLocalAssets, refreshLocalAssets, localAssetBlobUrl,
 } from "./orgs.js?v=phantom-live-20260723-57";
 
 export { saveToAssetCloud };
@@ -20,7 +21,7 @@ const KIND_ICON = { image: "🖼️", video: "🎬", audio: "🎵", font: "🔤"
 
 const VIEWS = [
   ["library", "All assets"], ["favorites", "Favorites"], ["brand", "Brand"],
-  ["archived", "Archived"], ["trash", "Trash"],
+  ["archived", "Archived"], ["trash", "Trash"], ["local", "Local Assets"],
 ];
 const KIND_FILTERS = [
   ["", "Any type"], ["image", "Images"], ["video", "Video"], ["audio", "Audio"],
@@ -117,6 +118,11 @@ async function loadFolders(el) {
 async function loadAssets(el) {
   const grid = el.querySelector("[data-ac-grid]");
   if (!grid) return;
+  const localMode = ui.view === "local";
+  el.querySelector(".ac-toolbar")?.toggleAttribute("hidden", localMode);
+  el.querySelector(".ac-head-actions")?.toggleAttribute("hidden", localMode);
+  el.querySelector("[data-ac-detail]")?.setAttribute("hidden", "");
+  if (localMode) return loadLocalAssetsView(el);
   const { assets } = await listAssets({
     view: ui.view, kind: ui.kind || undefined, search: ui.search || undefined,
     sort: ui.sort, orientation: ui.orientation || undefined, folder_id: ui.folderId || undefined,
@@ -270,6 +276,126 @@ function notifyInline(el, message) {
   bar.textContent = message;
   el.querySelector(".ac")?.appendChild(bar);
   setTimeout(() => bar.remove(), 5200);
+}
+
+/* ---------------- Local Assets (Motion Array vault) ----------------
+   Re-homed from the former Media Lab drawer. A read-only browse/search view
+   over the machine's local asset vault (e.g. the Motion Array folder), served
+   by the existing /phantom-ai/local-assets backend via orgs.js. Nothing here is
+   uploaded to Asset Cloud — files stay on this machine and are only listed and
+   previewed. */
+
+const LOCAL_KINDS = [
+  ["all", "All"], ["image", "Images"], ["video", "Video"],
+  ["project", "Projects"], ["archive", "Archives"], ["folder", "Templates"],
+];
+const localUi = {
+  loaded: false, loading: false, search: "", kind: "all",
+  assets: [], count: 0, source: "", rootLabel: "", message: "",
+};
+let localSearchTimer = null;
+let localFetchSeq = 0;
+let localBlobUrls = [];
+function trackLocalBlob(url) { if (url) localBlobUrls.push(url); return url; }
+function releaseLocalBlobs() { localBlobUrls.forEach((u) => URL.revokeObjectURL(u)); localBlobUrls = []; }
+
+function applyLocalResult(result = {}) {
+  localUi.assets = result.assets || [];
+  localUi.count = result.count || localUi.assets.length || 0;
+  localUi.source = result.source || "";
+  localUi.rootLabel = result.root_label || "";
+  localUi.message = result.ok === false
+    ? (String(result.detail || "").trim() || "Local asset lane is not reachable from this session yet.")
+    : "";
+}
+
+function localPanelHtml() {
+  const s = localUi;
+  return `
+    <div class="ac-local">
+      <p class="ac-local-note">Your local media vault on this machine (Motion Array and other indexed folders). Nothing is uploaded to Asset Cloud — files stay on this PC and are only listed and previewed here.</p>
+      <div class="ac-local-controls">
+        <input class="ac-search" data-acl-search type="search" placeholder="Search local assets…" value="${esc(s.search)}" />
+        <select class="ac-select" data-acl-kind>${LOCAL_KINDS.map(([v, l]) => `<option value="${v}" ${s.kind === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>
+        <button class="btn btn-quiet" data-acl-refresh type="button">Refresh</button>
+      </div>
+      <div class="ac-local-summary">
+        <b>${s.loading ? "Indexing…" : `${s.count || 0} assets indexed`}</b>
+        <span>${esc(s.rootLabel || "Local library")}${s.source ? ` · ${esc(s.source)}` : ""}</span>
+      </div>
+      ${s.message ? `<p class="ac-empty">${esc(s.message)}</p>` : ""}
+      <div class="ac-grid ac-local-grid">
+        ${s.loading && !s.assets.length
+          ? `<div class="ac-loading">Scanning local assets…</div>`
+          : s.assets.length
+            ? s.assets.map(localAssetCard).join("")
+            : `<div class="ac-empty">No local assets match that search.</div>`}
+      </div>
+    </div>`;
+}
+
+function localAssetCard(asset) {
+  const canPreview = asset.kind === "image" && (!!asset.has_preview || !!asset.previewable);
+  const ic = KIND_ICON[asset.kind] || KIND_ICON.other;
+  return `
+    <div class="ac-card ac-local-card" data-acl-card="${esc(asset.id)}">
+      <div class="ac-thumb ac-thumb-${esc(asset.kind || "other")}" data-acl-thumb="${esc(asset.id)}">
+        <span class="ac-thumb-ic">${ic}</span>
+      </div>
+      <div class="ac-card-meta">
+        <b>${esc(asset.title || asset.name || "Untitled")}</b>
+        <i>${esc(asset.category || asset.kind || "")}${asset.app ? ` · ${esc(asset.app)}` : ""}</i>
+        <i>${esc(asset.size_label || "")}${asset.safety ? ` · ${esc(asset.safety)}` : ""}</i>
+      </div>
+    </div>`;
+}
+
+function hydrateLocalThumbs(el) {
+  releaseLocalBlobs();
+  for (const asset of localUi.assets) {
+    if (asset.kind !== "image" || !(asset.has_preview || asset.previewable)) continue;
+    localAssetBlobUrl(asset.id).then((url) => {
+      if (!url) return;
+      const thumb = el.querySelector(`[data-acl-thumb="${asset.id}"]`);
+      if (thumb) { thumb.style.backgroundImage = `url(${trackLocalBlob(url)})`; thumb.classList.add("is-loaded"); }
+    });
+  }
+}
+
+function wireLocalPanel(el) {
+  const grid = el.querySelector("[data-ac-grid]");
+  if (!grid) return;
+  const search = grid.querySelector("[data-acl-search]");
+  if (search) search.oninput = (e) => {
+    localUi.search = e.target.value;
+    clearTimeout(localSearchTimer);
+    localSearchTimer = setTimeout(() => loadLocalAssetsView(el), 260);
+  };
+  grid.querySelector("[data-acl-kind]")?.addEventListener("change", (e) => {
+    localUi.kind = e.target.value;
+    loadLocalAssetsView(el);
+  });
+  grid.querySelector("[data-acl-refresh]")?.addEventListener("click", () => loadLocalAssetsView(el, true));
+}
+
+async function loadLocalAssetsView(el, refresh = false) {
+  const grid = el.querySelector("[data-ac-grid]");
+  if (!grid) return;
+  const seq = ++localFetchSeq;
+  localUi.loading = true;
+  grid.innerHTML = localPanelHtml();
+  wireLocalPanel(el);
+  const query = { search: localUi.search, kind: localUi.kind, limit: 60 };
+  const result = refresh
+    ? await refreshLocalAssets().then(() => listLocalAssets(query))
+    : await listLocalAssets(query);
+  if (seq !== localFetchSeq || !document.body.contains(grid)) return;
+  localUi.loading = false;
+  localUi.loaded = true;
+  applyLocalResult(result);
+  grid.innerHTML = localPanelHtml();
+  wireLocalPanel(el);
+  hydrateLocalThumbs(el);
 }
 
 /* ---------------- ingestion ---------------- */

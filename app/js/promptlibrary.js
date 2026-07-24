@@ -2,13 +2,12 @@
    working prompts for image, video, captions, ad copy, and content hooks,
    plus a place to save your own for quick reuse. Pure local data — nothing
    here is generated or faked; the curated set is written and refreshed by
-   the PhantomForce team, and "Use in Media Lab" only ever hands a prompt
-   string to the Shot Builder, never runs anything on its own. */
+   the PhantomForce team, and prompts are copy-only — the library never runs
+   anything on its own. */
 
 import { workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260723-57";
 
 const LIB_KEY = "pf.promptlibrary.v1";
-const MEDIA_INTENT_KEY = "pf.medialab.promptIntent.v1";
 
 export const PROMPT_CATEGORIES = [
   { id: "image", label: "Image", icon: "image" },
@@ -230,7 +229,6 @@ function promptCard(p, state, esc) {
   const isStar = state.starred.includes(p.id);
   const isMine = state.custom.some((c) => c.id === p.id);
   const catDef = PROMPT_CATEGORIES.find((c) => c.id === p.cat);
-  const canSendToMedia = p.cat === "image" || p.cat === "video";
   return `
     <article class="pl-card" data-pl-card="${p.id}">
       <div class="pl-card-top">
@@ -242,7 +240,6 @@ function promptCard(p, state, esc) {
       <p class="pl-card-prompt">${esc(p.prompt)}</p>
       <div class="pl-card-actions">
         <button class="pl-action" data-pl-copy="${p.id}" type="button">${svgIc("copy")} ${pl.copiedId === p.id ? "Copied" : "Copy"}</button>
-        ${canSendToMedia ? `<button class="pl-action" data-pl-use="${p.id}" type="button">${svgIc("arrow")} Use in Media Lab</button>` : ""}
         ${isMine ? `<button class="pl-action pl-action-danger" data-pl-delete="${p.id}" type="button">${svgIc("trash")} Delete</button>` : ""}
       </div>
     </article>`;
@@ -314,12 +311,4 @@ function wirePromptLibrary(el, state, opts) {
     setTimeout(() => { if (pl.copiedId === id) { pl.copiedId = ""; rerender(); } }, 1600);
   });
 
-  el.querySelectorAll("[data-pl-use]").forEach((b) => b.onclick = () => {
-    const id = b.dataset.plUse;
-    const p = allPrompts(state).find((x) => x.id === id);
-    if (!p) return;
-    try { workspaceStorageSetItem(MEDIA_INTENT_KEY, JSON.stringify({ prompt: p.prompt, modality: p.cat === "video" ? "video" : "image", at: p.id })); } catch {}
-    opts.notify?.("Prompt Library", `Sent "${p.title}" to the Media Lab Shot Builder.`);
-    opts.openWorkspace?.("media");
-  });
 }

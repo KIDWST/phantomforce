@@ -702,69 +702,6 @@ function renderBookings(el, rerender) {
   });
 }
 
-/* ============================= MEDIA LAB ============================= */
-function renderMedia(el, rerender) {
-  const media = visible(store.state.media);
-  const generatedStates = new Set(["generated", "delivered", "completed", "saved"]);
-  const mediaState = (m) => generatedStates.has(m.status) ? "generated" : "pending";
-  el.innerHTML = `
-    <div class="ws-toolbar">
-      <p class="ws-note">Media Lab tracks only two live states: pending generation and generated output. Paid generation never runs without sign-off.</p>
-      <button class="btn btn-primary" data-act="add">+ Pending generation</button>
-    </div>
-    <div class="card-grid">
-      ${media.map((m) => {
-        const shots = Array.isArray(m.shots) ? m.shots : [];
-        const updated = m.updated || new Date().toISOString();
-        const state = mediaState(m);
-        return `
-        <article class="record">
-          <button class="record-x" data-act="remove" data-id="${m.id}" aria-label="Remove media item">×</button>
-          <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title || "Pending generation")}</h4></div>
-          <p class="record-sub">${esc(m.type || "Media generation")} · ${chip(state)} · ${ago(updated)}</p>
-          <p class="record-notes"><b>Prompt:</b> ${esc(m.angle || m.notes || m.prompt || "Prompt not saved yet.")}</p>
-          <details class="shotlist"><summary>Details (${shots.length})</summary>
-            <ol>${shots.map((s) => `<li>${esc(s)}</li>`).join("") || `<li>No saved production details.</li>`}</ol>
-          </details>
-          <p class="record-notes"><b>Caption:</b> ${esc(m.caption || "No caption saved.")}</p>
-          ${m.proof ? `<p class="record-proof">Proof: <code>${esc(m.proof)}</code></p>` : ""}
-          <div class="record-actions">
-            <button class="btn" data-act="copy" data-id="${m.id}">Copy details</button>
-            ${state === "pending" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Queue generation approval</button>` : ""}
-            ${m.status === "generation-approved" ? `<button class="btn btn-good" data-act="delivered" data-id="${m.id}">Mark generated</button>` : ""}
-          </div>
-        </article>`;
-      }).join("") || empty("Media Lab is empty. Generate an image or video to start.")}
-    </div>`;
-  const find = (id) => store.state.media.find((m) => m.id === id);
-  bindActions(el, {
-    add: () => {
-      const t = prompt("What is this creative for? (client / campaign)");
-      if (!t) return;
-      store.state.media.unshift({ id: uid("med"), ws: currentWs(), title: `${t.trim()} — pending video`, type: "Video generation", status: "pending", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"], caption: `${t.trim()} — caption starter.`, proof: null, updated: new Date().toISOString() });
-      pushActivity("Media Factory", `added pending media: ${t.trim()}.`);
-      store.save(); rerender();
-    },
-    copy: (id, btn) => {
-      const m = find(id);
-      const shots = Array.isArray(m.shots) ? m.shots : [];
-      copyText(btn, `${m.title || "Pending generation"}\n${m.type || "Media generation"}\n\nPrompt: ${m.angle || m.notes || m.prompt || "Prompt not saved yet."}\n\nDetails:\n${shots.map((s, i) => `${i + 1}. ${s}`).join("\n") || "1. No saved production details."}\n\nCaption: ${m.caption || "No caption saved."}`);
-    },
-    remove: (id) => {
-      const m = find(id);
-      store.state.media = store.state.media.filter((item) => item.id !== id);
-      if (m) pushActivity("Media Factory", `removed media item: ${m.title}.`, m.ws);
-      store.save(); rerender();
-    },
-    "request-gen": (id) => {
-      const m = find(id);
-      queueWorkspaceApproval({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One paid generation pass. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
-      pushActivity("Media Factory", `queued generation approval for ${m.title}.`, m.ws);
-      store.save(); rerender();
-    },
-    delivered: (id) => { const m = find(id); m.status = "generated"; m.updated = new Date().toISOString(); pushActivity("Delivery Manager", `marked generated: ${m.title}.`, m.ws); store.save(); rerender(); },
-  });
-}
 
 /* ========================= SITE + STORE STUDIO ========================= */
 export function baseSiteDraft(title = "New website", kind = "Website") {
@@ -3629,7 +3566,6 @@ export const WORKSPACE_DEFS = {
   proposals: { title: "Offer Desk", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
-  media: { title: "Media Lab", kicker: "Creator production studio", render: renderMedia },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Accounting", kicker: "Books, transaction reader, and cash truth", render: renderMoney },
   memory: { title: "Memory", kicker: "Context intelligence database", render: renderMemory },
@@ -3645,8 +3581,6 @@ export function missionWidgets() {
   const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
   const m = moneyView();
   const pend = visible(store.state.approvals).filter((a) => a.status === "pending");
-  const pendingMedia = visible(store.state.media).filter((x) => ["pending", "draft", "brief-ready", "generation-approved"].includes(x.status));
-  const generatedMedia = visible(store.state.media).filter((x) => ["generated", "delivered", "completed", "saved"].includes(x.status));
   const pages = visible(store.state.sites);
   const sec = visible(store.state.security)[0];
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
@@ -3660,7 +3594,6 @@ export function missionWidgets() {
   const w = [
     { id: "leads", icon: "◉", title: "Client CRM", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "client memory current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Offer Desk", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
-    { id: "media", icon: "▶", title: "Creator Studio", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
     { id: "sites", icon: "▦", title: "Site Portfolio", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },

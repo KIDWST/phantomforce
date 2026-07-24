@@ -682,7 +682,7 @@ function mountAmbientOS() {
 }
 
 /* ---- keyboard command layer: g-chord navigation + a ? cheatsheet ---- */
-const GO_MAP = { d: "dashboard", p: "phantomplay", s: "phantomstore", m: "media", w: "sites", a: "analytics", i: "intelligence", $: "money" };
+const GO_MAP = { d: "dashboard", p: "phantomplay", s: "phantomstore", w: "sites", a: "analytics", i: "intelligence", $: "money" };
 let goMode = false;
 let goTimer = 0;
 function osIsTyping(t) { return !!(t && (/^(input|textarea|select)$/i.test(t.tagName) || t.isContentEditable)); }
@@ -699,7 +699,7 @@ function toggleCheatsheet(force) {
   if (force === false) return;
   const rows = [
     ["Launch", [["⌘ K", "Command palette"], ["/", "Talk to Phantom"], ["?", "This sheet"], ["Esc", "Close / back"]]],
-    ["Go to  ·  press g then", [["g d", "Dashboard"], ["g p", "PhantomPlay"], ["g s", "PhantomStore"], ["g m", "Media Lab"], ["g w", "Website Builder"], ["g a", "Analytics"], ["g i", "Competitor Intel"], ["g $", "Accounting"]]],
+    ["Go to  ·  press g then", [["g d", "Dashboard"], ["g p", "PhantomPlay"], ["g s", "PhantomStore"], ["g w", "Website Builder"], ["g a", "Analytics"], ["g i", "Competitor Intel"], ["g $", "Accounting"]]],
   ];
   const el = document.createElement("div");
   el.className = "os-keys";

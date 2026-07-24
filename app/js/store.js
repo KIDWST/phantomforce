@@ -1268,8 +1268,6 @@ export function todaysPlan() {
     .forEach((p) => items.push({ icon: "▸", text: `Proposal send-ready: ${p.client}`, kind: "proposal", open: "proposals" }));
   visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status || "new"))
     .forEach((t) => items.push({ icon: "▸", text: `Task ready: ${t.title}`, kind: "task", open: "workforce" }));
-  visible(store.state.media).filter((m) => ["pending", "draft", "brief-ready", "generation-approved"].includes(m.status))
-    .forEach((m) => items.push({ icon: "▸", text: `Pending media: ${m.title}`, kind: "media", open: "media" }));
   visible(store.state.security).forEach((s) => {
     if (daysUntil(s.rotationDue) <= 30) items.push({ icon: "⚠", text: `Password rotation window closes in ${daysUntil(s.rotationDue)} days`, kind: "security", open: "protect" });
   });

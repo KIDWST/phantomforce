@@ -13,8 +13,7 @@ import {
 import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260723-57";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260723-57";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260723-57";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260723-57";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260723-57";
+import { renderAnalytics } from "./contenthub.js?v=phantom-live-20260723-57";
 import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260723-57";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260723-57";
 import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260723-57";
@@ -466,7 +465,6 @@ const BASE_NAV = [
   { id: "phantomai",  label: "PhantomBot",   icon: "chat",  ws: "phantomai" },
   { id: "phantomlive", label: "Live Agent",  icon: "spark", ws: "phantomlive" },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
-  { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true, dashboardWidget: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
@@ -486,7 +484,6 @@ const BASE_NAV = [
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 let navEntitlements = { loaded: false, features: null, limits: null, entitlements: null };
 const FEATURE_BY_NAV_ID = {
-  media: "mediaLab",
   assets: "assetPacks",
   sites: "websites",
   automation: "advancedWorkflows",
@@ -496,12 +493,12 @@ const FEATURE_BY_NAV_ID = {
   phantomplay: "phantomPlay",
 };
 const PLAN_NAV_WORKFLOWS = {
-  free: new Set(["dashboard", "phantomai", "phantomlive", "media", "sites", "phantomplay", "settings"]),
-  starter: new Set(["dashboard", "phantomai", "phantomlive", "crm", "media", "sites", "phantomplay", "settings"]),
-  professional: new Set(["dashboard", "phantomai", "phantomlive", "crm", "media", "sites", "money", "intelligence", "analytics", "approvals", "phantomplay", "settings", "vacation"]),
-  developer: new Set(["dashboard", "phantomai", "phantomlive", "media", "sites", "assets", "automation", "developer", "phantomplay", "phantomstore", "settings"]),
-  elite: new Set(["dashboard", "phantomai", "phantomlive", "crm", "media", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "phantomplay", "phantomstore", "settings", "vacation"]),
-  developer_elite: new Set(["dashboard", "phantomai", "phantomlive", "crm", "media", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "developer", "phantomplay", "phantomstore", "settings", "vacation"]),
+  free: new Set(["dashboard", "phantomai", "phantomlive", "sites", "phantomplay", "settings"]),
+  starter: new Set(["dashboard", "phantomai", "phantomlive", "crm", "sites", "phantomplay", "settings"]),
+  professional: new Set(["dashboard", "phantomai", "phantomlive", "crm", "sites", "money", "intelligence", "analytics", "approvals", "phantomplay", "settings", "vacation"]),
+  developer: new Set(["dashboard", "phantomai", "phantomlive", "sites", "assets", "automation", "developer", "phantomplay", "phantomstore", "settings"]),
+  elite: new Set(["dashboard", "phantomai", "phantomlive", "crm", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "phantomplay", "phantomstore", "settings", "vacation"]),
+  developer_elite: new Set(["dashboard", "phantomai", "phantomlive", "crm", "assets", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "developer", "phantomplay", "phantomstore", "settings", "vacation"]),
   enterprise: null,
   internal: null,
   phantom: null,
@@ -534,7 +531,6 @@ const MOBILE_LABEL_OVERRIDES = {
   crm: "Clients",
   money: "Money",
   sites: "Sites",
-  media: "Media",
   phantomplay: "Play",
   phantomstore: "Store",
   phantomlive: "Agent",
@@ -546,7 +542,7 @@ const MOBILE_LABEL_OVERRIDES = {
   vacation: "Away",
   developer: "Developer",
 };
-const MOBILE_DOCK_IDS = ["dashboard", "crm", "media", "sites", "money"];
+const MOBILE_DOCK_IDS = ["dashboard", "crm", "assets", "sites", "money"];
 let MOBILE_NAV = NAV.map((n) => ({
   id: n.id,
   label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
@@ -654,7 +650,6 @@ let mobileNavOpen = false;
 const WORKSPACE_ALIASES = {
   brain: "workforce",
   memory: "memory",
-  content: "content",
   analytics: "analytics",
 };
 const ROUTE_REGISTRY = createRouteRegistry([
@@ -673,8 +668,7 @@ const NAV_PARENT_BY_WORKSPACE = {
   protect: "settings",
   adminos: "developer",
   account: "settings",
-  content: "media",
-  promptlibrary: "media",
+  promptlibrary: "assets",
   activity: "workers",
 };
 
@@ -1113,7 +1107,7 @@ function renderOsMenu() {
   }
   menu.hidden = !osMenuOpen;
   if (!osMenuOpen) return;
-  const primaryIds = ["dashboard", "clients", "media", "sites", "phantomplay", "phantomstore", "analytics", "intelligence", "money", "approvals"];
+  const primaryIds = ["dashboard", "clients", "assets", "sites", "phantomplay", "phantomstore", "analytics", "intelligence", "money", "approvals"];
   const items = orderedNavItems()
     .filter((item) => primaryIds.includes(item.id))
     .sort((a, b) => primaryIds.indexOf(a.id) - primaryIds.indexOf(b.id));
@@ -1178,8 +1172,8 @@ const ACCOUNT_TIERS = [
     name: "Pro",
     price: "$2,500/mo",
     badge: "Growth",
-    copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
-    features: ["Phantom AI operator", "Content Hub + Media Lab", "Accounting-aware ops"],
+    copy: "Operator-grade system for growth: creator workflow, Asset Cloud, accounting visibility, and owner controls.",
+    features: ["Phantom AI operator", "Asset Cloud library", "Accounting-aware ops"],
   },
   {
     id: "developer",
@@ -1955,7 +1949,7 @@ function renderDashboardIntel() {
       label: "Content readiness",
       value: `${media.length} media`,
       detail: pendingMedia ? `${pendingMedia} pending item${pendingMedia === 1 ? "" : "s"}` : `${sites.length} site${sites.length === 1 ? "" : "s"} available`,
-      open: pendingMedia ? "media" : "content",
+      open: "assets",
       tone: media.length || sites.length ? "good" : "idle",
     },
     {
@@ -2225,7 +2219,7 @@ const QUICK = [
   { label: "Create new content", icon: "spark",  run: "Create campaign media" },
   { label: "Start video campaign", icon: "film",  run: "Create a launch video" },
   { label: "Check cashflow", icon: "chart",   run: "What's my cash flow?" },
-  { label: "Open Content Hub", icon: "upload",   open: "content" },
+  { label: "Open Asset Cloud", icon: "upload",   open: "assets" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
 function renderQuick() {
@@ -2358,8 +2352,6 @@ function paletteSources(query) {
       .forEach((l) => add(l.name, `Lead · ${l.company || l.status}`, "leads", "users"));
     visible(store.state.proposals).filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((p) => add(p.client, `Proposal · ${fmtMoney(p.price)}`, "proposals", "dollar"));
-    visible(store.state.media).filter((m) => (m.title || "").toLowerCase().includes(q)).slice(0, 4)
-      .forEach((m) => add(m.title, "Media item", "media", "film"));
     visible(store.state.sites).filter((s) => (s.title || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((s) => add(s.title, `${s.kind}`, "sites", "grid"));
   }
@@ -2817,12 +2809,12 @@ function progressStepsForCommand(text = "") {
   const value = String(text).toLowerCase();
   if (/\b(image|video|media|photo|content|asset|thumbnail|reel)\b/.test(value)) {
     if (/\b(venus|planet|space|orbit|cosmic)\b/.test(value)) {
-      return ["Routing through Venus' cloud deck…", "Bending light and motion into the frame…", "Landing it in chat and Media Pool…"];
+      return ["Routing through Venus' cloud deck…", "Bending light and motion into the frame…", "Landing it in chat…"];
     }
     if (/\b(cyber|chip|circuit|neon|futur)\b/.test(value)) {
-      return ["Byting cyberchips into the frame…", "Giving the signal a little velocity…", "Landing it in chat and Media Pool…"];
+      return ["Byting cyberchips into the frame…", "Giving the signal a little velocity…", "Landing it in chat…"];
     }
-    return ["Setting the frame from your brief…", "Rendering through Media Lab…", "Landing it in chat and Media Pool…"];
+    return ["Setting the frame from your brief…", "Composing the frame…", "Landing it in chat…"];
   }
   if (/\b(build|create|draft|plan|proposal|campaign|site|page|workflow)\b/.test(value)) {
     return ["Understanding the outcome...", "Checking related work...", "Building the response..."];
@@ -3255,7 +3247,6 @@ const mediaOpts = () => ({
 /* Owner-only runtime lanes. Keep the product vocabulary clean here too:
    this page can show readiness without exposing vendor plumbing. */
 const LOOP_LANE_IDENTITY = { openai: "ChatGPT (OpenAI)", claude: "Claude (Anthropic)", glm: "GLM (OpenRouter)", local: "Local / Ollama", custom: "Custom endpoint" };
-const MEDIA_ENGINE_IDENTITY = { cinematic: "PhantomForce native lane", claude: "Direction lane", openai: "Image lane", runway: "Motion lane", flux: "Still lane" };
 
 /* ============================================================================
    DEVELOPER TAB — the real curtain-pull. Owner-only. Every section here is
@@ -3263,7 +3254,7 @@ const MEDIA_ENGINE_IDENTITY = { cinematic: "PhantomForce native lane", claude: "
    health) — nothing on this page is a static mockup. It never executes a
    provider, approval, send, or production write; it only looks. */
 const DEV_AGENT_ICON = { "phantom-ai": "brain", hermes: "db", builder: "dev", strategist: "brain", reviewer: "check", gatekeeper: "shield", scout: "dollar", sentinel: "shield", cutlab: "film" };
-const DEV_PROGRAM_ICON = { n8n: "auto", openspec: "doc", "agent-os": "book", serena: "search", ruflo: "users", "phantom-ai-online-fetch": "bolt", rembg: "media", "media-lab": "film", openai: "spark", fastify: "cog", "ai-proxy": "cog" };
+const DEV_PROGRAM_ICON = { n8n: "auto", openspec: "doc", "agent-os": "book", serena: "search", ruflo: "users", "phantom-ai-online-fetch": "bolt", rembg: "media", openai: "spark", fastify: "cog", "ai-proxy": "cog" };
 const DEV_TONE = {
   active: "on", working: "on", connected: "on", running_local: "on", reachable: "on", observed: "on",
   standby: "warn", available: "warn", idle: "warn", waiting: "warn", drafting: "warn", watching: "warn", ready: "warn",
@@ -3512,16 +3503,6 @@ function buildDevPrograms(workforce, rembg, mediaHealth) {
       ? `Local background removal running via ${rembg.pythonCommand || "python"}${rembg.version ? ` (${rembg.version})` : ""}.`
       : "Local background removal is safely registered. Connect the local worker when you want offline cutouts.",
     meta: rembg?.available && rembg?.checkedAt ? `Checked ${ago(rembg.checkedAt)} · ${rembg.lane || "local"} lane` : "Registered safely · local worker optional",
-  });
-  const mediaLabReady = !!mediaHealth?.media?.cinematic;
-  list.push({
-    id: "media-lab", name: "Media Lab", icon: "film",
-    tone: "on",
-    status: mediaLabReady ? "Connected" : "Guarded",
-    detail: mediaLabReady
-      ? "AI Edit and generation can run inside PhantomForce."
-      : "Media creation stays inside PhantomForce. Live render lanes are approval-gated until connected.",
-    meta: null,
   });
   const openaiKeyed = !!mediaHealth?.media?.openai;
   list.push({
@@ -3813,10 +3794,6 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
             <b>Phantom Loop targets</b>
             <div class="developer-list">${LOOP_PROVIDERS.map((p) => `<span><b>${esc(p.name)}</b><i>${esc(LOOP_LANE_IDENTITY[p.id] || p.id)}</i></span>`).join("")}</div>
           </div>
-          <div class="developer-lane-group">
-            <b>Media engines</b>
-            <div class="developer-list">${DEFAULT_PROVIDERS.map((p) => `<span><b>${esc(p.name)}</b><i>${esc(MEDIA_ENGINE_IDENTITY[p.id] || p.id)}${p.enabled ? "" : " · coming soon"}</i></span>`).join("")}</div>
-          </div>
         </div>
       </section>
 
@@ -3892,25 +3869,6 @@ function renderDeveloperPage(body) {
   }, 30000);
 }
 
-function renderMediaLabSuite(body) {
-  const opts = mediaOpts();
-  body.innerHTML = `
-      <section class="media-suite" data-media-suite>
-        <header class="media-suite-head">
-          <div>
-            <p class="media-suite-kicker">Creation workspace</p>
-            <h2>Media Lab</h2>
-            <p>Create and edit here. Finished work moves to Content Hub for planning, publishing, and analytics.</p>
-          </div>
-          <button class="media-suite-link" data-open-ws="content" type="button">${svg("doc")} Open Content Hub</button>
-        </header>
-        <div class="media-suite-body" data-media-suite-body></div>
-      </section>`;
-  const target = $("[data-media-suite-body]", body);
-  renderMediaStudio(target, opts);
-  $("[data-open-ws='content']", body)?.addEventListener("click", () => opts.openWorkspace?.("content"));
-}
-
 function renderAnalyticsSuite(body) {
   body.innerHTML = `
     <div class="analytics-stack">
@@ -3922,9 +3880,7 @@ function renderAnalyticsSuite(body) {
 }
 
 const CUSTOM = {
-  media: { title: "Media Lab", kicker: "Create and edit", custom: true, wide: true, render: (body) => renderMediaLabSuite(body) },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
-  content: { title: "Content Hub", kicker: "Library, ideas, drafts, publishing, and performance", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   phantomstore: { title: "PhantomStore", kicker: "AI marketplace", custom: true, wide: true, render: (body) => renderPhantomStore(body, mediaOpts()) },

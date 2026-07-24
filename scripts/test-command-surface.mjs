@@ -5,7 +5,6 @@ const main = readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8")
 const index = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
 const command = readFileSync(new URL("../app/js/command.js", import.meta.url), "utf8");
-const mediaLab = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const commandOsCss = readFileSync(new URL("../app/command-os.css", import.meta.url), "utf8");
 const phantomAi = readFileSync(new URL("../app/js/phantomai.js", import.meta.url), "utf8");
 const pageWorker = readFileSync(new URL("../app/js/pageworker.js", import.meta.url), "utf8");
@@ -63,7 +62,7 @@ assert.match(main, /event\.key === "`"/u, "Console must support the Ctrl-backtic
 assert.match(main, /data-chatbox-action="reset"/u, "Console right-click menu must include reset position.");
 assert.match(main, /classList\.toggle\("is-typing"/u, "Console must expose a subtle typing state for Phantom presence.");
 assert.match(main, /const bottomItems = items;/u, "The dedicated utility zone must remain the full navigation launcher while the main sidebar shows open tabs.");
-assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "crm", "media", "sites", "money"\]/u, "Phone dock must keep the five core destinations stable.");
+assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "crm", "assets", "sites", "money"\]/u, "Phone dock must keep the five core destinations stable.");
 assert.match(main, /data-mobile-more/u, "Phone dock must expose the complete navigation through More.");
 assert.match(main, /setMobileNav\(!mobileNavOpen\)/u, "More must open and close the existing mobile drawer.");
 assert.match(css, /\.mobile-bottom-nav\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/u, "Phone dock must fit six controls without horizontal clipping.");
@@ -76,11 +75,9 @@ assert.match(css, /Final compact nav guard:[\s\S]*?@media \(max-width: 900px\)[\
 assert.match(css, /Final compact nav guard:[\s\S]*?@media \(max-width: 900px\)[\s\S]*?\.mobile-bottom-nav\s*\{[\s\S]*?display:\s*grid\s*!important/u, "Final compact guard must leave the bottom dock as the one mobile nav.");
 assert.match(css, /@media \(max-width: 767px\)[\s\S]*?\.sidebar\s*\{[\s\S]*?display:\s*none\s*!important[\s\S]*?\.sidebar\.is-expanded\s*\{[\s\S]*?display:\s*flex\s*!important/u, "Phone sidebar must be drawer-only so it cannot duplicate the bottom nav.");
 assert.match(css, /\.sidebar:not\(\.is-expanded\)\s*\{\s*display:\s*none\s*!important;\s*\}/u, "Final phone chrome must keep the sidebar hidden until More opens it.");
-assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h\s*\{[\s\S]*?flex-direction:\s*column/u, "Content Hub mobile card headers must stack instead of squeezing copy into one-word columns.");
-assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h \.ch-src\s*\{[\s\S]*?white-space:\s*normal/u, "Content Hub mobile header copy must wrap naturally.");
+assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h\s*\{[\s\S]*?flex-direction:\s*column/u, "Analytics mobile card headers must stack instead of squeezing copy into one-word columns.");
 assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.buddy\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?pointer-events:\s*none/u, "Phone companion must not sit on top of mobile controls.");
 assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.buddy-say\s*\{[\s\S]*?display:\s*none/u, "Phone companion speech must not create off-screen overflow.");
-assert.match(css, /html\[data-org-color-mode="dark"\] \.ml-field-brief \.ml-prompt\s*\{[\s\S]*?rgba\(4, 10, 15, 0\.94\)[\s\S]*?color:\s*#eef8f5/u, "Media Lab prompt field must stay dark in dark mode.");
 assert.match(css, /\.dashboard-brief\s*\{/u, "Compact business brief must have dashboard styling.");
 assert.match(css, /\.dashboard-brief-metrics\s*\{/u, "Business snapshot must have a stable responsive layout.");
 assert.match(css, /\.chatbox\.is-minimized\s*\{/u, "Phantom Console must have a real collapsed state.");
@@ -108,10 +105,6 @@ assert.match(commandOsCss, /Phone command surface:[\s\S]*?\.decision-card > p:no
 assert.match(commandOsCss, /Phone command surface:[\s\S]*?\.hero2-stage\s*\{[\s\S]*?display:\s*none\s*!important/u, "Phone home must remove the decorative Earth stage so the Phantom input stays reachable.");
 assert.match(commandOsCss, /Final loaded mobile nav kill switch:[\s\S]*?@media \(max-width: 900px\)[\s\S]*?\.phantom \.topbar2,[\s\S]*?\.phantom \.os-command-rail,[\s\S]*?\.phantom \.mobile-admin-homebar,[\s\S]*?\.phantom \.os-system-line\s*\{[\s\S]*?display:\s*none\s*!important/u, "Last-loaded Command OS CSS must hide every duplicate compact top/status chrome surface.");
 assert.match(commandOsCss, /Final loaded mobile nav kill switch:[\s\S]*?@media \(max-width: 900px\)[\s\S]*?\.phantom \.mobile-bottom-nav\s*\{[\s\S]*?display:\s*grid\s*!important/u, "Last-loaded Command OS CSS must leave the bottom dock as the only compact nav.");
-assert.match(command, /isDirectChatMediaRequest/u, "Explicit image and video briefs must bypass the conversational model.");
-assert.match(command, /generateMediaFromChat\(text, intent, settings\)/u, "Chat must use the shared Media Lab generation entry point.");
-assert.match(mediaLab, /export async function generateMediaFromChat/u, "Media Lab must expose one shared chat generation path.");
-assert.match(mediaLab, /saveMediaPoolSource\(asset, \{/u, "Live chat media must save through the same Media Pool path.");
 assert.match(main, /chatAttachMedia\(r\.media\)/u, "Completed media must render inline in the dashboard chat.");
 assert.match(main, /Byting cyberchips into the frame/u, "Creative render progress should have a specific Phantom voice.");
 assert.match(css, /\.chat-media\s*\{/u, "Inline chat media needs a stable media card treatment.");
