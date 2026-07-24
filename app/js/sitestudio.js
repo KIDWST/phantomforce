@@ -2,20 +2,21 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney, workspaceStorageGetItem,
-} from "./store.js?v=phantom-live-20260723-54";
+} from "./store.js?v=phantom-live-20260723-55";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
   SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
-} from "./workspaces.js?v=phantom-live-20260723-54";
+} from "./workspaces.js?v=phantom-live-20260723-55";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun, fetchServerSites,
   addServerSiteDomain, verifyServerSiteDomain, rollbackServerSite,
-} from "./orgs.js?v=phantom-live-20260723-54";
+} from "./orgs.js?v=phantom-live-20260723-55";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
   panel: "website", editorMode: "easy", inspectTarget: "hero",
   previewMode: "live", compareIndex: -1, proposal: null,
+  editorOpen: true,
   cartOpen: false, checkoutOpen: false, confirmation: null,
   serverLoading: new Set(), notice: null,
 };
@@ -439,7 +440,7 @@ function siteSourceCodeMarkup(site) {
 function publicSourcePreviewMarkup(site) {
   const draft = siteUi.previewMode === "draft";
   return `
-    <div class="ss-public-source">
+    <div class="ss-public-source ${siteUi.editorOpen ? "is-editor-open" : "is-editor-collapsed"}">
       <div class="ss-public-source-frame">
         <div class="site-browser-bar">
           <span></span><span></span><span></span>
@@ -447,21 +448,17 @@ function publicSourcePreviewMarkup(site) {
           <div class="ss-preview-toggle" role="group" aria-label="Preview source">
             <button type="button" class="${draft ? "" : "is-active"}" data-ss-preview-mode="live">Live</button>
             <button type="button" class="${draft ? "is-active" : ""}" data-ss-preview-mode="draft">Draft</button>
+            <button type="button" data-ss-hot-reload>Reload</button>
+            <button type="button" class="ss-editor-toggle" data-ss-editor-toggle aria-expanded="${siteUi.editorOpen ? "true" : "false"}">${siteUi.editorOpen ? "Hide AI" : "Show AI"}</button>
           </div>
         </div>
         <div class="ss-frame-stage">
-          <div class="ss-live-hotspots" aria-label="Website click-to-edit regions">
-            ${SITE_INSPECT_TARGETS.map((target) => `
-              <button type="button" class="${target.id === siteUi.inspectTarget ? "is-active" : ""}" style="--top:${target.top}%;--left:${target.left}%;" data-ss-inspect-target="${esc(target.id)}">
-                <span>${esc(target.label)}</span>
-              </button>`).join("")}
-          </div>
           ${draft
             ? `<div class="ss-structured-draft" aria-label="Structured website draft preview">${renderWebsitePreview(site, productsFor(site), { selected: siteUi.selectedSection, interactive: true, cart: ensureSiteStore(site).cart })}</div>`
-            : `<iframe src="${esc(PHANTOMFORCE_PUBLIC_SOURCE.previewUrl)}?pf-site-preview=${Date.now()}" title="Live PhantomForce public website preview" loading="lazy"></iframe>`}
+            : `<iframe src="${esc(PHANTOMFORCE_PUBLIC_SOURCE.previewUrl)}?pf-site-preview=${Date.now()}" title="Live PhantomForce public website preview" loading="lazy" data-ss-live-frame></iframe>`}
         </div>
       </div>
-      ${siteEasyEditorMarkup(site)}
+      ${siteUi.editorOpen ? siteEasyEditorMarkup(site) : ""}
     </div>`;
 }
 
@@ -1020,6 +1017,17 @@ export function renderSiteStudio(el) {
   el.querySelectorAll("[data-ss-preview-mode]").forEach((button) => {
     button.onclick = () => {
       siteUi.previewMode = button.dataset.ssPreviewMode === "draft" ? "draft" : "live";
+      rerender();
+    };
+  });
+  el.querySelectorAll("[data-ss-hot-reload]").forEach((button) => {
+    button.onclick = () => {
+      rerender();
+    };
+  });
+  el.querySelectorAll("[data-ss-editor-toggle]").forEach((button) => {
+    button.onclick = () => {
+      siteUi.editorOpen = !siteUi.editorOpen;
       rerender();
     };
   });

@@ -92,7 +92,11 @@ const siteStudioSource = readFileSync(new URL("../app/js/sitestudio.js", import.
 const siteStudioCss = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
 assert.ok(siteStudioSource.includes("AI Website Editor"), "public site editor should default to an AI visual editor, not source loading.");
 assert.ok(siteStudioSource.includes("Easy edit") && siteStudioSource.includes("Code"), "code must remain available as the secondary editor mode.");
-assert.ok(siteStudioSource.includes("data-ss-inspect-target"), "public site preview must expose click-to-edit target controls.");
+assert.ok(siteStudioSource.includes("data-ss-inspect-target") && siteStudioSource.includes("ss-inspector-list"), "AI side panel must expose edit targets without covering the live website.");
+assert.equal(siteStudioSource.includes("ss-live-hotspots"), false, "live public preview must not render hotspot buttons over the website.");
+assert.ok(siteStudioSource.includes("data-ss-hot-reload"), "live public preview must offer an explicit reload control.");
+assert.ok(siteStudioSource.includes("data-ss-editor-toggle"), "live public preview must let owners collapse the AI side panel for full-width site interaction.");
+assert.ok(siteStudioSource.includes("data-ss-live-frame"), "live public preview iframe must be targetable without overlay interference.");
 assert.ok(siteStudioSource.includes("data-ss-ai-style"), "easy editor must offer AI style actions for selected regions.");
 assert.ok(siteStudioSource.includes("data-ss-asset-preset"), "easy editor must offer Media Pool asset and quick-element actions.");
 assert.ok(siteStudioSource.includes("workspaceStorageGetItem(CONTENT_ASSETS_KEY)"), "Site Studio should read real Media Pool assets from workspace storage.");
@@ -103,7 +107,9 @@ assert.ok(siteStudioSource.includes("Launch readiness"), "Website Builder must e
 assert.ok(siteStudioSource.includes("data-act=\"ss-connect-domain\""), "server-backed sites must expose domain connection.");
 assert.ok(siteStudioSource.includes("data-act=\"ss-rollback-live\""), "verified deployments must expose rollback when a prior version exists.");
 assert.equal(siteStudioSource.includes("Load current code"), false, "the old oversized load-code affordance should not return.");
-assert.ok(siteStudioCss.includes(".ss-live-hotspots"), "click-to-edit hotspots must be styled.");
+assert.ok(siteStudioCss.includes(".ss-live-hotspots") && siteStudioCss.includes("pointer-events: none !important"), "legacy hotspot styles must stay disabled so live websites receive clicks.");
+assert.ok(siteStudioCss.includes(".ss-public-source.is-editor-collapsed"), "public site preview must support full-width interaction by collapsing the AI panel.");
+assert.ok(siteStudioCss.includes("@media (max-width: 1180px)"), "public site editor must stop squeezing the preview at browser zoom and smaller desktop widths.");
 assert.ok(siteStudioCss.includes(".ss-site-editor-panel"), "AI website editor panel must be styled.");
 assert.ok(siteStudioCss.includes(".ss-asset-bank"), "Media Pool and quick-element asset bank must be styled.");
 assert.ok(siteStudioCss.includes(".ss-proposal-diff"), "proposal comparison must be styled.");
