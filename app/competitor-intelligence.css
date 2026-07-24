@@ -96,6 +96,34 @@
 .ci-radar-widgets button:hover { border-color: rgba(98, 66, 245,.5); color: var(--ink); }
 .ci-radar-widgets button.is-active { border-color: #6242f5; background: #6242f5; color: #ffffff; }
 .ci-radar-panel { min-width: 0; }
+.ci-movers { display: grid; gap: 14px; margin: 0 0 20px; min-width: 0; }
+.ci-movers>header { display: flex; align-items: end; justify-content: space-between; gap: 14px; padding: 16px; border: 1px solid rgba(98, 66, 245,.22); border-radius: 10px; background: linear-gradient(135deg,rgba(98, 66, 245,.08),rgba(22, 255, 169,.045)); }
+.ci-movers>header h3 { margin: 3px 0 0; font-size: clamp(22px,2.4vw,34px); line-height: 1.08; }
+.ci-movers>header small { max-width: 310px; color: #98a6b5; line-height: 1.4; text-align: right; }
+.ci-mover-lanes { display: grid; grid-template-columns: repeat(3,minmax(260px,1fr)); gap: 12px; min-width: 0; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x proximity; }
+.ci-mover-lanes>section { display: grid; align-content: start; gap: 9px; min-width: 260px; scroll-snap-align: start; }
+.ci-mover-lanes h4 { margin: 0; color: #7dffbd; font: 800 11px "Spline Sans Mono",monospace; text-transform: uppercase; letter-spacing: .12em; }
+.ci-mover-lanes>section>div { display: grid; gap: 10px; }
+.ci-mover-card { display: grid; gap: 10px; min-width: 0; padding: 14px; border: 1px solid rgba(98, 66, 245,.2); border-radius: 8px; background: linear-gradient(180deg,rgba(9,14,26,.88),rgba(5,9,18,.9)); color: var(--ink); }
+.ci-mover-card.is-up { border-color: rgba(85,231,167,.32); box-shadow: inset 0 1px rgba(255,255,255,.035),0 18px 36px rgba(0,0,0,.18); }
+.ci-mover-card.is-down { border-color: rgba(255,84,95,.4); }
+.ci-mover-card header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: start; }
+.ci-mover-card header span { color: #7dffbd; font: 800 10px "Spline Sans Mono",monospace; text-transform: uppercase; letter-spacing: .12em; }
+.ci-mover-card.is-down header span { color: #ff9ba3; }
+.ci-mover-card h3 { margin: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
+.ci-mover-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #98a6b5; }
+.ci-mover-card header b { color: #7dffbd; font: 900 28px "Spline Sans Mono",monospace; }
+.ci-mover-card.is-down header b { color: #ff9ba3; }
+.ci-mover-card p { margin: 0; color: #d9e6ed; line-height: 1.42; font-size: 13px; }
+.ci-mover-card footer { display: flex; gap: 8px; flex-wrap: wrap; }
+.ci-mover-card footer .ci-primary,.ci-mover-card footer .ci-secondary { min-height: 34px; padding: 7px 11px; }
+.ci-driver-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 24px; }
+.ci-driver-row i { display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid rgba(129,98,255,.22); border-radius: 999px; padding: 5px 8px; color: #dce8f0; background: rgba(129,98,255,.08); font: 800 10px "Spline Sans Mono",monospace; text-transform: uppercase; letter-spacing: .08em; font-style: normal; }
+.ci-driver-row i.is-up { border-color: rgba(85,231,167,.3); color: #7dffbd; background: rgba(37,140,94,.12); }
+.ci-driver-row i.is-down { border-color: rgba(255,84,95,.36); color: #ffb4ba; background: rgba(94,16,25,.2); }
+.ci-sparkline.is-up polyline { stroke: #55e7a7; }
+.ci-sparkline.is-down polyline { stroke: #ff5964; }
+.ci-sparkline.is-neutral polyline { stroke: #9aa8ff; }
 
 /* Consolidated 3-view layout: Radar / Competitors / Sources & settings */
 .ci-view-head{margin:14px 0 18px}
@@ -128,6 +156,8 @@
 .ci-stream-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 10px;flex-wrap:wrap}
 .ci-stream-head .ci-sub{margin:0}
 @media(max-width:1050px){.ci-comp-layout{grid-template-columns:1fr}.ci-comp-detail-head{flex-direction:column}.ci-discover-cta{flex-direction:column;align-items:flex-start}}
+@media(max-width:1050px){.ci-mover-lanes{grid-template-columns:repeat(3,minmax(260px,82vw))}}
+@media(max-width:767px){.ci-movers>header{align-items:flex-start;flex-direction:column}.ci-movers>header small{text-align:left}.ci-mover-lanes{margin:0 -14px;padding:0 14px 6px}.ci-mover-card h3{font-size:16px}}
 
 /* Command OS dark-material guardrail: prevents legacy light theme cards from
    punching white boxes through the admin/app shell. */
@@ -191,6 +221,12 @@ html[data-command-os="2040"] .ci-shell .ci-source-drawer,
 html[data-command-os="2040"] .ci-shell .ci-market-leaders button{
   border-color:rgba(129,98,255,.22);
   background:linear-gradient(180deg,rgba(8,13,25,.88),rgba(4,8,15,.9));
+  color:#eef4f7;
+}
+html[data-command-os="2040"] .ci-shell .ci-movers>header,
+html[data-command-os="2040"] .ci-shell .ci-mover-card{
+  border-color:rgba(129,98,255,.24);
+  background:linear-gradient(180deg,rgba(8,13,25,.92),rgba(4,8,15,.94));
   color:#eef4f7;
 }
 html[data-command-os="2040"] .ci-shell .ci-map-node{

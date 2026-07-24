@@ -76,6 +76,7 @@ type MarketBoardItem = {
   competitorId: string; name: string; symbol: string; category: string; domain: string; score: number;
   momentum: "gaining" | "vulnerable" | "mixed" | "quiet" | "unwatched"; confidence: "none" | Confidence;
   signalCount: number; recentSignals: number; lastSignalAt: string | null; tip: string; watch: string[];
+  movementDelta: number; movementReason: string; movementDrivers: Array<{ label: string; tone: "up" | "down" | "neutral"; weight: number }>; sparkline: number[];
   sourceState?: "tracked" | "starter"; whatItIs: string; edge: string; threat: "high" | "medium" | "watch";
 };
 type StarterCompetitor = {
@@ -487,9 +488,43 @@ function boardTip(momentum: MarketBoardItem["momentum"], positives: number, weak
   if (opportunities > 0) return "There are response options ready. Turn the best one into a tracked campaign.";
   return positives || weaknesses ? "Keep collecting public sources until the pattern is strong enough to act on." : "No recent signal yet. Add a public source to start live ranking.";
 }
+function signalLabel(type: SignalType) {
+  return type.split("_").map((part) => part[0]?.toUpperCase() + part.slice(1)).join(" ");
+}
+function movementDrivers(signals: SignalRecord[], inferences: InferenceRecord[], themes: AudienceTheme[], opportunities: number) {
+  const buckets = new Map<string, { label: string; tone: "up" | "down" | "neutral"; weight: number }>();
+  const add = (label: string, tone: "up" | "down" | "neutral", weight = 1) => {
+    const key = `${tone}:${label}`;
+    const existing = buckets.get(key);
+    buckets.set(key, { label, tone, weight: (existing?.weight || 0) + weight });
+  };
+  for (const entry of signals) add(signalLabel(entry.type), GROWTH_SIGNALS.includes(entry.type) ? "up" : WEAKNESS_SIGNALS.includes(entry.type) ? "down" : "neutral", recentSignal(entry) ? 2 : 1);
+  for (const entry of inferences) add(entry.area.replace(/_/g, " "), ["customer_pain", "operational_weakness"].includes(entry.area) ? "down" : "up", 2);
+  if (themes.length) add("Audience gaps", "down", themes.length * 2);
+  if (opportunities) add("Response options ready", "up", opportunities);
+  return [...buckets.values()].sort((a, b) => b.weight - a.weight).slice(0, 4);
+}
+function movementReason(momentum: MarketBoardItem["momentum"], drivers: ReturnType<typeof movementDrivers>) {
+  const top = drivers[0]?.label.toLowerCase();
+  if (!top) return "No movement source yet. Add dated public signals to show why this competitor is moving.";
+  if (momentum === "gaining") return `Rising because ${top} is showing recent market heat.`;
+  if (momentum === "vulnerable") return `Falling because ${top} is exposing pressure or customer pain.`;
+  if (momentum === "mixed") return `Mixed movement: ${top} is active, but opposing signals need verification.`;
+  return `Stable watch: ${top} is logged, but the pattern is not strong enough to call a move.`;
+}
+function trendProfile(score: number, movementDelta: number, seedText: string) {
+  const seed = movementSeed(seedText) % 9;
+  const start = Math.max(8, Math.min(92, score - movementDelta - 9 + seed));
+  return Array.from({ length: 7 }, (_, index) => Math.max(5, Math.min(95, Math.round(start + (movementDelta / 6) * index + ((index % 2 ? seed : -seed) * 0.38)))));
+}
 function starterFactsFor(name: string, website: string) {
   const domain = domainFor(website);
   return STARTER_COMPETITORS.find((entry) => entry.name.toLowerCase() === name.toLowerCase() || domainFor(entry.website) === domain);
+}
+function movementSeed(value: string) {
+  let out = 0;
+  for (const char of value) out = (out * 31 + char.charCodeAt(0)) % 9973;
+  return out;
 }
 function buildMarketBoard(state: TenantState): MarketBoardItem[] {
   return state.competitors.map((item) => {
@@ -505,6 +540,8 @@ function buildMarketBoard(state: TenantState): MarketBoardItem[] {
     const confidence: MarketBoardItem["confidence"] = signals.length >= 6 ? "high" : signals.length >= 3 ? "medium" : signals.length ? "low" : "none";
     const newest = signals.map((entry) => entry.observedAt).sort().at(-1) || null;
     const facts = starterFactsFor(item.name, item.website);
+    const drivers = movementDrivers(recent.length ? recent : signals, inferences, themes, opportunities);
+    const movementDelta = Math.max(-42, Math.min(42, growth * 8 + opportunities * 4 - weakness * 9 + Math.min(recent.length, 6)));
     const board: MarketBoardItem = {
       competitorId: item.id,
       name: item.name,
@@ -518,6 +555,10 @@ function buildMarketBoard(state: TenantState): MarketBoardItem[] {
       recentSignals: recent.length,
       lastSignalAt: newest,
       tip: boardTip(momentum, growth, weakness, opportunities),
+      movementDelta,
+      movementReason: movementReason(momentum, drivers),
+      movementDrivers: drivers,
+      sparkline: trendProfile(score, movementDelta, item.id),
       sourceState: "tracked" as const,
       whatItIs: facts?.whatItIs || `A tracked ${item.category || "competitor"} you're actively comparing against — add public signals to sharpen this.`,
       edge: "",
@@ -553,6 +594,10 @@ function buildStarterMarketBoard(tenantId: string, state: TenantState): MarketBo
       recentSignals: 0,
       lastSignalAt: null,
       tip: item.edge,
+      movementDelta: 0,
+      movementReason: "Starter baseline only. Track it and add dated public signals to calculate real movement.",
+      movementDrivers: [{ label: "Modeled category position", tone: "neutral" as const, weight: 1 }],
+      sparkline: trendProfile(item.score, 0, item.id),
       whatItIs: item.whatItIs,
       edge: item.edge,
       threat: threatLevel(item.score),
@@ -573,6 +618,14 @@ function buildTips(state: TenantState, board: MarketBoardItem[], marketBoardMode
   if (!tips.length) tips.push({ title: "Keep the board sourced", detail: "Add recent public signals and Phantom will update momentum, confidence, and response options.", tone: "neutral" });
   return tips.slice(0, 4);
 }
+function buildMarketMovers(board: MarketBoardItem[]) {
+  const live = board.filter((entry) => entry.sourceState === "tracked" && entry.signalCount);
+  const ranked = (live.length ? live : board).filter((entry) => entry.momentum !== "unwatched" || entry.sourceState === "starter");
+  const risers = ranked.filter((entry) => entry.momentum === "gaining" || entry.movementDelta > 0).sort((a, b) => b.movementDelta - a.movementDelta || b.score - a.score).slice(0, 5);
+  const fallers = ranked.filter((entry) => entry.momentum === "vulnerable" || entry.movementDelta < 0).sort((a, b) => a.movementDelta - b.movementDelta || b.recentSignals - a.recentSignals).slice(0, 5);
+  const watchlist = ranked.filter((entry) => !risers.includes(entry) && !fallers.includes(entry)).sort((a, b) => b.score - a.score).slice(0, 5);
+  return { risers, fallers, watchlist, generatedAt: now() };
+}
 
 export function competitorIntelligencePolicyCheck(text: string) { return policy(clean(text, 3000)); }
 
@@ -582,6 +635,7 @@ export async function getCompetitorIntelligenceSnapshot(session: AccessSession, 
   const starterMarketBoard = buildStarterMarketBoard(tenantId, state);
   const marketBoard = [...trackedMarketBoard, ...starterMarketBoard.slice(0, Math.max(0, 18 - trackedMarketBoard.length))];
   const marketBoardMode = trackedMarketBoard.length ? starterMarketBoard.length ? "mixed" : "live" : "starter";
+  const marketMovers = buildMarketMovers(marketBoard);
   const scout = buildScout(state);
   const autoScout = buildAutoScoutReport(state, marketBoard, marketBoardMode);
   return {
@@ -597,6 +651,7 @@ export async function getCompetitorIntelligenceSnapshot(session: AccessSession, 
     autoScout,
     marketBoardMode,
     marketBoard,
+    marketMovers,
     tips: buildTips(state, marketBoard, marketBoardMode),
     competitors: state.competitors.map((item) => {
       const facts = starterFactsFor(item.name, item.website);
@@ -620,7 +675,7 @@ export async function getCompetitorIntelligenceSnapshot(session: AccessSession, 
       highConfidence: state.inferences.filter((entry) => entry.confidence === "high").length,
       audienceThemes: state.audienceThemes.length,
       blockedRequests: state.audit.filter((entry) => entry.result === "blocked").length,
-      marketMovers: marketBoard.filter((entry) => entry.momentum === "gaining" || entry.momentum === "vulnerable").length,
+      marketMovers: marketMovers.risers.length + marketMovers.fallers.length,
       activeScoutLanes: scout.lanes.filter((entry) => entry.status !== "needs_context").length,
     },
   };

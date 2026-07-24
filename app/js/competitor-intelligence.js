@@ -1,8 +1,8 @@
-import { currentTenantId, friendlyBackendError, isLiveAdminHost, session } from "./store.js?v=phantom-live-20260723-53";
+import { currentTenantId, friendlyBackendError, isLiveAdminHost, session } from "./store.js?v=phantom-live-20260723-54";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [["radar", "Radar"], ["competitors", "Competitors"], ["sources", "Sources & settings"]];
-const RADAR_WIDGETS = [["board", "Competitor board"], ["pressure", "Category pressure"], ["opportunities", "Opportunities"], ["estimates", "Latest estimates"]];
+const RADAR_WIDGETS = [["board", "Competitor board"], ["movers", "Risers & fallers"], ["pressure", "Category pressure"], ["opportunities", "Opportunities"], ["estimates", "Latest estimates"]];
 const SIGNAL_LABELS = {
   website_copy: "Website copy", pricing_page: "Pricing page", landing_page: "Landing page", indexed_page: "New indexed page",
   public_ad: "Public ad", ad_volume: "Ad volume", social_cadence: "Social cadence", content_format: "Content format",
@@ -104,6 +104,24 @@ function nodeVector(item) {
 function sourceStateLabel(item) {
   return item.sourceState === "starter" ? "Modeled baseline" : item.signalCount ? `${item.signalCount} public signals` : "Needs public source";
 }
+function deltaLabel(value) {
+  const n = Number(value || 0);
+  return n > 0 ? `+${n}` : `${n}`;
+}
+function movementTone(item) {
+  return item.momentum === "gaining" || Number(item.movementDelta || 0) > 0 ? "up" : item.momentum === "vulnerable" || Number(item.movementDelta || 0) < 0 ? "down" : "neutral";
+}
+function sparkline(points = [], tone = "neutral") {
+  const values = points.length ? points : [48, 50, 49, 51, 50, 52, 53];
+  const max = Math.max(...values, 100);
+  const min = Math.min(...values, 0);
+  const coords = values.map((value, index) => {
+    const x = values.length === 1 ? 50 : Math.round((index / (values.length - 1)) * 100);
+    const y = Math.round(34 - ((value - min) / Math.max(1, max - min)) * 30);
+    return `${x},${Math.max(3, Math.min(34, y))}`;
+  }).join(" ");
+  return `<svg class="ci-sparkline is-${esc(tone)}" viewBox="0 0 100 38" role="img" aria-label="Movement trend"><polyline points="${esc(coords)}"></polyline></svg>`;
+}
 function hostOf(value) { try { return new URL(value).hostname; } catch { return String(value || ""); } }
 function contextValue(field) { return ui.snapshot?.scout?.context?.[field] || ""; }
 function contextLine() {
@@ -163,6 +181,32 @@ function clusterBars() {
   if (!charts.length) return "";
   return `<section class="ci-auto-scout"><h4 class="ci-sub">Auto scout report · category pressure</h4><div class="ci-auto-bars">${charts.map((chart) => `<article class="is-${esc(chart.tone)}"><div><b>${esc(chart.label)}</b><span>${esc(chart.detail)}</span></div><strong>${Number(chart.value || 0)}</strong><i><em style="width:${Math.max(4, Math.min(100, Number(chart.value || 0)))}%"></em></i></article>`).join("")}</div></section>`;
 }
+function moverCard(item, lane) {
+  const tone = movementTone(item);
+  const drivers = (item.movementDrivers || []).slice(0, 3);
+  return `<article class="ci-mover-card is-${esc(tone)}" data-ci-card="${esc(item.competitorId)}">
+    <header><div><span>${esc(lane)}</span><h3>${esc(item.name)}</h3><small>${esc(item.category)} · ${esc(item.domain)} · ${esc(sourceStateLabel(item))}</small></div><b>${esc(deltaLabel(item.movementDelta))}</b></header>
+    ${sparkline(item.sparkline, tone)}
+    <p>${esc(item.movementReason || item.tip)}</p>
+    <div class="ci-driver-row">${drivers.map((driver) => `<i class="is-${esc(driver.tone)}">${esc(driver.label)}</i>`).join("") || `<i class="is-neutral">Add sources</i>`}</div>
+    <footer><button class="ci-secondary" data-ci-focus-competitor="${esc(item.competitorId)}">Open on board</button>${item.sourceState === "starter" ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track</button>` : item.signalCount ? `<button class="ci-primary" data-ci-fuse="${esc(item.competitorId)}">Fuse</button>` : `<button class="ci-primary" data-ci-tab="sources">Add source</button>`}</footer>
+  </article>`;
+}
+function marketMovers() {
+  const movers = ui.snapshot.marketMovers || {};
+  const risers = movers.risers || [];
+  const fallers = movers.fallers || [];
+  const watchlist = movers.watchlist || [];
+  if (!risers.length && !fallers.length && !watchlist.length) return empty("No movers yet", "Add competitors and dated public sources so Phantom can rank who is rising, falling, and why.");
+  return `<section class="ci-movers" aria-label="Biggest risers and fallers">
+    <header><div><p class="ci-kicker">MARKET MOVERS</p><h3>Biggest risers, fallers, and why</h3></div><small>${esc(ui.snapshot.marketBoardMode === "starter" ? "Starter baselines until you track sources" : "Ranked from public signals, themes, and fused estimates")}</small></header>
+    <div class="ci-mover-lanes">
+      <section><h4>Risers</h4><div>${risers.map((item) => moverCard(item, "Rising")).join("") || empty("No risers", "No competitor has enough positive movement yet.")}</div></section>
+      <section><h4>Fallers</h4><div>${fallers.map((item) => moverCard(item, "Falling")).join("") || empty("No fallers", "No verified pressure signal has pulled a competitor down yet.")}</div></section>
+      <section><h4>Watch next</h4><div>${watchlist.map((item) => moverCard(item, "Watch")).join("") || empty("Nothing else", "The market board is focused on the active movers.")}</div></section>
+    </div>
+  </section>`;
+}
 function marketBoard() {
   const board = ui.snapshot.marketBoard || [];
   if (!board.length) return `<section class="ci-market-empty">${empty("Add the business map", ui.snapshot.scout?.status === "needs_context" ? "Fill in PhantomForce's offer, audience, and service area so Phantom can show the first competitor map." : "Track a competitor, then add public evidence for live rankings.", '<button class="ci-secondary" data-ci-tab="sources">Open sources & settings</button>')}</section>`;
@@ -170,8 +214,8 @@ function marketBoard() {
     const starter = item.sourceState === "starter";
     const bodyHtml = starter
       ? `<div class="ci-threat-row"><span class="ci-threat-pill is-${esc(item.threat || "watch")}">${esc(threatLabel(item.threat))}</span></div>${item.whatItIs ? `<p class="ci-whatitis">${esc(item.whatItIs)}</p>` : ""}<p class="ci-edge"><b>Your edge:</b> ${esc(item.edge || item.tip)}</p>`
-      : `<div class="ci-ticker"><span>${esc(momentumLabel(item.momentum))}</span><i style="width:${Math.max(6, Math.min(100, Number(item.score || 0)))}%"></i></div><p>${esc(item.tip)}</p>`;
-    return `<article class="is-${esc(item.momentum)} ${starter ? "is-starter" : ""}" data-ci-card="${esc(item.competitorId)}"><header><span class="ci-symbol">${esc(item.symbol)}</span><div><p>${esc(item.category)} · ${esc(item.domain)}</p><h3>${esc(item.name)}</h3></div><b>${Number(item.score || 0)}</b></header>${bodyHtml}<p class="ci-proof">${esc(sourceStateLabel(item))}${item.lastSignalAt ? ` · last signal ${fmtDate(item.lastSignalAt)}` : ""}</p><div class="ci-watch-tags">${(item.watch || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>${starter ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track + compare</button>` : item.signalCount ? `<button class="ci-secondary" data-ci-fuse="${esc(item.competitorId)}">Refresh estimate</button>` : `<button class="ci-secondary" data-ci-tab="sources">Add source</button>`}</article>`;
+      : `<div class="ci-ticker"><span>${esc(momentumLabel(item.momentum))}</span><i style="width:${Math.max(6, Math.min(100, Number(item.score || 0)))}%"></i></div>${sparkline(item.sparkline, movementTone(item))}<p>${esc(item.movementReason || item.tip)}</p>`;
+    return `<article class="is-${esc(item.momentum)} ${starter ? "is-starter" : ""}" data-ci-card="${esc(item.competitorId)}"><header><span class="ci-symbol">${esc(item.symbol)}</span><div><p>${esc(item.category)} · ${esc(item.domain)}</p><h3>${esc(item.name)}</h3></div><b>${Number(item.score || 0)}</b></header>${bodyHtml}<p class="ci-proof">${esc(sourceStateLabel(item))}${item.lastSignalAt ? ` · last signal ${fmtDate(item.lastSignalAt)}` : ""}</p><div class="ci-watch-tags">${(item.watch || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div><div class="ci-driver-row">${(item.movementDrivers || []).slice(0, 3).map((driver) => `<i class="is-${esc(driver.tone)}">${esc(driver.label)}</i>`).join("")}</div>${starter ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track + compare</button>` : item.signalCount ? `<button class="ci-secondary" data-ci-fuse="${esc(item.competitorId)}">Refresh estimate</button>` : `<button class="ci-secondary" data-ci-tab="sources">Add source</button>`}</article>`;
   }).join("")}</section>`;
 }
 function opportunityRail() {
@@ -186,6 +230,7 @@ function inferenceCard(item) {
 function radarWidgetPanel() {
   const s = ui.snapshot;
   const widget = RADAR_WIDGETS.some(([id]) => id === ui.radarWidget) ? ui.radarWidget : "board";
+  if (widget === "movers") return marketMovers();
   if (widget === "pressure") return clusterBars() || empty("No category pressure yet", "Track competitors across categories so Phantom can compare pressure once signals come in.");
   if (widget === "opportunities") return opportunityRail();
   if (widget === "estimates") {
@@ -200,7 +245,7 @@ function radar() {
   const widget = RADAR_WIDGETS.some(([id]) => id === ui.radarWidget) ? ui.radarWidget : "board";
   return `${viewHead("MARKET RADAR", auto.headline || "Where the market is moving")}
     <div class="ci-context"><b>${esc(contextLine())}</b>${auto.sourceNote ? `<span>${esc(auto.sourceNote)}</span>` : ""}</div>
-    ${metrics()}${marketMap()}
+    ${metrics()}${marketMovers()}${marketMap()}
     <nav class="ci-radar-widgets" aria-label="Competitor views">${RADAR_WIDGETS.map(([id, label]) => `<button type="button" class="${widget === id ? "is-active" : ""}" data-ci-widget="${id}">${label}</button>`).join("")}</nav>
     <section class="ci-radar-panel">${radarWidgetPanel()}</section>`;
 }

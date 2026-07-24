@@ -15,6 +15,8 @@ assert.match(index, /competitor-intelligence\.css\?v=phantom-live-/u, "The dedic
 assert.match(module, /Aggressive Intelligence/u, "Optional aggressive mode must be visible.");
 assert.match(module, /ON-DEMAND MARKET SCOUT|data-ci-scout-form/u, "The first-run experience must arm an on-demand market scout instead of waiting for manual competitor entry.");
 assert.match(module, /ci-market-board|momentumLabel/u, "The overview must render a stock-market-style competitor board.");
+assert.match(module, /Risers & fallers|ci-movers|marketMovers|movementReason|movementDrivers/u, "The overview must show biggest risers, fallers, and what is driving movement.");
+assert.match(module, /ci-mover-card|sparkline|Biggest risers, fallers, and why/u, "Market movers must render as a modern scrollable web surface with trend visuals.");
 assert.match(module, /ci-market-map|data-ci-focus-competitor|trendProfile|sparkline/u, "The overview must render an interactive market map with trend visuals.");
 assert.match(module, /directThreat|is-threat-|Red = direct competitor/u, "The market map must highlight direct competitors in red.");
 assert.match(module, /ci-map-heat|heatSpots/u, "The market map must render a heat-map layer, not just dots.");
@@ -30,10 +32,12 @@ assert.match(staticServer, /urlPath\.startsWith\("\/api\/competitor-intelligence
 assert.match(service, /PROHIBITED_PATTERNS/u, "A server-side hard boundary policy must exist.");
 assert.match(service, /status:\s*"estimate"/u, "Inferences must be labeled estimates.");
 assert.match(service, /buildMarketBoard|updateMarketScoutContext/u, "The service must compute market board and scout readiness server-side.");
+assert.match(service, /buildMarketMovers|movementDrivers|movementReason|movementDelta|trendProfile/u, "The service must compute risers, fallers, causes, and trend profiles server-side.");
 assert.match(service, /AutoScoutReport|buildAutoScoutReport|phantomAngleFor|sourceTargetsForBoardItem/u, "The service must generate automatic scout comparisons, source targets, and response angles.");
 assert.match(service, /STARTER_COMPETITORS[\s\S]*ChatGPT[\s\S]*Claude[\s\S]*HubSpot[\s\S]*HighLevel[\s\S]*Zapier[\s\S]*Hootsuite/u, "The service must seed PhantomForce-relevant starter competitors.");
 assert.match(service, /marketBoardMode|starterCompetitors/u, "The snapshot must distinguish starter competitors from live tracked competitors.");
 assert.match(css, /ci-auto-scout|ci-auto-bars|ciBarLoad/u, "Automatic market intelligence graphics must be styled and animated.");
+assert.match(css, /ci-movers|ci-mover-lanes|overflow-x:auto|ci-driver-row/u, "Market movers must be styled as scrollable interactive lanes.");
 assert.match(css, /ci-market-map|ci-map-node|ciMapSpin|ci-sparkline/u, "The competitor map must be graphic, animated, and trend-oriented.");
 assert.match(css, /ci-map-stage\{[^}]*overflow:hidden/u, "The competitor map stage must clip internally instead of hanging off the page.");
 assert.match(css, /ci-map-heat|is-threat-direct|rgba\(255,84,95/u, "The competitor map must use red heat styling for direct competitors.");
