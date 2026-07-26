@@ -7,6 +7,7 @@ const server = read("server/src/index.ts");
 const report = read("server/src/managed-growth/managed-growth-report.ts");
 const client = read("app/js/managedgrowth.js");
 const main = read("app/js/main.js");
+const analyticsHub = read("app/js/analytics-hub.js");
 const css = read("app/phantom.css");
 const staticServer = read("ops/admin-live/admin-static-server.mjs");
 const audit = read("scripts/audit-client-setup-data-model.mjs");
@@ -52,9 +53,11 @@ assert.match(client, /module\.signalCount/u, "Browser UI must show per-module so
 assert.match(client, /data-open-ws="\$\{esc\(item\.surface\)\}"/u, "Next actions must deep-link to relevant product surfaces.");
 assert.match(client, /data-open-ws="\$\{esc\(module\.surface \|\| "clientsetup"\)\}"/u, "Module cards must deep-link to relevant product surfaces.");
 
-assert.match(main, /managedgrowth\.js/u, "Analytics route must import the Managed Growth report panel.");
-assert.match(main, /data-managed-growth-report/u, "Analytics route must mount Managed Growth report before social analytics.");
-assert.match(main, /data-social-analytics-report/u, "Analytics route must still render social analytics separately.");
+assert.match(main, /analytics-hub\.js/u, "Analytics route must import the unified Analytics hub.");
+assert.match(main, /renderUnifiedAnalytics/u, "Analytics route must render the unified Analytics hub.");
+assert.match(analyticsHub, /managedgrowth\.js/u, "The unified Analytics hub must import the Managed Growth report panel.");
+assert.match(analyticsHub, /data-managed-growth-report/u, "The unified Analytics hub must mount the Managed Growth report.");
+assert.match(analyticsHub, /renderSocialAnalytics/u, "The unified Analytics hub must still render social analytics.");
 
 assert.match(css, /\.mg-report/u, "Managed Growth report must have dedicated responsive UI styles.");
 assert.match(css, /\.mg-module-grid/u, "Managed Growth module board must have dedicated responsive styles.");
