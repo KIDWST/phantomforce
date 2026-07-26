@@ -12,10 +12,10 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260723-63";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260723-63";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260723-63";
-import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260723-63";
+} from "./store.js?v=phantom-live-20260726-65";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260726-65";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260726-65";
+import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260726-65";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -983,8 +983,8 @@ function localQuestionAnswer(text, settings = null) {
     const media = visible(store.state.media || []);
     return {
       say: media.length
-        ? `${media.length} media item${media.length === 1 ? "" : "s"} in your library. Manage and reuse them in Asset Cloud — nothing sends or posts without your OK.`
-        : "No media in your library yet. Add assets in Asset Cloud whenever you're ready.",
+        ? `${media.length} media item${media.length === 1 ? "" : "s"} in your connected library. Nothing sends or posts without your OK.`
+        : "No connected media items are available yet. Use your native creative workspace when you're ready.",
       cards: [],
       open: null,
     };

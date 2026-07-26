@@ -5,7 +5,7 @@
    the field. Live stats from the store; every node opens its workspace.
    Two layouts: wide wave spine and phone snake. Reduced motion → static. */
 
-import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260723-63";
+import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260726-65";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NARROW_AT = 620;
@@ -43,7 +43,7 @@ function flowNodes() {
   return [
     { id: "leads", ws: "leads", icon: "◉", label: "Leads", stat: `${openLeads.length} open` },
     { id: "quotes", ws: "proposals", icon: "◆", label: "Quotes", stat: `${m.open.length} live` },
-    { id: "delivery", ws: "assets", icon: "▶", label: "Delivery", stat: `${moving.length} moving` },
+    { id: "delivery", ws: "workforce", icon: "▶", label: "Delivery", stat: `${moving.length} moving` },
     { id: "site", ws: "sites", icon: "▦", label: "Sites", stat: `${builds.length} live` },
     { id: "money", ws: "money", icon: "◈", label: "Accounting", stat: m.transactions.length ? signedMoney(m.netCash) : "books", size: 24 },
     { id: "protect", ws: "protect", icon: "⬡", label: "Protection", stat: secClean ? "clean" : "attention", alert: !secClean },

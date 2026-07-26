@@ -147,6 +147,11 @@ try {
   );
   const deniedPending = await waitForSession(deniedCreated.id, ["awaiting_approval", "blocked", "failed"]);
   assert.equal(deniedPending.state, "awaiting_approval");
+  assert.deepEqual(
+    deniedPending.events.map((event) => event.sequence),
+    deniedPending.events.map((_, index) => index + 1),
+    "normalized operator events must have unique, contiguous sequence IDs",
+  );
   assert(deniedPending.agentRunId);
   assert.equal(await getHermesOperatorSession(otherWorkspaceSession, deniedPending.id, options), null);
   const denied = await rejectAgentRun(

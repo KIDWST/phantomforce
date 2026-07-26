@@ -4,8 +4,8 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260723-63";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260723-63";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260726-65";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260726-65";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -35,13 +35,6 @@ const PAGE_WORKERS = {
     placeholder: "Ask for posts, ideas, captions, a schedule, or a campaign plan...",
     helper: "Phantom infers platform, format, caption angle, approval path, and next draft without asking for every field.",
     action: "Create campaign draft",
-  },
-  assets: {
-    eyebrow: "Asset intelligence",
-    title: "Prompt the asset move.",
-    placeholder: "Ask to sort files, find a logo, tag assets, or clean up a folder...",
-    helper: "Phantom infers file type, business, tags, safe copies, and cleanup intent.",
-    action: "Prepare asset plan",
   },
   intelligence: {
     eyebrow: "Research intelligence",
@@ -342,11 +335,6 @@ function actionDrafts(pageId, prompt, intent) {
       "Use public-safe research framing and separate facts from guesses.",
       "Extract competitor, offer, customer pain, and response opportunity.",
       "Return a short attack plan for positioning, content, or sales.",
-    ],
-    assets: [
-      "Infer asset category, usage, tags, and whether to copy instead of mutate originals.",
-      "Prepare a clean working set and note missing assets.",
-      "Use Asset Cloud/Media Lab paths before asking for uploads.",
     ],
     vacation: [
       "Infer what can continue safely and what must wait for approval.",
