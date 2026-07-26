@@ -159,3 +159,18 @@ checkout contains unrelated work and was not modified.
 - The renderer task cache remains browser local storage; authoritative
   operator/approval/receipt state is server-side.
 - Installer signing and a live Termina mission remain separate release work.
+
+## Windows artifact
+
+The verified 0.3.0 artifact is:
+
+`C:\Users\jorda\Documents\Codex\2026-07-26\files-mentioned-by-the-user-phantombot\outputs\PhantomBot-0.3.0-unsigned-Setup.exe`
+
+SHA-256:
+`69A7AB81DC1F902D18B2F1C4EAA5BB189D7251ECBF2FD2D49D348D190DE1FC1C`
+
+The matching `.sha256` sidecar is beside the installer. The packaged
+executable launch smoke confirmed version 0.3.0, a running PhantomBot process,
+local PhantomForce HTTP 200, and Hermes ACP readiness. Authenticode reports
+`NotSigned`; SmartScreen or Defender may warn, and no security bypass was
+attempted.
