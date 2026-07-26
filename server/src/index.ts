@@ -437,6 +437,7 @@ import {
   listHermesOperatorSessions,
   reopenHermesOperatorSession,
 } from "./phantom-ai/hermes-acp-operator.js";
+import { registerHermesOperatorStream } from "./phantom-ai/hermes-operator-stream.js";
 import {
   addSiteDomain,
   createSiteBuild,
@@ -8068,6 +8069,20 @@ const HermesOperatorStartSchema = z.object({
   workspace: z.string().trim().min(1).max(180),
 });
 
+async function resolveOperatorStreamToken(token: string): Promise<AccessSession | null> {
+  const sid = verifyAccessSessionTokenSid(token);
+  if (!sid) return null;
+  if (sid.startsWith(DB_SESSION_PREFIX) && databaseAuthEnabledForSessions()) {
+    return await resolveDatabaseSession(sid) ?? null;
+  }
+  if (sid.startsWith(LOCAL_CUSTOMER_SESSION_PREFIX) && localCustomerAuthEnabled()) {
+    return await resolveLocalCustomerSession(sid) ?? null;
+  }
+  return getAccessSession(sid) ?? null;
+}
+
+registerHermesOperatorStream(app, { resolveToken: resolveOperatorStreamToken });
+
 app.post("/phantom-ai/hermes-acp/sessions", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
@@ -8093,8 +8108,10 @@ app.post("/phantom-ai/hermes-acp/sessions", async (request, reply) => {
     ok: true,
     session: operatorSession,
     streaming: {
-      transport: "normalized_event_poll",
-      next: `/phantom-ai/hermes-acp/sessions/${operatorSession.id}`,
+      transport: "authenticated_websocket",
+      url: `/ws/phantom-ai/hermes-acp/sessions/${operatorSession.id}`,
+      protocol: "phantomforce.hermes-operator.v1",
+      pollingFallback: `/phantom-ai/hermes-acp/sessions/${operatorSession.id}`,
     },
   });
 });

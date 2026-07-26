@@ -9,7 +9,7 @@
    distinct, separately-authorized approval action. There is no path from
    "chat produced this run" straight to "Termina workers started." */
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +19,7 @@ import {
   decompose,
   ensureRunning,
   getMission,
+  stopMissionWorker,
   terminaTokenFromEnv,
   terminaUrlFromEnv,
   terminaWorkspaceRootFromEnv,
@@ -26,7 +27,9 @@ import {
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
-const ARTIFACTS_DIR = resolve(repoRoot, ".phantom", "artifacts");
+function artifactsDir() {
+  return resolve(process.env.PHANTOM_AGENT_RUN_ARTIFACTS_DIR || resolve(repoRoot, ".phantom", "artifacts"));
+}
 
 export const TERMINA_MISSION_OPERATION = "termina_mission";
 
@@ -75,11 +78,12 @@ export function registerTerminaMissionExecutor() {
         roles: decomposed.roles,
       });
 
-      // Stash the real Termina mission id on the run's own inputs so
-      // GET /phantom-ai/runs/:id and the verify step below can both find it
-      // without a second parallel store.
-      (run.inputs as Record<string, unknown>).missionId = mission.id;
-      (run.inputs as Record<string, unknown>).workspaceRoot = workspaceRoot;
+      if (isCancelled()) {
+        await Promise.allSettled(
+          mission.workers.map((worker) => stopMissionWorker(baseUrl, token, mission.id, worker.id)),
+        );
+        throw new Error("cancelled");
+      }
 
       const lines = [
         `# Termina mission dispatched`,
@@ -89,26 +93,33 @@ export function registerTerminaMissionExecutor() {
         `- Termina mission ID: ${mission.id}`,
         `- Mission name: ${mission.name}`,
         `- Objective: ${objective}`,
-        `- Workspace root: ${workspaceRoot}`,
+        `- Workspace: configured PhantomForce Termina workspace`,
         `- Launch mode: ${mission.launchMode} (Termina's own per-worker approval gate; this bridge never requests "auto")`,
         `- Decompose cost: ${decomposed.costUsd === null ? "unknown" : `$${decomposed.costUsd}`}`,
         `- Workers: ${mission.workers.map((worker) => `${worker.name} (${worker.status})`).join(", ") || "none reported"}`,
         ``,
         `Poll GET /api/missions/${mission.id} on Termina directly, or GET /phantom-ai/runs/${run.id} here, for live progress. Nothing further executes automatically from PhantomForce.`,
       ];
-      await mkdir(ARTIFACTS_DIR, { recursive: true });
-      const path = resolve(ARTIFACTS_DIR, `${run.id}-termina-mission.md`);
+      const outputDir = artifactsDir();
+      await mkdir(outputDir, { recursive: true });
+      const path = resolve(outputDir, `${run.id}-termina-mission.md`);
       await writeFile(path, lines.join("\n"), "utf8");
 
       return {
         artifacts: [{ kind: "markdown" as const, path, summary: `Termina mission ${mission.id} dispatched (${mission.workers.length} worker(s)).` }],
         summary: `Dispatched Termina mission ${mission.id} ("${mission.name}") with ${mission.workers.length} worker(s).`,
-        actualEffect: `Termina mission ${mission.id} is running against ${workspaceRoot}.`,
+        actualEffect: `Termina mission ${mission.id} is live with ${mission.workers.length} worker(s).`,
       };
     },
-    async verify({ run }) {
-      const missionId = (run.inputs as { missionId?: unknown }).missionId;
-      if (typeof missionId !== "string" || !missionId) {
+    async verify(_ctx, artifacts) {
+      let missionId = "";
+      try {
+        const evidence = await readFile(artifacts[0]?.path || "", "utf8");
+        missionId = evidence.match(/^- Termina mission ID: ([a-zA-Z0-9-]+)$/mu)?.[1] || "";
+      } catch {
+        // The explicit failure below is the stable public contract.
+      }
+      if (!missionId) {
         return { ok: false, detail: "no Termina mission id was recorded after dispatch" };
       }
       try {

@@ -136,6 +136,28 @@ async function verifyReopenInNewProcess(id: string, expectedState: string) {
 }
 
 try {
+  // Typed read-only plans execute automatically and still produce a verified receipt.
+  const orientationCreated = await createHermesOperatorSession(
+    accessSession,
+    {
+      prompt: "Orient to the canonical workspace and do not modify anything.",
+      workspace: "fixture-workspace",
+    },
+    {
+      ...options,
+      env: { ...process.env, FAKE_HERMES_ACP_PLAN: "read" },
+    },
+  );
+  const orientation = await waitForSession(orientationCreated.id, ["completed", "blocked", "failed"]);
+  assert.equal(orientation.state, "completed");
+  assert(orientation.intent && "operations" in orientation.intent);
+  assert.equal(orientation.intent.operations.length, 2);
+  assert(orientation.agentRunId);
+  const orientationRun = await waitForRun(orientation.agentRunId);
+  assert.equal(orientationRun.risk, "low_internal");
+  assert.equal(orientationRun.receipt?.verification.ok, true);
+  assert.equal(await readFile(documentPath, "utf8"), `# Fixture\n\n${originalLine}\n`);
+
   // Denial must preserve the file and survive reopen.
   const deniedCreated = await createHermesOperatorSession(
     accessSession,
@@ -332,6 +354,7 @@ try {
     pathTraversalRejected: true,
     verificationFailureRolledBack: true,
     crossWorkspaceSessionHidden: true,
+    typedReadOnlyPlan: true,
     verifiedReceipt: receipt.receipt_id,
     memoryCreated: completed.memoryId,
     pendingRestartRecovered: true,

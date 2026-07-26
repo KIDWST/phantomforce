@@ -14,12 +14,12 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260726-65";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260726-65";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260726-65";
-import { esc } from "./workspaces.js?v=phantom-live-20260726-65";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260726-65";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260726-65";
+} from "./store.js?v=phantom-live-20260726-67";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260726-67";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260726-67";
+import { esc } from "./workspaces.js?v=phantom-live-20260726-67";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260726-67";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260726-67";
 
 const TABS = ["chat", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -117,7 +117,7 @@ function operatorStatusText(operator) {
     return summary || "Hermes prepared a bounded plan. Review the exact scope before execution.";
   }
   if (operator?.state === "completed") {
-    return summary || "The approved change passed verification and has a durable receipt.";
+    return summary || "The governed task passed verification and has a durable receipt.";
   }
   if (operator?.state === "denied") return "The proposed operation was denied. No approved change was executed.";
   if (operator?.state === "blocked") return summary || "Hermes could not produce an operation within the allowed first-slice policy.";
@@ -151,8 +151,20 @@ function operatorEventLabel(event) {
 function operatorEventSummary(event) {
   const summary = cleanText(event?.summary || "", 500);
   if (event?.type !== "message_delta") return summary;
-  const publicText = summary.split(/<phantom_tool_intent>/iu, 1)[0].trim();
+  const publicText = summary.split(/<phantom_(?:tool_intent|engineering_plan)>/iu, 1)[0].trim();
   return publicText || "Hermes prepared a governed operation proposal.";
+}
+
+function operatorPlanHtml(plan) {
+  const operations = Array.isArray(plan?.operations) ? plan.operations : [];
+  if (!operations.length) return "";
+  return `<div><dt>Exact plan</dt><dd><ol class="phantombot-operator-plan">${operations.map((operation) => {
+    const payload = JSON.stringify(operation, null, 2);
+    return `<li><b>${esc(operation.id || "operation")} · ${esc(String(operation.kind || "").replaceAll("_", " "))}</b>
+      <span>${esc(operation.summary || "")}</span>
+      <details><summary>Review exact immutable payload</summary><pre>${esc(payload)}</pre></details>
+    </li>`;
+  }).join("")}</ol></dd></div>`;
 }
 
 function operatorTimelineHtml(operator) {
@@ -160,24 +172,26 @@ function operatorTimelineHtml(operator) {
   const events = Array.isArray(operator.events) ? operator.events.slice(-8) : [];
   const run = operator.run || null;
   const intent = operator.intent || null;
+  const plan = intent?.operations ? intent : run?.inputs?.plan;
   const scope = operator.state === "awaiting_approval" && run
     ? `<dl class="phantombot-operator-scope">
         <div><dt>Project</dt><dd>${esc(operator.workspace || "")}</dd></div>
-        <div><dt>Change</dt><dd>${esc(intent?.summary || run.expected_effect || "Bound documentation update")}</dd></div>
-        <div><dt>File</dt><dd>${esc(intent?.relativePath || run.inputs?.relativePath || "")}</dd></div>
-        <div><dt>Command</dt><dd>${esc(intent?.testCommand || run.inputs?.testCommand || "")}</dd></div>
+        <div><dt>Change</dt><dd>${esc(intent?.summary || run.expected_effect || "Bound engineering task")}</dd></div>
+        ${operatorPlanHtml(plan)}
+        ${plan ? "" : `<div><dt>File</dt><dd>${esc(intent?.relativePath || run.inputs?.relativePath || "")}</dd></div>
+        <div><dt>Command</dt><dd>${esc(intent?.testCommand || run.inputs?.testCommand || "")}</dd></div>`}
         <div><dt>Scope</dt><dd>${esc(run.scope || "")}</dd></div>
         <div><dt>Risk</dt><dd>${esc(run.risk || "approval required")}</dd></div>
       </dl>`
     : "";
   const approval = operator.state === "awaiting_approval" && run?.id
     ? `<div class="phantombot-operator-actions">
-        <button type="button" data-operator-approve="${esc(run.id)}">Approve exact operation</button>
+        <button type="button" data-operator-approve="${esc(run.id)}">Approve exact immutable plan</button>
         <button type="button" data-operator-reject="${esc(run.id)}">Deny</button>
       </div>`
     : "";
   const receipt = operator.receiptId
-    ? `<p class="phantombot-operator-receipt">Verified receipt <code>${esc(operator.receiptId)}</code>${operator.memoryId ? " · memory saved" : ""}</p>`
+    ? `<p class="phantombot-operator-receipt">${operator.receiptVerified === false ? "Failure" : "Verified"} receipt <code>${esc(operator.receiptId)}</code>${operator.memoryId ? " · memory saved" : ""}</p>`
     : "";
   return `<section class="phantombot-operator" data-operator-session="${esc(operator.id || "")}">
     <header><b>Hermes ACP</b><span data-state="${esc(operator.state || "connecting")}">${esc(String(operator.state || "connecting").replaceAll("_", " "))}</span></header>
@@ -455,6 +469,129 @@ async function pollOperatorMessage(task, message, paint) {
   }
 }
 
+function applyOperatorUpdate(task, message, payload, paint) {
+  const priorEvents = Array.isArray(message.operator?.events) ? message.operator.events : [];
+  const nextEvents = Array.isArray(payload.session?.events) ? payload.session.events : [];
+  const bySequence = new Map();
+  [...priorEvents, ...nextEvents].forEach((event) => {
+    const sequence = Number(event?.sequence);
+    if (Number.isSafeInteger(sequence) && sequence > 0) bySequence.set(sequence, event);
+  });
+  const events = [...bySequence.values()]
+    .sort((left, right) => left.sequence - right.sequence)
+    .slice(-500);
+  message.operator = {
+    ...(message.operator || {}),
+    ...(payload.session || {}),
+    events,
+    run: payload.run || null,
+    streamCursor: Number(payload.cursor) || message.operator?.streamCursor || 0,
+  };
+  message.say = operatorStatusText(message.operator);
+  const settled = message.operator.state === "awaiting_approval" || ACP_TERMINAL_STATES.has(message.operator.state);
+  message.pending = !settled;
+  message.error = ["failed", "blocked"].includes(message.operator.state);
+  task.updatedAt = new Date().toISOString();
+  persistTaskState();
+  if (taskState.activeId === task.id) paint(true);
+  return settled;
+}
+
+async function streamOperatorMessage(task, message, paint, stream = null) {
+  if (typeof WebSocket !== "function") throw new Error("websocket_unavailable");
+  const operatorId = message.operator?.id;
+  const token = session.token();
+  if (!operatorId || !token) throw new Error("operator_stream_auth_unavailable");
+  const configuredPath = cleanText(stream?.url || "", 500);
+  const path = configuredPath || `/ws/phantom-ai/hermes-acp/sessions/${encodeURIComponent(operatorId)}`;
+  const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const url = new URL(path, `${scheme}//${window.location.host}`).toString();
+  let cursor = Math.max(
+    Number(message.operator?.streamCursor) || 0,
+    ...(message.operator?.events || []).map((event) => Number(event.sequence) || 0),
+  );
+  let lastError = new Error("operator_stream_disconnected");
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await new Promise((resolvePromise, rejectPromise) => {
+        const socket = new WebSocket(url);
+        let settled = false;
+        let received = false;
+        let livenessTimer = null;
+        const armLiveness = () => {
+          clearTimeout(livenessTimer);
+          livenessTimer = setTimeout(() => {
+            socket.close(4000, "heartbeat_timeout");
+          }, 35_000);
+        };
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(livenessTimer);
+          try { socket.close(1000, "client_settled"); } catch {}
+          resolvePromise(value);
+        };
+        const fail = (error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(livenessTimer);
+          rejectPromise(error);
+        };
+        socket.addEventListener("open", () => {
+          socket.send(JSON.stringify({
+            type: "authenticate",
+            token,
+            cursor,
+            workspace: message.operator.workspace,
+          }));
+          armLiveness();
+        });
+        socket.addEventListener("message", (event) => {
+          received = true;
+          armLiveness();
+          let payload;
+          try { payload = JSON.parse(String(event.data || "")); } catch { return; }
+          if (payload.type === "heartbeat") return;
+          if (payload.type === "cursor_rejected") {
+            cursor = 0;
+            return;
+          }
+          if (payload.type === "error") {
+            fail(new Error(cleanText(payload.error || "operator_stream_error", 180)));
+            return;
+          }
+          if (payload.type !== "operator_update") return;
+          cursor = Math.max(cursor, Number(payload.cursor) || 0);
+          if (applyOperatorUpdate(task, message, payload, paint)) finish(payload);
+        });
+        socket.addEventListener("error", () => {
+          lastError = new Error("operator_stream_socket_error");
+        });
+        socket.addEventListener("close", (event) => {
+          if (settled) return;
+          fail(new Error(`operator_stream_closed:${event.code}:${received ? "after_data" : "before_data"}`));
+        });
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, 300 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function watchOperatorMessage(task, message, paint, stream = null) {
+  try {
+    return await streamOperatorMessage(task, message, paint, stream);
+  } catch {
+    message.operator = { ...(message.operator || {}), streamFallback: "polling" };
+    return pollOperatorMessage(task, message, paint);
+  }
+}
+
 function exchangeHtml(message, messageIndex) {
   return `
     <section class="phantombot-exchange" data-message-id="${esc(message.id)}">
@@ -593,7 +730,7 @@ function mountChatTab() {
         message.say = operatorStatusText(message.operator);
         persistTaskState();
         paint(true);
-        await pollOperatorMessage(task, message, paint);
+        await watchOperatorMessage(task, message, paint, started.streaming);
         rememberConversation({
           prompt: displayQ,
           reply: message.say,
@@ -747,7 +884,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260726-65")
+  import("./brain.js?v=phantom-live-20260726-67")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }
@@ -840,7 +977,7 @@ function bindRootActions(root) {
           : "The operation was denied. No approved change was executed.";
         persistTaskState();
         chatBindings?.paint(true);
-        await pollOperatorMessage(task, message, chatBindings.paint);
+        await watchOperatorMessage(task, message, chatBindings.paint);
       } catch (error) {
         message.pending = false;
         message.error = true;

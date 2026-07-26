@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import {
   appendFile,
   lstat,
@@ -12,6 +13,7 @@ import { spawn } from "node:child_process";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { EngineeringTaskPlan } from "@phantomforce/contracts";
 import type { AccessSession } from "../access/session.js";
 import {
   getAgentRun,
@@ -27,6 +29,11 @@ import {
   type HermesAcpNormalizedEvent,
 } from "./hermes-acp-transport.js";
 import { redactSensitiveText } from "./hermes-ledger.js";
+import {
+  engineeringOperationForPlan,
+  parseEngineeringTaskPlan,
+} from "./hermes-engineering-tools.js";
+import { composeHermesEcosystemContext } from "./hermes-ecosystem-knowledge.js";
 import { createBrainMemory } from "./neural-spine.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -95,9 +102,10 @@ export type HermesOperatorSessionRecord = {
   hermesCapabilities: HermesAcpCapabilities | null;
   events: HermesAcpNormalizedEvent[];
   assistantText: string;
-  intent: HermesDocumentationPatchIntent | null;
+  intent: HermesDocumentationPatchIntent | EngineeringTaskPlan | null;
   agentRunId: string | null;
   receiptId: string | null;
+  receiptVerified: boolean | null;
   memoryId: string | null;
   errorCode: string | null;
   createdAt: string;
@@ -116,6 +124,8 @@ type OperatorStoreOptions = {
 
 const sessions = new Map<string, HermesOperatorSessionRecord>();
 const activeTransports = new Map<string, HermesAcpTransport>();
+const operatorSessionChangeEvents = new EventEmitter();
+operatorSessionChangeEvents.setMaxListeners(200);
 let loadedPath: string | null = null;
 
 function nowIso() {
@@ -236,6 +246,12 @@ async function persist(record: HermesOperatorSessionRecord, options: OperatorSto
   record.updatedAt = nowIso();
   sessions.set(record.id, structuredClone(record));
   await appendFile(target, `${JSON.stringify(record)}\n`, "utf8");
+  operatorSessionChangeEvents.emit(record.id, record.id);
+}
+
+export function subscribeHermesOperatorSession(id: string, listener: () => void) {
+  operatorSessionChangeEvents.on(id, listener);
+  return () => operatorSessionChangeEvents.off(id, listener);
 }
 
 function sessionScope(session: AccessSession, workspace: string) {
@@ -318,18 +334,34 @@ export function parseHermesDocumentationIntent(
   };
 }
 
+export function parseHermesEngineeringPlan(assistantText: string): EngineeringTaskPlan | null {
+  const tagged = assistantText.match(
+    /<phantom_engineering_plan>\s*([\s\S]*?)\s*<\/phantom_engineering_plan>/i,
+  );
+  if (!tagged?.[1]) return null;
+  try {
+    return parseEngineeringTaskPlan(JSON.parse(tagged[1]));
+  } catch {
+    return null;
+  }
+}
+
 function planningPrompt(userPrompt: string, workspace: string) {
   return [
     "You are Hermes, the governed engineering planner inside PhantomBot.",
-    "This turn is Observe mode. You may inspect files, search, and reason inside the current workspace.",
-    "Do not edit files. Do not run commands. Do not install anything. Do not use network tools.",
-    "Identify the canonical relevant documentation file and propose one harmless exact text replacement.",
-    "The only permitted first-slice operation is a documentation patch under docs/ followed by npm run test:phantombot-desktop.",
-    "Explain the proposed action concisely, then end with exactly one machine-readable block:",
-    "<phantom_tool_intent>",
-    '{"version":1,"operation":"documentation_patch","relativePath":"docs/example.md","expectedText":"exact existing text","replacementText":"exact replacement text","testCommand":"npm run test:phantombot-desktop","summary":"short summary"}',
-    "</phantom_tool_intent>",
-    "Use exact current file text for expectedText. If no safe matching documentation edit exists, do not emit the block.",
+    "This planning turn is Observe mode. Inspect and reason, but do not edit files, run commands, install, deploy, restart services, use credentials, or use network tools.",
+    "Propose only bounded typed operations. PhantomForce, not Hermes, executes the validated plan.",
+    "Read operations: repo_status; search_text(query,path,maxResults); list_files(path,depth,maxEntries); read_text_file(path,maxBytes); inspect_package_scripts(path); git_diff(staged,path); git_log(limit); find_tests(query,maxResults); inspect_services(namePattern); inspect_listening_ports(ports).",
+    "File operations: edit_text_file(path,expectedSha256,expectedText,replacementText); create_text_file(path,expectedAbsent:true,content); append_text_file(path,expectedSha256,content); rename_file/move_file(fromPath,toPath,expectedSha256,expectedDestinationAbsent:true); create_directory(path,expectedAbsent:true); delete_fixture_file(path,expectedSha256).",
+    "Command operations: run_npm_script(script,args,timeoutMs); run_typescript_build(workspace,timeoutMs); run_typecheck(workspace,timeoutMs); run_powershell_script(path,args,timeoutMs); run_secret_scan(strict,timeoutMs). Git add or commit, if truly needed, must be a separate single-operation plan.",
+    "Every operation needs a unique id, kind, and concise summary. Paths are project-relative. Writes require exact current hashes/state. Include only actions necessary for this request; do not grant future discretion.",
+    "Read-only plans run without approval. Any write or command requires explicit approval of the immutable full plan.",
+    "Explain your evidence concisely, then end with exactly one JSON block using this shape:",
+    "<phantom_engineering_plan>",
+    '{"version":1,"workspace":"workspace label","summary":"bounded task summary","operations":[{"id":"inspect-1","kind":"repo_status","summary":"Inspect repository state"}],"verification":{"inspectDiff":true,"requireCleanRollback":true}}',
+    "</phantom_engineering_plan>",
+    "If no safe, evidence-backed bounded plan is possible, do not emit the block.",
+    composeHermesEcosystemContext(userPrompt, workspace),
     `Workspace label: ${workspace}`,
     `User request: ${clean(userPrompt, MAX_PROMPT_CHARS)}`,
   ].join("\n");
@@ -363,6 +395,7 @@ export async function createHermesOperatorSession(
     intent: null,
     agentRunId: null,
     receiptId: null,
+    receiptVerified: null,
     memoryId: null,
     errorCode: null,
     createdAt: nowIso(),
@@ -393,6 +426,7 @@ export async function planHermesOperatorSession(
   });
   activeTransports.set(id, transport);
   transport.on("event", (event: HermesAcpNormalizedEvent) => {
+    if (record.state === "cancelled") return;
     const previous = record.events.at(-1);
     if (event.type !== "analyzing" || previous?.type !== "analyzing") {
       record.events.push({
@@ -415,8 +449,12 @@ export async function planHermesOperatorSession(
       created.sessionId,
       planningPrompt(record.prompt, record.workspace),
     );
+    if ((record.state as HermesOperatorSessionState) === "cancelled") {
+      return publicRecord(record);
+    }
     record.assistantText = eventText(record.events);
-    record.intent = parseHermesDocumentationIntent(record.assistantText);
+    record.intent = parseHermesEngineeringPlan(record.assistantText)
+      || parseHermesDocumentationIntent(record.assistantText);
     if (!record.intent) {
       record.state = "blocked";
       record.errorCode = "hermes_safe_intent_missing";
@@ -429,8 +467,27 @@ export async function planHermesOperatorSession(
       await persist(record, options);
       return publicRecord(record);
     }
+    const engineeringPlan = "operations" in record.intent ? record.intent : null;
+    const documentationIntent = engineeringPlan ? null : record.intent as HermesDocumentationPatchIntent;
+    const operation = engineeringPlan
+      ? engineeringOperationForPlan(engineeringPlan)
+      : HERMES_DOCUMENTATION_PATCH_OPERATION;
+    const inputs = engineeringPlan
+      ? {
+          hermesOperatorSessionId: record.id,
+          hermesSessionId: record.hermesSessionId,
+          plan: engineeringPlan,
+        }
+      : {
+          hermesOperatorSessionId: record.id,
+          hermesSessionId: record.hermesSessionId,
+          relativePath: documentationIntent!.relativePath,
+          expectedText: documentationIntent!.expectedText,
+          replacementText: documentationIntent!.replacementText,
+          testCommand: documentationIntent!.testCommand,
+        };
     const started = await startAgentRun({
-      operation: HERMES_DOCUMENTATION_PATCH_OPERATION,
+      operation,
       workspace: record.workspace,
       organizationId: record.organizationId,
       module: "phantombot",
@@ -442,28 +499,26 @@ export async function planHermesOperatorSession(
       idempotencyKey: `hermes-acp:${record.id}:${createHash("sha256")
         .update(JSON.stringify(record.intent))
         .digest("hex")}`,
-      inputs: {
-        hermesOperatorSessionId: record.id,
-        hermesSessionId: record.hermesSessionId,
-        relativePath: record.intent.relativePath,
-        expectedText: record.intent.expectedText,
-        replacementText: record.intent.replacementText,
-        testCommand: record.intent.testCommand,
-      },
+      inputs,
     });
     if (!("id" in started)) throw new Error(started.error);
     record.agentRunId = started.id;
-    record.state = "awaiting_approval";
+    record.state = started.state === "awaiting_approval" ? "awaiting_approval" : "executing";
     record.events.push({
       sequence: nextEventSequence(record),
       at: nowIso(),
-      type: "approval_required",
-      summary: `Approval is required to update ${record.intent.relativePath} and run the desktop tests.`,
+      type: started.state === "awaiting_approval" ? "approval_required" : "operation_started",
+      summary: started.state === "awaiting_approval"
+        ? `Approval is required for ${engineeringPlan?.operations.length ?? 2} exact governed operation(s).`
+        : `Running ${engineeringPlan?.operations.length ?? 1} bounded read-only engineering operation(s).`,
       data: { agentRunId: started.id },
     });
     await persist(record, options);
     return publicRecord(record);
   } catch (error) {
+    if ((record.state as HermesOperatorSessionState) === "cancelled") {
+      return publicRecord(record);
+    }
     record.state = "failed";
     record.errorCode = clean((error as Error).message, 180) || "hermes_acp_failed";
     record.events.push({
@@ -573,6 +628,7 @@ async function reconcileHermesOperatorSession(
   if (!record.agentRunId) return;
   const run = getAgentRun(record.agentRunId);
   if (!run) return;
+  let changed = false;
   const stateMap: Partial<Record<AgentRun["state"], HermesOperatorSessionState>> = {
     awaiting_approval: "awaiting_approval",
     approved: "approved",
@@ -590,6 +646,7 @@ async function reconcileHermesOperatorSession(
   const mapped = stateMap[run.state];
   if (mapped && record.state !== mapped) {
     record.state = mapped;
+    changed = true;
     const eventType: HermesAcpNormalizedEvent["type"] =
       mapped === "completed" ? "completed"
       : mapped === "denied" ? "blocked"
@@ -610,15 +667,22 @@ async function reconcileHermesOperatorSession(
   }
   if (run.receipt && record.receiptId !== run.receipt.receipt_id) {
     record.receiptId = run.receipt.receipt_id;
+    record.receiptVerified = run.receipt.verification.ok;
+    changed = true;
     record.events.push({
       sequence: nextEventSequence(record),
       at: nowIso(),
-      type: "completed",
-      summary: `Verified receipt ${run.receipt.receipt_id} was created.`,
-      data: { receiptId: run.receipt.receipt_id },
+      type: run.receipt.verification.ok ? "completed" : "failed",
+      summary: run.receipt.verification.ok
+        ? `Verified receipt ${run.receipt.receipt_id} was created.`
+        : `Failure receipt ${run.receipt.receipt_id} recorded the unsuccessful verification and rollback posture.`,
+      data: {
+        receiptId: run.receipt.receipt_id,
+        verificationOk: run.receipt.verification.ok,
+      },
     });
   }
-  if (run.receipt && !record.memoryId) {
+  if (run.receipt?.verification.ok && !record.memoryId) {
     const memory = await createBrainMemory(
       accessSession,
       {
@@ -629,7 +693,9 @@ async function reconcileHermesOperatorSession(
         text: [
           `Verified PhantomBot engineering task for ${record.workspace}.`,
           `Request: ${record.summary}.`,
-          `File: ${String(run.inputs.relativePath || "unknown")}.`,
+          run.inputs.plan
+            ? `Plan: ${clean((run.inputs.plan as EngineeringTaskPlan).summary, 300)}.`
+            : `File: ${String(run.inputs.relativePath || "unknown")}.`,
           `Verification: ${run.receipt.verification.detail}.`,
           `Receipt: ${run.receipt.receipt_id}.`,
         ].join(" ").slice(0, 1_100),
@@ -641,8 +707,9 @@ async function reconcileHermesOperatorSession(
       },
     );
     record.memoryId = memory.id;
+    changed = true;
   }
-  await persist(record, options);
+  if (changed) await persist(record, options);
 }
 
 async function validateDocumentationTarget(root: string, relativePath: string) {

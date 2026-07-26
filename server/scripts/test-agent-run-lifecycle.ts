@@ -136,7 +136,8 @@ try {
   assert("id" in rejected);
   const failed = await waitForTerminal(rejected.id);
   assert.equal(failed.state, "failed", "verifier rejection must prevent completion");
-  assert.equal(failed.receipt, null, "unverified work must not receive a success receipt");
+  assert.equal(failed.receipt?.verification.ok, false, "unverified work must receive only an explicit failure receipt");
+  assert.equal(failed.receipt?.next_state, "failed");
 
   const retry = await retryAgentRun(failed.id, {
     sessionId: "session-a",

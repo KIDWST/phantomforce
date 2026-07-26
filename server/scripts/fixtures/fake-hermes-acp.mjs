@@ -74,7 +74,34 @@ lines.on("line", (line) => {
       status: "pending",
       locations: [{ path: "docs/PHANTOMBOT_DESKTOP_VERTICAL_SLICE.md", line: 1 }],
     });
-    const responseText = [
+    const responseText = process.env.FAKE_HERMES_ACP_PLAN === "read"
+      ? [
+          "I prepared a bounded read-only orientation plan.",
+          "<phantom_engineering_plan>",
+          JSON.stringify({
+            version: 1,
+            workspace: "fixture-workspace",
+            summary: "Inspect the canonical fixture workspace without modification.",
+            operations: [
+              {
+                id: "document",
+                kind: "read_text_file",
+                summary: "Read the canonical desktop slice document",
+                path: "docs/PHANTOMBOT_DESKTOP_VERTICAL_SLICE.md",
+                maxBytes: 65536,
+              },
+              {
+                id: "scripts",
+                kind: "inspect_package_scripts",
+                summary: "Inspect declared repository scripts",
+                path: "package.json",
+              },
+            ],
+            verification: { inspectDiff: true, requireCleanRollback: true },
+          }),
+          "</phantom_engineering_plan>",
+        ].join("\n")
+      : [
       "I found the canonical documentation and prepared one harmless change.",
       "<phantom_tool_intent>",
       JSON.stringify({
@@ -87,7 +114,7 @@ lines.on("line", (line) => {
         summary: "Update the PhantomBot milestone status and run desktop runtime tests.",
       }),
       "</phantom_tool_intent>",
-    ].join("\n");
+        ].join("\n");
     update(sessionId, {
       sessionUpdate: "agent_message_chunk",
       content: { type: "text", text: responseText },

@@ -260,7 +260,8 @@ try {
   assert.equal(terminaCallCount >= 2, true, "Approval should have triggered at least a decompose call and a create-mission call.");
   assert.ok(lastMissionBody, "createMission should have been called.");
   assert.equal(lastMissionBody!.launchMode, "approval", "createMission must always send launchMode \"approval\", never \"auto\".");
-  assert.equal(finalRun.inputs.missionId, "abc123", "The real Termina mission id should be recorded on the run.");
+  assert.equal(finalRun.inputs.missionId, undefined, "Execution outputs must not mutate the immutable approved input payload.");
+  assert.match(finalRun.artifacts[0]?.summary || "", /abc123/, "The real Termina mission id should be recorded in evidence.");
 
   // ---- single-use: saying "yes" again must not re-dispatch the same run ----
   const callCountAfterFirstConfirm = terminaCallCount;

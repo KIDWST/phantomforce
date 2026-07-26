@@ -18,6 +18,7 @@
 
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -95,7 +96,7 @@ export type AgentRunReceipt = {
   cost_estimate_usd: number | null;
   rollback_guidance: string | null;
   verification: {
-    ok: true;
+    ok: boolean;
     detail: string;
     verified_at: string;
   };
@@ -165,6 +166,8 @@ export type AgentRunExecutor = {
 };
 
 const runs = new Map<string, AgentRun>();
+const agentRunChangeEvents = new EventEmitter();
+agentRunChangeEvents.setMaxListeners(200);
 
 export const AGENT_RUN_TRANSITIONS: Readonly<Record<AgentRunState, ReadonlySet<AgentRunState>>> = {
   draft: new Set(["planned", "cancelled"]),
@@ -221,6 +224,12 @@ function runId() {
 async function persistRun(run: AgentRun) {
   await mkdir(dirname(RUNS_LOG_PATH), { recursive: true });
   await appendFile(RUNS_LOG_PATH, `${JSON.stringify({ type: "run", run })}\n`, "utf8");
+  agentRunChangeEvents.emit(run.id, run.id);
+}
+
+export function subscribeAgentRun(id: string, listener: () => void) {
+  agentRunChangeEvents.on(id, listener);
+  return () => agentRunChangeEvents.off(id, listener);
 }
 
 async function transition(run: AgentRun, state: AgentRunState, note: string) {
@@ -519,6 +528,38 @@ async function executeRun(run: AgentRun, executor: AgentRunExecutor, proof: {
     const verdict = await executor.verify(ctx, result.artifacts);
     if (!verdict.ok) {
       run.error = verdict.detail;
+      const failedAt = nowIso();
+      run.receipt = {
+        receipt_id: `receipt-${run.id}`,
+        run_id: run.id,
+        actor_user_id: run.requested_by,
+        organization_id: run.organization_id,
+        workspace: run.workspace,
+        module: run.module,
+        object_type: "agent_run",
+        object_id: run.id,
+        action: run.operation,
+        payload_hash: run.payload_hash,
+        previous_state: "verifying",
+        next_state: "failed",
+        operation: run.operation,
+        requested_by: run.requested_by,
+        approved_by: run.approved_by,
+        approved_at: run.approved_at,
+        executed_at: failedAt,
+        inputs: run.inputs,
+        scope: run.scope,
+        expected_effect: run.expected_effect,
+        actual_effect: `Verification failed: ${redactSensitiveText(verdict.detail).slice(0, 240)}`,
+        cost_estimate_usd: run.cost_estimate_usd,
+        rollback_guidance: executor.rollbackGuidance ?? null,
+        verification: {
+          ok: false,
+          detail: redactSensitiveText(verdict.detail).slice(0, 300),
+          verified_at: failedAt,
+        },
+        human_summary: `Failed verification: ${redactSensitiveText(verdict.detail).slice(0, 200)}`,
+      };
       await transition(run, "failed", `Verification failed: ${verdict.detail}`);
       return;
     }
@@ -596,6 +637,38 @@ async function executeRun(run: AgentRun, executor: AgentRunExecutor, proof: {
       await transition(run, "cancelled", "Cancelled by request.");
     } else {
       run.error = message.slice(0, 300);
+      const failedAt = nowIso();
+      run.receipt = {
+        receipt_id: `receipt-${run.id}`,
+        run_id: run.id,
+        actor_user_id: run.requested_by,
+        organization_id: run.organization_id,
+        workspace: run.workspace,
+        module: run.module,
+        object_type: "agent_run",
+        object_id: run.id,
+        action: run.operation,
+        payload_hash: run.payload_hash,
+        previous_state: run.state,
+        next_state: "failed",
+        operation: run.operation,
+        requested_by: run.requested_by,
+        approved_by: run.approved_by,
+        approved_at: run.approved_at,
+        executed_at: failedAt,
+        inputs: run.inputs,
+        scope: run.scope,
+        expected_effect: run.expected_effect,
+        actual_effect: `Execution failed: ${redactSensitiveText(message).slice(0, 240)}`,
+        cost_estimate_usd: run.cost_estimate_usd,
+        rollback_guidance: executor.rollbackGuidance ?? null,
+        verification: {
+          ok: false,
+          detail: redactSensitiveText(message).slice(0, 300),
+          verified_at: failedAt,
+        },
+        human_summary: `Failed: ${redactSensitiveText(message).slice(0, 220)}`,
+      };
       await transition(run, "failed", `Failed: ${run.error}`);
     }
   }
