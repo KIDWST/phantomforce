@@ -14,12 +14,12 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260723-63";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-63";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260723-63";
-import { esc } from "./workspaces.js?v=phantom-live-20260723-63";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260723-63";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260723-63";
+} from "./store.js?v=phantom-live-20260726-65";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260726-65";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260726-65";
+import { esc } from "./workspaces.js?v=phantom-live-20260726-65";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260726-65";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260726-65";
 
 const TABS = ["chat", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -133,6 +133,7 @@ function operatorEventLabel(event) {
     analyzing: "Analyzing request",
     context_inspection: "Inspecting workspace context",
     plan_created: "Plan created",
+    message_delta: "Response prepared",
     approval_required: "Approval required",
     operation_started: "Approved operation started",
     operation_progress: "Operation progress",
@@ -145,6 +146,13 @@ function operatorEventLabel(event) {
     failed: "Failed closed",
   };
   return labels[event?.type] || String(event?.type || "Update").replaceAll("_", " ");
+}
+
+function operatorEventSummary(event) {
+  const summary = cleanText(event?.summary || "", 500);
+  if (event?.type !== "message_delta") return summary;
+  const publicText = summary.split(/<phantom_tool_intent>/iu, 1)[0].trim();
+  return publicText || "Hermes prepared a governed operation proposal.";
 }
 
 function operatorTimelineHtml(operator) {
@@ -173,7 +181,10 @@ function operatorTimelineHtml(operator) {
     : "";
   return `<section class="phantombot-operator" data-operator-session="${esc(operator.id || "")}">
     <header><b>Hermes ACP</b><span data-state="${esc(operator.state || "connecting")}">${esc(String(operator.state || "connecting").replaceAll("_", " "))}</span></header>
-    <ol>${events.map((event) => `<li><i></i><span><b>${esc(operatorEventLabel(event))}</b>${event.summary ? `<small>${esc(event.summary)}</small>` : ""}</span></li>`).join("")}</ol>
+    <ol>${events.map((event) => {
+      const summary = operatorEventSummary(event);
+      return `<li><i></i><span><b>${esc(operatorEventLabel(event))}</b>${summary ? `<small>${esc(summary)}</small>` : ""}</span></li>`;
+    }).join("")}</ol>
     ${scope}${approval}${receipt}
   </section>`;
 }
@@ -736,7 +747,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260723-63")
+  import("./brain.js?v=phantom-live-20260726-65")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }

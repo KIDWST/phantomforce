@@ -8,6 +8,7 @@ const command = readFileSync(new URL("../app/js/command.js", import.meta.url), "
 const commandOsCss = readFileSync(new URL("../app/command-os.css", import.meta.url), "utf8");
 const phantomAi = readFileSync(new URL("../app/js/phantomai.js", import.meta.url), "utf8");
 const pageWorker = readFileSync(new URL("../app/js/pageworker.js", import.meta.url), "utf8");
+const flowMap = readFileSync(new URL("../app/js/flowmap.js", import.meta.url), "utf8");
 const count = (source, pattern) => source.match(pattern)?.length || 0;
 
 // Full chat (log + composer) moved off the dashboard into its own PhantomBot
@@ -32,6 +33,7 @@ assert.doesNotMatch(main, /data-phantomai-chat-input type="text"/u, "PhantomBot 
 assert.match(phantomAi, /const TASKS_KEY = "pf\.phantombot\.tasks\.v1"/u, "PhantomBot tasks must have a stable workspace persistence key.");
 assert.match(phantomAi, /workspaceStorageGetItem\(TASKS_KEY,[\s\S]*workspaceStorageSetItem\(TASKS_KEY/u, "PhantomBot must load and save its task history through workspace-scoped storage.");
 assert.match(phantomAi, /taskState\.tasks[\s\S]*activeId/u, "PhantomBot must track multiple tasks and one active task.");
+assert.match(phantomAi, /split\(\/<phantom_tool_intent>\/iu/u, "The operator timeline must hide governed machine-intent markup from the user-facing progress stream.");
 assert.match(phantomAi, /say:\s*message\.say,[\s\S]*pending:\s*!!message\.pending,[\s\S]*error:\s*!!message\.error/u, "In-flight replies must remain pending in storage until a real reload converts them into interrupted recovery state.");
 assert.match(phantomAi, /mountPhantomAI\(root\)[\s\S]*loadTaskState\(false\)/u, "Shell remounts must preserve an active in-memory request instead of reloading its recovery snapshot.");
 assert.match(phantomAi, /event\.key === "Enter" && !event\.shiftKey && !event\.isComposing/u, "Enter must send while Shift+Enter remains available for a newline.");
@@ -68,7 +70,10 @@ assert.match(main, /renderDashboardBrief\(\);/u, "Console render must refresh th
 // nothing.
 assert.doesNotMatch(main, /bindChatboxMobility/u, "Dead chatbox drag/hotkey subsystem must not come back once its target element is gone.");
 assert.match(main, /const bottomItems = items;/u, "The dedicated utility zone must remain the full navigation launcher while the main sidebar shows open tabs.");
-assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "crm", "assets", "sites", "money"\]/u, "Phone dock must keep the five core destinations stable.");
+assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "crm", "phantomai", "sites", "money"\]/u, "Phone dock must keep the five core destinations stable.");
+assert.doesNotMatch(main, /renderAssetCloud|\.\/assetcloud\.js|id:\s*"assets"/u, "Removed Asset Cloud must not blank the shell through stale imports or navigation.");
+assert.doesNotMatch(index, /data-nav-id="assets"/u, "Removed Asset Cloud must not remain in the command rail.");
+assert.doesNotMatch(flowMap, /ws:\s*"assets"/u, "Flow-map delivery must not route into the removed Asset Cloud workspace.");
 assert.match(main, /data-mobile-more/u, "Phone dock must expose the complete navigation through More.");
 assert.match(main, /setMobileNav\(!mobileNavOpen\)/u, "More must open and close the existing mobile drawer.");
 assert.match(css, /\.mobile-bottom-nav\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/u, "Phone dock must fit six controls without horizontal clipping.");

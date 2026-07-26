@@ -122,6 +122,13 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function nextEventSequence(record: Pick<HermesOperatorSessionRecord, "events">) {
+  return record.events.reduce(
+    (highest, event) => Math.max(highest, Number(event.sequence) || 0),
+    0,
+  ) + 1;
+}
+
 function clean(value: unknown, max = 1_000) {
   return redactSensitiveText(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, max);
 }
@@ -388,7 +395,10 @@ export async function planHermesOperatorSession(
   transport.on("event", (event: HermesAcpNormalizedEvent) => {
     const previous = record.events.at(-1);
     if (event.type !== "analyzing" || previous?.type !== "analyzing") {
-      record.events.push(event);
+      record.events.push({
+        ...event,
+        sequence: nextEventSequence(record),
+      });
     }
     record.events = record.events.slice(-MAX_EVENTS);
     if (event.type === "connecting") record.state = "connecting";
@@ -411,7 +421,7 @@ export async function planHermesOperatorSession(
       record.state = "blocked";
       record.errorCode = "hermes_safe_intent_missing";
       record.events.push({
-        sequence: record.events.length + 1,
+        sequence: nextEventSequence(record),
         at: nowIso(),
         type: "blocked",
         summary: "Hermes did not produce a valid governed documentation action.",
@@ -445,7 +455,7 @@ export async function planHermesOperatorSession(
     record.agentRunId = started.id;
     record.state = "awaiting_approval";
     record.events.push({
-      sequence: record.events.length + 1,
+      sequence: nextEventSequence(record),
       at: nowIso(),
       type: "approval_required",
       summary: `Approval is required to update ${record.intent.relativePath} and run the desktop tests.`,
@@ -457,7 +467,7 @@ export async function planHermesOperatorSession(
     record.state = "failed";
     record.errorCode = clean((error as Error).message, 180) || "hermes_acp_failed";
     record.events.push({
-      sequence: record.events.length + 1,
+      sequence: nextEventSequence(record),
       at: nowIso(),
       type: "failed",
       summary: "Hermes could not complete the governed planning turn.",
@@ -523,7 +533,7 @@ export async function reopenHermesOperatorSession(
   record.closedAt = null;
   record.reopenCount += 1;
   record.events.push({
-    sequence: record.events.length + 1,
+    sequence: nextEventSequence(record),
     at: nowIso(),
     type: "connected",
     summary: record.hermesSessionId
@@ -546,7 +556,7 @@ export async function cancelHermesOperatorSession(
   if (record.hermesSessionId) activeTransports.get(id)?.cancel(record.hermesSessionId);
   record.state = "cancelled";
   record.events.push({
-    sequence: record.events.length + 1,
+    sequence: nextEventSequence(record),
     at: nowIso(),
     type: "cancelled",
     summary: "The operator session was cancelled.",
@@ -589,7 +599,7 @@ async function reconcileHermesOperatorSession(
       : mapped === "executing" ? "operation_started"
       : "operation_progress";
     record.events.push({
-      sequence: record.events.length + 1,
+      sequence: nextEventSequence(record),
       at: nowIso(),
       type: eventType,
       summary:
@@ -601,7 +611,7 @@ async function reconcileHermesOperatorSession(
   if (run.receipt && record.receiptId !== run.receipt.receipt_id) {
     record.receiptId = run.receipt.receipt_id;
     record.events.push({
-      sequence: record.events.length + 1,
+      sequence: nextEventSequence(record),
       at: nowIso(),
       type: "completed",
       summary: `Verified receipt ${run.receipt.receipt_id} was created.`,
