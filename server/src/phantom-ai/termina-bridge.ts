@@ -250,6 +250,22 @@ export async function getMission(
   return { mission: payload.mission, ledger: payload.ledger ?? [], tokens: payload.tokens ?? {} };
 }
 
+export async function stopMissionWorker(
+  baseUrl: string,
+  token: string,
+  missionId: string,
+  workerId: string,
+): Promise<TerminaWorker> {
+  const payload = await terminaFetch<{ worker: TerminaWorker }>(
+    baseUrl,
+    token,
+    "POST",
+    `/api/missions/${encodeURIComponent(missionId)}/workers/${encodeURIComponent(workerId)}/stop`,
+    {},
+  );
+  return payload.worker;
+}
+
 export async function listRepos(baseUrl: string, token: string): Promise<unknown[]> {
   const payload = await terminaFetch<{ repos: unknown[] }>(baseUrl, token, "GET", "/api/repos");
   return payload.repos ?? [];
