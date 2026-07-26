@@ -33,6 +33,7 @@ import {
   engineeringOperationForPlan,
   parseEngineeringTaskPlan,
 } from "./hermes-engineering-tools.js";
+import { composeHermesEcosystemContext } from "./hermes-ecosystem-knowledge.js";
 import { createBrainMemory } from "./neural-spine.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -360,6 +361,7 @@ function planningPrompt(userPrompt: string, workspace: string) {
     '{"version":1,"workspace":"workspace label","summary":"bounded task summary","operations":[{"id":"inspect-1","kind":"repo_status","summary":"Inspect repository state"}],"verification":{"inspectDiff":true,"requireCleanRollback":true}}',
     "</phantom_engineering_plan>",
     "If no safe, evidence-backed bounded plan is possible, do not emit the block.",
+    composeHermesEcosystemContext(userPrompt, workspace),
     `Workspace label: ${workspace}`,
     `User request: ${clean(userPrompt, MAX_PROMPT_CHARS)}`,
   ].join("\n");

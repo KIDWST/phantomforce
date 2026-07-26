@@ -56,6 +56,8 @@
     "test:hermes-acp-operator": "tsx scripts/test-hermes-acp-operator-journey.ts",
     "test:hermes-engineering-tools": "tsx scripts/test-hermes-engineering-tools.ts",
     "test:hermes-operator-stream": "tsx scripts/test-hermes-operator-stream.ts",
+    "test:hermes-ecosystem-knowledge": "tsx scripts/test-hermes-ecosystem-knowledge.ts",
+    "test:phantom-capability-registry": "tsx scripts/test-phantom-capability-registry.ts",
     "test:hermes-acp-live": "tsx scripts/test-hermes-acp-live.ts",
     "test:local-customer-plan": "tsx scripts/test-local-customer-plan-preview.ts",
     "test:stripe-billing": "tsx scripts/test-stripe-billing.ts",
