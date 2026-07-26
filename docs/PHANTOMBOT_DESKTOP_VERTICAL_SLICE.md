@@ -1,6 +1,6 @@
 # PhantomBot desktop vertical slice
 
-Status: implemented desktop/runtime foundation; the complete master mission is not finished.
+Status: implemented desktop/runtime foundation and governed ACP operator slice; the complete master mission is not finished.
 
 Last verified: 2026-07-26
 
@@ -15,7 +15,7 @@ PhantomBot Electron shell
      -> Termina adapter for approved multi-worker missions
   -> installed Hermes runtime
      -> supported CLI discovery
-     -> ACP readiness verification
+     -> ACP v1 session, planning, and normalized streaming adapter
 ```
 
 The desktop shell does not contain a second model loop or a second tool
@@ -43,6 +43,11 @@ shipping runtime path. Provider credentials remain outside the renderer.
 - Offline/recovery surface that distinguishes PhantomForce availability,
   Hermes kernel health, and desktop-supervisor state.
 - Windows package and Squirrel installer generation.
+- Provider-neutral Hermes ACP transport and durable PhantomForce operator
+  sessions with approval-bound documentation edits, verification, receipts,
+  memory, and close/reopen recovery.
+- PhantomBot engineering prompts render normalized Hermes milestones and use
+  the existing agent-run approval/denial routes from the task timeline.
 
 ## Existing systems retained
 
@@ -53,7 +58,7 @@ shipping runtime path. Provider credentials remain outside the renderer.
 | Agent run lifecycle | Retain | `server/src/phantom-ai/agent-runs.ts` | Real state machine, verification, receipts, restart recovery, and approval payload binding. |
 | Termina mission adapter | Retain | shared agent-run executor | Real production adapter; automated verification uses a mocked Termina endpoint to avoid spending or filesystem mutation. |
 | Hermes ledger and memory contracts | Retain | PhantomForce server | Existing organization-scoped evidence/memory path. |
-| Installed Hermes Agent | Adapt | desktop runtime adapter | Installation and ACP readiness are verified. Direct ACP conversation streaming is not wired yet. |
+| Installed Hermes Agent | Adapt | server-side ACP adapter + desktop timeline | Real ACP handshake, capabilities, planning stream, typed intent, and live provider-backed journey are verified. |
 | Direct Electron OpenRouter/tool executor prototype | Deprecate | none | Would duplicate routing/execution, bypass tenant policy, and create a separate receipt system. |
 | PhantomForce web-only shell | Merge | desktop content surface | Desktop owns process/runtime concerns; the application keeps identity and organization context. |
 
@@ -68,17 +73,20 @@ The following parts are proven:
 5. PhantomBot command/task surface checks pass.
 6. Chat deterministic tool checks pass.
 7. Memory retention checks pass.
-8. Agent runs enforce transitions, approvals, idempotency, cancellation,
+8. Agent runs enforce transitions, approvals, expiration, idempotency, cancellation,
    verification-before-completion, persistence, receipt data, and path
    redaction.
-9. The TypeScript server and shared contracts build.
+9. A real installed-Hermes ACP model turn inspected a disposable workspace,
+   produced a governed intent, waited for PhantomForce approval, edited one
+   documentation line, ran the real test process, created a verified receipt
+   and memory, and reopened durably.
+10. Pending approval and completed sessions recover in a new PhantomForce
+    process; denial, replay, traversal, malformed stream, drop, timeout, and
+    failed-test rollback cases fail closed.
+11. The TypeScript server and shared contracts build.
 
 The following are not yet proven as one automated production journey:
 
-- A desktop-created conversation using Hermes ACP as the live model/tool
-  transport.
-- An approved Hermes tool edit that changes a file, runs a test, and returns a
-  PhantomForce receipt in the same desktop task.
 - A real Termina mission against the local service. The adapter test uses a
   controlled fake endpoint and deliberately performs no real worker spend.
 - Installer signing, update rollback, crash recovery qualification, uninstall
@@ -89,19 +97,10 @@ mission or as a production-qualified release.
 
 ## Next highest-value slice
 
-Implement a versioned PhantomBot runtime adapter over Hermes ACP:
-
-1. Start one Hermes ACP child per desktop profile/workspace.
-2. Normalize ACP plan, message, tool, permission, and completion notifications
-   into PhantomBot streaming events.
-3. Map the authenticated PhantomForce organization/workspace envelope into the
-   Hermes profile and working directory without exposing cross-tenant memory.
-4. Route ACP permission requests through the shared PhantomForce approval
-   engine rather than Electron-only dialogs.
-5. Persist the resulting artifact/test evidence through `agent-runs.ts` and
-   return its receipt to the desktop task.
-6. Add one hermetic end-to-end fixture proving:
-   prompt -> approval -> file edit -> test -> verified receipt -> reopen.
+Expand the typed operation catalog beyond documentation edits, add push-based
+event delivery, and qualify a disposable live Termina multi-worker mission
+after its local service and bridge token are available. See
+`docs/HERMES_ACP_OPERATOR.md` for the implemented contract and exact boundary.
 
 Do not use Hermes `--oneshot` for this path: its documented behavior bypasses
 tool approvals, so it is unsuitable for governed desktop execution.
@@ -118,6 +117,8 @@ npm run test:memory
 npm run test:auth-boundaries
 npm run test:agent-run-lifecycle
 npm run test:termina-bridge --workspace @phantomforce/server
+npm run test:phantombot-operator
+npm run test:hermes-acp-live --workspace @phantomforce/server
 npm run build
 npm run test:change-memory
 git diff --check
