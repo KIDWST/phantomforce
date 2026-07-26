@@ -1,0 +1,45 @@
+{
+  "name": "@phantomforce/phantombot-desktop",
+  "productName": "PhantomBot",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Native desktop shell for the existing Phantom AI operating intelligence.",
+  "author": "PhantomForce",
+  "license": "UNLICENSED",
+  "main": "src/main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+        "name": "PhantomBot",
+        "executableName": "PhantomBot",
+        "asar": true,
+        "overwrite": true,
+        "ignore": [
+          "^/\\.backup-"
+        ]
+      },
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "phantombot_desktop",
+            "authors": "PhantomForce",
+            "description": "PhantomBot desktop operating intelligence"
+          }
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.2",
+    "@electron-forge/maker-squirrel": "^7.11.2",
+    "electron": "^43.2.0"
+  }
+}

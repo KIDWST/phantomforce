@@ -25,9 +25,9 @@
           "description": "Visible approval cards use tenant-scoped server persistence."
         },
         {
-          "file": "app/js/main.js",
+          "file": "app/js/analytics-hub.js",
           "pattern": "mountManagedGrowthReport",
-          "description": "Analytics mounts the source-backed Managed Growth report."
+          "description": "The unified Analytics hub mounts the source-backed Managed Growth report."
         },
         {
           "file": "package.json",

@@ -5,12 +5,15 @@
 
 import {
   currentWs,
+  currentTenantId,
+  friendlyBackendError,
   isOwnerOperator,
   rememberConversation,
   uid,
   wsName,
   workspaceStorageGetItem,
   workspaceStorageSetItem,
+  session,
 } from "./store.js?v=phantom-live-20260723-63";
 import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260723-63";
 import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260723-63";
@@ -24,6 +27,7 @@ const MAX_TASKS = 30;
 const MAX_MESSAGES = 80;
 const NEW_TASK_TITLE = "New task";
 const INTERRUPTED_REPLY = "This response was interrupted before it finished. Retry the message when you are ready.";
+const ACP_TERMINAL_STATES = new Set(["completed", "denied", "failed", "cancelled", "blocked"]);
 
 let rootEl = null;
 let taskState = { workspace: "", activeId: "", tasks: [] };
@@ -75,10 +79,103 @@ function normalizedMessage(message = {}) {
     media: Array.isArray(message.media) ? message.media.slice(0, 8) : [],
     attachments: Array.isArray(message.attachments) ? message.attachments.slice(0, 8) : [],
     background: !!message.background,
+    operator: message.operator && typeof message.operator === "object" ? message.operator : null,
     pending: false,
     error: pending || !!message.error,
     createdAt: cleanText(message.createdAt || new Date().toISOString(), 60),
   };
+}
+
+function isEngineeringPrompt(prompt) {
+  return /\b(?:build|code|coding|repo|repository|implement|fix|debug|refactor|patch|test|documentation|docs?|typescript|javascript|backend|frontend)\b/i.test(prompt);
+}
+
+async function operatorApi(path, options = {}) {
+  const token = session.token();
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(friendlyBackendError(response.status, payload?.error, {
+      authMessage: "Sign in with an admin account to run governed engineering work.",
+      fallbackPrefix: "Hermes operator request failed",
+    }));
+  }
+  return payload;
+}
+
+function operatorStatusText(operator) {
+  const state = String(operator?.state || "connecting").replaceAll("_", " ");
+  const summary = cleanText(operator?.summary || "", 280);
+  if (operator?.state === "awaiting_approval") {
+    return summary || "Hermes prepared a bounded plan. Review the exact scope before execution.";
+  }
+  if (operator?.state === "completed") {
+    return summary || "The approved change passed verification and has a durable receipt.";
+  }
+  if (operator?.state === "denied") return "The proposed operation was denied. No approved change was executed.";
+  if (operator?.state === "blocked") return summary || "Hermes could not produce an operation within the allowed first-slice policy.";
+  if (operator?.state === "failed") return summary || "The governed operator failed closed. Check Activity for its recorded error.";
+  if (operator?.state === "cancelled") return "The governed operator session was cancelled.";
+  return `${state.charAt(0).toUpperCase()}${state.slice(1)}…`;
+}
+
+function operatorEventLabel(event) {
+  const labels = {
+    connecting: "Connecting to Hermes",
+    connected: "ACP session connected",
+    analyzing: "Analyzing request",
+    context_inspection: "Inspecting workspace context",
+    plan_created: "Plan created",
+    approval_required: "Approval required",
+    operation_started: "Approved operation started",
+    operation_progress: "Operation progress",
+    tool_result: "Tool result recorded",
+    usage: "Usage recorded",
+    completed: "Verification complete",
+    blocked: "Blocked by policy",
+    cancelled: "Cancelled",
+    disconnected: "ACP disconnected",
+    failed: "Failed closed",
+  };
+  return labels[event?.type] || String(event?.type || "Update").replaceAll("_", " ");
+}
+
+function operatorTimelineHtml(operator) {
+  if (!operator) return "";
+  const events = Array.isArray(operator.events) ? operator.events.slice(-8) : [];
+  const run = operator.run || null;
+  const intent = operator.intent || null;
+  const scope = operator.state === "awaiting_approval" && run
+    ? `<dl class="phantombot-operator-scope">
+        <div><dt>Project</dt><dd>${esc(operator.workspace || "")}</dd></div>
+        <div><dt>Change</dt><dd>${esc(intent?.summary || run.expected_effect || "Bound documentation update")}</dd></div>
+        <div><dt>File</dt><dd>${esc(intent?.relativePath || run.inputs?.relativePath || "")}</dd></div>
+        <div><dt>Command</dt><dd>${esc(intent?.testCommand || run.inputs?.testCommand || "")}</dd></div>
+        <div><dt>Scope</dt><dd>${esc(run.scope || "")}</dd></div>
+        <div><dt>Risk</dt><dd>${esc(run.risk || "approval required")}</dd></div>
+      </dl>`
+    : "";
+  const approval = operator.state === "awaiting_approval" && run?.id
+    ? `<div class="phantombot-operator-actions">
+        <button type="button" data-operator-approve="${esc(run.id)}">Approve exact operation</button>
+        <button type="button" data-operator-reject="${esc(run.id)}">Deny</button>
+      </div>`
+    : "";
+  const receipt = operator.receiptId
+    ? `<p class="phantombot-operator-receipt">Verified receipt <code>${esc(operator.receiptId)}</code>${operator.memoryId ? " · memory saved" : ""}</p>`
+    : "";
+  return `<section class="phantombot-operator" data-operator-session="${esc(operator.id || "")}">
+    <header><b>Hermes ACP</b><span data-state="${esc(operator.state || "connecting")}">${esc(String(operator.state || "connecting").replaceAll("_", " "))}</span></header>
+    <ol>${events.map((event) => `<li><i></i><span><b>${esc(operatorEventLabel(event))}</b>${event.summary ? `<small>${esc(event.summary)}</small>` : ""}</span></li>`).join("")}</ol>
+    ${scope}${approval}${receipt}
+  </section>`;
 }
 
 function normalizedTask(task = {}) {
@@ -306,8 +403,8 @@ function assistantTurnHtml(message, messageIndex) {
       <article class="phantombot-turn is-assistant is-thinking" aria-label="PhantomBot is thinking">
         <div class="phantombot-avatar"><img src="/app/assets/brand-phantom-favicon.png" alt="" /></div>
         <div class="phantombot-turn-content">
-          <header><b>PhantomBot</b><span>Thinking</span></header>
-          <div class="phantombot-thinking"><i></i><i></i><i></i></div>
+          <header><b>PhantomBot</b><span>${message.operator ? "Hermes ACP" : "Thinking"}</span></header>
+          ${message.operator ? operatorTimelineHtml(message.operator) : `<div class="phantombot-thinking"><i></i><i></i><i></i></div>`}
         </div>
       </article>`;
   }
@@ -317,6 +414,7 @@ function assistantTurnHtml(message, messageIndex) {
       <div class="phantombot-turn-content">
         <header><b>PhantomBot</b>${message.background ? "<span>Working in background</span>" : ""}</header>
         <p class="phantomai-chat-reply">${esc(message.say)}</p>
+        ${operatorTimelineHtml(message.operator)}
         ${message.background ? `<p class="phantomai-chat-status">The task is still running. Results will stay attached to this workspace.</p>` : ""}
         ${(message.media || []).map(chatMediaHtml).join("")}
         ${(message.cards || []).map((card, cardIndex) => chatCardHtml(card, cardIndex, messageIndex)).join("")}
@@ -326,6 +424,24 @@ function assistantTurnHtml(message, messageIndex) {
         </footer>
       </div>
     </article>`;
+}
+
+async function pollOperatorMessage(task, message, paint) {
+  const operatorId = message.operator?.id;
+  if (!operatorId) throw new Error("Hermes operator session was not created.");
+  while (true) {
+    const payload = await operatorApi(`/phantom-ai/hermes-acp/sessions/${encodeURIComponent(operatorId)}`);
+    message.operator = { ...payload.session, run: payload.run || null };
+    message.say = operatorStatusText(message.operator);
+    const settled = message.operator.state === "awaiting_approval" || ACP_TERMINAL_STATES.has(message.operator.state);
+    message.pending = !settled;
+    message.error = ["failed", "blocked"].includes(message.operator.state);
+    task.updatedAt = new Date().toISOString();
+    persistTaskState();
+    if (taskState.activeId === task.id) paint(true);
+    if (settled) return payload;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 700));
+  }
 }
 
 function exchangeHtml(message, messageIndex) {
@@ -370,6 +486,11 @@ function stopRunningRequest() {
   const task = taskState.tasks.find((item) => item.id === request.taskId);
   const message = task?.messages.find((item) => item.id === request.messageId);
   if (message?.pending) {
+    if (message.operator?.id) {
+      void operatorApi(`/phantom-ai/hermes-acp/sessions/${encodeURIComponent(message.operator.id)}/cancel`, {
+        method: "POST",
+      }).catch(() => {});
+    }
     message.pending = false;
     message.error = true;
     message.say = "Stopped before the response finished.";
@@ -449,6 +570,27 @@ function mountChatTab() {
     setBusy(true);
     try {
       const outbound = composeMessage(prompt, attachments);
+      if (isEngineeringPrompt(prompt) && session.token()) {
+        const started = await operatorApi("/phantom-ai/hermes-acp/sessions", {
+          method: "POST",
+          body: JSON.stringify({
+            prompt: outbound,
+            workspace: currentTenantId() || currentWs(),
+          }),
+        });
+        message.operator = { ...started.session, run: null };
+        message.say = operatorStatusText(message.operator);
+        persistTaskState();
+        paint(true);
+        await pollOperatorMessage(task, message, paint);
+        rememberConversation({
+          prompt: displayQ,
+          reply: message.say,
+          mode: "phantombot-hermes-acp",
+          route: `/phantom-ai/hermes-acp/sessions/${message.operator.id}`,
+        });
+        return;
+      }
       const result = await handleSmartCommand(outbound).catch(() => handleCommand(outbound));
       const targetTask = taskState.tasks.find((item) => item.id === task.id);
       const targetMessage = targetTask?.messages.find((item) => item.id === message.id);
@@ -666,6 +808,37 @@ function bindRootActions(root) {
     if (button.dataset.phantombotRetry !== undefined) {
       const message = activeTask().messages[Number(button.dataset.phantombotRetry)];
       if (message?.q) void chatBindings?.submitPrompt(message.q);
+      return;
+    }
+    if (button.dataset.operatorApprove || button.dataset.operatorReject) {
+      const runId = button.dataset.operatorApprove || button.dataset.operatorReject;
+      const task = activeTask();
+      const message = task.messages.find((item) => item.operator?.run?.id === runId);
+      if (!message || runningRequest) return;
+      const action = button.dataset.operatorApprove ? "approve" : "reject";
+      button.disabled = true;
+      setBusy(true);
+      try {
+        await operatorApi(`/phantom-ai/runs/${encodeURIComponent(runId)}/${action}`, {
+          method: "POST",
+          ...(action === "reject" ? { body: JSON.stringify({ reason: "Denied from PhantomBot task timeline." }) } : {}),
+        });
+        message.pending = action === "approve";
+        message.say = action === "approve"
+          ? "Approval recorded. Executing only the exact reviewed operation…"
+          : "The operation was denied. No approved change was executed.";
+        persistTaskState();
+        chatBindings?.paint(true);
+        await pollOperatorMessage(task, message, chatBindings.paint);
+      } catch (error) {
+        message.pending = false;
+        message.error = true;
+        message.say = cleanText(error?.message || "The approval decision could not be recorded.", 400);
+      } finally {
+        setBusy(false);
+        persistTaskState();
+        chatBindings?.paint(true);
+      }
       return;
     }
     if (button.matches("[data-card-remove]")) {

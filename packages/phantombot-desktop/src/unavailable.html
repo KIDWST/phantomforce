@@ -1,0 +1,317 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>PhantomBot</title>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family:
+        Inter,
+        "Segoe UI",
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 30px;
+      color: #f6f4ff;
+      background:
+        radial-gradient(
+          circle at 50% 15%,
+          rgba(132, 95, 255, 0.28),
+          transparent 35rem
+        ),
+        radial-gradient(
+          circle at 15% 90%,
+          rgba(88, 64, 210, 0.16),
+          transparent 32rem
+        ),
+        #090a10;
+    }
+
+    .panel {
+      width: min(680px, 100%);
+      padding: 34px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 26px;
+      background:
+        linear-gradient(
+          145deg,
+          rgba(255, 255, 255, 0.085),
+          rgba(255, 255, 255, 0.035)
+        );
+      box-shadow:
+        0 32px 90px rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(28px);
+    }
+
+    .identity {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 26px;
+    }
+
+    .orb {
+      width: 46px;
+      height: 46px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background:
+        radial-gradient(
+          circle at 34% 27%,
+          white,
+          #a394ff 15%,
+          #6c54f0 37%,
+          #2e236d 64%,
+          #0d0a20 76%
+        );
+      box-shadow:
+        0 0 42px rgba(119, 91, 255, 0.66),
+        inset 0 0 12px rgba(255, 255, 255, 0.4);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: -0.02em;
+    }
+
+    .eyebrow {
+      margin-top: 3px;
+      color: #aaa2c8;
+      font-size: 13px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: clamp(25px, 4vw, 38px);
+      line-height: 1.08;
+      letter-spacing: -0.045em;
+    }
+
+    p {
+      margin: 0;
+      color: #c5c0d8;
+      line-height: 1.65;
+    }
+
+    .status {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px 14px;
+      margin: 25px 0;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      background: rgba(0, 0, 0, 0.18);
+      font-size: 13px;
+    }
+
+    .status span {
+      color: #8f88aa;
+    }
+
+    .status code {
+      overflow-wrap: anywhere;
+      color: #e8e3ff;
+      font-family:
+        "Cascadia Code",
+        Consolas,
+        monospace;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    button {
+      min-height: 46px;
+      padding: 0 20px;
+      border: 0;
+      border-radius: 13px;
+      color: white;
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+      background:
+        linear-gradient(
+          135deg,
+          #8d78ff,
+          #5b46d9
+        );
+      box-shadow:
+        0 10px 30px rgba(92, 70, 217, 0.28);
+    }
+
+    button.secondary {
+      color: #ddd8ef;
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      background: rgba(255, 255, 255, 0.06);
+      box-shadow: none;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    #message {
+      min-height: 24px;
+      margin-top: 18px;
+      color: #b6add8;
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="panel">
+    <div class="identity">
+      <div class="orb"></div>
+
+      <div>
+        <h1>PhantomBot</h1>
+        <div class="eyebrow">
+          Desktop shell connected to Phantom AI
+        </div>
+      </div>
+    </div>
+
+    <h2>The desktop app is ready. The local brain is not responding yet.</h2>
+
+    <p>
+      PhantomBot did not create or stop any server. It is waiting for the
+      existing local Phantom AI service to become available.
+    </p>
+
+    <div class="status">
+      <span>Expected app</span>
+      <code id="app-url">Checking...</code>
+
+      <span>Expected health</span>
+      <code id="health-url">Checking...</code>
+
+      <span>Status</span>
+      <code id="connection">Unavailable</code>
+
+      <span>Hermes kernel</span>
+      <code id="hermes-status">Checking...</code>
+
+      <span>Desktop supervisor</span>
+      <code id="supervisor-status">Checking...</code>
+    </div>
+
+    <div class="actions">
+      <button id="retry" type="button">
+        Retry connection
+      </button>
+
+      <button id="details" class="secondary" type="button">
+        Refresh status
+      </button>
+    </div>
+
+    <div id="message"></div>
+  </main>
+
+  <script>
+    const retryButton = document.querySelector("#retry");
+    const detailsButton = document.querySelector("#details");
+    const message = document.querySelector("#message");
+    const appUrl = document.querySelector("#app-url");
+    const healthUrl = document.querySelector("#health-url");
+    const connection = document.querySelector("#connection");
+    const hermesStatus = document.querySelector("#hermes-status");
+    const supervisorStatus = document.querySelector("#supervisor-status");
+
+    async function refreshStatus() {
+      try {
+        const [status, runtime] = await Promise.all([
+          window.PhantomBotDesktop.getConnectionStatus(),
+          window.PhantomBotDesktop.getRuntimeStatus()
+        ]);
+
+        appUrl.textContent = status.appUrl || "Unknown";
+        healthUrl.textContent = status.healthUrl || "Unknown";
+        connection.textContent =
+          status.reachable
+            ? "Reachable"
+            : "Unavailable";
+        hermesStatus.textContent = runtime?.hermes?.healthy
+          ? `Ready${runtime.hermes.acpReady ? " · ACP verified" : ""}`
+          : runtime?.hermes?.installed
+            ? `Needs attention · ${runtime.hermes.errorCode || "health check failed"}`
+            : "Not detected";
+        supervisorStatus.textContent = runtime?.supervisor?.startedByDesktop
+          ? `Running local service · PID ${runtime.supervisor.pid || "unknown"}`
+          : runtime?.app?.reachable
+            ? "Existing local service"
+            : runtime?.supervisor?.errorCode || "Idle";
+
+        return status;
+      } catch (error) {
+        message.textContent =
+          error?.message ||
+          "Could not read desktop connection status.";
+
+        return null;
+      }
+    }
+
+    retryButton.addEventListener("click", async () => {
+      retryButton.disabled = true;
+      message.textContent = "Checking for Phantom AI...";
+
+      try {
+        const result =
+          await window.PhantomBotDesktop.retryConnection();
+
+        if (!result?.reachable) {
+          message.textContent =
+            "Phantom AI is still unavailable. No other process was changed.";
+        }
+      } catch (error) {
+        message.textContent =
+          error?.message ||
+          "The connection retry failed.";
+      } finally {
+        retryButton.disabled = false;
+        await refreshStatus();
+      }
+    });
+
+    detailsButton.addEventListener(
+      "click",
+      refreshStatus
+    );
+
+    refreshStatus();
+  </script>
+</body>
+</html>

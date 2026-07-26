@@ -3942,6 +3942,80 @@ body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
 }
 .phantombot-thinking i:nth-child(2) { animation-delay: 120ms; }
 .phantombot-thinking i:nth-child(3) { animation-delay: 240ms; }
+.phantombot-operator {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--pbot-panel) 88%, transparent);
+}
+.phantombot-operator > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.phantombot-operator > header span { color: var(--pbot-live); }
+.phantombot-operator ol {
+  display: grid;
+  gap: 7px;
+  margin: 11px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.phantombot-operator li { display: flex; align-items: flex-start; gap: 8px; }
+.phantombot-operator li > i {
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--pbot-live);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--pbot-live) 65%, transparent);
+}
+.phantombot-operator li span { display: grid; gap: 2px; }
+.phantombot-operator li b { color: var(--pbot-text); font-size: 11px; font-weight: 600; }
+.phantombot-operator li small { color: var(--pbot-muted); font-size: 10px; }
+.phantombot-operator-scope {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 10px;
+  border-radius: 9px;
+  background: var(--pbot-hover);
+}
+.phantombot-operator-scope div { display: grid; grid-template-columns: 66px 1fr; gap: 8px; }
+.phantombot-operator-scope dt {
+  color: var(--pbot-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.phantombot-operator-scope dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--pbot-text);
+  font-size: 10px;
+}
+.phantombot-operator-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.phantombot-operator-actions button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 8px;
+  background: var(--pbot-hover);
+  color: var(--pbot-text);
+  cursor: pointer;
+}
+.phantombot-operator-actions button:first-child {
+  border-color: color-mix(in srgb, var(--pbot-live) 55%, var(--pbot-line));
+  color: var(--pbot-live);
+}
+.phantombot-operator-receipt { margin: 11px 0 0; color: var(--pbot-muted); font-size: 10px; }
 
 /* Sticky/floating composer */
 .phantombot-stage .phantomai-chat-form,.phantombot-composer {

@@ -430,6 +430,14 @@ import {
 import { registerTerminaMissionExecutor, TERMINA_MISSION_OPERATION } from "./phantom-ai/termina-mission-executor.js";
 import { terminaWorkspaceRootFromEnv } from "./phantom-ai/termina-bridge.js";
 import {
+  cancelHermesOperatorSession,
+  closeHermesOperatorSession,
+  createHermesOperatorSession,
+  getHermesOperatorSession,
+  listHermesOperatorSessions,
+  reopenHermesOperatorSession,
+} from "./phantom-ai/hermes-acp-operator.js";
+import {
   addSiteDomain,
   createSiteBuild,
   getBuildHtml,
@@ -8053,6 +8061,116 @@ const AgentRunStartSchema = z.object({
   request: z.string().max(400).optional(),
   workspace: z.string().max(60).optional(),
   idempotency_key: z.string().min(8).max(180).optional(),
+});
+
+const HermesOperatorStartSchema = z.object({
+  prompt: z.string().trim().min(1).max(8000),
+  workspace: z.string().trim().min(1).max(180),
+});
+
+app.post("/phantom-ai/hermes-acp/sessions", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = HermesOperatorStartSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: "bad_request",
+      detail: parsed.error.flatten(),
+    });
+  }
+  const verdict = await screenText(parsed.data.prompt, "hermes_acp_operator_request");
+  if (verdict.classification === "block") {
+    return reply.code(400).send({
+      ok: false,
+      error: "blocked_by_prompt_guard",
+      violation_types: verdict.violation_types,
+      detail: verdict.reason,
+    });
+  }
+  const operatorSession = await createHermesOperatorSession(session, parsed.data);
+  return reply.code(202).send({
+    ok: true,
+    session: operatorSession,
+    streaming: {
+      transport: "normalized_event_poll",
+      next: `/phantom-ai/hermes-acp/sessions/${operatorSession.id}`,
+    },
+  });
+});
+
+app.get("/phantom-ai/hermes-acp/sessions", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  return {
+    ok: true,
+    sessions: await listHermesOperatorSessions(session),
+  };
+});
+
+app.get("/phantom-ai/hermes-acp/sessions/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const operatorSession = await getHermesOperatorSession(
+    session,
+    (request.params as { id: string }).id,
+  );
+  if (!operatorSession) {
+    return reply.code(404).send({ ok: false, error: "operator_session_not_found" });
+  }
+  const run = operatorSession.agentRunId
+    ? getAgentRun(operatorSession.agentRunId)
+    : null;
+  return {
+    ok: true,
+    session: operatorSession,
+    run: run ? serializeAgentRun(run) : null,
+  };
+});
+
+app.post("/phantom-ai/hermes-acp/sessions/:id/reopen", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const operatorSession = await reopenHermesOperatorSession(
+    session,
+    (request.params as { id: string }).id,
+  );
+  if (!operatorSession) {
+    return reply.code(404).send({ ok: false, error: "operator_session_not_found" });
+  }
+  return { ok: true, session: operatorSession };
+});
+
+app.post("/phantom-ai/hermes-acp/sessions/:id/close", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const operatorSession = await closeHermesOperatorSession(
+    session,
+    (request.params as { id: string }).id,
+  );
+  if (!operatorSession) {
+    return reply.code(404).send({ ok: false, error: "operator_session_not_found" });
+  }
+  return { ok: true, session: operatorSession };
+});
+
+app.post("/phantom-ai/hermes-acp/sessions/:id/cancel", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const operatorSession = await cancelHermesOperatorSession(
+    session,
+    (request.params as { id: string }).id,
+  );
+  if (!operatorSession) {
+    return reply.code(404).send({ ok: false, error: "operator_session_not_found" });
+  }
+  if (operatorSession.agentRunId) {
+    const run = getAgentRun(operatorSession.agentRunId);
+    if (run && canDecideRun(session, run)) {
+      await requestAgentRunCancel(run.id);
+    }
+  }
+  return { ok: true, session: operatorSession };
 });
 
 app.get("/phantom-ai/runs/operations", async (request, reply) => {
