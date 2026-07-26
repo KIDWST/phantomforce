@@ -33,7 +33,7 @@ assert.doesNotMatch(main, /data-phantomai-chat-input type="text"/u, "PhantomBot 
 assert.match(phantomAi, /const TASKS_KEY = "pf\.phantombot\.tasks\.v1"/u, "PhantomBot tasks must have a stable workspace persistence key.");
 assert.match(phantomAi, /workspaceStorageGetItem\(TASKS_KEY,[\s\S]*workspaceStorageSetItem\(TASKS_KEY/u, "PhantomBot must load and save its task history through workspace-scoped storage.");
 assert.match(phantomAi, /taskState\.tasks[\s\S]*activeId/u, "PhantomBot must track multiple tasks and one active task.");
-assert.match(phantomAi, /split\(\/<phantom_tool_intent>\/iu/u, "The operator timeline must hide governed machine-intent markup from the user-facing progress stream.");
+assert.match(phantomAi, /tool_intent\|engineering_plan/u, "The operator timeline must hide both governed machine-intent formats from the user-facing progress stream.");
 assert.match(phantomAi, /say:\s*message\.say,[\s\S]*pending:\s*!!message\.pending,[\s\S]*error:\s*!!message\.error/u, "In-flight replies must remain pending in storage until a real reload converts them into interrupted recovery state.");
 assert.match(phantomAi, /mountPhantomAI\(root\)[\s\S]*loadTaskState\(false\)/u, "Shell remounts must preserve an active in-memory request instead of reloading its recovery snapshot.");
 assert.match(phantomAi, /event\.key === "Enter" && !event\.shiftKey && !event\.isComposing/u, "Enter must send while Shift+Enter remains available for a newline.");

@@ -14,12 +14,12 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260726-65";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260726-65";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260726-65";
-import { esc } from "./workspaces.js?v=phantom-live-20260726-65";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260726-65";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260726-65";
+} from "./store.js?v=phantom-live-20260726-66";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260726-66";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260726-66";
+import { esc } from "./workspaces.js?v=phantom-live-20260726-66";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260726-66";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260726-66";
 
 const TABS = ["chat", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -117,7 +117,7 @@ function operatorStatusText(operator) {
     return summary || "Hermes prepared a bounded plan. Review the exact scope before execution.";
   }
   if (operator?.state === "completed") {
-    return summary || "The approved change passed verification and has a durable receipt.";
+    return summary || "The governed task passed verification and has a durable receipt.";
   }
   if (operator?.state === "denied") return "The proposed operation was denied. No approved change was executed.";
   if (operator?.state === "blocked") return summary || "Hermes could not produce an operation within the allowed first-slice policy.";
@@ -151,8 +151,20 @@ function operatorEventLabel(event) {
 function operatorEventSummary(event) {
   const summary = cleanText(event?.summary || "", 500);
   if (event?.type !== "message_delta") return summary;
-  const publicText = summary.split(/<phantom_tool_intent>/iu, 1)[0].trim();
+  const publicText = summary.split(/<phantom_(?:tool_intent|engineering_plan)>/iu, 1)[0].trim();
   return publicText || "Hermes prepared a governed operation proposal.";
+}
+
+function operatorPlanHtml(plan) {
+  const operations = Array.isArray(plan?.operations) ? plan.operations : [];
+  if (!operations.length) return "";
+  return `<div><dt>Exact plan</dt><dd><ol class="phantombot-operator-plan">${operations.map((operation) => {
+    const payload = JSON.stringify(operation, null, 2);
+    return `<li><b>${esc(operation.id || "operation")} · ${esc(String(operation.kind || "").replaceAll("_", " "))}</b>
+      <span>${esc(operation.summary || "")}</span>
+      <details><summary>Review exact immutable payload</summary><pre>${esc(payload)}</pre></details>
+    </li>`;
+  }).join("")}</ol></dd></div>`;
 }
 
 function operatorTimelineHtml(operator) {
@@ -160,24 +172,26 @@ function operatorTimelineHtml(operator) {
   const events = Array.isArray(operator.events) ? operator.events.slice(-8) : [];
   const run = operator.run || null;
   const intent = operator.intent || null;
+  const plan = intent?.operations ? intent : run?.inputs?.plan;
   const scope = operator.state === "awaiting_approval" && run
     ? `<dl class="phantombot-operator-scope">
         <div><dt>Project</dt><dd>${esc(operator.workspace || "")}</dd></div>
-        <div><dt>Change</dt><dd>${esc(intent?.summary || run.expected_effect || "Bound documentation update")}</dd></div>
-        <div><dt>File</dt><dd>${esc(intent?.relativePath || run.inputs?.relativePath || "")}</dd></div>
-        <div><dt>Command</dt><dd>${esc(intent?.testCommand || run.inputs?.testCommand || "")}</dd></div>
+        <div><dt>Change</dt><dd>${esc(intent?.summary || run.expected_effect || "Bound engineering task")}</dd></div>
+        ${operatorPlanHtml(plan)}
+        ${plan ? "" : `<div><dt>File</dt><dd>${esc(intent?.relativePath || run.inputs?.relativePath || "")}</dd></div>
+        <div><dt>Command</dt><dd>${esc(intent?.testCommand || run.inputs?.testCommand || "")}</dd></div>`}
         <div><dt>Scope</dt><dd>${esc(run.scope || "")}</dd></div>
         <div><dt>Risk</dt><dd>${esc(run.risk || "approval required")}</dd></div>
       </dl>`
     : "";
   const approval = operator.state === "awaiting_approval" && run?.id
     ? `<div class="phantombot-operator-actions">
-        <button type="button" data-operator-approve="${esc(run.id)}">Approve exact operation</button>
+        <button type="button" data-operator-approve="${esc(run.id)}">Approve exact immutable plan</button>
         <button type="button" data-operator-reject="${esc(run.id)}">Deny</button>
       </div>`
     : "";
   const receipt = operator.receiptId
-    ? `<p class="phantombot-operator-receipt">Verified receipt <code>${esc(operator.receiptId)}</code>${operator.memoryId ? " · memory saved" : ""}</p>`
+    ? `<p class="phantombot-operator-receipt">${operator.receiptVerified === false ? "Failure" : "Verified"} receipt <code>${esc(operator.receiptId)}</code>${operator.memoryId ? " · memory saved" : ""}</p>`
     : "";
   return `<section class="phantombot-operator" data-operator-session="${esc(operator.id || "")}">
     <header><b>Hermes ACP</b><span data-state="${esc(operator.state || "connecting")}">${esc(String(operator.state || "connecting").replaceAll("_", " "))}</span></header>
@@ -747,7 +761,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260726-65")
+  import("./brain.js?v=phantom-live-20260726-66")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }
