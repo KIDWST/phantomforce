@@ -1,7 +1,7 @@
 {
   "name": "@phantomforce/phantombot-desktop",
   "productName": "PhantomBot",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Native desktop shell for the existing Phantom AI operating intelligence.",
   "author": "PhantomForce",
