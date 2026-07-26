@@ -49,7 +49,7 @@
     "test:change-memory": "node scripts/guard-change-memory.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
     "test:phantombot-desktop": "npm test --workspace @phantomforce/phantombot-desktop",
-    "test:phantombot-operator": "npm run test:hermes-acp-transport --workspace @phantomforce/server && npm run test:hermes-acp-operator --workspace @phantomforce/server && npm run test:hermes-engineering-tools --workspace @phantomforce/server",
+    "test:phantombot-operator": "npm run test:hermes-acp-transport --workspace @phantomforce/server && npm run test:hermes-acp-operator --workspace @phantomforce/server && npm run test:hermes-engineering-tools --workspace @phantomforce/server && npm run test:hermes-operator-stream --workspace @phantomforce/server",
     "test:game-visuals": "node scripts/test-game-runtime-visuals.mjs",
     "test:claude-live-ship": "node scripts/test-claude-live-ship.mjs",
     "security:secrets": "node scripts/secret-scan.mjs",

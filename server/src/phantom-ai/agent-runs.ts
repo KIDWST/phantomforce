@@ -18,6 +18,7 @@
 
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -165,6 +166,8 @@ export type AgentRunExecutor = {
 };
 
 const runs = new Map<string, AgentRun>();
+const agentRunChangeEvents = new EventEmitter();
+agentRunChangeEvents.setMaxListeners(200);
 
 export const AGENT_RUN_TRANSITIONS: Readonly<Record<AgentRunState, ReadonlySet<AgentRunState>>> = {
   draft: new Set(["planned", "cancelled"]),
@@ -221,6 +224,12 @@ function runId() {
 async function persistRun(run: AgentRun) {
   await mkdir(dirname(RUNS_LOG_PATH), { recursive: true });
   await appendFile(RUNS_LOG_PATH, `${JSON.stringify({ type: "run", run })}\n`, "utf8");
+  agentRunChangeEvents.emit(run.id, run.id);
+}
+
+export function subscribeAgentRun(id: string, listener: () => void) {
+  agentRunChangeEvents.on(id, listener);
+  return () => agentRunChangeEvents.off(id, listener);
 }
 
 async function transition(run: AgentRun, state: AgentRunState, note: string) {

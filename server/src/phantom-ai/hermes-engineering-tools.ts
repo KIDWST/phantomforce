@@ -731,7 +731,17 @@ async function rollbackChanges(entries: RollbackEntry[]) {
 }
 
 function parsePlan(value: unknown) {
-  return EngineeringTaskPlanSchema.parse(value);
+  const plan = EngineeringTaskPlanSchema.parse(value);
+  for (const operation of plan.operations) {
+    if (operation.kind === "create_text_file" || operation.kind === "append_text_file") {
+      assertNoSecretLikeText(operation.content);
+    }
+    if (operation.kind === "edit_text_file") {
+      assertNoSecretLikeText(operation.expectedText);
+      assertNoSecretLikeText(operation.replacementText);
+    }
+  }
+  return plan;
 }
 
 async function writeEvidence(runId: string, evidence: EngineeringEvidence) {

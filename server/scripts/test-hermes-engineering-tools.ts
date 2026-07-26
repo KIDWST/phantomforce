@@ -109,6 +109,22 @@ try {
     }),
     /separately approved/,
   );
+  assert.throws(
+    () => parseEngineeringTaskPlan({
+      version: 1,
+      workspace,
+      summary: "Reject secret-like payload before it reaches approval UI",
+      operations: [{
+        id: "secret",
+        kind: "create_text_file",
+        summary: "Must fail",
+        path: "fixtures/secret.txt",
+        expectedAbsent: true,
+        content: `OPENAI_API_KEY=${fakeProviderKey}`,
+      }],
+    }),
+    /secret_like_content_rejected/,
+  );
 
   const readPlan = {
     version: 1,
@@ -257,7 +273,7 @@ try {
     successReceipt: successFinished.receipt?.receipt_id,
     rollbackReceipt: rollbackFinished.receipt?.receipt_id,
     linkedPathTested,
-    adversarialChecks: 10,
+    adversarialChecks: 11,
   }, null, 2)}\n`);
 } finally {
   await rm(root, { recursive: true, force: true });

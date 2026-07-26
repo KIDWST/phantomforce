@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import {
   appendFile,
   lstat,
@@ -122,6 +123,8 @@ type OperatorStoreOptions = {
 
 const sessions = new Map<string, HermesOperatorSessionRecord>();
 const activeTransports = new Map<string, HermesAcpTransport>();
+const operatorSessionChangeEvents = new EventEmitter();
+operatorSessionChangeEvents.setMaxListeners(200);
 let loadedPath: string | null = null;
 
 function nowIso() {
@@ -242,6 +245,12 @@ async function persist(record: HermesOperatorSessionRecord, options: OperatorSto
   record.updatedAt = nowIso();
   sessions.set(record.id, structuredClone(record));
   await appendFile(target, `${JSON.stringify(record)}\n`, "utf8");
+  operatorSessionChangeEvents.emit(record.id, record.id);
+}
+
+export function subscribeHermesOperatorSession(id: string, listener: () => void) {
+  operatorSessionChangeEvents.on(id, listener);
+  return () => operatorSessionChangeEvents.off(id, listener);
 }
 
 function sessionScope(session: AccessSession, workspace: string) {
@@ -415,6 +424,7 @@ export async function planHermesOperatorSession(
   });
   activeTransports.set(id, transport);
   transport.on("event", (event: HermesAcpNormalizedEvent) => {
+    if (record.state === "cancelled") return;
     const previous = record.events.at(-1);
     if (event.type !== "analyzing" || previous?.type !== "analyzing") {
       record.events.push({
@@ -437,6 +447,9 @@ export async function planHermesOperatorSession(
       created.sessionId,
       planningPrompt(record.prompt, record.workspace),
     );
+    if ((record.state as HermesOperatorSessionState) === "cancelled") {
+      return publicRecord(record);
+    }
     record.assistantText = eventText(record.events);
     record.intent = parseHermesEngineeringPlan(record.assistantText)
       || parseHermesDocumentationIntent(record.assistantText);
@@ -501,6 +514,9 @@ export async function planHermesOperatorSession(
     await persist(record, options);
     return publicRecord(record);
   } catch (error) {
+    if ((record.state as HermesOperatorSessionState) === "cancelled") {
+      return publicRecord(record);
+    }
     record.state = "failed";
     record.errorCode = clean((error as Error).message, 180) || "hermes_acp_failed";
     record.events.push({
@@ -610,6 +626,7 @@ async function reconcileHermesOperatorSession(
   if (!record.agentRunId) return;
   const run = getAgentRun(record.agentRunId);
   if (!run) return;
+  let changed = false;
   const stateMap: Partial<Record<AgentRun["state"], HermesOperatorSessionState>> = {
     awaiting_approval: "awaiting_approval",
     approved: "approved",
@@ -627,6 +644,7 @@ async function reconcileHermesOperatorSession(
   const mapped = stateMap[run.state];
   if (mapped && record.state !== mapped) {
     record.state = mapped;
+    changed = true;
     const eventType: HermesAcpNormalizedEvent["type"] =
       mapped === "completed" ? "completed"
       : mapped === "denied" ? "blocked"
@@ -648,6 +666,7 @@ async function reconcileHermesOperatorSession(
   if (run.receipt && record.receiptId !== run.receipt.receipt_id) {
     record.receiptId = run.receipt.receipt_id;
     record.receiptVerified = run.receipt.verification.ok;
+    changed = true;
     record.events.push({
       sequence: nextEventSequence(record),
       at: nowIso(),
@@ -686,8 +705,9 @@ async function reconcileHermesOperatorSession(
       },
     );
     record.memoryId = memory.id;
+    changed = true;
   }
-  await persist(record, options);
+  if (changed) await persist(record, options);
 }
 
 async function validateDocumentationTarget(root: string, relativePath: string) {
