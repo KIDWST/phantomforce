@@ -10,10 +10,25 @@ const test = require("node:test");
 const {
   findHermesExecutable,
   findPhantomForceRoot,
+  phantomForceLaunchCommand,
   probeUrl,
   safeRuntimeSummary,
   waitForUrl
 } = require("../src/runtime.cjs");
+
+test("PhantomForce launch command is fixed and shell-injection resistant", () => {
+  const launch = phantomForceLaunchCommand({
+    ComSpec: "C:\\Windows\\System32\\cmd.exe",
+    SystemRoot: "C:\\Windows"
+  });
+  if (process.platform === "win32") {
+    assert.equal(launch.executable, "C:\\Windows\\System32\\cmd.exe");
+    assert.deepEqual(launch.args, ["/d", "/s", "/c", "npm.cmd run dev:server"]);
+  } else {
+    assert.equal(launch.executable, "npm");
+    assert.deepEqual(launch.args, ["run", "dev:server"]);
+  }
+});
 
 test("probeUrl reports a reachable local health endpoint", async (t) => {
   const server = http.createServer((_request, response) => {

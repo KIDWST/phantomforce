@@ -266,6 +266,21 @@ function findPhantomForceRoot({
   return null;
 }
 
+function phantomForceLaunchCommand(env = process.env) {
+  if (process.platform === "win32") {
+    return {
+      executable:
+        env.ComSpec ||
+        path.join(env.SystemRoot || "C:\\Windows", "System32", "cmd.exe"),
+      args: ["/d", "/s", "/c", "npm.cmd run dev:server"]
+    };
+  }
+  return {
+    executable: "npm",
+    args: ["run", "dev:server"]
+  };
+}
+
 function safeRuntimeSummary(status) {
   return {
     app: {
@@ -352,15 +367,15 @@ class RuntimeSupervisor {
       return this.lastStatus;
     }
 
-    const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
+    const launch = phantomForceLaunchCommand(this.env);
     fs.mkdirSync(this.logsDirectory, { recursive: true });
     this.logStream = fs.createWriteStream(
       path.join(this.logsDirectory, "phantombot-runtime.log"),
       { flags: "a" }
     );
     this.child = this.spawnProcess(
-      npmExecutable,
-      ["run", "dev:server"],
+      launch.executable,
+      launch.args,
       {
         cwd: root,
         env: {
@@ -419,6 +434,7 @@ module.exports = {
   findPhantomForceRoot,
   inspectHermes,
   isHttpUrl,
+  phantomForceLaunchCommand,
   probeUrl,
   safeRuntimeSummary,
   waitForUrl
