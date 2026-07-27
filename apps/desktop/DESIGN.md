@@ -98,8 +98,9 @@ for call-site shadow or border inventions.
 | `--chrome-action-hover` | hover fill for quiet controls |
 | `--theme-primary`, `--ui-accent` | brand/accent |
 
-Never hardcode `border-gray-*`, `bg-white`, `text-black`, etc. The white tile in
-`BrandMark` is the one sanctioned literal (the mark needs a fixed backdrop).
+Never hardcode `border-gray-*`, `bg-white`, `text-black`, etc. `BrandMark` is
+the one sanctioned fixed-backdrop exception because the icon owns its obsidian
+tile in every mode.
 
 ## Buttons — one component
 
@@ -206,9 +207,10 @@ Notes:
   action. Do not introduce a third icon set or mix styles within one control
   group.
 - **`BrandMark`** (`src/components/brand-mark.tsx`) is the brand glyph — the
-  `nous-girl` mark on a white tile, softly rounded, identical in light/dark.
-  It replaced scattered Sparkles glyphs in updates / onboarding / about. Use it
-  for hero/brand moments; don't reintroduce decorative star/sparkle icons.
+  PhantomBot hooded-operator mark on an obsidian tile with emerald edge light.
+  It anchors updates, onboarding, setup, and About. Use it for hero/brand
+  moments; don't substitute upstream Hermes/Nous artwork or decorative
+  star/sparkle icons.
 
 ## Motion
 

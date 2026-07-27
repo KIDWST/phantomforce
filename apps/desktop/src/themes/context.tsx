@@ -19,7 +19,7 @@ import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 
 import { $backendThemes, $pendingSkinApply } from './backend-sync'
 import { hexToRgb, mix, readableOn } from './color'
-import { BUILTIN_THEME_LIST, DEFAULT_SKIN_NAME, DEFAULT_TYPOGRAPHY, nousTheme } from './presets'
+import { BUILTIN_THEME_LIST, DEFAULT_SKIN_NAME, DEFAULT_TYPOGRAPHY, phantomForceTheme } from './presets'
 import type { DesktopTheme, DesktopThemeColors } from './types'
 import { $userThemes, listAllThemes, resolveTheme } from './user-themes'
 
@@ -48,7 +48,7 @@ const normalizeSkin = (name: string | null): string =>
   name && resolveTheme(name) && !RETIRED_SKINS.has(name) ? name : DEFAULT_SKIN_NAME
 
 const normalizeMode = (value: string | null): ThemeMode =>
-  value === 'light' || value === 'dark' || value === 'system' ? value : 'light'
+  value === 'light' || value === 'dark' || value === 'system' ? value : 'dark'
 
 // ─── Per-profile appearance persistence ─────────────────────────────────────
 // Skin and mode are each stored per profile. "default" isn't a real profile —
@@ -116,7 +116,7 @@ function synthLightColors(seed: DesktopTheme): DesktopThemeColors {
 
 /** Returns the seed palette for a given skin + mode (no overrides applied). */
 export function getBaseColors(skinName: string, mode: 'light' | 'dark'): DesktopThemeColors {
-  const seed = resolveTheme(skinName) ?? nousTheme
+  const seed = resolveTheme(skinName) ?? phantomForceTheme
 
   if (mode === 'dark') {
     return seed.darkColors ?? seed.colors
@@ -126,7 +126,7 @@ export function getBaseColors(skinName: string, mode: 'light' | 'dark'): Desktop
 }
 
 function deriveTheme(skinName: string, mode: 'light' | 'dark'): DesktopTheme {
-  const seed = resolveTheme(skinName) ?? nousTheme
+  const seed = resolveTheme(skinName) ?? phantomForceTheme
 
   return {
     ...seed,
@@ -180,7 +180,7 @@ function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark') {
 
   const root = document.documentElement
   const c = theme.colors
-  const typo = { ...DEFAULT_TYPOGRAPHY, ...nousTheme.typography, ...theme.typography }
+  const typo = { ...DEFAULT_TYPOGRAPHY, ...theme.typography }
   const rendered = renderedModeFor(c, mode)
   const isDark = rendered === 'dark'
   const midground = c.midground ?? c.ring
@@ -300,11 +300,11 @@ interface ThemeContextValue {
 const SKIN_LIST = BUILTIN_THEME_LIST.map(({ name, label, description }) => ({ name, label, description }))
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: nousTheme,
+  theme: phantomForceTheme,
   themeName: DEFAULT_SKIN_NAME,
-  mode: 'light',
-  resolvedMode: 'light',
-  renderedMode: 'light',
+  mode: 'dark',
+  resolvedMode: 'dark',
+  renderedMode: 'dark',
   availableThemes: SKIN_LIST,
   setTheme: () => {},
   setMode: () => {}
@@ -340,7 +340,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   )
 
   const [mode, setModeState] = useState<ThemeMode>(() =>
-    typeof window === 'undefined' ? 'light' : modePref.resolve(readBootProfileKey())
+    typeof window === 'undefined' ? 'dark' : modePref.resolve(readBootProfileKey())
   )
 
   // Follow profile switches: paint the profile's assigned skin + mode and

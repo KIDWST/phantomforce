@@ -3,14 +3,7 @@ import { FileText, RefreshCw } from 'lucide-react'
 import { type CSSProperties } from 'react'
 
 import { Button } from '../components/button'
-import {
-  $logPath,
-  $mode,
-  type BootstrapStateModel,
-  openLogDir,
-  startInstall,
-  startUpdate
-} from '../store'
+import { $logPath, $mode, type BootstrapStateModel, openLogDir, startInstall, startUpdate } from '../store'
 
 interface FailureProps {
   bootstrap: BootstrapStateModel
@@ -29,7 +22,7 @@ export default function Failure({ bootstrap }: FailureProps) {
   const isUpdate = mode === 'update'
 
   return (
-    <div className="hermes-fade-in flex h-full flex-col items-center justify-center gap-6 px-12 py-10">
+    <div className="phantombot-fade-in flex h-full flex-col items-center justify-center gap-6 px-12 py-10">
       <div className="w-full max-w-2xl min-w-0 text-center">
         <p
           className="fit-text mx-auto mb-4 w-full font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] text-destructive mix-blend-plus-lighter dark:text-destructive/90"
@@ -49,9 +42,7 @@ export default function Failure({ bootstrap }: FailureProps) {
 
         <p className="m-0 mx-auto max-w-xl text-center text-sm leading-normal tracking-tight text-muted-foreground">
           {bootstrap.error ??
-            (isUpdate
-              ? 'Something went wrong during the update.'
-              : 'Something went wrong during installation.')}
+            (isUpdate ? 'Something went wrong during the update.' : 'Something went wrong during installation.')}
         </p>
       </div>
 

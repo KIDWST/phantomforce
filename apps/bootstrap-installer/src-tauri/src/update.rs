@@ -1,9 +1,9 @@
 //! Update orchestration.
 //!
-//! Driven when the installer is launched as `Hermes-Setup.exe --update` (see
+//! Driven when the installer is launched as `PhantomBot-Setup.exe --update` (see
 //! `AppMode` in lib.rs). The desktop app hands off to us — it exits, then we:
 //!
-//!   1. wait for the old Hermes desktop process to fully exit (so both the
+//!   1. wait for the old PhantomBot desktop process to fully exit (so both the
 //!      venv shim and packaged app.asar are free; otherwise `hermes update`
 //!      or repair bootstrap can race locked files),
 //!   2. run `hermes update --yes --gateway` (Python/repo update; this does NOT
@@ -460,7 +460,7 @@ async fn run_update(app: AppHandle) -> Result<()> {
                 &app,
                 None,
                 LogStream::Stderr,
-                &format!("[update] could not auto-launch desktop: {err}. Launch Hermes manually."),
+                &format!("[update] could not auto-launch desktop: {err}. Launch PhantomBot manually."),
             );
         }
     } else if let Err(err) =
@@ -473,7 +473,7 @@ async fn run_update(app: AppHandle) -> Result<()> {
             &app,
             None,
             LogStream::Stdout,
-            &format!("[update] could not auto-launch desktop: {err}. Launch Hermes manually."),
+            &format!("[update] could not auto-launch desktop: {err}. Launch PhantomBot manually."),
         );
     }
 
@@ -487,7 +487,7 @@ pub(crate) async fn wait_for_install_locks_free(install_root: &Path, app: &AppHa
     let lock_targets = install_lock_probe_paths(install_root);
     let deadline = Instant::now() + DESKTOP_EXIT_WAIT;
 
-    emit_log(app, Some(stage), LogStream::Stdout, "[handoff] waiting for Hermes to exit…");
+    emit_log(app, Some(stage), LogStream::Stdout, "[handoff] waiting for PhantomBot to exit…");
 
     loop {
         let locked = locked_paths(&lock_targets);
@@ -508,7 +508,7 @@ pub(crate) async fn wait_for_install_locks_free(install_root: &Path, app: &AppHa
                 Some(stage),
                 LogStream::Stdout,
                 &format!(
-                    "[handoff] Hermes still holding install files ({}); force-killing stragglers…",
+                    "[handoff] PhantomBot still holding install files ({}); force-killing stragglers…",
                     format_locked_paths(&locked)
                 ),
             );
@@ -554,8 +554,8 @@ fn desktop_app_payload_paths(install_root: &Path) -> Vec<PathBuf> {
         ]
     } else if cfg!(target_os = "macos") {
         vec![
-            release.join("mac").join("Hermes.app").join("Contents").join("Resources").join("app.asar"),
-            release.join("mac-arm64").join("Hermes.app").join("Contents").join("Resources").join("app.asar"),
+            release.join("mac").join("PhantomBot.app").join("Contents").join("Resources").join("app.asar"),
+            release.join("mac-arm64").join("PhantomBot.app").join("Contents").join("Resources").join("app.asar"),
         ]
     } else {
         vec![release.join("linux-unpacked").join("resources").join("app.asar")]
@@ -821,7 +821,7 @@ async fn install_macos_app_update(
 
     let rebuilt_app = crate::bootstrap::resolve_hermes_desktop_app(install_root).ok_or_else(|| {
         anyhow!(
-            "desktop rebuild succeeded but no Hermes.app was found under {}",
+            "desktop rebuild succeeded but no PhantomBot.app was found under {}",
             install_root.join("apps").join("desktop").join("release").display()
         )
     })?;
@@ -1193,8 +1193,8 @@ mod tests {
     #[test]
     fn parses_only_app_targets() {
         assert_eq!(
-            target_app_from_args(["--update", "--target-app", "/Applications/Hermes.app"]),
-            Some(PathBuf::from("/Applications/Hermes.app"))
+            target_app_from_args(["--update", "--target-app", "/Applications/PhantomBot.app"]),
+            Some(PathBuf::from("/Applications/PhantomBot.app"))
         );
         assert_eq!(target_app_from_args(["--target-app", "/tmp/not-an-app"]), None);
     }
@@ -1221,9 +1221,9 @@ mod tests {
     #[tokio::test]
     async fn swap_installs_new_bundle_and_cleans_up() {
         let base = unique_tmp_dir("ok");
-        let target = base.join("Hermes.app");
-        let tmp = base.join("Hermes.app.hermes-update-new");
-        let old = base.join("Hermes.app.hermes-update-old");
+        let target = base.join("PhantomBot.app");
+        let tmp = base.join("PhantomBot.app.hermes-update-new");
+        let old = base.join("PhantomBot.app.hermes-update-old");
         write_marker(&target, "OLD");
         write_marker(&tmp, "NEW");
 
@@ -1251,9 +1251,9 @@ mod tests {
         //  - `old` is a NON-EMPTY dir  -> rename(target, old) fails
         //  - `tmp` does not exist       -> rename(tmp, target) fails
         let base = unique_tmp_dir("fail");
-        let target = base.join("Hermes.app");
-        let tmp = base.join("Hermes.app.hermes-update-new"); // intentionally absent
-        let old = base.join("Hermes.app.hermes-update-old");
+        let target = base.join("PhantomBot.app");
+        let tmp = base.join("PhantomBot.app.hermes-update-new"); // intentionally absent
+        let old = base.join("PhantomBot.app.hermes-update-old");
         write_marker(&target, "OLD");
         write_marker(&old, "OCCUPIED"); // non-empty => rename(target,old) fails
 
@@ -1274,9 +1274,9 @@ mod tests {
         // Move-aside succeeds but installing the staged bundle fails (tmp
         // absent). The original must be rolled back from `old` to `target`.
         let base = unique_tmp_dir("rollback");
-        let target = base.join("Hermes.app");
-        let tmp = base.join("Hermes.app.hermes-update-new"); // absent
-        let old = base.join("Hermes.app.hermes-update-old");
+        let target = base.join("PhantomBot.app");
+        let tmp = base.join("PhantomBot.app.hermes-update-new"); // absent
+        let old = base.join("PhantomBot.app.hermes-update-old");
         write_marker(&target, "OLD");
 
         let result = swap_in_new_bundle(&tmp, &target, &old).await;

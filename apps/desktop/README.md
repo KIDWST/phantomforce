@@ -1,19 +1,27 @@
-# Hermes Desktop ☤
+# PhantomBot
 
 <p align="center">
-  <a href="https://github.com/NousResearch/hermes-agent/releases"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-FFD700?style=for-the-badge" alt="Download"></a>
-  <a href="https://hermes-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-hermes--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentation"></a>
-  <a href="https://discord.gg/NousResearch"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/NousResearch/hermes-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/Product-PhantomBot-18F58A?style=for-the-badge" alt="PhantomBot">
+  <img src="https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-111914?style=for-the-badge" alt="macOS, Windows, and Linux">
+  <a href="../../THIRD_PARTY_NOTICES.md"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
 </p>
 
-**The native desktop app for [Hermes Agent](../../README.md) — the self-improving AI agent from [Nous Research](https://nousresearch.com).** Same agent, same skills, same memory as the CLI and gateway, in a polished native window — chat with streaming tool output, side-by-side previews, a file browser, voice, and settings, no terminal required. Available for **macOS, Windows, and Linux**.
+**PhantomBot is PhantomForce’s private local operator for macOS, Windows, and
+Linux.** It provides persistent agent sessions, live tool activity, project and
+file context, previews, voice, settings, and native service supervision in a
+distinct PhantomForce desktop product.
+
+PhantomBot is powered by the MIT-licensed
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) kernel from Nous
+Research. That engine attribution and license are preserved in source and in
+every packaged distribution; PhantomBot’s product identity and integration
+layer are separate.
 
 <table>
-<tr><td><b>Chat with the full agent</b></td><td>Streaming responses, live tool activity, structured tool summaries, and the same conversation history as every other Hermes surface.</td></tr>
+<tr><td><b>Chat with the full operator</b></td><td>Streaming responses, live tool activity, structured tool summaries, and persistent PhantomBot task history.</td></tr>
 <tr><td><b>Side-by-side previews</b></td><td>Render web pages, files, and tool outputs in a right-hand pane while you keep chatting.</td></tr>
 <tr><td><b>File browser</b></td><td>Explore and preview the working directory without leaving the app.</td></tr>
-<tr><td><b>Voice</b></td><td>Talk to Hermes and hear it back.</td></tr>
+<tr><td><b>Voice</b></td><td>Talk to PhantomBot and hear it back.</td></tr>
 <tr><td><b>Settings & onboarding</b></td><td>Manage providers, models, tools, and credentials from a real UI. First-run setup gets you to your first message in seconds.</td></tr>
 <tr><td><b>Stays current</b></td><td>Built-in updates pull the latest agent and rebuild the app in place.</td></tr>
 </table>
@@ -22,19 +30,24 @@
 
 ## Install
 
-### Install with Hermes (recommended)
+### Local development install
 
-Already have the Hermes CLI? Just run:
+From a compatible Hermes kernel checkout, the internal development launcher is:
 
 ```bash
 hermes desktop
 ```
 
-It builds and launches the GUI against your existing install — same config, keys, sessions, and skills. If Desktop cannot find a usable runtime or saved remote connection, first launch lets you connect to an existing Hermes gateway or install Hermes locally. Local onboarding then walks you through choosing a provider and model.
+This builds and launches PhantomBot against the local kernel checkout. If the
+desktop cannot find a usable runtime or saved remote connection, first launch
+can prepare the managed local engine or connect to a compatible gateway.
 
 ### Prebuilt installers
 
-Prebuilt installers are built and distributed via [the Hermes Desktop website.](https://hermes-agent.nousresearch.com/).
+Do not distribute installers built from an unpushed local product commit. Run
+`npm run phantombot:doctor` from the repository root; a consumer release is
+eligible only when the PhantomBot product commit exists on its configured
+product remote and the security/package gates pass.
 
 ---
 
@@ -83,7 +96,10 @@ npm run dist:linux   # AppImage + deb + rpm
 npm run pack         # unpacked app under release/ (no installer)
 ```
 
-Installers are built and uploaded to GitHub Releases manually. macOS/Windows signing & notarization happen automatically when the relevant credentials are present in the environment (`CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_*` for macOS, `WIN_CSC_*` for Windows).
+Installers are published only from the PhantomBot product release workflow.
+macOS/Windows signing and notarization use the relevant release credentials
+(`CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_*` for macOS, `WIN_CSC_*` for
+Windows).
 
 ### How it works
 
@@ -201,16 +217,17 @@ Remove-Item -Recurse -Force "$env:LOCALAPPDATA\hermes\hermes-agent\venv"
 
 ---
 
-## Community
+## Upstream kernel resources
 
-- 💬 [Discord](https://discord.gg/NousResearch)
-- 📖 [Documentation](https://hermes-agent.nousresearch.com/docs/)
-- 🐛 [Issues](https://github.com/NousResearch/hermes-agent/issues)
+- [Hermes Agent source](https://github.com/NousResearch/hermes-agent)
+- [Hermes Agent documentation](https://hermes-agent.nousresearch.com/docs/)
 
 ---
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE).
+MIT — see [LICENSE](../../LICENSE) and
+[THIRD_PARTY_NOTICES](../../THIRD_PARTY_NOTICES.md).
 
-Built by [Nous Research](https://nousresearch.com).
+PhantomBot product layer by PhantomForce. Hermes Agent kernel by
+[Nous Research](https://nousresearch.com).

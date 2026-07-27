@@ -2497,17 +2497,16 @@ let updateInFlight = false
 let isQuittingForHandoff = false
 
 // Resolve the staged updater binary. The Tauri installer copies itself to
-// HERMES_HOME/hermes-setup.exe on a successful install (see
+// HERMES_HOME/phantombot-setup.exe on a successful install (see
 // apps/bootstrap-installer paths::copy_self_to_hermes_home). That binary owns
 // ALL repo mutation — running `hermes update` + rebuilding the desktop — so
 // the desktop never touches its own bits while running. Returns null when the
 // updater isn't staged (e.g. a dev/source run that never went through the
 // installer); callers degrade gracefully.
 function resolveUpdaterBinary() {
-  const name = IS_WINDOWS ? 'hermes-setup.exe' : 'hermes-setup'
-  const candidate = path.join(HERMES_HOME, name)
+  const names = IS_WINDOWS ? ['phantombot-setup.exe', 'hermes-setup.exe'] : ['phantombot-setup', 'hermes-setup']
 
-  return fileExists(candidate) ? candidate : null
+  return names.map(name => path.join(HERMES_HOME, name)).find(fileExists) ?? null
 }
 
 function repairMacUpdaterHelper(updater) {
@@ -2718,7 +2717,7 @@ async function releaseBackendLock(updateRoot, tag) {
 //
 // The desktop is a pure consumer: it does NOT git pull / pip install / rebuild
 // itself (the old open-coded git dance lived here and drifted from
-// `hermes update`). Instead we spawn the staged Hermes-Setup binary with
+// `hermes update`). Instead we spawn the staged PhantomBot Setup binary with
 // --update and quit, so it can run `hermes update` (which refuses while we
 // hold the venv shim) and rebuild the desktop with our exe already gone.
 //
@@ -2735,7 +2734,7 @@ async function applyUpdates(opts = {}) {
     const updater = resolveUpdaterBinary()
 
     if (!updater && !IS_WINDOWS) {
-      // macOS/Linux drag-install: no staged Tauri hermes-setup. Unlike Windows
+      // macOS/Linux drag-install: no staged Tauri PhantomBot updater. Unlike Windows
       // (where a venv-shim file lock forces the quit→hand-off→rebuild dance),
       // there's no mandatory file locking here, so the desktop can drive the
       // whole update itself: `hermes update` (backend) + `hermes desktop
@@ -2747,7 +2746,7 @@ async function applyUpdates(opts = {}) {
     if (!updater) {
       // No staged updater binary — this is a CLI-installed user (they ran
       // `hermes desktop`, never the Tauri installer that self-copies
-      // hermes-setup.exe into HERMES_HOME). They DO have a working `hermes`
+      // setup helper into HERMES_HOME). They DO have a working `hermes`
       // on PATH / in the venv, so the correct path is the one-liner in their
       // native medium. We show the EXACT command, branch-pinned to the
       // checkout they're on — bare `hermes update` defaults to main and would
@@ -3287,8 +3286,7 @@ async function applyUpdatesPosixInApp(opts: any) {
       emitUpdateProgress({
         stage: 'guiSkew',
         message:
-          'Backend updated, but the desktop app package was not changed. ' +
-          'Update or reinstall the Hermes desktop app to match.',
+          'Backend updated, but the desktop app package was not changed. ' + 'Update or reinstall PhantomBot to match.',
         percent: 100
       })
       rememberLog(
@@ -3314,13 +3312,13 @@ async function applyUpdatesPosixInApp(opts: any) {
       sandboxBlocked: true,
       message:
         'Backend updated. The rebuilt app can’t relaunch automatically ' +
-        '(sandbox helper needs root). Quit and reopen Hermes to finish.'
+        '(sandbox helper needs root). Quit and reopen PhantomBot to finish.'
     }
   }
 
   const rebuiltApp = [
-    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac-arm64', 'Hermes.app'),
-    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac', 'Hermes.app')
+    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac-arm64', 'PhantomBot.app'),
+    path.join(updateRoot, 'apps', 'desktop', 'release', 'mac', 'PhantomBot.app')
   ].find(directoryExists)
 
   const targetApp = runningAppBundle()
@@ -3330,7 +3328,7 @@ async function applyUpdatesPosixInApp(opts: any) {
   if (!rebuiltApp || !targetApp) {
     emitUpdateProgress({
       stage: 'done',
-      message: 'Backend updated. Restart Hermes to load the new version.',
+      message: 'Backend updated. Restart PhantomBot to load the new version.',
       percent: 100
     })
 
@@ -10968,12 +10966,13 @@ ipcMain.handle('hermes:vscode-theme:fetch', async (_event, id) => fetchMarketpla
 ipcMain.handle('hermes:vscode-theme:search', async (_event, query) => searchMarketplaceThemes(String(query || ''), 20))
 
 // ---------------------------------------------------------------------------
-// hermes:// deep links (e.g. hermes://blueprint/morning-brief?time=08:00).
+// phantombot:// deep links (e.g. phantombot://blueprint/morning-brief?time=08:00).
 // A docs/dashboard "Send to App" button opens this URL; we route it into the
 // running app's chat composer. Three delivery paths: macOS 'open-url',
 // Win/Linux running-app 'second-instance' (argv), Win/Linux cold-start argv.
 // ---------------------------------------------------------------------------
-const HERMES_PROTOCOL = 'hermes'
+const PHANTOMBOT_PROTOCOL = 'phantombot'
+const SUPPORTED_DEEP_LINK_PROTOCOLS = [PHANTOMBOT_PROTOCOL, 'hermes']
 let _pendingDeepLink = null
 let _rendererReadyForDeepLink = false
 
@@ -10982,7 +10981,11 @@ function _extractDeepLink(argv) {
     return null
   }
 
-  return argv.find(a => typeof a === 'string' && a.startsWith(`${HERMES_PROTOCOL}://`)) || null
+  return (
+    argv.find(
+      a => typeof a === 'string' && SUPPORTED_DEEP_LINK_PROTOCOLS.some(protocol => a.startsWith(`${protocol}://`))
+    ) || null
+  )
 }
 
 function handleDeepLink(url) {
@@ -11000,7 +11003,7 @@ function handleDeepLink(url) {
     return
   }
 
-  // hermes://blueprint/<key>?slot=val  -> host="blueprint", path="/<key>"
+  // phantombot://blueprint/<key>?slot=val -> host="blueprint", path="/<key>"
   const kind = parsed.hostname || ''
   const name = decodeURIComponent((parsed.pathname || '').replace(/^\//, ''))
   const params = {}
@@ -11037,7 +11040,7 @@ ipcMain.handle('hermes:deep-link-ready', () => {
     const queued = _pendingDeepLink
     _pendingDeepLink = null
     handleDeepLink(
-      `${HERMES_PROTOCOL}://${queued.kind}/${encodeURIComponent(queued.name)}` +
+      `${PHANTOMBOT_PROTOCOL}://${queued.kind}/${encodeURIComponent(queued.name)}` +
         (Object.keys(queued.params).length ? '?' + new URLSearchParams(queued.params).toString() : '')
     )
   }
@@ -11050,9 +11053,9 @@ function registerDeepLinkProtocol() {
     if (process.defaultApp && process.argv.length >= 2) {
       // Dev: register with the electron exec path + entry script so the OS can
       // relaunch us with the URL.
-      app.setAsDefaultProtocolClient(HERMES_PROTOCOL, process.execPath, [path.resolve(process.argv[1])])
+      app.setAsDefaultProtocolClient(PHANTOMBOT_PROTOCOL, process.execPath, [path.resolve(process.argv[1])])
     } else {
-      app.setAsDefaultProtocolClient(HERMES_PROTOCOL)
+      app.setAsDefaultProtocolClient(PHANTOMBOT_PROTOCOL)
     }
   } catch (err) {
     rememberLog(`[deeplink] protocol registration failed: ${err.message}`)
@@ -11060,7 +11063,7 @@ function registerDeepLinkProtocol() {
 }
 
 // Single-instance lock: deep links on a running app (Win/Linux) arrive as a
-// second-instance argv. Without the lock a second `hermes://` launch spawns a
+// second-instance argv. Without the lock a second `phantombot://` launch spawns a
 // whole new app instead of routing into the running one.
 const _gotSingleInstanceLock = app.requestSingleInstanceLock()
 
@@ -11118,7 +11121,7 @@ app.whenReady().then(() => {
   keepAwake.set(readPersistedKeepAwake())
   createWindow()
 
-  // Win/Linux cold start: the launching hermes:// URL is in our own argv.
+  // Win/Linux cold start: the launching phantombot:// URL is in our own argv.
   const _coldStartLink = _extractDeepLink(process.argv)
 
   if (_coldStartLink) {

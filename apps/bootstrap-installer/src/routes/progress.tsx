@@ -6,13 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { BrandMark } from '../components/brand-mark'
 import { Button } from '../components/button'
 import { Loader } from '../components/loader'
-import {
-  $mode,
-  $progress,
-  type BootstrapStateModel,
-  cancelInstall,
-  type StageState
-} from '../store'
+import { $mode, $progress, type BootstrapStateModel, cancelInstall, type StageState } from '../store'
 
 interface ProgressProps {
   bootstrap: BootstrapStateModel
@@ -50,16 +44,16 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
   }, [bootstrap.status])
 
   const isUpdate = mode === 'update'
-  const title = bootstrap.status === 'completed' ? 'Done' : isUpdate ? 'Updating Hermes' : 'Setting up Hermes Agent'
+  const title = bootstrap.status === 'completed' ? 'Done' : isUpdate ? 'Updating PhantomBot' : 'Setting up PhantomBot'
 
   const description = isUpdate
-    ? 'Hermes is updating to the latest version — this only takes a moment.'
-    : 'This is a one-time setup. The Hermes installer is downloading dependencies and configuring your machine. Subsequent launches will skip this step.'
+    ? 'PhantomBot is updating to the latest version — this only takes a moment.'
+    : 'This is a one-time setup. PhantomBot is preparing its private local runtime and desktop. Subsequent launches will skip this step.'
 
   const pct = Math.round(progress.fraction * 100)
 
   return (
-    <div className="hermes-fade-in flex h-full flex-col">
+    <div className="phantombot-fade-in flex h-full flex-col">
       {/* Header: brand + title + description, matching the desktop install overlay. */}
       <div className="flex shrink-0 items-start gap-4 px-6 pt-6 pb-4">
         <BrandMark className="size-11" />
@@ -93,10 +87,12 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
               muted. Running loader overhangs left so labels stay aligned; the
               terminal check/cross sits right of the label. */}
           <ol className="space-y-0.5">
-            {bootstrap.stageOrder.map((name) => {
+            {bootstrap.stageOrder.map(name => {
               const rec = bootstrap.stages[name]
 
-              if (!rec) {return null}
+              if (!rec) {
+                return null
+              }
 
               const meta =
                 rec.state === 'running' && rec.startedAt != null
@@ -109,9 +105,7 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
                 <li
                   className={clsx(
                     'flex items-center gap-2.5 px-3 py-1.5 text-sm',
-                    rec.state === 'running'
-                      ? 'font-medium text-foreground'
-                      : 'text-muted-foreground'
+                    rec.state === 'running' ? 'font-medium text-foreground' : 'text-muted-foreground'
                   )}
                   key={name}
                 >
@@ -152,7 +146,7 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
       <div className="flex shrink-0 items-center justify-between border-t border-(--stroke-nous) px-6 py-3">
         <button
           className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          onClick={() => setShowLogs((v) => !v)}
+          onClick={() => setShowLogs(v => !v)}
           type="button"
         >
           <FileText size={14} />
@@ -190,9 +184,14 @@ function StateIcon({ state }: { state: StageState | null }) {
 }
 
 function formatDuration(ms: number): string {
-  if (ms < 1000) {return `${ms}ms`}
+  if (ms < 1000) {
+    return `${ms}ms`
+  }
 
-  if (ms < 60000) {return `${(ms / 1000).toFixed(1)}s`}
+  if (ms < 60000) {
+    return `${(ms / 1000).toFixed(1)}s`
+  }
+
   const m = Math.floor(ms / 60000)
   const s = Math.round((ms % 60000) / 1000)
 
@@ -203,7 +202,10 @@ function formatDuration(ms: number): string {
 function formatElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
 
-  if (s < 60) {return `${s}s`}
+  if (s < 60) {
+    return `${s}s`
+  }
+
   const m = Math.floor(s / 60)
 
   return `${m}:${String(s - m * 60).padStart(2, '0')}`

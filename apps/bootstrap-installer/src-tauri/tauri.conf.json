@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Hermes",
+  "productName": "PhantomBot Setup",
   "version": "0.0.1",
-  "identifier": "com.nousresearch.hermes.setup",
+  "identifier": "online.phantomforce.phantombot.setup",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:5175",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Hermes",
+        "title": "PhantomBot Setup",
         "width": 880,
         "height": 620,
         "minWidth": 720,
@@ -33,23 +33,14 @@
   },
   "bundle": {
     "active": true,
+    "resources": ["resources/LICENSE-HERMES.txt", "resources/THIRD_PARTY_NOTICES.md"],
     "category": "DeveloperTool",
-    "shortDescription": "Hermes",
-    "longDescription": "Installs Hermes Agent on your machine. Drives scripts/install.ps1 (Windows) and scripts/install.sh (macOS/Linux).",
-    "publisher": "Nous Research",
-    "copyright": "Copyright © 2026 Nous Research",
-    "targets": [
-      "app",
-      "dmg",
-      "appimage"
-    ],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
+    "shortDescription": "PhantomBot Setup",
+    "longDescription": "Installs the PhantomBot local operator and its attributed Hermes Agent kernel.",
+    "publisher": "PhantomForce",
+    "copyright": "Copyright © 2026 PhantomForce",
+    "targets": ["app", "dmg", "appimage"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "windows": {
       "webviewInstallMode": {
         "type": "embedBootstrapper"

@@ -863,15 +863,58 @@ code {
 }
 
 /* Arc-style multicolor action surface (static, not animated). Reusable on any
-   Button via className. Unlayered so it beats Tailwind's bg-*/
-text-* variant utilities. */ .btn-arc {
-  background-image: linear-gradient(110deg, #5b6cff 0%, #8b5cf6 28%, #d946ef 58%, #fb7185 82%, #fb923c 100%);
+   Button via className. Unlayered so it beats Tailwind's background/text
+   variant utilities. */
+.btn-arc {
+  background-image: linear-gradient(110deg, #032b1a 0%, #075f39 34%, #0a8f50 68%, #11b968 100%);
   color: #fff;
   border-color: transparent;
 }
 
 .btn-arc:hover:not(:disabled) {
   filter: brightness(1.08) saturate(1.06);
+}
+
+/* ── PhantomBot product identity ───────────────────────────────────────────
+   The theme system still supports imported/user palettes, but a clean
+   PhantomBot profile opens in this obsidian + emerald visual language. */
+.phantombot-brand-mark {
+  border: 1px solid color-mix(in srgb, var(--theme-midground) 44%, transparent);
+  background: #020503;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #fff 5%, transparent),
+    0 0 1.25rem color-mix(in srgb, var(--theme-midground) 18%, transparent);
+}
+
+.phantombot-hero-mark {
+  border-radius: 1.35rem;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #fff 7%, transparent),
+    0 0 2.5rem color-mix(in srgb, var(--theme-midground) 28%, transparent),
+    0 1.25rem 3.5rem color-mix(in srgb, #000 40%, transparent);
+}
+
+.phantombot-wordmark {
+  color: var(--theme-midground);
+  text-shadow:
+    0 0 0.5rem color-mix(in srgb, var(--theme-midground) 50%, transparent),
+    0 0 2.25rem color-mix(in srgb, var(--theme-midground) 24%, transparent);
+}
+
+html[data-hermes-theme='phantomforce'] body {
+  background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--theme-midground) 8%, transparent), transparent 32rem),
+    radial-gradient(circle at 88% 100%, color-mix(in srgb, var(--theme-midground) 5%, transparent), transparent 38rem),
+    var(--ui-chat-surface-background);
+}
+
+html[data-hermes-theme='phantomforce'] [data-slot='aui_intro'] {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--theme-midground) 2.5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--theme-midground) 2.5%, transparent) 1px, transparent 1px);
+  background-position: center;
+  background-size: 2.25rem 2.25rem;
+  border-radius: 1.5rem;
 }
 
 /* Shared input chrome — mirrors composer hover/focus FX. Unlayered to beat Tailwind utilities. */
