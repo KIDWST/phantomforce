@@ -137,6 +137,7 @@ import {
   ARTIFACTS_ROUTE,
   CRON_ROUTE,
   MESSAGING_ROUTE,
+  SETTINGS_ROUTE,
   SIDEBAR_NAV_AREA,
   type SidebarNavContribution,
   SKILLS_ROUTE
@@ -220,6 +221,12 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     icon: props => <Codicon name="watch" {...props} />,
     route: CRON_ROUTE,
     keybindActionId: 'nav.cron'
+  },
+  {
+    id: 'api-keys',
+    label: 'API keys',
+    icon: props => <Codicon name="key" {...props} />,
+    route: `${SETTINGS_ROUTE}?tab=providers&pview=keys`
   }
 ]
 
@@ -322,7 +329,7 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const { t } = useI18n()
   const s = t.sidebar
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   // Contributed nav rows (plugins pairing a page with a sidebar entry) render
   // below the built-ins with the same chrome; active = at their route.
   const navContributions = useContributions(SIDEBAR_NAV_AREA)
@@ -1474,6 +1481,7 @@ export function ChatSidebar({
                   (item.id === 'messaging' && currentView === 'messaging') ||
                   (item.id === 'artifacts' && currentView === 'artifacts') ||
                   (item.id === 'cron' && currentView === 'cron') ||
+                  (item.id === 'api-keys' && currentView === 'settings' && search.includes('pview=keys')) ||
                   // Contributed rows light up at their own route.
                   (Boolean(item.route) && pathname === item.route)
 
