@@ -40,6 +40,8 @@ pub struct StartBootstrapArgs {
     pub commit: Option<String>,
     /// Optional override for the branch pin. Defaults to `BUILD_PIN_BRANCH`.
     pub branch: Option<String>,
+    /// Published PhantomBot fork used for script download and checkout.
+    pub repository_url: Option<String>,
     /// Include Stage-Desktop (build apps/desktop) in the manifest. The
     /// signed bootstrap installer passes true; the deprecated Electron-side
     /// bootstrap-runner passes false to avoid building-while-running.
@@ -309,6 +311,7 @@ fn write_bootstrap_complete_marker(install_root: &Path, pin: &Pin) -> Result<ser
         "schemaVersion": 1,
         "pinnedCommit": resolve_marker_commit(install_root, pin),
         "pinnedBranch": pin.branch.clone(),
+        "productRepository": pin.repository_url.clone(),
         "completedAtUnix": completed_at_unix,
     });
     let mut body = serde_json::to_vec_pretty(&marker)?;
@@ -453,6 +456,9 @@ async fn run_bootstrap(
     let pin = Pin {
         commit: args.commit.or_else(|| option_env_string("BUILD_PIN_COMMIT")),
         branch: args.branch.or_else(|| option_env_string("BUILD_PIN_BRANCH")),
+        repository_url: args
+            .repository_url
+            .or_else(|| option_env_string("BUILD_PRODUCT_REPOSITORY")),
     };
 
     tracing::info!(
@@ -933,6 +939,10 @@ fn build_pin_args(script: &install_script::ResolvedScript) -> Vec<String> {
         out.push("-Branch".to_string());
         out.push(b.clone());
     }
+    if let Some(repository) = &script.repository_url {
+        out.push("-RepositoryUrl".to_string());
+        out.push(repository.clone());
+    }
     out
 }
 
@@ -1090,6 +1100,7 @@ mod tests {
         let pin = Pin {
             commit: Some("abcdef1234567890".to_string()),
             branch: Some("main".to_string()),
+            repository_url: None,
         };
 
         let marker =
@@ -1116,6 +1127,7 @@ mod tests {
         let pin = Pin {
             commit: Some("abcdef1234567890".to_string()),
             branch: Some("main".to_string()),
+            repository_url: None,
         };
 
         write_bootstrap_complete_marker(&root, &pin).expect("marker write should succeed");
@@ -1163,6 +1175,7 @@ mod tests {
         let pin = Pin {
             commit: Some("abcdef1234567890".to_string()),
             branch: Some("main".to_string()),
+            repository_url: None,
         };
 
         let err = write_bootstrap_complete_marker(&not_a_dir, &pin)

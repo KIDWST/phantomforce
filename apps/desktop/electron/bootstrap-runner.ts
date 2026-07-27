@@ -45,9 +45,29 @@ const IS_WINDOWS = process.platform === 'win32'
 const STAMP_COMMIT_RE = /^[0-9a-f]{7,40}$/i
 const FALLBACK_COMMIT_RE = /^0{7,40}$/
 const FALLBACK_BRANCH = 'main'
+const LEGACY_UPSTREAM_REPOSITORY = 'https://github.com/NousResearch/hermes-agent.git'
 
 function isPinnedCommit(commit) {
   return typeof commit === 'string' && STAMP_COMMIT_RE.test(commit) && !FALLBACK_COMMIT_RE.test(commit)
+}
+
+function productCommitForStamp(installStamp) {
+  return installStamp?.productCommit || installStamp?.commit || null
+}
+
+function productBranchForStamp(installStamp) {
+  return installStamp?.productBranch || installStamp?.branch || null
+}
+
+function productRepositoryForStamp(installStamp) {
+  if (installStamp?.productRepository) {
+    return installStamp.productRepository
+  }
+
+  // Schema v1 packages predate the PhantomBot fork boundary. Keep them
+  // repairable, but never let a new schema-v2 product silently fall back to
+  // Nous' upstream repository.
+  return installStamp?.schemaVersion === 2 ? null : LEGACY_UPSTREAM_REPOSITORY
 }
 
 type ExecGitFn = (args: string[], cwd: string) => string
@@ -111,8 +131,10 @@ function resolveMarkerPinnedCommit(
 ): string | null {
   const resolveHead = opts.resolveHead || resolveCheckoutHead
 
-  if (installStamp && isPinnedCommit(installStamp.commit)) {
-    return installStamp.commit
+  const productCommit = productCommitForStamp(installStamp)
+
+  if (isPinnedCommit(productCommit)) {
+    return productCommit
   }
 
   const head = resolveHead(activeRoot)
@@ -131,16 +153,19 @@ function resolveMarkerPinnedCommit(
  * never asks GitHub for commit 0000000... (#50823).
  */
 function installRefForStamp(installStamp) {
-  if (installStamp && isPinnedCommit(installStamp.commit)) {
+  const productCommit = productCommitForStamp(installStamp)
+  const productBranch = productBranchForStamp(installStamp)
+
+  if (isPinnedCommit(productCommit)) {
     return {
-      ref: installStamp.commit,
-      cacheKey: installStamp.commit,
+      ref: productCommit,
+      cacheKey: productCommit,
       pinned: true
     }
   }
 
-  if (installStamp && typeof installStamp.commit === 'string' && FALLBACK_COMMIT_RE.test(installStamp.commit)) {
-    const ref = installStamp.branch || FALLBACK_BRANCH
+  if (typeof productCommit === 'string' && FALLBACK_COMMIT_RE.test(productCommit)) {
+    const ref = productBranch || FALLBACK_BRANCH
 
     return {
       ref,
@@ -227,13 +252,63 @@ function cachedScriptPath(hermesHome, commit) {
   return path.join(bootstrapCacheDir(hermesHome), `install-${commit}.${process.platform === 'win32' ? 'ps1' : 'sh'}`)
 }
 
-function downloadInstallScript(ref, destPath) {
+function repositoryCacheKey(repository, ref) {
+  const source = String(repository || '')
+    .trim()
+    .replace(/[^0-9A-Za-z._-]/g, '_')
+  const sourceSuffix = source.length > 72 ? source.slice(-72) : source
+
+  return `${sourceSuffix}--${ref}`
+}
+
+function githubRawScriptUrl(repository, ref, scriptName) {
+  let value = String(repository || '').trim()
+
+  if (value.startsWith('git@github.com:')) {
+    value = `https://github.com/${value.slice('git@github.com:'.length)}`
+  } else if (value.startsWith('ssh://git@github.com/')) {
+    value = `https://github.com/${value.slice('ssh://git@github.com/'.length)}`
+  }
+
+  let parsed
+
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error('PhantomBot product repository must be a valid public GitHub repository URL.')
+  }
+
+  const parts = parsed.pathname
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/\.git$/i, '')
+    .split('/')
+  const isUpstreamHermes =
+    parts[0]?.toLowerCase() === 'nousresearch' && parts[1]?.toLowerCase() === 'hermes-agent'
+
+  if (
+    parsed.protocol !== 'https:' ||
+    parsed.hostname.toLowerCase() !== 'github.com' ||
+    parts.length !== 2 ||
+    isUpstreamHermes
+  ) {
+    throw new Error('PhantomBot product repository must be a public https://github.com/OWNER/REPO URL.')
+  }
+
+  const encodedRef = String(ref)
+    .split('/')
+    .map(part => encodeURIComponent(part))
+    .join('/')
+
+  return `https://raw.githubusercontent.com/${parts[0]}/${parts[1]}/${encodedRef}/scripts/${scriptName}`
+}
+
+function downloadInstallScript(repository, ref, destPath) {
   // Fetch from GitHub raw at the install ref. Normal production builds pass a
   // pinned SHA (immutable). Non-git fallback builds pass an unpinned branch
   // ref so local builds can still bootstrap without pretending the all-zero
   // placeholder is a real GitHub commit.
   const scriptName = installScriptName()
-  const url = `https://raw.githubusercontent.com/NousResearch/hermes-agent/${ref}/scripts/${scriptName}`
+  const url = githubRawScriptUrl(repository, ref, scriptName)
 
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(destPath), { recursive: true })
@@ -336,15 +411,19 @@ async function resolveInstallScript({
   // Non-git fallback builds carry an all-zero commit; treat that as an
   // unpinned branch ref instead of trying to fetch a non-existent SHA.
   const installRef = installRefForStamp(installStamp)
+  const productRepository = productRepositoryForStamp(installStamp)
 
-  if (!installRef) {
+  if (!installRef || !productRepository) {
     throw new Error(
-      `Cannot resolve ${installScriptName()}: no SOURCE_REPO_ROOT and no install stamp. ` +
-        'This packaged build was produced without a valid build-time stamp.'
+      `Cannot resolve ${installScriptName()}: this packaged build has no PhantomBot product source. ` +
+        'Build releases with PHANTOMBOT_PRODUCT_REPOSITORY set to the published PhantomBot fork.'
     )
   }
 
-  const cached = cachedScriptPath(hermesHome, installRef.cacheKey)
+  const cacheKey = installStamp?.productRepository
+    ? repositoryCacheKey(productRepository, installRef.cacheKey)
+    : installRef.cacheKey
+  const cached = cachedScriptPath(hermesHome, cacheKey)
   const resolvedCommit = installRef.pinned ? installRef.ref : null
 
   try {
@@ -354,7 +433,13 @@ async function resolveInstallScript({
       line: `[bootstrap] using cached ${installScriptName()} for ${installRef.ref.slice(0, 12)}`
     })
 
-    return { path: cached, source: 'cache', commit: resolvedCommit, kind: installScriptKind() }
+    return {
+      path: cached,
+      source: 'cache',
+      commit: resolvedCommit,
+      repository: productRepository,
+      kind: installScriptKind()
+    }
   } catch {
     // not cached; download
   }
@@ -367,10 +452,16 @@ async function resolveInstallScript({
   })
 
   try {
-    await _download(installRef.ref, cached)
+    await _download(productRepository, installRef.ref, cached)
     emit({ type: 'log', line: `[bootstrap] saved to ${cached}` })
 
-    return { path: cached, source: 'download', commit: resolvedCommit, kind: installScriptKind() }
+    return {
+      path: cached,
+      source: 'download',
+      commit: resolvedCommit,
+      repository: productRepository,
+      kind: installScriptKind()
+    }
   } catch (err) {
     // The pinned commit may not be fetchable from GitHub -- most commonly a
     // locally-built desktop app stamped to an unpushed HEAD (see
@@ -391,10 +482,22 @@ async function resolveInstallScript({
         fs.mkdirSync(path.dirname(cached), { recursive: true })
         fs.copyFileSync(installed, cached)
 
-        return { path: cached, source: 'installed-agent', commit: resolvedCommit, kind: installScriptKind() }
+        return {
+          path: cached,
+          source: 'installed-agent',
+          commit: resolvedCommit,
+          repository: productRepository,
+          kind: installScriptKind()
+        }
       } catch {
         // Cache copy failed (read-only FS, etc.) -- use the source path directly.
-        return { path: installed, source: 'installed-agent', commit: resolvedCommit, kind: installScriptKind() }
+        return {
+          path: installed,
+          source: 'installed-agent',
+          commit: resolvedCommit,
+          repository: productRepository,
+          kind: installScriptKind()
+        }
       }
     }
 
@@ -664,13 +767,19 @@ function spawnBash(scriptPath, args, { emit, stageName, abortSignal, hermesHome 
 // passed as -Commit/--commit — only the branch is used (#50823 / #50864 review).
 function buildPinArgs(installStamp, { pinCommit = true } = {}) {
   const args = []
+  const productCommit = productCommitForStamp(installStamp)
+  const productBranch = productBranchForStamp(installStamp)
 
-  if (pinCommit && installStamp && isPinnedCommit(installStamp.commit)) {
-    args.push('-Commit', installStamp.commit)
+  if (pinCommit && isPinnedCommit(productCommit)) {
+    args.push('-Commit', productCommit)
   }
 
-  if (installStamp && installStamp.branch) {
-    args.push('-Branch', installStamp.branch)
+  if (productBranch) {
+    args.push('-Branch', productBranch)
+  }
+
+  if (installStamp?.productRepository) {
+    args.push('-RepositoryUrl', installStamp.productRepository)
   }
 
   return args
@@ -678,13 +787,19 @@ function buildPinArgs(installStamp, { pinCommit = true } = {}) {
 
 function buildPosixPinArgs({ installStamp, activeRoot, hermesHome, pinCommit = true }) {
   const args = ['--dir', activeRoot, '--hermes-home', hermesHome]
+  const productCommit = productCommitForStamp(installStamp)
+  const productBranch = productBranchForStamp(installStamp)
 
-  if (installStamp && installStamp.branch) {
-    args.push('--branch', installStamp.branch)
+  if (productBranch) {
+    args.push('--branch', productBranch)
   }
 
-  if (pinCommit && installStamp && isPinnedCommit(installStamp.commit)) {
-    args.push('--commit', installStamp.commit)
+  if (pinCommit && isPinnedCommit(productCommit)) {
+    args.push('--commit', productCommit)
+  }
+
+  if (installStamp?.productRepository) {
+    args.push('--repository-url', installStamp.productRepository)
   }
 
   return args
@@ -909,7 +1024,7 @@ async function runBootstrap(opts) {
     line:
       `[bootstrap] starting at ${new Date().toISOString()}; ` +
       `activeRoot=${activeRoot}; ` +
-      `stamp=${installStamp ? installStamp.commit.slice(0, 12) : '<none>'}; ` +
+      `stamp=${productCommitForStamp(installStamp)?.slice(0, 12) || '<none>'}; ` +
       `runLog=${runLog.path}`
   })
 
@@ -917,12 +1032,14 @@ async function runBootstrap(opts) {
     const existingCheckout = hasExistingGitCheckout(activeRoot)
     const pinCommit = !existingCheckout
 
-    if (existingCheckout && installStamp && installStamp.commit) {
+    const packagedProductCommit = productCommitForStamp(installStamp)
+
+    if (existingCheckout && packagedProductCommit) {
       emit({
         type: 'log',
         line:
           `[bootstrap] existing checkout detected at ${activeRoot}; ` +
-          `not pinning to packaged install stamp ${installStamp.commit.slice(0, 12)}`
+          `not pinning to packaged install stamp ${packagedProductCommit.slice(0, 12)}`
       })
     }
 
@@ -990,7 +1107,7 @@ async function runBootstrap(opts) {
           '[bootstrap] WARNING: could not resolve a real pinnedCommit for the ' +
           'bootstrap-complete marker; subsequent launches may re-run bootstrap'
       })
-    } else if (installStamp && !isPinnedCommit(installStamp.commit)) {
+    } else if (installStamp && !isPinnedCommit(productCommitForStamp(installStamp))) {
       emit({
         type: 'log',
         line: `[bootstrap] fallback stamp resolved marker pin to ${pinnedCommit.slice(0, 12)} from checkout`
@@ -999,7 +1116,7 @@ async function runBootstrap(opts) {
 
     const markerPayload = {
       pinnedCommit,
-      pinnedBranch: installStamp ? installStamp.branch : null
+      pinnedBranch: installStamp ? productBranchForStamp(installStamp) : null
     }
 
     const marker = typeof writeMarker === 'function' ? writeMarker(markerPayload) : markerPayload
@@ -1024,6 +1141,7 @@ export {
   buildPosixPinArgs,
   cachedScriptPath,
   hasExistingGitCheckout,
+  githubRawScriptUrl,
   installedAgentInstallScript,
   installRefForStamp,
   isPinnedCommit,
@@ -1033,5 +1151,6 @@ export {
   resolveInstallScript,
   resolveLocalInstallScript,
   resolveMarkerPinnedCommit,
+  repositoryCacheKey,
   runBootstrap
 }

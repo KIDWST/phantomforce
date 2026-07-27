@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { isMain } from './utils.mjs'
+import { isUpstreamHermesRepository, resolveProductRepository } from './write-build-stamp.mjs'
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..', '..')
@@ -84,6 +85,20 @@ export function releaseBlockers(input) {
     blockers.push('The PhantomBot product commit is not present on a configured remote.')
   }
 
+  if (!input.productRepository) {
+    blockers.push('No PhantomBot product repository is configured.')
+  } else if (isUpstreamHermesRepository(input.productRepository)) {
+    blockers.push('The PhantomBot product repository cannot be the upstream Hermes repository.')
+  }
+
+  if (
+    input.productRepository &&
+    (input.installStamp?.productRepository !== input.productRepository ||
+      input.installStamp?.productCommit !== input.productCommit)
+  ) {
+    blockers.push('The packaged install stamp does not match the current PhantomBot source.')
+  }
+
   if (!input.installStamp?.commit || /^0+$/.test(input.installStamp.commit)) {
     blockers.push('The packaged kernel install stamp is missing or unpinned.')
   }
@@ -133,6 +148,7 @@ export function collectDoctorReport() {
   const upstream = git('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}') || null
   const counts = parseAheadBehind(git('rev-list', '--left-right', '--count', 'HEAD...@{upstream}'))
   const publishedRefs = commit ? git('branch', '--remotes', '--contains', commit) : null
+  const productRepository = resolveProductRepository()
   const identityOk =
     desktopPackage?.name === 'phantombot' &&
     desktopPackage?.productName === 'PhantomBot' &&
@@ -143,7 +159,9 @@ export function collectDoctorReport() {
     identityOk,
     installStamp,
     kernelAvailable,
-    productCommitPublished
+    productCommit: commit,
+    productCommitPublished,
+    productRepository
   })
 
   return {
@@ -163,7 +181,8 @@ export function collectDoctorReport() {
       dirty: Boolean(git('status', '--porcelain')),
       upstream,
       ...counts,
-      productCommitPublished
+      productCommitPublished,
+      productRepository
     },
     kernel: {
       home: hermesHome,

@@ -9,12 +9,14 @@ import {
   buildPinArgs,
   buildPosixPinArgs,
   cachedScriptPath,
+  githubRawScriptUrl,
   hasExistingGitCheckout,
   installedAgentInstallScript,
   installRefForStamp,
   isPinnedCommit,
   resolveInstallScript,
   resolveMarkerPinnedCommit,
+  repositoryCacheKey,
   runBootstrap
 } from './bootstrap-runner'
 
@@ -166,7 +168,7 @@ test('resolveInstallScript downloads fallback stamps by branch instead of zero c
       sourceRepoRoot: null,
       hermesHome: home,
       emit: ev => logs.push(ev),
-      _download: async (ref, destPath) => {
+      _download: async (_repository, ref, destPath) => {
         refs.push(ref)
         fs.mkdirSync(path.dirname(destPath), { recursive: true })
         fs.writeFileSync(destPath, '#!/bin/sh\necho fallback branch\n')
@@ -186,6 +188,98 @@ test('resolveInstallScript downloads fallback stamps by branch instead of zero c
   } finally {
     fs.rmSync(home, { recursive: true, force: true })
   }
+})
+
+test('schema-v2 product stamps pin the PhantomBot fork and pass it to both installers', () => {
+  const installStamp = {
+    schemaVersion: 2,
+    commit: 'a'.repeat(40),
+    branch: 'main',
+    productCommit: 'b'.repeat(40),
+    productBranch: 'phantomforce/phantombot-product-main',
+    productRepository: 'https://github.com/KIDWST/phantombot.git'
+  }
+
+  assert.deepEqual(installRefForStamp(installStamp), {
+    ref: installStamp.productCommit,
+    cacheKey: installStamp.productCommit,
+    pinned: true
+  })
+  assert.deepEqual(buildPinArgs(installStamp), [
+    '-Commit',
+    installStamp.productCommit,
+    '-Branch',
+    installStamp.productBranch,
+    '-RepositoryUrl',
+    installStamp.productRepository
+  ])
+  assert.deepEqual(
+    buildPosixPinArgs({
+      installStamp,
+      activeRoot: '/tmp/phantombot',
+      hermesHome: '/tmp/hermes'
+    }),
+    [
+      '--dir',
+      '/tmp/phantombot',
+      '--hermes-home',
+      '/tmp/hermes',
+      '--branch',
+      installStamp.productBranch,
+      '--commit',
+      installStamp.productCommit,
+      '--repository-url',
+      installStamp.productRepository
+    ]
+  )
+})
+
+test('new PhantomBot packages never fall back to the upstream Hermes source', async () => {
+  const home = mkTmpHome()
+
+  try {
+    await assert.rejects(
+      resolveInstallScript({
+        installStamp: {
+          schemaVersion: 2,
+          commit: 'a'.repeat(40),
+          productCommit: 'b'.repeat(40),
+          productBranch: 'main',
+          productRepository: null
+        },
+        sourceRepoRoot: null,
+        hermesHome: home,
+        emit: () => {}
+      }),
+      /no PhantomBot product source/
+    )
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('GitHub product repositories resolve to immutable raw script URLs', () => {
+  assert.equal(
+    githubRawScriptUrl('https://github.com/KIDWST/phantombot.git', 'phantomforce/release', 'install.ps1'),
+    'https://raw.githubusercontent.com/KIDWST/phantombot/phantomforce/release/scripts/install.ps1'
+  )
+  assert.throws(
+    () => githubRawScriptUrl('https://github.com/NousResearch/hermes-agent/tree/main', 'main', 'install.sh'),
+    /public https:\/\/github.com/
+  )
+  assert.throws(
+    () => githubRawScriptUrl('https://github.com/NousResearch/hermes-agent.git', 'main', 'install.sh'),
+    /public https:\/\/github.com/
+  )
+})
+
+test('product script caches are namespaced by repository', () => {
+  const ref = 'main'
+
+  assert.notEqual(
+    repositoryCacheKey('https://github.com/KIDWST/phantombot.git', ref),
+    repositoryCacheKey('https://github.com/NousResearch/hermes-agent.git', ref)
+  )
 })
 
 test('resolveInstallScript prefers a cached script without touching the network', async () => {
