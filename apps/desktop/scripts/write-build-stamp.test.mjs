@@ -8,14 +8,17 @@ import {
   fromFallback,
   fromLocalGit,
   isFallbackCommit,
+  resolveKernelPin,
   resolveStamp
 } from './write-build-stamp.mjs'
 
 test('fromCI reads GITHUB_SHA / GITHUB_REF_NAME', () => {
-  assert.deepEqual(
-    fromCI({ GITHUB_SHA: 'a'.repeat(40), GITHUB_REF_NAME: 'release' }),
-    { commit: 'a'.repeat(40), branch: 'release', dirty: false, source: 'ci' }
-  )
+  assert.deepEqual(fromCI({ GITHUB_SHA: 'a'.repeat(40), GITHUB_REF_NAME: 'release' }), {
+    commit: 'a'.repeat(40),
+    branch: 'release',
+    dirty: false,
+    source: 'ci'
+  })
   assert.equal(fromCI({}), null)
 })
 
@@ -26,7 +29,7 @@ test('fromLocalGit returns null when git rev-parse fails', () => {
 
 test('fromLocalGit reads HEAD + branch + dirty status', () => {
   const calls = []
-  const execFn = (cmd) => {
+  const execFn = cmd => {
     calls.push(cmd)
     if (cmd === 'git rev-parse HEAD') return 'b'.repeat(40)
     if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'main'
@@ -63,7 +66,7 @@ test('resolveStamp prefers CI over local git over fallback', () => {
 
   const local = resolveStamp({
     env: {},
-    execFn: (cmd) => {
+    execFn: cmd => {
       if (cmd === 'git rev-parse HEAD') return 'd'.repeat(40)
       if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'main'
       if (cmd === 'git status --porcelain -uno') return ''
@@ -83,4 +86,32 @@ test('resolveStamp falls back when neither CI nor git is available', () => {
     dirty: false,
     source: 'fallback'
   })
+})
+
+test('resolveKernelPin keeps the distributable kernel separate from the product commit', () => {
+  assert.deepEqual(
+    resolveKernelPin({
+      env: { PHANTOMBOT_KERNEL_COMMIT: 'e'.repeat(40), PHANTOMBOT_KERNEL_BRANCH: 'main' },
+      execFn: () => {
+        throw new Error('must not resolve git when the production pin is explicit')
+      }
+    }),
+    { commit: 'e'.repeat(40), branch: 'main', source: 'explicit' }
+  )
+
+  assert.deepEqual(
+    resolveKernelPin({
+      env: {},
+      execFn: command => (command === 'git merge-base HEAD origin/main' ? 'f'.repeat(40) : null)
+    }),
+    { commit: 'f'.repeat(40), branch: 'main', source: 'merge-base:origin/main' }
+  )
+
+  assert.deepEqual(
+    resolveKernelPin({
+      env: {},
+      execFn: command => (command === 'git rev-list --max-parents=0 HEAD' ? '1'.repeat(40) : null)
+    }),
+    { commit: '1'.repeat(40), branch: 'main', source: 'product-shallow-root' }
+  )
 })
