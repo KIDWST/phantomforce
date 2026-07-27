@@ -11,6 +11,7 @@ import { spawn, spawnSync } from "node:child_process";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relative) => readFileSync(path.join(root, relative), "utf8");
 const index = read("app/index.html");
+const mainJs = read("app/js/main.js");
 const mobileCss = read("app/workspace-mobile-integrity.css");
 const staticServer = read("ops/admin-live/admin-static-server.mjs");
 const apiServer = read("server/src/index.ts");
@@ -60,7 +61,11 @@ function rawRequest(port, pathname) {
    live status, reduced motion, and targeted build refresh. */
 assert.match(index, /<a class="pf-skip-link" href="#phantom-main">Skip to main workspace<\/a>/u);
 assert.match(index, /<main class="console" id="phantom-main" data-console tabindex="-1">/u);
-assert.match(index, /data-chat-log aria-live="polite"/u);
+/* The PhantomAI chat log was promoted from a static index.html element
+   into a template literal injected by app/js/main.js (commit 09732cff).
+   The accessibility contract — role="log", aria-live="polite" — must survive
+   that move; assert it against the live generating source, not the stale HTML. */
+assert.match(mainJs, /data-phantomai-chat-log role="log" aria-live="polite"/u);
 assert.match(mobileCss, /\.pf-skip-link:focus\s*\{[\s\S]*?transform:\s*translateY\(0\)/u);
 assert.match(mobileCss, /@media \(prefers-reduced-motion: reduce\)/u);
 assert.doesNotMatch(index, /getRegistrations\(\)[\s\S]*?unregister\(\)/u,
