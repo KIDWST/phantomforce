@@ -7,14 +7,20 @@ import type { EnvVarInfo, OAuthProvider } from '@/types/hermes'
 const listOAuthProviders = vi.fn()
 const disconnectOAuthProvider = vi.fn()
 const getEnvVars = vi.fn()
+const getRecommendedDefaultModel = vi.fn()
+const setEnvVar = vi.fn()
+const setModelAssignment = vi.fn()
 const startManualProviderOAuth = vi.fn()
 const startManualLocalEndpoint = vi.fn()
 const onboarding = atom({ manual: false })
 
 vi.mock('@/hermes', () => ({
   disconnectOAuthProvider: (providerId: string) => disconnectOAuthProvider(providerId),
+  getRecommendedDefaultModel: (provider: string) => getRecommendedDefaultModel(provider),
   getEnvVars: () => getEnvVars(),
-  listOAuthProviders: () => listOAuthProviders()
+  listOAuthProviders: () => listOAuthProviders(),
+  setEnvVar: (key: string, value: string) => setEnvVar(key, value),
+  setModelAssignment: (body: unknown) => setModelAssignment(body)
 }))
 
 vi.mock('@/store/onboarding', () => ({
@@ -60,6 +66,9 @@ function keyVar(patch: Partial<EnvVarInfo> = {}): EnvVarInfo {
 beforeEach(() => {
   onboarding.set({ manual: false })
   getEnvVars.mockResolvedValue({})
+  getRecommendedDefaultModel.mockResolvedValue({ free_tier: null, model: 'gpt-5.5', provider: 'openai' })
+  setEnvVar.mockResolvedValue({ ok: true })
+  setModelAssignment.mockResolvedValue({ model: 'gpt-5.5', provider: 'openai', stale_aux: [] })
   disconnectOAuthProvider.mockResolvedValue({ ok: true, provider: 'nous' })
   listOAuthProviders.mockResolvedValue({
     providers: [provider('nous', true), provider('minimax-oauth', false)]
@@ -202,5 +211,38 @@ describe('ProvidersSettings', () => {
     fireEvent.click(row)
 
     await waitFor(() => expect(startManualLocalEndpoint).toHaveBeenCalledWith(null))
+  })
+
+  it('saves an OpenAI key and switches the main model without OAuth login', async () => {
+    getEnvVars.mockResolvedValue({
+      OPENAI_API_KEY: keyVar({ provider: 'openai', provider_label: 'OpenAI' })
+    })
+    listOAuthProviders.mockResolvedValue({ providers: [] })
+    const onMainModelChanged = vi.fn()
+
+    const { ProvidersSettings } = await import('./providers-settings')
+    render(
+      <ProvidersSettings
+        onClose={vi.fn()}
+        onMainModelChanged={onMainModelChanged}
+        onViewChange={vi.fn()}
+        view="keys"
+      />
+    )
+
+    const input = await screen.findByPlaceholderText('Paste OPENAI_API_KEY')
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'sk-openai-test' } })
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save + switch' }))
+    })
+
+    await waitFor(() => expect(setEnvVar).toHaveBeenCalledWith('OPENAI_API_KEY', 'sk-openai-test'))
+    expect(getRecommendedDefaultModel).toHaveBeenCalledWith('openai')
+    expect(setModelAssignment).toHaveBeenCalledWith({ model: 'gpt-5.5', provider: 'openai', scope: 'main' })
+    expect(onMainModelChanged).toHaveBeenCalledWith('openai', 'gpt-5.5')
+    expect(startManualProviderOAuth).not.toHaveBeenCalled()
   })
 })

@@ -15,9 +15,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { RowButton } from '@/components/ui/row-button'
 import { SearchField } from '@/components/ui/search-field'
-import { disconnectOAuthProvider, listOAuthProviders } from '@/hermes'
+import { disconnectOAuthProvider, getRecommendedDefaultModel, listOAuthProviders, setModelAssignment } from '@/hermes'
 import { useI18n } from '@/i18n'
-import { Check, ChevronDown, ChevronRight, KeyRound, Loader2, Terminal, Trash2 } from '@/lib/icons'
+import { Check, ChevronDown, ChevronRight, KeyRound, Loader2, Save, Terminal, Trash2, Zap } from '@/lib/icons'
 import { normalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
@@ -331,6 +331,175 @@ function LocalEndpointRow({ onOpen }: { onOpen: (reason: null | string) => void 
   )
 }
 
+const QUICK_KEY_PROVIDERS = [
+  {
+    envKey: 'OPENROUTER_API_KEY',
+    fallbackModel: 'anthropic/claude-sonnet-4',
+    label: 'OpenRouter',
+    provider: 'openrouter',
+    summary: 'One key for OpenAI, Anthropic, and other routed models.'
+  },
+  {
+    envKey: 'OPENAI_API_KEY',
+    fallbackModel: 'gpt-5.5',
+    label: 'OpenAI',
+    provider: 'openai',
+    summary: 'Direct OpenAI key for GPT models.'
+  },
+  {
+    envKey: 'ANTHROPIC_API_KEY',
+    fallbackModel: 'claude-sonnet-4-6',
+    label: 'Anthropic',
+    provider: 'anthropic',
+    summary: 'Direct Anthropic key for Claude models.'
+  }
+] as const
+
+function QuickModelKeySwitcher({
+  onMainModelChanged,
+  saveValue,
+  vars
+}: {
+  onMainModelChanged?: (provider: string, model: string) => void
+  saveValue: (key: string, value: string) => Promise<{ message?: string; ok: boolean }>
+  vars: Record<string, EnvVarInfo>
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [busyProvider, setBusyProvider] = useState<null | string>(null)
+
+  function updateDraft(envKey: string, value: string) {
+    setDrafts(current => ({ ...current, [envKey]: value }))
+  }
+
+  async function saveAndSwitch(item: (typeof QUICK_KEY_PROVIDERS)[number]) {
+    const draft = drafts[item.envKey]?.trim() ?? ''
+    const existing = vars[item.envKey]?.is_set
+
+    if (!draft && !existing) {
+      notify({
+        kind: 'info',
+        message: `Paste a ${item.label} key first, then switch.`,
+        title: 'Key needed'
+      })
+
+      return
+    }
+
+    setBusyProvider(item.provider)
+
+    try {
+      if (draft) {
+        const saved = await saveValue(item.envKey, draft)
+
+        if (!saved.ok) {
+          return
+        }
+
+        setDrafts(current => {
+          const next = { ...current }
+          delete next[item.envKey]
+
+          return next
+        })
+      }
+
+      let provider: string = item.provider
+      let model: string = item.fallbackModel
+
+      try {
+        const recommended = await getRecommendedDefaultModel(item.provider)
+        provider = recommended.provider || provider
+        model = recommended.model || model
+      } catch {
+        // Fall back to a known-good local catalog default if recommendation is unavailable.
+      }
+
+      const result = await setModelAssignment({ model, provider, scope: 'main' })
+      const appliedProvider = result.provider || provider
+      const appliedModel = result.model || model
+      onMainModelChanged?.(appliedProvider, appliedModel)
+      notify({
+        kind: 'success',
+        message: `PhantomBot is now using ${item.label} (${appliedModel}).`,
+        title: 'Provider switched'
+      })
+    } catch (err) {
+      notifyError(err, `Could not switch to ${item.label}`)
+    } finally {
+      setBusyProvider(null)
+    }
+  }
+
+  return (
+    <section className="grid gap-2 rounded-[6px] border border-(--ui-stroke-secondary) bg-(--ui-bg-quaternary) p-3">
+      <div className="flex items-center gap-2">
+        <Zap className="size-4 text-primary" />
+        <div className="min-w-0">
+          <h3 className="truncate text-[length:var(--conversation-text-font-size)] font-semibold">
+            Quick model keys
+          </h3>
+          <p className="text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+            Local, no-login switching for PhantomBot. Paste once, then use Switch any time.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-2">
+        {QUICK_KEY_PROVIDERS.map(item => {
+          const info = vars[item.envKey]
+          const set = Boolean(info?.is_set)
+          const busy = busyProvider === item.provider
+
+          return (
+            <div
+              className="grid gap-2 rounded-[6px] bg-(--ui-bg-primary) p-2 @2xl:grid-cols-[minmax(0,1fr)_minmax(14rem,20rem)_auto] @2xl:items-center"
+              key={item.envKey}
+            >
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={cn('size-2 shrink-0 rounded-full', set ? 'bg-primary' : 'bg-(--ui-stroke-secondary)')} />
+                  <span className="truncate text-sm font-medium">{item.label}</span>
+                  {set && (
+                    <span className="truncate text-xs text-(--ui-text-tertiary)">
+                      {info?.redacted_value || 'saved'}
+                    </span>
+                  )}
+                </div>
+                <p className="truncate text-xs text-(--ui-text-tertiary)">{item.summary}</p>
+              </div>
+              <input
+                autoComplete="off"
+                className={cn(
+                  'h-8 min-w-0 rounded-[6px] border border-(--ui-stroke-secondary) bg-(--ui-bg-secondary) px-2.5 text-sm outline-none transition focus:border-primary',
+                  'placeholder:text-(--ui-text-tertiary)'
+                )}
+                onChange={event => updateDraft(item.envKey, event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') {
+                    void saveAndSwitch(item)
+                  }
+                }}
+                placeholder={set ? `Replace ${item.envKey}` : `Paste ${item.envKey}`}
+                type="password"
+                value={drafts[item.envKey] ?? ''}
+              />
+              <Button
+                className="justify-self-start @2xl:justify-self-end"
+                disabled={busy || (!set && !drafts[item.envKey]?.trim())}
+                onClick={() => void saveAndSwitch(item)}
+                size="sm"
+                type="button"
+              >
+                {busy ? <Loader2 className="size-3.5 animate-spin" /> : drafts[item.envKey]?.trim() ? <Save /> : <Zap />}
+                {busy ? 'Switching...' : drafts[item.envKey]?.trim() ? 'Save + switch' : 'Switch'}
+              </Button>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 export function ProvidersSettings({
   onClose,
   onConfigSaved,
@@ -339,7 +508,7 @@ export function ProvidersSettings({
   view
 }: ProvidersSettingsProps) {
   const { t } = useI18n()
-  const { rowProps, vars } = useEnvCredentials()
+  const { rowProps, saveValue, vars } = useEnvCredentials()
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([])
   const [openProvider, setOpenProvider] = useState<null | string>(null)
   const [disconnecting, setDisconnecting] = useState<null | string>(null)
@@ -454,6 +623,11 @@ export function ProvidersSettings({
 
     return (
       <SettingsContent>
+        <QuickModelKeySwitcher
+          onMainModelChanged={onMainModelChanged}
+          saveValue={saveValue}
+          vars={vars}
+        />
         <LocalEndpointRow onOpen={startManualLocalEndpoint} />
         {keyGroups.length > 0 ? (
           <div className="grid gap-3">
