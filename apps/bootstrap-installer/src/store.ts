@@ -68,7 +68,7 @@ export type Route = 'welcome' | 'progress' | 'success' | 'failure'
 
 /// How the installer was launched, mirrored from src-tauri AppMode.
 /// 'install' = first-run onboarding (bare launch). 'update' = driven by the
-/// desktop app handing off via `Hermes-Setup.exe --update`.
+/// desktop app handing off via `PhantomBot-Setup.exe --update`.
 export type AppMode = 'install' | 'update'
 
 export const $route = atom<Route>('welcome')
@@ -77,16 +77,21 @@ export const $bootstrap = atom<BootstrapStateModel>(INITIAL)
 export const $logPath = atom<string | null>(null)
 export const $hermesHome = atom<string | null>(null)
 
-export const $progress = computed($bootstrap, (b) => {
+export const $progress = computed($bootstrap, b => {
   const total = b.stageOrder.length
 
-  if (total === 0) {return { done: 0, total: 0, fraction: 0 }}
+  if (total === 0) {
+    return { done: 0, total: 0, fraction: 0 }
+  }
+
   let done = 0
 
   for (const name of b.stageOrder) {
     const s = b.stages[name]?.state
 
-    if (s === 'succeeded' || s === 'skipped' || s === 'failed') {done += 1}
+    if (s === 'succeeded' || s === 'skipped' || s === 'failed') {
+      done += 1
+    }
   }
 
   return { done, total, fraction: done / total }
@@ -104,7 +109,9 @@ function withStageState(
 ): BootstrapStateModel {
   const existing = cur.stages[name]
 
-  if (!existing) {return cur}
+  if (!existing) {
+    return cur
+  }
 
   return {
     ...cur,
@@ -169,7 +176,9 @@ type BootstrapEvent =
 let unlisten: UnlistenFn | null = null
 
 export async function initialize(): Promise<void> {
-  if (unlisten) {return}
+  if (unlisten) {
+    return
+  }
 
   // Dev-only isolated preview (see runFakeBoot): drive the screens in a plain
   // browser, no Tauri backend, no real install.
@@ -182,7 +191,9 @@ export async function initialize(): Promise<void> {
     $mode.set(fake === 'update' ? 'update' : 'install')
 
     // Update auto-runs (it's a hand-off); install/failure wait for the welcome click.
-    if (fake === 'update') {void runFakeBoot('update')}
+    if (fake === 'update') {
+      void runFakeBoot('update')
+    }
 
     return
   }
@@ -202,7 +213,7 @@ export async function initialize(): Promise<void> {
     console.warn('failed to fetch installer paths', err)
   }
 
-  unlisten = await listen<BootstrapEvent>('bootstrap', (event) => {
+  unlisten = await listen<BootstrapEvent>('bootstrap', event => {
     const payload = event.payload
     const cur = $bootstrap.get()
 
@@ -239,9 +250,7 @@ export async function initialize(): Promise<void> {
           break
         }
 
-        $bootstrap.set(
-          withStageState(cur, payload.name, payload.state, payload.durationMs, payload.error)
-        )
+        $bootstrap.set(withStageState(cur, payload.name, payload.state, payload.durationMs, payload.error))
 
         break
       }
@@ -264,7 +273,7 @@ export async function initialize(): Promise<void> {
           currentStage: null
         })
 
-        // Install: show the "launch Hermes" success screen. Update: this is a
+        // Install: show the "launch PhantomBot" success screen. Update: this is a
         // hand-off — the installer relaunches the desktop and exits within a
         // few hundred ms, so routing to success just flashes that screen
         // before the window closes. Stay on progress until we exit.
@@ -329,7 +338,7 @@ export async function startUpdate(): Promise<void> {
     return
   }
 
-  // Update is driven by the desktop handing off (Hermes-Setup.exe --update);
+  // Update is driven by the desktop handing off (PhantomBot-Setup.exe --update);
   // there's no welcome click. Reset + jump straight to progress, then let the
   // Rust side stream the synthetic update manifest.
   $bootstrap.set(INITIAL)
@@ -347,16 +356,25 @@ export async function cancelInstall(): Promise<void> {
   await invoke('cancel_bootstrap')
 }
 
-export async function launchHermesDesktop(): Promise<void> {
-  if (fakeMode()) {throw new Error('Preview mode — launching is disabled.')}
+export async function launchPhantomBot(): Promise<void> {
+  if (fakeMode()) {
+    throw new Error('Preview mode — launching is disabled.')
+  }
+
   const installRoot = $bootstrap.get().installRoot
 
-  if (!installRoot) {throw new Error('no install root')}
+  if (!installRoot) {
+    throw new Error('no install root')
+  }
+
   await invoke('launch_hermes_desktop', { installRoot })
 }
 
 export async function openLogDir(): Promise<void> {
-  if (fakeMode()) {return}
+  if (fakeMode()) {
+    return
+  }
+
   await invoke('open_log_dir')
 }
 
@@ -374,7 +392,10 @@ export async function openLogDir(): Promise<void> {
 type FakeMode = 'install' | 'update' | 'failure'
 
 function fakeMode(): FakeMode | null {
-  if (!import.meta.env.DEV || typeof window === 'undefined') {return null}
+  if (!import.meta.env.DEV || typeof window === 'undefined') {
+    return null
+  }
+
   const v = new URLSearchParams(window.location.search).get('fake')
 
   return v === 'install' || v === 'update' || v === 'failure' ? v : null
@@ -389,7 +410,7 @@ const FAKE_INSTALL_STAGES: FakeStage[] = [
   { name: 'system-packages', title: 'System packages' },
   { name: 'uv', title: 'uv' },
   { name: 'python', title: 'Python environment' },
-  { name: 'repo', title: 'Hermes repository' },
+  { name: 'repo', title: 'PhantomBot application files' },
   { name: 'dependencies', title: 'Python dependencies' },
   { name: 'node', title: 'Node runtime' },
   { name: 'desktop', title: 'Desktop app' }
@@ -402,7 +423,7 @@ const FAKE_UPDATE_STAGES: FakeStage[] = [
   { name: 'install', title: 'Installing the update' }
 ]
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
 let fakeRunning = false
 let fakeCancelled = false
@@ -413,11 +434,13 @@ const fakeStage = (name: string, state: StageState, durationMs?: number, error?:
 const fakeLog = (stage: string, line: string) =>
   $bootstrap.set({ ...$bootstrap.get(), logs: [...$bootstrap.get().logs, { stage, line, stream: 'stdout' }] })
 
-const fakeFail = (error: string) =>
-  $bootstrap.set({ ...$bootstrap.get(), status: 'failed', error, currentStage: null })
+const fakeFail = (error: string) => $bootstrap.set({ ...$bootstrap.get(), status: 'failed', error, currentStage: null })
 
 async function runFakeBoot(kind: FakeMode): Promise<void> {
-  if (fakeRunning) {return}
+  if (fakeRunning) {
+    return
+  }
+
   fakeRunning = true
   fakeCancelled = false
 
@@ -425,7 +448,10 @@ async function runFakeBoot(kind: FakeMode): Promise<void> {
     const stages = kind === 'update' ? FAKE_UPDATE_STAGES : FAKE_INSTALL_STAGES
 
     const cancelled = () => {
-      if (!fakeCancelled) {return false}
+      if (!fakeCancelled) {
+        return false
+      }
+
       fakeFail(kind === 'update' ? 'Update cancelled.' : 'Install cancelled.')
       $route.set('failure')
 
@@ -435,7 +461,7 @@ async function runFakeBoot(kind: FakeMode): Promise<void> {
     $bootstrap.set({
       ...INITIAL,
       status: 'running',
-      stageOrder: stages.map((s) => s.name),
+      stageOrder: stages.map(s => s.name),
       stages: Object.fromEntries(
         stages.map((s): [string, StageRecord] => [
           s.name,
@@ -449,7 +475,10 @@ async function runFakeBoot(kind: FakeMode): Promise<void> {
     const failAt = kind === 'failure' ? stages[Math.floor(stages.length / 2)]?.name : null
 
     for (const s of stages) {
-      if (cancelled()) {return}
+      if (cancelled()) {
+        return
+      }
+
       fakeStage(s.name, 'running')
 
       const durationMs = 700 + Math.floor(Math.random() * 2200)
@@ -458,7 +487,10 @@ async function runFakeBoot(kind: FakeMode): Promise<void> {
       for (let l = 0; l < lines; l++) {
         await sleep(durationMs / lines)
 
-        if (cancelled()) {return}
+        if (cancelled()) {
+          return
+        }
+
         fakeLog(s.name, `[${s.name}] ${s.title.toLowerCase()} — step ${l + 1}/${lines}…`)
       }
 
@@ -477,7 +509,9 @@ async function runFakeBoot(kind: FakeMode): Promise<void> {
 
     // Install lands on success; update stays on progress (the real updater
     // relaunches the desktop and exits from there).
-    if (kind !== 'update') {$route.set('success')}
+    if (kind !== 'update') {
+      $route.set('success')
+    }
   } finally {
     fakeRunning = false
   }

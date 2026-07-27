@@ -33,6 +33,34 @@ const SYSTEM_MONO = 'Menlo, Monaco, "SF Mono", "Courier Prime", monospace, ' + E
 
 export const DEFAULT_TYPOGRAPHY: DesktopThemeTypography = { fontSans: SYSTEM_SANS, fontMono: SYSTEM_MONO }
 
+const PHANTOM_EMERALD = '#18F58A'
+const PHANTOM_EMERALD_DEEP = '#075C39'
+
+export const phantomForceTheme: DesktopTheme = {
+  name: 'phantomforce',
+  label: 'PhantomForce',
+  description: 'Obsidian operator surfaces with electric emerald accents',
+  colors: {
+    background: '#F4F9F6', foreground: '#111914', card: '#FCFFFD', cardForeground: '#111914',
+    muted: '#E8F3EC', mutedForeground: '#54685B', popover: '#FFFFFF', popoverForeground: '#111914',
+    primary: '#087747', primaryForeground: '#F5FFF9', secondary: '#DDF5E7', secondaryForeground: '#163C28',
+    accent: '#D5F8E5', accentForeground: '#0B3A22', border: '#B6D8C3', input: '#A9CFB8', ring: '#087747',
+    midground: '#087747', midgroundForeground: '#FFFFFF', composerRing: '#0AA760', destructive: '#C83952',
+    destructiveForeground: '#FFFFFF', sidebarBackground: '#EAF4EE', sidebarBorder: '#B9D8C5',
+    userBubble: '#DFF5E8', userBubbleBorder: '#A8D3B8'
+  },
+  darkColors: {
+    background: '#050806', foreground: '#E8F7EE', card: '#0B110D', cardForeground: '#E8F7EE',
+    muted: '#111A14', mutedForeground: '#8DA89A', popover: '#0D1510', popoverForeground: '#EDFFF4',
+    primary: PHANTOM_EMERALD, primaryForeground: '#021009', secondary: '#102A1C', secondaryForeground: '#C8F8DA',
+    accent: '#0D3622', accentForeground: '#D9FFE7', border: '#1C3C2A', input: '#234E35', ring: PHANTOM_EMERALD,
+    midground: PHANTOM_EMERALD, midgroundForeground: '#021009', composerRing: PHANTOM_EMERALD,
+    destructive: '#FF5570', destructiveForeground: '#160006', sidebarBackground: '#030604', sidebarBorder: '#163222',
+    userBubble: '#0B2819', userBubbleBorder: PHANTOM_EMERALD_DEEP
+  },
+  typography: { fontSans: SYSTEM_SANS, fontMono: `"JetBrains Mono", ${SYSTEM_MONO}` }
+}
+
 /**
  * Nous — the canonical Hermes desktop identity, forked from the GitHub VS Code
  * theme (github.github-vscode-theme). Light is GitHub Light Default, dark is
@@ -770,6 +798,7 @@ export const slateTheme: DesktopTheme = {
 }
 
 export const BUILTIN_THEMES: Record<string, DesktopTheme> = {
+  phantomforce: phantomForceTheme,
   nous: nousTheme,
   github: githubTheme,
   catppuccin: catppuccinTheme,
@@ -785,4 +814,4 @@ export const BUILTIN_THEMES: Record<string, DesktopTheme> = {
 export const BUILTIN_THEME_LIST = Object.values(BUILTIN_THEMES)
 
 /** Skin used when nothing is persisted or the persisted name is retired. */
-export const DEFAULT_SKIN_NAME = 'nous'
+export const DEFAULT_SKIN_NAME = 'phantomforce'
