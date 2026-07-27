@@ -10,6 +10,18 @@ DEFAULT_CONFIG = {
     "fallback_providers": [],
     "credential_pool_strategies": {},
     "toolsets": ["hermes-cli"],
+    # PhantomBot Auto stores non-secret routing preferences. Provider
+    # credentials remain in .env or the provider authentication stores.
+    "phantombot": {
+        "autoRouting": {
+            "version": 1,
+            "routes": {
+                "reasoning": {"option_id": "openrouter.glm-5.2"},
+                "image": {"option_id": "openai.gpt-image-1"},
+                "video": {"option_id": "higgsfield.subscription"},
+            },
+        },
+    },
     # SQLite journal mode used by every Hermes database opener. WAL is the
     # normal default; set DELETE for weak-fsync/shared filesystems where WAL is
     # not crash-safe (for example macOS virtiofs, NFS, or SMB).
