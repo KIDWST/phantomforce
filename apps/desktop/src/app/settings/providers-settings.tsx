@@ -352,6 +352,13 @@ const QUICK_KEY_PROVIDERS = [
     label: 'Anthropic',
     provider: 'anthropic',
     summary: 'Direct Anthropic key for Claude models.'
+  },
+  {
+    envKey: 'GEMINI_API_KEY',
+    fallbackModel: 'gemini-2.5-flash',
+    label: 'Gemini',
+    provider: 'google',
+    summary: 'Direct Gemini key for Google models.'
   }
 ] as const
 
@@ -436,10 +443,10 @@ function QuickModelKeySwitcher({
         <Zap className="size-4 text-primary" />
         <div className="min-w-0">
           <h3 className="truncate text-[length:var(--conversation-text-font-size)] font-semibold">
-            Quick model keys
+            API keys / quick model routing
           </h3>
           <p className="text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-            Local, no-login switching for PhantomBot. Paste once, then use Switch any time.
+            Local, no-login switching for PhantomBot. Rotate OpenAI, Anthropic, OpenRouter, or Gemini keys here, then use Switch any time.
           </p>
         </div>
       </div>

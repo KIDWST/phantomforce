@@ -103,6 +103,7 @@ import {
   ARTIFACTS_ROUTE,
   MESSAGING_ROUTE,
   SIDEBAR_NAV_AREA,
+  SETTINGS_ROUTE,
   type SidebarNavContribution,
   SKILLS_ROUTE
 } from '../../routes'
@@ -168,6 +169,12 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     icon: props => <Codicon name="files" {...props} />,
     route: ARTIFACTS_ROUTE,
     keybindActionId: 'nav.artifacts'
+  },
+  {
+    id: 'api-keys',
+    label: 'API keys',
+    icon: props => <Codicon name="key" {...props} />,
+    route: `${SETTINGS_ROUTE}?tab=providers&pview=keys`
   }
 ]
 
@@ -256,7 +263,7 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const { t } = useI18n()
   const s = t.sidebar
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   // Contributed nav rows (plugins pairing a page with a sidebar entry) render
   // below the built-ins with the same chrome; active = at their route.
   const navContributions = useContributions(SIDEBAR_NAV_AREA)
@@ -1109,6 +1116,7 @@ export function ChatSidebar({
                   (item.id === 'skills' && currentView === 'skills') ||
                   (item.id === 'messaging' && currentView === 'messaging') ||
                   (item.id === 'artifacts' && currentView === 'artifacts') ||
+                  (item.id === 'api-keys' && currentView === 'settings' && search.includes('pview=keys')) ||
                   // Contributed rows light up at their own route.
                   (Boolean(item.route) && pathname === item.route)
 
