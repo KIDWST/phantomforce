@@ -223,6 +223,7 @@ import { createPoolStopper } from './pool-stop'
 import { poolTouchKeys } from './pool-touch-scope'
 import { createKeepAwake } from './power-save'
 import { PreviewReachRegistry } from './preview-reach'
+import { PRODUCT_IDENTITY } from './product-identity'
 import {
   createPrimaryRemoteConnection,
   FirstRunSetupResetError,
@@ -250,6 +251,13 @@ import {
 import { createQuickEntryShortcut, quickEntryWindowBounds, sanitizeQuickEntrySettings } from './quick-entry'
 import { type ActiveWork, mergeActiveWork, normalizeActiveWork, quitPromptFor } from './quit-guard'
 import * as remoteLifecycle from './remote-lifecycle'
+import {
+  createPackagedSourceIdentity,
+  createRuntimeIdentity,
+  parseAheadBehind,
+  parseRuntimeUrl,
+  resolveRuntimeMode
+} from './runtime-identity'
 import {
   RemoteLivenessTracker,
   RemoteRevalidationCoordinator,
@@ -800,7 +808,7 @@ const BOOT_FAKE_STEP_MS = (() => {
   return Math.max(120, raw)
 })()
 
-const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME || 'PhantomBot'
+const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME || PRODUCT_IDENTITY.displayName
 const HUD_WINDOW_TITLE = `${APP_NAME} HUD`
 const TITLEBAR_HEIGHT = 34
 const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14
@@ -1194,7 +1202,7 @@ app.setName(APP_NAME)
 // need this, so gate it on Windows. (Fixes: desktop approval/turn notifications
 // never firing on Windows.)
 if (IS_WINDOWS) {
-  app.setAppUserModelId('online.phantomforce.phantombot')
+  app.setAppUserModelId(PRODUCT_IDENTITY.appId)
 }
 
 // Seed the native About panel with the live Hermes version. This is refreshed
@@ -14574,21 +14582,146 @@ function showAboutPanelFresh() {
       applicationVersion: skew.outOfSync
         ? `${resolveHermesVersion()} — app build out of date, update the desktop app`
         : resolveHermesVersion(),
-      copyright: 'Copyright © 2026 Nous Research'
+      copyright: PRODUCT_IDENTITY.copyright
     })
     app.showAboutPanel()
   })
 }
 
+async function gitRuntimeValue(root, args) {
+  try {
+    const result = await runGit(args, { cwd: root })
+
+    return result.code === 0 ? result.stdout.trim() : null
+  } catch {
+    return null
+  }
+}
+
+async function collectRuntimeIdentity() {
+  const repositoryRoot = APP_ROOT
+  const [worktree, remote, branch, commit, status, upstream, counts] = await Promise.all([
+    gitRuntimeValue(repositoryRoot, ['rev-parse', '--show-toplevel']),
+    gitRuntimeValue(repositoryRoot, ['remote', 'get-url', 'origin']),
+    gitRuntimeValue(repositoryRoot, ['branch', '--show-current']),
+    gitRuntimeValue(repositoryRoot, ['rev-parse', 'HEAD']),
+    gitRuntimeValue(repositoryRoot, ['status', '--porcelain']),
+    gitRuntimeValue(repositoryRoot, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']),
+    gitRuntimeValue(repositoryRoot, ['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'])
+  ])
+
+  const { ahead, behind } = parseAheadBehind(counts)
+  const sourceWorktree = worktree || repositoryRoot
+  let connection = null
+  let connectionError = null
+
+  try {
+    connection = await ensureBackend(null)
+  } catch (error) {
+    connectionError = error
+  }
+
+  const processHandle: any = backendConnectionState.getProcess()
+  const parsedUrl = parseRuntimeUrl(connection?.baseUrl)
+  let resolvedBackend: any = null
+
+  try {
+    resolvedBackend = resolveHermesBackend(['serve', '--host', '127.0.0.1', '--port', '0'])
+  } catch {
+    // Diagnostics must still render when runtime resolution itself is broken.
+  }
+
+  const kernelRoot = resolvedBackend?.root || ACTIVE_HERMES_ROOT
+  const kernelCommit = await gitRuntimeValue(kernelRoot, ['rev-parse', 'HEAD'])
+  const explicitMode = process.env.PHANTOMBOT_RUNTIME_MODE || process.env.HERMES_DESKTOP_RUNTIME_MODE
+  const mode = resolveRuntimeMode({
+    explicitMode,
+    isPackaged: IS_PACKAGED,
+    sourceIsGitWorktree: Boolean(worktree)
+  })
+  const deploymentPath = mode === 'packaged' ? path.dirname(process.execPath) : null
+  const backendMode = connection?.mode === 'local' || connection?.mode === 'remote' ? connection.mode : 'unknown'
+  const command = processHandle?.spawnargs?.length
+    ? processHandle.spawnargs.map(value => String(value)).join(' ')
+    : resolvedBackend?.command
+      ? [resolvedBackend.command, ...(resolvedBackend.args || [])].join(' ')
+      : null
+  const sourceIdentity = deploymentPath
+    ? createPackagedSourceIdentity(deploymentPath, INSTALL_STAMP)
+    : {
+        ahead,
+        behind,
+        branch: branch || null,
+        commit,
+        dirty: status === null ? null : Boolean(status),
+        remote,
+        repositoryRoot: sourceWorktree,
+        upstream,
+        worktree: sourceWorktree
+      }
+
+  return createRuntimeIdentity({
+    appPath: APP_ROOT,
+    appVersion: app.getVersion(),
+    arch: process.arch,
+    backend: {
+      baseUrl: connection?.baseUrl || null,
+      command,
+      health: connection ? 'ready' : connectionError ? 'offline' : processHandle ? 'starting' : 'degraded',
+      host: parsedUrl.host,
+      managed: Boolean(processHandle),
+      mode: backendMode,
+      pid: Number.isInteger(processHandle?.pid) ? processHandle.pid : null,
+      port: parsedUrl.port,
+      profile: readActiveDesktopProfile() || 'default',
+      workingDirectory: backendMode === 'remote' ? null : resolveHermesCwd()
+    },
+    build:
+      mode === 'packaged' && INSTALL_STAMP
+        ? {
+            branch: INSTALL_STAMP.productBranch,
+            builtAt: INSTALL_STAMP.builtAt,
+            commit: INSTALL_STAMP.productCommit || null,
+            dirty: INSTALL_STAMP.dirty,
+            kernelCommit: INSTALL_STAMP.commit || kernelCommit,
+            source: INSTALL_STAMP.source
+          }
+        : {
+            branch: branch || null,
+            commit,
+            dirty: status === null ? null : Boolean(status),
+            kernelCommit,
+            source: mode === 'worktree-development' ? 'worktree' : null
+          },
+    deploymentPath,
+    electronVersion: process.versions.electron,
+    environment: mode === 'worktree-development' ? 'development' : 'production',
+    executable: process.execPath,
+    hermesBinary: processHandle?.spawnfile || resolvedBackend?.command || null,
+    hermesHome: HERMES_HOME,
+    kernelRoot,
+    kernelVersion: resolveHermesVersion(),
+    mode,
+    nodeVersion: process.versions.node,
+    platform: process.platform,
+    source: sourceIdentity,
+    userData: app.getPath('userData')
+  })
+}
+
+ipcMain.handle('hermes:runtime-identity', collectRuntimeIdentity)
+
 ipcMain.handle('hermes:version', async () => {
   const skew = await detectRendererSkew()
 
   return {
-    appVersion: resolveHermesVersion(),
+    appVersion: app.getVersion(),
     electronVersion: process.versions.electron,
     nodeVersion: process.versions.node,
     platform: process.platform,
     hermesRoot: resolveUpdateRoot(),
+    kernelVersion: resolveHermesVersion(),
+    productName: PRODUCT_IDENTITY.displayName,
     bundleOutOfSync: skew.outOfSync,
     bundleCommitsBehind: skew.desktopCommitsBehind
   }
