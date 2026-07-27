@@ -3660,10 +3660,32 @@ body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
   flex-direction: column;
   overflow: hidden;
   background:
+    radial-gradient(42% 54% at 50% 48%,rgba(0,255,148,.12),transparent 62%),
+    radial-gradient(70% 90% at 72% 36%,rgba(0,255,148,.055),transparent 64%),
+    radial-gradient(54% 90% at 18% 20%,rgba(16,255,162,.04),transparent 66%),
     linear-gradient(rgba(125,148,166,.018) 1px,transparent 1px),
     linear-gradient(90deg,rgba(125,148,166,.014) 1px,transparent 1px),
     var(--pbot-bg);
   background-size: 64px 64px;
+}
+.phantombot-stage::before {
+  position: absolute;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 58% 12%,rgba(8,21,15,.34),transparent 48%),
+    linear-gradient(90deg,rgba(2,6,5,.78),transparent 22%,transparent 78%,rgba(2,6,5,.72)),
+    url("/app/assets/command-earth-horizon.png") center/cover no-repeat;
+  opacity: .17;
+  mix-blend-mode: screen;
+}
+.phantombot-stage::after {
+  position: absolute;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg,rgba(0,0,0,.32),transparent 35%,rgba(0,0,0,.46));
 }
 .phantombot-titlebar {
   position: relative;
@@ -3768,11 +3790,13 @@ body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
 
 /* Empty state */
 .phantombot-empty {
+  position: relative;
+  z-index: 2;
   display: grid;
-  width: min(720px,100%);
+  width: min(980px,100%);
   min-height: 100%;
   margin: 0 auto;
-  padding: 8vh 0 7vh;
+  padding: 6vh 0 12vh;
   place-content: center;
   justify-items: center;
   text-align: center;
@@ -3780,14 +3804,14 @@ body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
 .phantombot-empty-mark {
   position: relative;
   display: grid;
-  width: 92px;
-  height: 92px;
-  margin-bottom: 24px;
+  width: 96px;
+  height: 96px;
+  margin-bottom: 18px;
   place-items: center;
-  border: 1px solid rgba(103,237,179,.16);
-  border-radius: 28px;
-  background: radial-gradient(circle,rgba(103,237,179,.12),transparent 68%),rgba(8,15,20,.78);
-  box-shadow: 0 0 58px rgba(103,237,179,.11);
+  border: 1px solid rgba(0,255,148,.34);
+  border-radius: 26px;
+  background: radial-gradient(circle,rgba(0,255,148,.16),transparent 66%),rgba(6,13,10,.82);
+  box-shadow: 0 0 22px rgba(0,255,148,.24),0 0 86px rgba(0,255,148,.18),inset 0 1px rgba(255,255,255,.055);
 }
 .phantombot-empty-mark::before,.phantombot-empty-mark::after {
   position: absolute;
@@ -3804,37 +3828,34 @@ body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
   animation-duration: 18s;
 }
 .phantombot-empty-mark img {
-  width: 70px;
-  height: 70px;
+  width: 72px;
+  height: 72px;
   object-fit: contain;
-  opacity: .82;
-  filter: saturate(1.1) drop-shadow(0 0 14px rgba(103,237,179,.26));
-}
-.phantombot-empty > p {
-  margin: 0 0 9px;
-  color: var(--pbot-live);
-  font: 600 9px "Spline Sans Mono",monospace;
-  letter-spacing: .18em;
+  opacity: .94;
+  filter: saturate(1.2) drop-shadow(0 0 18px rgba(0,255,148,.45));
 }
 .phantombot-empty > h1 {
   margin: 0;
-  color: var(--pbot-text);
-  font: 640 clamp(28px,3vw,42px)/1.08 "Bricolage Grotesque",sans-serif;
-  letter-spacing: -.035em;
+  color: #19f58e;
+  font: 820 clamp(68px,10vw,154px)/.86 "Bricolage Grotesque","Instrument Sans",system-ui,sans-serif;
+  letter-spacing: -.07em;
+  text-shadow: 0 0 14px rgba(0,255,148,.48),0 0 42px rgba(0,255,148,.26),0 16px 54px rgba(0,0,0,.72);
+  text-transform: uppercase;
 }
 .phantombot-empty > span {
-  max-width: 560px;
-  margin-top: 12px;
+  max-width: 720px;
+  margin-top: 22px;
   color: var(--pbot-muted);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: clamp(15px,1.35vw,20px);
+  line-height: 1.42;
+  text-shadow: 0 2px 18px rgba(0,0,0,.72);
 }
 .phantombot-starters {
   display: grid;
   grid-template-columns: repeat(2,minmax(0,1fr));
-  width: min(650px,100%);
-  margin-top: 28px;
-  gap: 8px;
+  width: min(760px,100%);
+  margin-top: 30px;
+  gap: 10px;
 }
 .phantombot-starters button {
   display: flex;
@@ -3843,17 +3864,18 @@ body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
   justify-content: space-between;
   gap: 12px;
   padding: 11px 13px;
-  border: 1px solid var(--pbot-line);
-  border-radius: 10px;
-  background: rgba(255,255,255,.02);
+  border: 1px solid rgba(0,255,148,.18);
+  border-radius: 12px;
+  background: rgba(4,12,9,.54);
+  box-shadow: inset 0 1px rgba(255,255,255,.035);
   color: var(--pbot-muted);
   text-align: left;
   cursor: pointer;
   font-size: 11.5px;
 }
 .phantombot-starters button:hover {
-  border-color: rgba(138,121,255,.42);
-  background: rgba(138,121,255,.065);
+  border-color: rgba(0,255,148,.42);
+  background: rgba(0,255,148,.075);
   color: var(--pbot-text);
 }
 .phantombot-starters i { color: var(--pbot-faint); font-style: normal; }

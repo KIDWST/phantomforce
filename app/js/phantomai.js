@@ -403,19 +403,18 @@ function chatMediaHtml(media = {}) {
 
 function emptyStateHtml() {
   const suggestions = [
-    "Build or fix code in this project",
-    "Review what changed recently",
-    "Plan a feature from start to finish",
-    "Explain this workspace",
+    "Set up API keys and model routing",
+    "Connect ChatGPT, Claude, or Gemini",
+    "Plan the Higgsfield media lane",
+    "Show PhantomBot skills and automations",
   ];
   return `
     <section class="phantombot-empty">
       <div class="phantombot-empty-mark" aria-hidden="true">
-        <img src="/app/assets/brand-phantom.png" alt="" />
+        <img src="/app/assets/brand-phantom-favicon.png" alt="" />
       </div>
-      <p>PHANTOMBOT</p>
-      <h1>What do you want to work on?</h1>
-      <span>Ask a question, build something, inspect the workspace, or turn an idea into a finished task.</span>
+      <h1>PHANTOMBOT</h1>
+      <span>Drop a file path, a traceback, a rough idea, or a provider key setup task. I'll investigate, route the right brain lane, and keep things reversible.</span>
       <div class="phantombot-starters">
         ${suggestions.map((prompt) => `<button type="button" data-phantombot-prompt="${esc(prompt)}">${esc(prompt)}<i>↗</i></button>`).join("")}
       </div>
