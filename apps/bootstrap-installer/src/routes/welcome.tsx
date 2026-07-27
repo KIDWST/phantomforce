@@ -1,13 +1,14 @@
 import { type CSSProperties } from 'react'
 
+import { BrandMark } from '../components/brand-mark'
 import { HackeryButton } from '../components/hackery-button'
 import { startInstall } from '../store'
 
 /*
  * Welcome screen.
  *
- * Mirrors the desktop's chat intro (apps/desktop/src/components/chat/intro.tsx):
- *   - HERMES AGENT wordmark rendered in Collapse Bold, uppercase, tracked
+ * Mirrors the PhantomBot desktop's chat intro:
+ *   - PHANTOMBOT wordmark rendered in Collapse Bold, uppercase, tracked
  *   - mix-blend-plus-lighter so the type "glows" on the canvas
  *   - fit-text utility so the wordmark sizes itself to the column
  *
@@ -17,11 +18,11 @@ import { startInstall } from '../store'
  */
 export default function Welcome() {
   return (
-    <div className="hermes-fade-in flex h-full flex-col items-center justify-center gap-10 px-12 py-10">
-      {/* Hero — same recipe the desktop's chat/intro.tsx uses */}
+    <div className="phantombot-fade-in flex h-full flex-col items-center justify-center gap-8 px-12 py-10">
       <div className="w-full max-w-2xl min-w-0 text-center">
+        <BrandMark aria-hidden="true" className="phantombot-hero-mark mx-auto mb-6 size-28" />
         <p
-          className="fit-text mx-auto mb-4 w-full font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] text-midground mix-blend-plus-lighter dark:text-foreground/90"
+          className="phantombot-wordmark fit-text mx-auto mb-4 w-full font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] mix-blend-plus-lighter"
           style={
             {
               '--fit-text-line-height': '0.9',
@@ -31,18 +32,18 @@ export default function Welcome() {
           }
         >
           <span>
-            <span>HERMES AGENT</span>
+            <span>PHANTOMBOT</span>
           </span>
-          <span aria-hidden="true">HERMES AGENT</span>
+          <span aria-hidden="true">PHANTOMBOT</span>
         </p>
 
         <p className="m-0 text-center text-base leading-normal tracking-tight text-muted-foreground">
-          The agent that grows with you. We&rsquo;ll set things up in the
-          background &mdash; takes a few minutes.
+          Your private local operator. We&rsquo;ll prepare the engine and desktop in the background &mdash; this takes a
+          few minutes.
         </p>
       </div>
 
-      <HackeryButton label="Install" onClick={() => void startInstall()} />
+      <HackeryButton label="Install PhantomBot" onClick={() => void startInstall()} />
     </div>
   )
 }

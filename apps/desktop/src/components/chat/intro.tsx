@@ -1,5 +1,6 @@
 import { type CSSProperties, useState } from 'react'
 
+import { BrandMark } from '@/components/brand-mark'
 import { capitalize, normalize } from '@/lib/text'
 
 import introCopyJsonl from './intro-copy.jsonl?raw'
@@ -166,9 +167,10 @@ export function Intro({ personality, seed }: IntroProps) {
       data-slot="aui_intro"
     >
       <div className="w-full min-w-0">
+        <BrandMark aria-hidden="true" className="phantombot-hero-mark mx-auto mb-4 size-20 sm:size-24" />
         <p
           aria-label={WORDMARK}
-          className="fit-text mx-auto mb-1 w-[calc(100%-1rem)] font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] text-midground mix-blend-plus-lighter dark:text-foreground/90"
+          className="phantombot-wordmark fit-text mx-auto mb-1 w-[calc(100%-1rem)] font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] text-midground mix-blend-plus-lighter"
           style={{ '--fit-min': '2.75rem' } as CSSProperties}
         >
           <span>

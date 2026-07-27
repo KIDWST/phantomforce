@@ -255,9 +255,9 @@ export function resolveStagedUpdaterBinary(
   }
 
   const fileExists = deps.fileExists ?? stagedFileExists
-  const candidate = path.join(hermesHome, 'hermes-setup.exe')
+  const candidates = ['phantombot-setup.exe', 'hermes-setup.exe'].map(name => path.join(hermesHome, name))
 
-  return fileExists(candidate) ? candidate : null
+  return candidates.find(fileExists) ?? null
 }
 
 /**
