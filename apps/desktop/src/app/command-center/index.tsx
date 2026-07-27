@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { upsertDesktopActionTask } from '@/store/activity'
 import { $pinnedSessionIds, pinSession, unpinSession } from '@/store/layout'
 import { $sessions, sessionPinId } from '@/store/session'
+import type { PhantomBotRuntimeIdentity } from '@/types/runtime-identity'
 
 import { useRefreshHotkey } from '../hooks/use-refresh-hotkey'
 import { useRouteEnumParam } from '../hooks/use-route-enum-param'
@@ -136,6 +137,7 @@ export function CommandCenterView({ initialSection, onClose, onDeleteSession, on
 
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusResponse | null>(null)
+  const [runtimeIdentity, setRuntimeIdentity] = useState<PhantomBotRuntimeIdentity | null>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [logFile, setLogFile] = useState<(typeof LOG_FILES)[number]>('agent')
   const [logLevel, setLogLevel] = useState<(typeof LOG_LEVELS)[number]>('ALL')
@@ -177,17 +179,19 @@ export function CommandCenterView({ initialSection, onClose, onDeleteSession, on
     setSystemError('')
 
     try {
-      const [nextStatus, nextLogs] = await Promise.all([
+      const [nextStatus, nextLogs, nextRuntimeIdentity] = await Promise.all([
         getStatus(),
         getLogs({
           file: logFile,
           level: logLevel,
           lines: 200
-        })
+        }),
+        window.hermesDesktop.getRuntimeIdentity()
       ])
 
       setStatus(nextStatus)
       setLogs(nextLogs.lines)
+      setRuntimeIdentity(nextRuntimeIdentity)
     } catch (error) {
       setSystemError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -406,7 +410,7 @@ export function CommandCenterView({ initialSection, onClose, onDeleteSession, on
           ) : section === 'maintenance' ? (
             <MaintenancePanel />
           ) : (
-            <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4">
+            <div className="grid min-h-0 flex-1 grid-rows-[auto_auto_minmax(0,1fr)] gap-4">
               <div>
                 {status ? (
                   <div className="grid gap-2">
@@ -451,6 +455,8 @@ export function CommandCenterView({ initialSection, onClose, onDeleteSession, on
                   <PageLoader className="min-h-32" label={cc.loadingStatus} />
                 )}
               </div>
+
+              {runtimeIdentity && <RuntimeIdentityPanel identity={runtimeIdentity} />}
 
               <div className="flex min-h-0 flex-col pt-2">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
@@ -498,6 +504,75 @@ export function CommandCenterView({ initialSection, onClose, onDeleteSession, on
         </OverlayMain>
       </OverlaySplitLayout>
     </OverlayView>
+  )
+}
+
+function RuntimeIdentityPanel({ identity }: { identity: PhantomBotRuntimeIdentity }) {
+  const { t } = useI18n()
+  const copy = t.commandCenter.runtimeInspector
+  const sourceCommit = identity.source.commit?.slice(0, 12) || copy.unknown
+  const kernelCommit = identity.build.kernelCommit?.slice(0, 12) || copy.unknown
+  const backendAddress = identity.backend.baseUrl || copy.notRunning
+
+  const aheadBehind =
+    identity.source.ahead === null || identity.source.behind === null
+      ? copy.noUpstream
+      : copy.aheadBehind(identity.source.ahead, identity.source.behind)
+
+  const rows = [
+    [copy.source, identity.source.repositoryRoot],
+    [copy.remote, identity.source.remote || copy.unknown],
+    [
+      copy.git,
+      `${identity.source.branch || copy.detached} · ${sourceCommit}${identity.source.dirty ? ` · ${copy.dirty}` : ''} · ${aheadBehind}`
+    ],
+    [copy.worktree, identity.source.worktree],
+    [
+      copy.backend,
+      `${backendAddress} · PID ${identity.backend.pid ?? copy.unknown} · ${identity.backend.managed ? copy.managed : copy.external}`
+    ],
+    [copy.kernel, `${identity.kernel.version} · ${kernelCommit} · ${identity.kernel.root}`],
+    [copy.kernelBinary, identity.kernel.binary || copy.unknown],
+    [copy.desktop, `${identity.desktop.appVersion} · ${identity.desktop.executable}`],
+    [copy.runtime, `Electron ${identity.runtime.electronVersion} · Node ${identity.runtime.nodeVersion}`],
+    [copy.profile, identity.backend.profile || copy.unknown],
+    [copy.hermesHome, identity.config.hermesHome],
+    [copy.userData, identity.config.userData]
+  ] as const
+
+  return (
+    <details className="group rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) px-3 py-2">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block text-[length:var(--conversation-caption-font-size)] font-medium text-foreground">
+            {copy.title}
+          </span>
+          <span className="block truncate font-mono text-[0.65rem] text-(--ui-text-tertiary)">
+            {identity.mode} · {identity.source.branch || copy.detached} · {sourceCommit} · {backendAddress}
+          </span>
+        </span>
+        <span
+          className={cn(
+            'shrink-0 rounded-full px-2 py-0.5 text-[0.625rem] font-medium',
+            identity.backend.health === 'ready'
+              ? 'bg-emerald-500/12 text-emerald-600'
+              : 'bg-amber-500/12 text-amber-600'
+          )}
+        >
+          {identity.backend.health}
+        </span>
+      </summary>
+      <dl className="mt-3 grid gap-x-4 gap-y-2 border-t border-(--ui-stroke-tertiary) pt-3 sm:grid-cols-[7rem_minmax(0,1fr)]">
+        {rows.map(([label, value]) => (
+          <div className="contents" key={label}>
+            <dt className="text-[0.625rem] font-medium uppercase tracking-[0.08em] text-(--ui-text-tertiary)">
+              {label}
+            </dt>
+            <dd className="min-w-0 break-all font-mono text-[0.68rem] text-foreground">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   )
 }
 

@@ -138,9 +138,17 @@ import { serializeJsonBody, setJsonRequestHeaders } from './oauth-net-request'
 import { createKeepAwake } from './power-save'
 import { FirstRunSetupResetError, runPrimaryBackendStartup } from './primary-backend-startup'
 import { rehomePrimaryConnection } from './primary-connection-rehome'
+import { PRODUCT_IDENTITY } from './product-identity'
 import { decideProfileDeleteAction, profileNameFromDeleteRequest, resolveRouteProfile } from './profile-delete-routing'
 import * as remoteLifecycle from './remote-lifecycle'
 import { RemoteLivenessTracker, RemoteRevalidationCoordinator, revalidateRemoteConnection } from './remote-liveness'
+import {
+  createPackagedSourceIdentity,
+  createRuntimeIdentity,
+  parseAheadBehind,
+  parseRuntimeUrl,
+  resolveRuntimeMode
+} from './runtime-identity'
 import {
   buildSessionWindowUrl,
   chatWindowWebPreferences,
@@ -399,7 +407,8 @@ const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, '../..')
 // build hasn't been invoked, or schema mismatch). Callers must handle null.
 //
 // Schema:
-//   { schemaVersion: 1, commit, branch, builtAt, dirty, source }
+//   { schemaVersion: 1, commit, branch, productCommit, productBranch,
+//     productRemote, builtAt, dirty, source }
 const INSTALL_STAMP_SCHEMA_VERSION = 1
 
 function loadInstallStamp() {
@@ -430,6 +439,9 @@ function loadInstallStamp() {
           schemaVersion: parsed.schemaVersion,
           commit: parsed.commit,
           branch: parsed.branch || null,
+          productCommit: parsed.productCommit || null,
+          productBranch: parsed.productBranch || null,
+          productRemote: parsed.productRemote || null,
           builtAt: parsed.builtAt || null,
           dirty: Boolean(parsed.dirty),
           source: parsed.source || null,
@@ -606,7 +618,7 @@ const BOOT_FAKE_STEP_MS = (() => {
   return Math.max(120, raw)
 })()
 
-const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME || 'PhantomBot'
+const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME || PRODUCT_IDENTITY.displayName
 const TITLEBAR_HEIGHT = 34
 const MACOS_TRAFFIC_LIGHTS_HEIGHT = 14
 
@@ -904,7 +916,7 @@ app.setName(APP_NAME)
 // need this, so gate it on Windows. (Fixes: desktop approval/turn notifications
 // never firing on Windows.)
 if (IS_WINDOWS) {
-  app.setAppUserModelId('com.nousresearch.hermes')
+  app.setAppUserModelId(PRODUCT_IDENTITY.appId)
 }
 
 // Seed the native About panel with the live Hermes version. This is refreshed
@@ -914,7 +926,7 @@ if (IS_WINDOWS) {
 app.setAboutPanelOptions({
   applicationName: APP_NAME,
   applicationVersion: resolveHermesVersion(),
-  copyright: 'Copyright © 2026 Nous Research'
+  copyright: PRODUCT_IDENTITY.copyright
 })
 
 // Custom scheme for streaming local media (video/audio) into the renderer.
@@ -7916,7 +7928,11 @@ async function spawnPoolBackend(profile, entry) {
   entry.port = port
 
   const baseUrl = `http://127.0.0.1:${port}`
-  await Promise.race([waitForHermes(baseUrl, token), startFailed])
+  // Local dashboard backends still use the ephemeral desktop session token.
+  // Present it during readiness so kernels predating the public /api/health
+  // endpoint can authenticate, surface the missing route, and fall back to
+  // their credentialed /api/status endpoint.
+  await Promise.race([waitForHermes(baseUrl, token, undefined, 'token'), startFailed])
   ready = true
 
   const authToken = await adoptServedDashboardToken(baseUrl, token, {
@@ -8243,7 +8259,11 @@ async function startHermes() {
 
     const baseUrl = `http://127.0.0.1:${port}`
     await advanceBootProgress('backend.wait', 'Waiting for Hermes backend to become ready', 90)
-    await Promise.race([waitForHermes(baseUrl, token), backendStartFailed])
+    // Keep backward compatibility with installed Hermes kernels that predate
+    // the public /api/health endpoint. Their loopback auth gate rejects an
+    // anonymous probe before route matching; the desktop-issued token lets the
+    // missing route surface and activates the /api/status fallback.
+    await Promise.race([waitForHermes(baseUrl, token, undefined, 'token'), backendStartFailed])
     backendReady = true
     backendStartFailure = null
 
@@ -8387,7 +8407,7 @@ function spawnSecondaryWindow({ sessionId, watch }: { sessionId?: string; watch?
     height: SESSION_WINDOW_MIN_HEIGHT,
     minWidth: SESSION_WINDOW_MIN_WIDTH,
     minHeight: SESSION_WINDOW_MIN_HEIGHT,
-    title: 'Hermes',
+    title: APP_NAME,
     titleBarStyle: 'hidden',
     titleBarOverlay: getTitleBarOverlayOptions(),
     trafficLightPosition: IS_MAC ? WINDOW_BUTTON_POSITION : undefined,
@@ -10579,17 +10599,150 @@ function showAboutPanelFresh() {
   app.setAboutPanelOptions({
     applicationName: APP_NAME,
     applicationVersion: resolveHermesVersion(),
-    copyright: 'Copyright © 2026 Nous Research'
+    copyright: PRODUCT_IDENTITY.copyright
   })
   app.showAboutPanel()
 }
 
+async function gitRuntimeValue(root, args) {
+  try {
+    const result = await runGit(args, { cwd: root })
+
+    return result.code === 0 ? result.stdout.trim() : null
+  } catch {
+    return null
+  }
+}
+
+async function collectRuntimeIdentity() {
+  // Product provenance belongs to the PhantomBot checkout (or packaged build
+  // stamp), never to the separately resolved Hermes kernel checkout.
+  const repositoryRoot = APP_ROOT
+
+  const [worktree, remote, branch, commit, status, upstream, counts] = await Promise.all([
+    gitRuntimeValue(repositoryRoot, ['rev-parse', '--show-toplevel']),
+    gitRuntimeValue(repositoryRoot, ['remote', 'get-url', 'origin']),
+    gitRuntimeValue(repositoryRoot, ['branch', '--show-current']),
+    gitRuntimeValue(repositoryRoot, ['rev-parse', 'HEAD']),
+    gitRuntimeValue(repositoryRoot, ['status', '--porcelain']),
+    gitRuntimeValue(repositoryRoot, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']),
+    gitRuntimeValue(repositoryRoot, ['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'])
+  ])
+
+  const { ahead, behind } = parseAheadBehind(counts)
+  const sourceWorktree = worktree || repositoryRoot
+  let connection = null
+  let connectionError = null
+
+  try {
+    connection = await ensureBackend(null)
+  } catch (error) {
+    connectionError = error
+  }
+
+  const processHandle: any = backendConnectionState.getProcess()
+  const parsedUrl = parseRuntimeUrl(connection?.baseUrl)
+  let resolvedBackend: any = null
+
+  try {
+    resolvedBackend = resolveHermesBackend(['serve', '--host', '127.0.0.1', '--port', '0'])
+  } catch {
+    // Diagnostics must still render when runtime resolution itself is broken.
+  }
+
+  const kernelRoot = resolvedBackend?.root || ACTIVE_HERMES_ROOT
+  const kernelCommit = await gitRuntimeValue(kernelRoot, ['rev-parse', 'HEAD'])
+  const explicitMode = process.env.PHANTOMBOT_RUNTIME_MODE || process.env.HERMES_DESKTOP_RUNTIME_MODE
+
+  const mode = resolveRuntimeMode({
+    explicitMode,
+    isPackaged: IS_PACKAGED,
+    sourceIsGitWorktree: Boolean(worktree)
+  })
+
+  const deploymentPath = mode === 'packaged' ? path.dirname(process.execPath) : null
+
+  const backendMode = connection?.mode === 'local' || connection?.mode === 'remote' ? connection.mode : 'unknown'
+
+  const command = processHandle?.spawnargs?.length
+    ? processHandle.spawnargs.map(value => String(value)).join(' ')
+    : resolvedBackend?.command
+      ? [resolvedBackend.command, ...(resolvedBackend.args || [])].join(' ')
+      : null
+
+  const sourceIdentity = deploymentPath
+    ? createPackagedSourceIdentity(deploymentPath, INSTALL_STAMP)
+    : {
+        ahead,
+        behind,
+        branch: branch || null,
+        commit,
+        dirty: status === null ? null : Boolean(status),
+        remote,
+        repositoryRoot: sourceWorktree,
+        upstream,
+        worktree: sourceWorktree
+      }
+
+  return createRuntimeIdentity({
+    appPath: APP_ROOT,
+    appVersion: app.getVersion(),
+    arch: process.arch,
+    backend: {
+      baseUrl: connection?.baseUrl || null,
+      command,
+      health: connection ? 'ready' : connectionError ? 'offline' : processHandle ? 'starting' : 'degraded',
+      host: parsedUrl.host,
+      managed: Boolean(processHandle),
+      mode: backendMode,
+      pid: Number.isInteger(processHandle?.pid) ? processHandle.pid : null,
+      port: parsedUrl.port,
+      profile: readActiveDesktopProfile() || 'default',
+      workingDirectory: backendMode === 'remote' ? null : resolveHermesCwd()
+    },
+    build:
+      mode === 'packaged' && INSTALL_STAMP
+        ? {
+            branch: INSTALL_STAMP.productBranch,
+            builtAt: INSTALL_STAMP.builtAt,
+            commit: INSTALL_STAMP.productCommit || null,
+            dirty: INSTALL_STAMP.dirty,
+            kernelCommit: INSTALL_STAMP.commit || kernelCommit,
+            source: INSTALL_STAMP.source
+          }
+        : {
+            branch: branch || null,
+            commit,
+            dirty: status === null ? null : Boolean(status),
+            kernelCommit,
+            source: mode === 'worktree-development' ? 'worktree' : null
+          },
+    deploymentPath,
+    electronVersion: process.versions.electron,
+    environment: mode === 'worktree-development' ? 'development' : 'production',
+    executable: process.execPath,
+    hermesBinary: processHandle?.spawnfile || resolvedBackend?.command || null,
+    hermesHome: HERMES_HOME,
+    kernelRoot,
+    kernelVersion: resolveHermesVersion(),
+    mode,
+    nodeVersion: process.versions.node,
+    platform: process.platform,
+    source: sourceIdentity,
+    userData: app.getPath('userData')
+  })
+}
+
+ipcMain.handle('hermes:runtime-identity', collectRuntimeIdentity)
+
 ipcMain.handle('hermes:version', async () => ({
-  appVersion: resolveHermesVersion(),
+  appVersion: app.getVersion(),
   electronVersion: process.versions.electron,
   nodeVersion: process.versions.node,
   platform: process.platform,
-  hermesRoot: resolveUpdateRoot()
+  hermesRoot: resolveUpdateRoot(),
+  kernelVersion: resolveHermesVersion(),
+  productName: PRODUCT_IDENTITY.displayName
 }))
 
 // ===========================================================================

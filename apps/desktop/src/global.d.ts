@@ -6,6 +6,7 @@ import type {
   PetOverlayOpenRequest,
   PetOverlayStatePayload
 } from './store/pet-overlay'
+import type { PhantomBotRuntimeIdentity } from './types/runtime-identity'
 
 export {}
 
@@ -217,6 +218,7 @@ declare global {
       cancelBootstrap: () => Promise<{ ok: boolean; cancelled: boolean }>
       onBootstrapEvent: (callback: (payload: DesktopBootstrapEvent) => void) => () => void
       getVersion: () => Promise<DesktopVersionInfo>
+      getRuntimeIdentity: () => Promise<PhantomBotRuntimeIdentity>
       getRemoteDisplayReason?: () => Promise<string | null>
       updates: {
         check: () => Promise<DesktopUpdateStatus>
@@ -280,6 +282,8 @@ export interface DesktopVersionInfo {
   nodeVersion: string
   platform: string
   hermesRoot: string
+  kernelVersion?: string
+  productName?: string
 }
 
 export type DesktopUninstallMode = 'full' | 'gui' | 'lite'

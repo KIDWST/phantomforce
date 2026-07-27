@@ -22,6 +22,11 @@
     "audit:fix:root": "npm audit fix --workspaces=false",
     "audit:fix:web": "npm audit fix --workspace web",
     "audit:fix:tui": "npm audit fix --workspace ui-tui",
+    "phantombot:dev": "npm run dev --workspace apps/desktop",
+    "phantombot:doctor": "node apps/desktop/scripts/phantombot-doctor.mjs",
+    "phantombot:audit": "npm audit --omit=dev --audit-level=critical",
+    "phantombot:test": "npm run typecheck --workspace apps/desktop && npm run lint --workspace apps/desktop && npm run test --workspace apps/desktop",
+    "phantombot:package": "node apps/desktop/scripts/phantombot-doctor.mjs --release && npm run phantombot:audit && npm run dist:win --workspace apps/desktop",
     "check": "npm run --ws check",
     "fix": "npm run --ws fix"
   },
@@ -39,10 +44,21 @@
     "agent-browser": "^0.26.0"
   },
   "overrides": {
+    "dompurify": "$dompurify",
+    "fast-uri": "$fast-uri",
     "lodash": "4.18.1",
+    "postcss": "$postcss",
+    "shell-quote": "^1.8.5",
+    "tar": "$tar",
     "yauzl": "^3.3.1"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "dompurify": "^3.4.12",
+    "fast-uri": "^3.1.4",
+    "postcss": "^8.5.23",
+    "tar": "^7.5.22"
   }
 }

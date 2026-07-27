@@ -1096,6 +1096,29 @@ export interface Translations {
     logFile: string
     logLevel: string
     logSearchPlaceholder: string
+    runtimeInspector: {
+      title: string
+      source: string
+      remote: string
+      git: string
+      worktree: string
+      backend: string
+      kernel: string
+      kernelBinary: string
+      desktop: string
+      runtime: string
+      profile: string
+      hermesHome: string
+      userData: string
+      managed: string
+      external: string
+      detached: string
+      dirty: string
+      unknown: string
+      notRunning: string
+      noUpstream: string
+      aheadBehind: (ahead: number, behind: number) => string
+    }
     maintenance: {
       runOps: string
       doctor: string

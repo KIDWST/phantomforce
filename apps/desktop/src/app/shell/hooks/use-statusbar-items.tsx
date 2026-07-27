@@ -249,6 +249,19 @@ export function useStatusbarItems({
     updateStatus?.currentSha
   ])
 
+  const runtimeIdentityItem = useMemo<StatusbarItem>(
+    () => ({
+      detail: connection?.mode === 'remote' ? 'remote' : 'local',
+      icon: <Codicon name="hubot" size="0.75rem" />,
+      id: 'runtime-identity',
+      label: desktopVersion?.productName || 'PhantomBot',
+      onSelect: () => openCommandCenterSection('system'),
+      title: t.commandCenter.runtimeInspector.title,
+      variant: 'action'
+    }),
+    [connection?.mode, desktopVersion?.productName, openCommandCenterSection, t.commandCenter.runtimeInspector.title]
+  )
+
   const backendVersionItem = useMemo<StatusbarItem | null>(() => {
     if (connection?.mode !== 'remote') {
       return null
@@ -504,6 +517,7 @@ export function useStatusbarItems({
         title: terminalTakeover ? copy.hideTerminal : copy.showTerminal,
         variant: 'action'
       },
+      runtimeIdentityItem,
       clientVersionItem,
       ...(backendVersionItem ? [backendVersionItem] : [])
     ],
@@ -520,6 +534,7 @@ export function useStatusbarItems({
       currentUsage,
       publishContextUsage,
       requestGateway,
+      runtimeIdentityItem,
       sessionStartedAt,
       gatewayState,
       terminalTakeover,
