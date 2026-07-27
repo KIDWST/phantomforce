@@ -16,10 +16,28 @@ describe('PhantomBot doctor', () => {
     expect(
       releaseBlockers({
         identityOk: true,
-        installStamp: { commit: 'a'.repeat(40) },
+        installStamp: { commit: 'a'.repeat(40), productCommit: 'b'.repeat(40) },
         kernelAvailable: true,
+        productCommit: 'b'.repeat(40),
         productCommitPublished: false
       })
     ).toContain('The PhantomBot product commit is not present on a configured remote.')
+  })
+
+  it('blocks a release that still points at the upstream Hermes repository', () => {
+    expect(
+      releaseBlockers({
+        identityOk: true,
+        installStamp: {
+          commit: 'a'.repeat(40),
+          productCommit: 'b'.repeat(40),
+          productRepository: 'https://github.com/NousResearch/hermes-agent.git'
+        },
+        kernelAvailable: true,
+        productCommit: 'b'.repeat(40),
+        productCommitPublished: true,
+        productRepository: 'https://github.com/NousResearch/hermes-agent.git'
+      })
+    ).toContain('The PhantomBot product repository cannot be the upstream Hermes repository.')
   })
 })

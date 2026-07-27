@@ -49,6 +49,16 @@ Do not distribute installers built from an unpushed local product commit. Run
 eligible only when the PhantomBot product commit exists on its configured
 product remote and the security/package gates pass.
 
+Release builds must name the published PhantomBot fork explicitly. The release
+gate rejects Nous’ upstream repository as a product source, so a branded
+package can never silently reinstall the upstream desktop:
+
+```powershell
+$env:PHANTOMBOT_PRODUCT_REPOSITORY = "https://github.com/OWNER/phantombot.git"
+$env:PHANTOMBOT_BUILD_PIN_COMMIT = "<published PhantomBot commit>"
+npm run phantombot:package
+```
+
 ---
 
 ## Updating
@@ -151,7 +161,7 @@ Cloud connections. Remote and cloud modes use the same remote-capability path;
 authentication and discovery differ, not the renderer feature model.
 
 When no usable local runtime or saved remote connection exists, the first-run
-screen offers **Connect to existing Hermes** before starting the local installer.
+screen offers **Connect an existing backend** before starting the local installer.
 Desktop probes the gateway to discover token or OAuth authentication, requires a
 successful HTTP and WebSocket connection test, and saves the connection using
 the same encrypted Desktop configuration used by Settings. A saved remote
