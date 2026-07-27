@@ -936,6 +936,18 @@ DEFAULT_CONFIG = {
     "fallback_providers": [],
     "credential_pool_strategies": {},
     "toolsets": ["hermes-cli"],
+    # PhantomBot Auto is a non-secret routing preference. Provider credentials
+    # remain in .env / provider auth stores; only stable option ids live here.
+    "phantombot": {
+        "autoRouting": {
+            "version": 1,
+            "routes": {
+                "reasoning": {"option_id": "openrouter.glm-5.2"},
+                "image": {"option_id": "openai.gpt-image-1"},
+                "video": {"option_id": "higgsfield.subscription"},
+            },
+        },
+    },
     # Global active chat session cap across CLI, TUI/dashboard, and messaging.
     # None/0 = unbounded.
     "max_concurrent_sessions": None,

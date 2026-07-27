@@ -218,8 +218,9 @@ export const zhHant = defineLocale({
     resetFailed: '重設失敗',
     nav: {
       providers: '提供方',
-      providerAccounts: '帳號',
+      providerAccounts: '訂閱',
       providerApiKeys: 'API 金鑰',
+      providerAutoRouting: '自動模式',
       providerCustomEndpoints: '自訂端點',
       gateway: '閘道',
       apiKeys: '工具與金鑰',
@@ -813,6 +814,8 @@ export const zhHant = defineLocale({
       appliesDesc: '套用至新工作階段。可在輸入框的模型選擇器中臨時切換目前對話。',
       provider: '提供方',
       model: '模型',
+      modelProviders: 'API 與模型提供方',
+      subscriptionConnections: '訂閱連線',
       applying: '套用中...',
       auxiliaryTitle: '輔助模型',
       resetAllToMain: '全部重設為主要模型',
@@ -851,6 +854,35 @@ export const zhHant = defineLocale({
       localEndpoint: {
         title: '本地 / 自訂端點',
         description: '將 Hermes 指向任意 OpenAI 相容端點（Zyphra、vLLM、llama.cpp、Ollama 等）。'
+      },
+      subscriptions: {
+        title: '訂閱與帳號',
+        description: '在此連結瀏覽器或 CLI 訂閱。API 金鑰和模型端點保留在獨立類別中。',
+        useApiProviders: '改用 API / 模型提供方？',
+        mediaTitle: '媒體訂閱',
+        apiOrConnector: 'API 或連接器',
+        connectorRequired: '需要連接器',
+        geminiDescription: '直接使用模型時設定 Gemini API 金鑰；PhantomForce 連接器可用時，也可選擇 Gemini 訂閱通道。',
+        higgsfieldDescription:
+          '可將 Higgsfield 設為自動影片路由。訂閱使用需要 PhantomForce 媒體連接器；目前執行階段不會宣稱具有原生訂閱 API 存取權。'
+      },
+      autoRouting: {
+        title: '自動模式路由',
+        description: '選擇自動模式處理推理、圖片或影片任務時使用的通道。每個通道都可獨立變更。',
+        accessApi: 'API 提供方',
+        accessModel: '模型路由',
+        accessSubscription: '訂閱連線',
+        saving: '正在儲存',
+        savedTitle: '自動模式已更新',
+        savedMessage: lane => `${lane} 路由已儲存。`,
+        saveFailed: '無法儲存自動模式路由',
+        loadFailed: '無法載入自動模式路由。',
+        subscriptionNote: '訂閱選項只是路由偏好，不是隱藏的 API 憑證。只有對應的已登入連接器可用時才能運作。',
+        lanes: {
+          reasoning: { title: '推理', description: '用於規劃、程式設計、分析和複雜決策的模型路由。' },
+          image: { title: '圖片', description: 'PhantomBot 用於生成圖片的提供方或訂閱。' },
+          video: { title: '影片', description: 'PhantomBot 用於生成影片的提供方或訂閱。' }
+        }
       },
       loading: '正在載入提供方...'
     },

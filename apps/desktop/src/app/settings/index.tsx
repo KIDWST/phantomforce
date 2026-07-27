@@ -18,6 +18,7 @@ import {
   Package,
   RefreshCw,
   Settings2,
+  SlidersHorizontal,
   Upload,
   Wrench,
   Zap
@@ -176,6 +177,13 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
           id: 'pview:keys',
           label: t.settings.nav.providerApiKeys,
           onSelect: () => openProviderView('keys')
+        },
+        {
+          active: activeView === 'providers' && providerView === 'auto-routing',
+          icon: SlidersHorizontal,
+          id: 'pview:auto-routing',
+          label: t.settings.nav.providerAutoRouting,
+          onSelect: () => openProviderView('auto-routing')
         },
         {
           active: activeView === 'providers' && providerView === 'custom-endpoints',

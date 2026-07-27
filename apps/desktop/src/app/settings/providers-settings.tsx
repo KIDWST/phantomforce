@@ -3,15 +3,7 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { runInTerminal } from '@/app/right-sidebar/store'
-import {
-  FEATURED_ID,
-  FeaturedProviderRow,
-  FireworksProviderRow,
-  OpenRouterProviderRow,
-  ProviderRow,
-  providerTitle,
-  sortProviders
-} from '@/components/onboarding'
+import { FEATURED_ID, FeaturedProviderRow, ProviderRow, providerTitle, sortProviders } from '@/components/onboarding'
 import { Button } from '@/components/ui/button'
 import { RowButton } from '@/components/ui/row-button'
 import { SearchField } from '@/components/ui/search-field'
@@ -24,11 +16,12 @@ import { notify, notifyError } from '@/store/notifications'
 import { $desktopOnboarding, startManualLocalEndpoint, startManualProviderOAuth } from '@/store/onboarding'
 import type { EnvVarInfo, OAuthProvider } from '@/types/hermes'
 
+import { AutoRoutingSettings } from './auto-routing-settings'
 import { isKeyVar, ProviderKeyRows } from './credential-key-ui'
 import { CustomEndpointsSettings } from './custom-endpoints-settings'
 import { SettingsCategoryHeading, useEnvCredentials } from './env-credentials'
 import { providerGroup, providerMeta, providerPriority } from './helpers'
-import { SettingsContent, SettingsSkeleton } from './primitives'
+import { Pill, SettingsContent, SettingsSkeleton } from './primitives'
 
 // The embedded terminal (and thus the "run disconnect command" path) only
 // exists in the Electron desktop shell, not the web dashboard.
@@ -44,8 +37,9 @@ function GroupLabel({ children }: { children: ReactNode }) {
   )
 }
 
-// Sub-views surfaced as a sidebar subnav: account sign-in vs raw API keys.
-export const PROVIDER_VIEWS = ['accounts', 'keys', 'custom-endpoints'] as const
+// Sub-views surfaced as a sidebar subnav. Keep credentials, subscription
+// connections, and non-secret Auto routing as distinct concerns.
+export const PROVIDER_VIEWS = ['accounts', 'keys', 'auto-routing', 'custom-endpoints'] as const
 
 export type ProviderView = (typeof PROVIDER_VIEWS)[number]
 
@@ -125,12 +119,14 @@ function buildProviderKeyGroups(vars: Record<string, EnvVarInfo>): ProviderKeyGr
 // catalog below.
 function OAuthPicker({
   disconnecting,
+  onAutoRouting,
   onDisconnect,
   onTerminalDisconnect,
   onWantApiKey,
   providers
 }: {
   disconnecting: null | string
+  onAutoRouting: () => void
   onDisconnect: (provider: OAuthProvider) => void
   onTerminalDisconnect: (provider: OAuthProvider) => void
   onWantApiKey: () => void
@@ -139,11 +135,10 @@ function OAuthPicker({
   const { t } = useI18n()
   const p = t.settings.providers
   const [showAll, setShowAll] = useState(false)
-  const ordered = useMemo(() => sortProviders(providers), [providers])
-
-  if (ordered.length === 0) {
-    return null
-  }
+  // The backend's historical "accounts" catalog includes one Anthropic
+  // API-key helper. Keep it in API Keys so this view is subscriptions/accounts
+  // only; every OAuth/external provider continues to flow through dynamically.
+  const ordered = useMemo(() => sortProviders(providers.filter(provider => provider.id !== 'anthropic')), [providers])
 
   const select = (p: OAuthProvider) => startManualProviderOAuth(p.id)
 
@@ -160,7 +155,7 @@ function OAuthPicker({
   return (
     <section className="mb-5 grid gap-2">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <SettingsCategoryHeading icon={KeyRound} title={p.connectAccount} />
+        <SettingsCategoryHeading icon={KeyRound} title={p.subscriptions.title} />
         <Button
           className="text-[length:var(--conversation-caption-font-size)]"
           onClick={onWantApiKey}
@@ -168,15 +163,13 @@ function OAuthPicker({
           type="button"
           variant="textStrong"
         >
-          {p.haveApiKey}
+          {p.subscriptions.useApiProviders}
         </Button>
       </div>
       <p className="-mt-2 mb-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-        {p.intro}
+        {p.subscriptions.description}
       </p>
       {featured && <FeaturedProviderRow onSelect={select} provider={featured} />}
-      {/* Slot #2 — always visible, matching onboarding / CANONICAL_PROVIDERS. */}
-      <FireworksProviderRow onClick={onWantApiKey} />
       {connected.length > 0 && (
         <>
           <GroupLabel>{p.connected}</GroupLabel>
@@ -192,13 +185,25 @@ function OAuthPicker({
           ))}
         </>
       )}
+      <GroupLabel>{p.subscriptions.mediaTitle}</GroupLabel>
+      <SubscriptionRouteRow
+        description={p.subscriptions.geminiDescription}
+        label="Gemini"
+        onClick={onAutoRouting}
+        status={p.subscriptions.apiOrConnector}
+      />
+      <SubscriptionRouteRow
+        description={p.subscriptions.higgsfieldDescription}
+        label="Higgsfield"
+        onClick={onAutoRouting}
+        status={p.subscriptions.connectorRequired}
+      />
       {showOthers && (
         <>
           {connected.length > 0 && <GroupLabel>{p.otherProviders}</GroupLabel>}
           {others.map(p => (
             <ProviderRow key={p.id} onSelect={select} provider={p} />
           ))}
-          <OpenRouterProviderRow onClick={onWantApiKey} />
         </>
       )}
       {collapsible && (
@@ -214,6 +219,34 @@ function OAuthPicker({
         </Button>
       )}
     </section>
+  )
+}
+
+function SubscriptionRouteRow({
+  description,
+  label,
+  onClick,
+  status
+}: {
+  description: string
+  label: string
+  onClick: () => void
+  status: string
+}) {
+  return (
+    <RowButton
+      className="group flex w-full items-center justify-between gap-3 rounded-[6px] px-3 py-2.5 text-left transition-colors hover:bg-(--ui-control-hover-background)"
+      onClick={onClick}
+    >
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-[length:var(--conversation-text-font-size)] font-semibold">{label}</span>
+          <Pill>{status}</Pill>
+        </div>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+      </div>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
+    </RowButton>
   )
 }
 
@@ -446,7 +479,8 @@ function QuickModelKeySwitcher({
             API keys / quick model routing
           </h3>
           <p className="text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-            Local, no-login switching for PhantomBot. Rotate OpenAI, Anthropic, OpenRouter, or Gemini keys here, then use Switch any time.
+            Local, no-login switching for PhantomBot. Rotate OpenAI, Anthropic, OpenRouter, or Gemini keys here, then
+            use Switch any time.
           </p>
         </div>
       </div>
@@ -463,7 +497,9 @@ function QuickModelKeySwitcher({
             >
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className={cn('size-2 shrink-0 rounded-full', set ? 'bg-primary' : 'bg-(--ui-stroke-secondary)')} />
+                  <span
+                    className={cn('size-2 shrink-0 rounded-full', set ? 'bg-primary' : 'bg-(--ui-stroke-secondary)')}
+                  />
                   <span className="truncate text-sm font-medium">{item.label}</span>
                   {set && (
                     <span className="truncate text-xs text-(--ui-text-tertiary)">
@@ -496,7 +532,13 @@ function QuickModelKeySwitcher({
                 size="sm"
                 type="button"
               >
-                {busy ? <Loader2 className="size-3.5 animate-spin" /> : drafts[item.envKey]?.trim() ? <Save /> : <Zap />}
+                {busy ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : drafts[item.envKey]?.trim() ? (
+                  <Save />
+                ) : (
+                  <Zap />
+                )}
                 {busy ? 'Switching...' : drafts[item.envKey]?.trim() ? 'Save + switch' : 'Switch'}
               </Button>
             </div>
@@ -606,14 +648,15 @@ export function ProvidersSettings({
     }
   }
 
+  if (view === 'auto-routing') {
+    return <AutoRoutingSettings onConfigSaved={onConfigSaved} />
+  }
+
   if (!vars) {
     return <SettingsSkeleton search sections={[{ rows: 6 }]} />
   }
 
-  const hasOauth = oauthProviders.length > 0
-  // The sidebar subnav owns the Accounts/API-keys split now; with no OAuth
-  // providers there's nothing for the "Accounts" view to show, so fall to keys.
-  const showApiKeys = view === 'keys' || (!hasOauth && view !== 'custom-endpoints')
+  const showApiKeys = view === 'keys'
 
   const keyGroups = buildProviderKeyGroups(vars)
 
@@ -630,11 +673,7 @@ export function ProvidersSettings({
 
     return (
       <SettingsContent>
-        <QuickModelKeySwitcher
-          onMainModelChanged={onMainModelChanged}
-          saveValue={saveValue}
-          vars={vars}
-        />
+        <QuickModelKeySwitcher onMainModelChanged={onMainModelChanged} saveValue={saveValue} vars={vars} />
         <LocalEndpointRow onOpen={startManualLocalEndpoint} />
         {keyGroups.length > 0 ? (
           <div className="grid gap-3">
@@ -679,6 +718,7 @@ export function ProvidersSettings({
     <SettingsContent>
       <OAuthPicker
         disconnecting={disconnecting}
+        onAutoRouting={() => onViewChange('auto-routing')}
         onDisconnect={provider => void handleDisconnect(provider)}
         onTerminalDisconnect={handleTerminalDisconnect}
         onWantApiKey={() => onViewChange('keys')}

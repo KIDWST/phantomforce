@@ -224,8 +224,9 @@ export const ja = defineLocale({
     resetFailed: 'リセットに失敗しました',
     nav: {
       providers: 'プロバイダー',
-      providerAccounts: 'アカウント',
+      providerAccounts: 'サブスクリプション',
       providerApiKeys: 'API キー',
+      providerAutoRouting: '自動モード',
       providerCustomEndpoints: 'カスタムエンドポイント',
       gateway: 'ゲートウェイ',
       apiKeys: 'ツールとキー',
@@ -837,6 +838,8 @@ export const ja = defineLocale({
         '新しいセッションに適用されます。コンポーザーのモデルピッカーを使ってアクティブなチャットをホットスワップできます。',
       provider: 'プロバイダー',
       model: 'モデル',
+      modelProviders: 'API / モデルプロバイダー',
+      subscriptionConnections: 'サブスクリプション接続',
       applying: '適用中...',
       auxiliaryTitle: '補助モデル',
       resetAllToMain: 'すべてメインにリセット',
@@ -877,6 +880,39 @@ export const ja = defineLocale({
       localEndpoint: {
         title: 'ローカル / カスタムエンドポイント',
         description: 'OpenAI 互換のエンドポイント（Zyphra、vLLM、llama.cpp、Ollama など）を指定します。'
+      },
+      subscriptions: {
+        title: 'サブスクリプションとアカウント',
+        description:
+          'ブラウザーまたは CLI のサブスクリプションを接続します。API キーとモデルエンドポイントは別のカテゴリで管理します。',
+        useApiProviders: 'API / モデルプロバイダーを使用しますか？',
+        mediaTitle: 'メディアサブスクリプション',
+        apiOrConnector: 'API またはコネクター',
+        connectorRequired: 'コネクターが必要',
+        geminiDescription:
+          '直接モデルを使う場合は Gemini API キーを使用し、PhantomForce コネクターが利用可能な場合は Gemini サブスクリプション経路を選択します。',
+        higgsfieldDescription:
+          '自動ビデオルーティングに Higgsfield を選択できます。サブスクリプション利用には PhantomForce メディアコネクターが必要です。'
+      },
+      autoRouting: {
+        title: '自動モードのルーティング',
+        description:
+          '自動モードが推論、画像、動画の処理に使用する経路を選択します。他の経路を変えずに個別に変更できます。',
+        accessApi: 'API プロバイダー',
+        accessModel: 'モデル経路',
+        accessSubscription: 'サブスクリプション接続',
+        saving: '保存中',
+        savedTitle: '自動モードを更新しました',
+        savedMessage: lane => `${lane} のルーティングを保存しました。`,
+        saveFailed: '自動モードのルーティングを保存できませんでした',
+        loadFailed: '自動モードのルーティングを読み込めませんでした。',
+        subscriptionNote:
+          'サブスクリプションの選択はルーティング設定であり、隠された API 認証情報ではありません。対応するサインイン済みコネクターが必要です。',
+        lanes: {
+          reasoning: { title: '推論', description: '計画、コーディング、分析、難しい判断に使うモデル経路です。' },
+          image: { title: '画像', description: '画像生成に使うプロバイダーまたはサブスクリプションです。' },
+          video: { title: '動画', description: '動画生成に使うプロバイダーまたはサブスクリプションです。' }
+        }
       },
       loading: 'プロバイダーを読み込み中...'
     },

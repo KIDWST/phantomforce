@@ -324,8 +324,9 @@ export const en: Translations = {
     resetFailed: 'Reset failed',
     nav: {
       providers: 'Providers',
-      providerAccounts: 'Accounts',
+      providerAccounts: 'Subscriptions',
       providerApiKeys: 'API keys',
+      providerAutoRouting: 'Auto mode',
       providerCustomEndpoints: 'Custom Endpoints',
       gateway: 'Gateway',
       apiKeys: 'Tools & Keys',
@@ -778,6 +779,8 @@ export const en: Translations = {
       appliesDesc: 'Applies to new sessions. Use the model picker in the composer to hot-swap the active chat.',
       provider: 'Provider',
       model: 'Model',
+      modelProviders: 'API & model providers',
+      subscriptionConnections: 'Subscription connections',
       applying: 'Applying...',
       defaultsLabel: 'Defaults',
       reasoning: 'Reasoning',
@@ -830,6 +833,48 @@ export const en: Translations = {
       localEndpoint: {
         title: 'Local / custom endpoint',
         description: 'Point Hermes at any OpenAI-compatible endpoint (Zyphra, vLLM, llama.cpp, Ollama, etc).'
+      },
+      subscriptions: {
+        title: 'Subscriptions & accounts',
+        description:
+          'Connect browser or CLI subscriptions here. API keys and model endpoints stay in their own category.',
+        useApiProviders: 'Use an API/model provider instead?',
+        mediaTitle: 'Media subscriptions',
+        apiOrConnector: 'API or connector',
+        connectorRequired: 'Connector required',
+        geminiDescription:
+          'Use Gemini API keys for direct models, or select the Gemini subscription lane when your PhantomForce connector is available.',
+        higgsfieldDescription:
+          'Select Higgsfield for Auto video routing. Subscription use requires the PhantomForce media connector; this runtime does not claim native subscription API access.'
+      },
+      autoRouting: {
+        title: 'Auto mode routing',
+        description:
+          'Choose which lane PhantomBot uses when Auto handles reasoning, image, or video work. Change any lane without replacing the others.',
+        accessApi: 'API providers',
+        accessModel: 'Model routes',
+        accessSubscription: 'Subscription connections',
+        saving: 'Saving',
+        savedTitle: 'Auto mode updated',
+        savedMessage: lane => `${lane} routing was saved.`,
+        saveFailed: 'Could not save Auto mode routing',
+        loadFailed: 'Could not load Auto mode routing.',
+        subscriptionNote:
+          'Subscription choices are routing preferences, not hidden API credentials. They work only when the matching signed-in connector is available.',
+        lanes: {
+          reasoning: {
+            title: 'Reasoning',
+            description: 'The model route for planning, coding, analysis, and difficult decisions.'
+          },
+          image: {
+            title: 'Images',
+            description: 'The provider or subscription PhantomBot should use for image generation.'
+          },
+          video: {
+            title: 'Video',
+            description: 'The provider or subscription PhantomBot should use for video generation.'
+          }
+        }
       },
       loading: 'Loading providers...'
     },

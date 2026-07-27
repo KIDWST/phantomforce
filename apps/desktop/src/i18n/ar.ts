@@ -287,8 +287,9 @@ export const ar = defineLocale({
     resetFailed: 'فشلت إعادة الضبط',
     nav: {
       providers: 'المزودون',
-      providerAccounts: 'الحسابات',
+      providerAccounts: 'الاشتراكات',
       providerApiKeys: 'مفاتيح API',
+      providerAutoRouting: 'الوضع التلقائي',
       gateway: 'البوابة',
       apiKeys: 'الأدوات والمفاتيح',
       keysTools: 'الأدوات',
@@ -744,6 +745,8 @@ export const ar = defineLocale({
       appliesDesc: 'ينطبق على الجلسات الجديدة. استخدم منتقي النموذج في صندوق الإنشاء لتبديل المحادثة النشطة فورا.',
       provider: 'المزوّد',
       model: 'النموذج',
+      modelProviders: 'مزودو API والنماذج',
+      subscriptionConnections: 'اتصالات الاشتراك',
       applying: 'جار التطبيق...',
       defaultsLabel: 'الافتراضيات',
       reasoning: 'الاستدلال',
@@ -816,6 +819,37 @@ export const ar = defineLocale({
       localEndpoint: {
         title: 'نقطة نهاية محلية',
         description: 'استخدم خادما محليا أو نقطة نهاية متوافقة مع OpenAI لهذا المزود.'
+      },
+      subscriptions: {
+        title: 'الاشتراكات والحسابات',
+        description: 'اربط اشتراكات المتصفح أو CLI هنا. تبقى مفاتيح API ونقاط نهاية النماذج في فئة منفصلة.',
+        useApiProviders: 'هل تريد استخدام مزود API أو نموذج؟',
+        mediaTitle: 'اشتراكات الوسائط',
+        apiOrConnector: 'API أو موصل',
+        connectorRequired: 'يتطلب موصلا',
+        geminiDescription:
+          'استخدم مفتاح Gemini API للوصول المباشر، أو اختر مسار اشتراك Gemini عندما يتوفر موصل PhantomForce.',
+        higgsfieldDescription:
+          'اختر Higgsfield لتوجيه الفيديو التلقائي. يتطلب استخدام الاشتراك موصل وسائط PhantomForce ولا يدّعي هذا التشغيل وصول API أصليا للاشتراك.'
+      },
+      autoRouting: {
+        title: 'توجيه الوضع التلقائي',
+        description: 'اختر المسار الذي يستخدمه PhantomBot للاستدلال والصور والفيديو عند تشغيل الوضع التلقائي.',
+        accessApi: 'مزودو API',
+        accessModel: 'مسارات النماذج',
+        accessSubscription: 'اتصالات الاشتراك',
+        saving: 'جار الحفظ',
+        savedTitle: 'تم تحديث الوضع التلقائي',
+        savedMessage: lane => `تم حفظ توجيه ${lane}.`,
+        saveFailed: 'تعذر حفظ توجيه الوضع التلقائي',
+        loadFailed: 'تعذر تحميل توجيه الوضع التلقائي.',
+        subscriptionNote:
+          'خيارات الاشتراك تفضيلات توجيه وليست بيانات API مخفية. لا تعمل إلا عند توفر الموصل المطابق بعد تسجيل الدخول.',
+        lanes: {
+          reasoning: { title: 'الاستدلال', description: 'مسار النموذج للتخطيط والبرمجة والتحليل والقرارات الصعبة.' },
+          image: { title: 'الصور', description: 'المزود أو الاشتراك الذي يستخدمه PhantomBot لتوليد الصور.' },
+          video: { title: 'الفيديو', description: 'المزود أو الاشتراك الذي يستخدمه PhantomBot لتوليد الفيديو.' }
+        }
       },
       loading: 'جار تحميل المزودين...'
     },

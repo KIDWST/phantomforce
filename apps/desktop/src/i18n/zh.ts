@@ -315,8 +315,9 @@ export const zh: Translations = {
     resetFailed: '重置失败',
     nav: {
       providers: '提供方',
-      providerAccounts: '账号',
+      providerAccounts: '订阅',
       providerApiKeys: 'API 密钥',
+      providerAutoRouting: '自动模式',
       providerCustomEndpoints: '自定义端点',
       gateway: '网关',
       apiKeys: '工具与密钥',
@@ -980,6 +981,8 @@ export const zh: Translations = {
       appliesDesc: '应用于新会话。可在输入框的模型选择器中临时切换当前对话。',
       provider: '提供方',
       model: '模型',
+      modelProviders: 'API 与模型提供方',
+      subscriptionConnections: '订阅连接',
       applying: '应用中...',
       defaultsLabel: '默认值',
       reasoning: '推理',
@@ -1030,6 +1033,36 @@ export const zh: Translations = {
       localEndpoint: {
         title: '本地 / 自定义端点',
         description: '将 Hermes 指向任意 OpenAI 兼容端点（Zyphra、vLLM、llama.cpp、Ollama 等）。'
+      },
+      subscriptions: {
+        title: '订阅与账号',
+        description: '在这里连接浏览器或 CLI 订阅。API 密钥和模型端点保留在单独的类别中。',
+        useApiProviders: '改用 API / 模型提供方？',
+        mediaTitle: '媒体订阅',
+        apiOrConnector: 'API 或连接器',
+        connectorRequired: '需要连接器',
+        geminiDescription:
+          '直接使用模型时配置 Gemini API 密钥；当 PhantomForce 连接器可用时，也可选择 Gemini 订阅通道。',
+        higgsfieldDescription:
+          '可将 Higgsfield 设为自动视频路由。订阅使用需要 PhantomForce 媒体连接器；当前运行时不会声称拥有原生订阅 API 访问。'
+      },
+      autoRouting: {
+        title: '自动模式路由',
+        description: '选择自动模式处理推理、图片或视频任务时使用的通道。每个通道都可独立更改。',
+        accessApi: 'API 提供方',
+        accessModel: '模型路由',
+        accessSubscription: '订阅连接',
+        saving: '正在保存',
+        savedTitle: '自动模式已更新',
+        savedMessage: lane => `${lane} 路由已保存。`,
+        saveFailed: '无法保存自动模式路由',
+        loadFailed: '无法加载自动模式路由。',
+        subscriptionNote: '订阅选项只是路由偏好，不是隐藏的 API 凭据。只有对应的已登录连接器可用时才能工作。',
+        lanes: {
+          reasoning: { title: '推理', description: '用于规划、编码、分析和复杂决策的模型路由。' },
+          image: { title: '图片', description: 'PhantomBot 用于生成图片的提供方或订阅。' },
+          video: { title: '视频', description: 'PhantomBot 用于生成视频的提供方或订阅。' }
+        }
       },
       loading: '正在加载提供方...'
     },

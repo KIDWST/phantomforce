@@ -1,13 +1,16 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { atom } from 'nanostores'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { EnvVarInfo, OAuthProvider } from '@/types/hermes'
 
 const listOAuthProviders = vi.fn()
 const disconnectOAuthProvider = vi.fn()
 const getEnvVars = vi.fn()
+const getHermesConfigRecord = vi.fn()
 const getRecommendedDefaultModel = vi.fn()
+const saveHermesConfig = vi.fn()
 const setEnvVar = vi.fn()
 const setModelAssignment = vi.fn()
 const startManualProviderOAuth = vi.fn()
@@ -17,9 +20,12 @@ const onboarding = atom({ manual: false })
 vi.mock('@/hermes', () => ({
   disconnectOAuthProvider: (providerId: string) => disconnectOAuthProvider(providerId),
   getRecommendedDefaultModel: (provider: string) => getRecommendedDefaultModel(provider),
+  getHermesConfigRecord: () => getHermesConfigRecord(),
   getEnvVars: () => getEnvVars(),
   listOAuthProviders: () => listOAuthProviders(),
   setEnvVar: (key: string, value: string) => setEnvVar(key, value),
+  saveHermesConfig: (config: unknown) => saveHermesConfig(config),
+  setApiRequestProfile: () => {},
   setModelAssignment: (body: unknown) => setModelAssignment(body)
 }))
 
@@ -63,12 +69,21 @@ function keyVar(patch: Partial<EnvVarInfo> = {}): EnvVarInfo {
   }
 }
 
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false)
+  Element.prototype.releasePointerCapture = vi.fn()
+  Element.prototype.scrollIntoView = vi.fn()
+  Element.prototype.setPointerCapture = vi.fn()
+})
+
 beforeEach(() => {
   onboarding.set({ manual: false })
   getEnvVars.mockResolvedValue({})
+  getHermesConfigRecord.mockResolvedValue({})
   getRecommendedDefaultModel.mockResolvedValue({ free_tier: null, model: 'gpt-5.5', provider: 'openai' })
   setEnvVar.mockResolvedValue({ ok: true })
   setModelAssignment.mockResolvedValue({ model: 'gpt-5.5', provider: 'openai', stale_aux: [] })
+  saveHermesConfig.mockResolvedValue({ ok: true })
   disconnectOAuthProvider.mockResolvedValue({ ok: true, provider: 'nous' })
   listOAuthProviders.mockResolvedValue({
     providers: [provider('nous', true), provider('minimax-oauth', false)]
@@ -114,6 +129,16 @@ describe('ProvidersSettings', () => {
 
     expect(startManualProviderOAuth).toHaveBeenCalledWith('nous')
     expect(disconnectOAuthProvider).not.toHaveBeenCalled()
+  })
+
+  it('keeps subscription/media connections separate from API model providers', async () => {
+    await renderProvidersSettings()
+
+    expect(await screen.findByText('Subscriptions & accounts')).toBeTruthy()
+    expect(screen.getByText('Gemini')).toBeTruthy()
+    expect(screen.getByText('Higgsfield')).toBeTruthy()
+    expect(screen.queryByText('Fireworks AI')).toBeNull()
+    expect(screen.queryByText('OpenRouter')).toBeNull()
   })
 
   it('does not offer removal for externally managed providers', async () => {
@@ -222,12 +247,7 @@ describe('ProvidersSettings', () => {
 
     const { ProvidersSettings } = await import('./providers-settings')
     render(
-      <ProvidersSettings
-        onClose={vi.fn()}
-        onMainModelChanged={onMainModelChanged}
-        onViewChange={vi.fn()}
-        view="keys"
-      />
+      <ProvidersSettings onClose={vi.fn()} onMainModelChanged={onMainModelChanged} onViewChange={vi.fn()} view="keys" />
     )
 
     const input = await screen.findByPlaceholderText('Paste OPENAI_API_KEY')
@@ -244,5 +264,39 @@ describe('ProvidersSettings', () => {
     expect(setModelAssignment).toHaveBeenCalledWith({ model: 'gpt-5.5', provider: 'openai', scope: 'main' })
     expect(onMainModelChanged).toHaveBeenCalledWith('openai', 'gpt-5.5')
     expect(startManualProviderOAuth).not.toHaveBeenCalled()
+  })
+
+  it('persists a profile-scoped Auto reasoning route without storing credentials', async () => {
+    const { ProvidersSettings } = await import('./providers-settings')
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    render(
+      <QueryClientProvider client={client}>
+        <ProvidersSettings onClose={vi.fn()} onViewChange={vi.fn()} view="auto-routing" />
+      </QueryClientProvider>
+    )
+
+    const trigger = await screen.findByRole('combobox', { name: 'Reasoning' })
+    await waitFor(() => expect((trigger as HTMLButtonElement).disabled).toBe(false))
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' })
+    const kimi = await screen.findByText('OpenRouter · Kimi K3')
+    fireEvent.click(kimi)
+
+    await waitFor(() => expect(saveHermesConfig).toHaveBeenCalledTimes(1))
+    const saved = saveHermesConfig.mock.calls[0][0] as Record<string, unknown>
+
+    expect(saved).toMatchObject({
+      phantombot: {
+        autoRouting: {
+          version: 1,
+          routes: {
+            reasoning: { option_id: 'openrouter.kimi-k3' },
+            image: { option_id: 'openai.gpt-image-1' },
+            video: { option_id: 'higgsfield.subscription' }
+          }
+        }
+      }
+    })
+    expect(JSON.stringify(saved)).not.toMatch(/api[_-]?key|token|secret|password/i)
   })
 })

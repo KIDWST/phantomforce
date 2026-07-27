@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -118,6 +126,83 @@ const AUX_TASKS: readonly AuxTaskMeta[] = [
 ]
 
 const NO_PROVIDERS: readonly ModelOptionProvider[] = [{ name: '—', slug: '', models: [] }]
+
+const SUBSCRIPTION_PROVIDER_SLUGS = new Set([
+  'nous',
+  'openai-codex',
+  'claude-code',
+  'minimax-oauth',
+  'qwen-oauth',
+  'xai-oauth'
+])
+
+/** Provider setup has two materially different credential paths. Keep them
+ * visibly separated so a model endpoint is never presented as a subscription
+ * and a browser/CLI subscription is never mistaken for an API key. */
+export function splitModelProviders(providers: readonly ModelOptionProvider[]): {
+  modelProviders: ModelOptionProvider[]
+  subscriptions: ModelOptionProvider[]
+} {
+  const subscriptions: ModelOptionProvider[] = []
+  const modelProviders: ModelOptionProvider[] = []
+
+  for (const provider of providers) {
+    const slug = provider.slug.trim().toLowerCase()
+    const authType = (provider.auth_type ?? '').trim().toLowerCase()
+
+    const subscription =
+      SUBSCRIPTION_PROVIDER_SLUGS.has(slug) ||
+      slug.endsWith('-oauth') ||
+      authType.includes('oauth') ||
+      authType === 'external' ||
+      authType === 'subscription'
+
+    if (subscription) {
+      subscriptions.push(provider)
+    } else {
+      modelProviders.push(provider)
+    }
+  }
+
+  return { modelProviders, subscriptions }
+}
+
+function ProviderSelectItems({
+  modelLabel,
+  providers,
+  subscriptionLabel
+}: {
+  modelLabel: string
+  providers: readonly ModelOptionProvider[]
+  subscriptionLabel: string
+}) {
+  const groups = splitModelProviders(providers)
+
+  return (
+    <>
+      {groups.modelProviders.length > 0 ? (
+        <SelectGroup>
+          <SelectLabel>{modelLabel}</SelectLabel>
+          {groups.modelProviders.map(provider => (
+            <SelectItem key={provider.slug || 'none'} value={provider.slug || 'none'}>
+              {provider.name}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      ) : null}
+      {groups.subscriptions.length > 0 ? (
+        <SelectGroup>
+          <SelectLabel>{subscriptionLabel}</SelectLabel>
+          {groups.subscriptions.map(provider => (
+            <SelectItem key={provider.slug || 'none'} value={provider.slug || 'none'}>
+              {provider.name}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      ) : null}
+    </>
+  )
+}
 
 // Radix <Select> renders a blank trigger when `value` matches no <SelectItem>.
 // A custom model (e.g. one added via config that isn't in the provider's
@@ -733,11 +818,11 @@ export function ModelSettings({ onMainModelChanged }: ModelSettingsProps) {
               <SelectValue placeholder={m.provider} />
             </SelectTrigger>
             <SelectContent>
-              {mainProviderOptions.map(provider => (
-                <SelectItem key={provider.slug || 'none'} value={provider.slug || 'none'}>
-                  {provider.name}
-                </SelectItem>
-              ))}
+              <ProviderSelectItems
+                modelLabel={m.modelProviders}
+                providers={mainProviderOptions}
+                subscriptionLabel={m.subscriptionConnections}
+              />
             </SelectContent>
           </Select>
           {needsSetup ? (

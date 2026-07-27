@@ -284,6 +284,7 @@ export interface Translations {
       providers: string
       providerAccounts: string
       providerApiKeys: string
+      providerAutoRouting: string
       providerCustomEndpoints: string
       gateway: string
       apiKeys: string
@@ -671,6 +672,8 @@ export interface Translations {
       appliesDesc: string
       provider: string
       model: string
+      modelProviders: string
+      subscriptionConnections: string
       applying: string
       defaultsLabel: string
       reasoning: string
@@ -712,6 +715,30 @@ export interface Translations {
       localEndpoint: {
         title: string
         description: string
+      }
+      subscriptions: {
+        title: string
+        description: string
+        useApiProviders: string
+        mediaTitle: string
+        apiOrConnector: string
+        connectorRequired: string
+        geminiDescription: string
+        higgsfieldDescription: string
+      }
+      autoRouting: {
+        title: string
+        description: string
+        accessApi: string
+        accessModel: string
+        accessSubscription: string
+        saving: string
+        savedTitle: string
+        savedMessage: (lane: string) => string
+        saveFailed: string
+        loadFailed: string
+        subscriptionNote: string
+        lanes: Record<'image' | 'reasoning' | 'video', { title: string; description: string }>
       }
       loading: string
     }
