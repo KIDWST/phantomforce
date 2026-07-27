@@ -6,11 +6,12 @@
  *
  * Schema (subject to bump via STAMP_SCHEMA_VERSION):
  *   {
- *     "schemaVersion": 1,
+ *     "schemaVersion": 2,
  *     "commit":        "<40-char SHA>",
  *     "branch":        "<branch name>",
  *     "productCommit": "<PhantomBot desktop commit>",
  *     "productBranch": "<PhantomBot desktop branch>",
+ *     "productRepository": "<consumer-distribution git URL>",
  *     "builtAt":       "<ISO 8601 UTC timestamp>",
  *     "dirty":         true|false,
  *     "source":        "ci" | "local" | "fallback"
@@ -34,7 +35,7 @@ import { execSync } from 'child_process'
 
 import { isMain } from './utils.mjs'
 
-const STAMP_SCHEMA_VERSION = 1
+const STAMP_SCHEMA_VERSION = 2
 
 /** All-zero placeholder used when no real commit can be resolved. */
 export const FALLBACK_COMMIT = '0000000000000000000000000000000000000000'
@@ -116,6 +117,39 @@ export function isFallbackCommit(commit) {
   return typeof commit === 'string' && /^0{7,40}$/.test(commit)
 }
 
+export function canonicalRepository(value) {
+  let normalized = String(value || '')
+    .trim()
+    .replace(/^git\+/, '')
+    .replace(/\/+$/, '')
+    .replace(/\.git$/i, '')
+    .toLowerCase()
+
+  if (normalized.startsWith('git@github.com:')) {
+    normalized = `https://github.com/${normalized.slice('git@github.com:'.length)}`
+  } else if (normalized.startsWith('ssh://git@github.com/')) {
+    normalized = `https://github.com/${normalized.slice('ssh://git@github.com/'.length)}`
+  }
+
+  return normalized
+}
+
+export function isUpstreamHermesRepository(value) {
+  return canonicalRepository(value) === 'https://github.com/nousresearch/hermes-agent'
+}
+
+export function resolveProductRepository({ env = process.env, execFn = tryExec } = {}) {
+  const explicit = String(env.PHANTOMBOT_PRODUCT_REPOSITORY || '').trim()
+
+  if (explicit) {
+    return isUpstreamHermesRepository(explicit) ? null : explicit
+  }
+
+  const origin = execFn('git remote get-url origin', { cwd: REPO_ROOT })
+
+  return origin && !isUpstreamHermesRepository(origin) ? origin : null
+}
+
 export function resolveKernelPin({ env = process.env, execFn = tryExec } = {}) {
   const explicitCommit = env.PHANTOMBOT_KERNEL_COMMIT
 
@@ -154,6 +188,7 @@ export function resolveKernelPin({ env = process.env, execFn = tryExec } = {}) {
 function main() {
   const productStamp = resolveStamp()
   const kernelPin = resolveKernelPin()
+  const productRepository = resolveProductRepository()
 
   if (!productStamp || !productStamp.commit) {
     // Should not happen — fromFallback() always provides a commit.
@@ -188,16 +223,26 @@ function main() {
     )
   }
 
+  if (!productRepository) {
+    console.warn(
+      '[write-build-stamp] WARNING: no PhantomBot product repository configured.\n' +
+        '  Local builds remain available, but consumer packaging is blocked.\n' +
+        '  Set PHANTOMBOT_PRODUCT_REPOSITORY to the published PhantomBot fork URL.'
+    )
+  }
+
   const payload = {
     schemaVersion: STAMP_SCHEMA_VERSION,
-    // `commit` remains the bootstrap contract consumed by bootstrap-runner:
-    // it MUST be a published Hermes kernel commit, never a private PhantomBot
-    // product commit that Nous' repository cannot fetch.
+    // commit/branch retain compatible Hermes kernel provenance for runtime
+    // diagnostics. The product fields below are the only consumer-bootstrap
+    // source contract for current PhantomBot packages.
     commit: kernelPin.commit,
     branch: kernelPin.branch,
     productCommit: productStamp.commit,
     productBranch: productStamp.branch,
-    productRemote: tryExec('git remote get-url origin', { cwd: REPO_ROOT }),
+    productRemote: productRepository,
+    productRepository,
+    sourceOrigin: tryExec('git remote get-url origin', { cwd: REPO_ROOT }),
     builtAt: new Date().toISOString(),
     dirty: productStamp.dirty,
     source: productStamp.source,

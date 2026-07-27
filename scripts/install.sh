@@ -43,8 +43,13 @@ NC='\033[0m' # No Color
 BOLD='\033[1m'
 
 # Configuration
-REPO_URL_SSH="git@github.com:NousResearch/hermes-agent.git"
-REPO_URL_HTTPS="https://github.com/NousResearch/hermes-agent.git"
+if [ -n "${PHANTOMBOT_PRODUCT_REPOSITORY:-}" ]; then
+    REPO_URL_SSH=""
+    REPO_URL_HTTPS="$PHANTOMBOT_PRODUCT_REPOSITORY"
+else
+    REPO_URL_SSH="git@github.com:NousResearch/hermes-agent.git"
+    REPO_URL_HTTPS="https://github.com/NousResearch/hermes-agent.git"
+fi
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 # INSTALL_DIR is resolved AFTER arg parsing and OS detection so we can pick an
 # FHS-style layout for root installs.  Track whether the user gave us an
@@ -115,6 +120,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --commit|-Commit)
             INSTALL_COMMIT="$2"
+            shift 2
+            ;;
+        --repository-url|-RepositoryUrl)
+            REPO_URL_HTTPS="$2"
+            REPO_URL_SSH=""
             shift 2
             ;;
         --manifest|-Manifest)
@@ -1290,13 +1300,13 @@ EOF
         # Try SSH first (for private repo access), fall back to HTTPS
         # GIT_SSH_COMMAND disables interactive prompts and sets a short timeout
         # so SSH fails fast instead of hanging when no key is configured.
-        log_info "Trying SSH clone..."
-        if GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
+        log_info "Preparing application source..."
+        if [ -n "$REPO_URL_SSH" ] && GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
            git clone --depth 1 --branch "$BRANCH" "$REPO_URL_SSH" "$INSTALL_DIR" 2>/dev/null; then
             log_success "Cloned via SSH"
         else
             rm -rf "$INSTALL_DIR" 2>/dev/null  # Clean up partial SSH clone
-            log_info "SSH failed, trying HTTPS..."
+            log_info "Cloning application source over HTTPS..."
             if git clone --depth 1 --branch "$BRANCH" "$REPO_URL_HTTPS" "$INSTALL_DIR"; then
                 log_success "Cloned via HTTPS"
             else

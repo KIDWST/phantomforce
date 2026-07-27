@@ -38,6 +38,9 @@ pub struct StartBootstrapArgs {
     pub commit: Option<String>,
     /// Optional override for the branch pin. Defaults to `BUILD_PIN_BRANCH`.
     pub branch: Option<String>,
+    /// Published PhantomBot fork used for script download and checkout.
+    /// Release builds bake this via `PHANTOMBOT_PRODUCT_REPOSITORY`.
+    pub repository_url: Option<String>,
     /// Include Stage-Desktop (build apps/desktop) in the manifest. The
     /// signed bootstrap installer passes true; the deprecated Electron-side
     /// bootstrap-runner passes false to avoid building-while-running.
@@ -350,6 +353,9 @@ async fn run_bootstrap(
     let pin = Pin {
         commit: args.commit.or_else(|| option_env_string("BUILD_PIN_COMMIT")),
         branch: args.branch.or_else(|| option_env_string("BUILD_PIN_BRANCH")),
+        repository_url: args
+            .repository_url
+            .or_else(|| option_env_string("BUILD_PRODUCT_REPOSITORY")),
     };
 
     tracing::info!(
@@ -663,6 +669,7 @@ async fn run_bootstrap(
             marker: Some(serde_json::json!({
                 "pinnedCommit": pin.commit,
                 "pinnedBranch": pin.branch,
+                "productRepository": pin.repository_url,
             })),
         },
     );
@@ -752,6 +759,10 @@ fn build_pin_args(script: &install_script::ResolvedScript) -> Vec<String> {
     if let Some(b) = &script.branch {
         out.push("-Branch".to_string());
         out.push(b.clone());
+    }
+    if let Some(repository) = &script.repository_url {
+        out.push("-RepositoryUrl".to_string());
+        out.push(repository.clone());
     }
     out
 }

@@ -407,9 +407,9 @@ const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, '../..')
 // build hasn't been invoked, or schema mismatch). Callers must handle null.
 //
 // Schema:
-//   { schemaVersion: 1, commit, branch, productCommit, productBranch,
-//     productRemote, builtAt, dirty, source }
-const INSTALL_STAMP_SCHEMA_VERSION = 1
+//   { schemaVersion: 2, commit, branch, productCommit, productBranch,
+//     productRemote, productRepository, builtAt, dirty, source }
+const INSTALL_STAMP_SCHEMA_VERSION = 2
 
 function loadInstallStamp() {
   // Try packaged location first (resources/install-stamp.json), then the
@@ -442,6 +442,8 @@ function loadInstallStamp() {
           productCommit: parsed.productCommit || null,
           productBranch: parsed.productBranch || null,
           productRemote: parsed.productRemote || null,
+          productRepository: parsed.productRepository || null,
+          sourceOrigin: parsed.sourceOrigin || null,
           builtAt: parsed.builtAt || null,
           dirty: Boolean(parsed.dirty),
           source: parsed.source || null,

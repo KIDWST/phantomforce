@@ -7,8 +7,10 @@ import {
   fromCI,
   fromFallback,
   fromLocalGit,
+  isUpstreamHermesRepository,
   isFallbackCommit,
   resolveKernelPin,
+  resolveProductRepository,
   resolveStamp
 } from './write-build-stamp.mjs'
 
@@ -113,5 +115,36 @@ test('resolveKernelPin keeps the distributable kernel separate from the product 
       execFn: command => (command === 'git rev-list --max-parents=0 HEAD' ? '1'.repeat(40) : null)
     }),
     { commit: '1'.repeat(40), branch: 'main', source: 'product-shallow-root' }
+  )
+})
+
+test('resolveProductRepository requires an explicit PhantomBot fork when origin is upstream Hermes', () => {
+  assert.equal(
+    resolveProductRepository({
+      env: {},
+      execFn: command =>
+        command === 'git remote get-url origin' ? 'https://github.com/NousResearch/hermes-agent.git' : null
+    }),
+    null
+  )
+  assert.equal(isUpstreamHermesRepository('git@github.com:NousResearch/hermes-agent.git'), true)
+})
+
+test('resolveProductRepository prefers the release override and accepts a non-upstream origin', () => {
+  assert.equal(
+    resolveProductRepository({
+      env: { PHANTOMBOT_PRODUCT_REPOSITORY: 'https://github.com/KIDWST/phantombot.git' },
+      execFn: () => {
+        throw new Error('explicit repository must win')
+      }
+    }),
+    'https://github.com/KIDWST/phantombot.git'
+  )
+  assert.equal(
+    resolveProductRepository({
+      env: {},
+      execFn: () => 'https://github.com/KIDWST/phantombot.git'
+    }),
+    'https://github.com/KIDWST/phantombot.git'
   )
 })

@@ -262,7 +262,7 @@
     },
     "linux": {
       "category": "Development",
-      "maintainer": "Nous Research <support@nousresearch.com>",
+      "maintainer": "PhantomForce",
       "synopsis": "PhantomBot standalone desktop, powered by Hermes Agent.",
       "target": [
         "AppImage",

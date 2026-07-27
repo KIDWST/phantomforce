@@ -29,6 +29,7 @@ pub struct ResolvedScript {
     /// what makes the repo stage clone the exact tested SHA.
     pub commit: Option<String>,
     pub branch: Option<String>,
+    pub repository_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,6 +117,7 @@ pub async fn resolve(
                 source: ScriptSource::DevCheckout,
                 commit: pin.commit.clone(),
                 branch: pin.branch.clone(),
+                repository_url: pin.repository_url.clone(),
             });
         }
     }
@@ -142,7 +144,13 @@ pub async fn resolve(
         }
     };
 
-    let cached = cached_path(kind, &commit_or_ref);
+    let repository_url = pin.repository_url.as_deref().ok_or_else(|| {
+        anyhow!(
+            "no PhantomBot product repository supplied — release builds must set \
+             PHANTOMBOT_PRODUCT_REPOSITORY"
+        )
+    })?;
+    let cached = cached_path(kind, repository_url, &commit_or_ref);
     match cache_plan(immutable, cached.exists()) {
         CachePlan::Reuse => {
             emit_log(&format!(
@@ -159,6 +167,7 @@ pub async fn resolve(
                 source: ScriptSource::Cached,
                 commit: pin.commit.clone(),
                 branch: pin.branch.clone(),
+                repository_url: pin.repository_url.clone(),
             });
         }
         CachePlan::Fetch { stale_ok } => {
@@ -173,7 +182,7 @@ pub async fn resolve(
                 truncate_ref(&commit_or_ref)
             ));
 
-            match download(kind, &commit_or_ref, &cached).await {
+            match download(kind, repository_url, &commit_or_ref, &cached).await {
                 Ok(()) => {
                     emit_log(&format!("[bootstrap] cached to {}", cached.display()));
                     Ok(ResolvedScript {
@@ -181,6 +190,7 @@ pub async fn resolve(
                         source: ScriptSource::Downloaded,
                         commit: pin.commit.clone(),
                         branch: pin.branch.clone(),
+                        repository_url: pin.repository_url.clone(),
                     })
                 }
                 Err(err) if stale_ok => {
@@ -197,6 +207,7 @@ pub async fn resolve(
                         source: ScriptSource::Cached,
                         commit: pin.commit.clone(),
                         branch: pin.branch.clone(),
+                        repository_url: pin.repository_url.clone(),
                     })
                 }
                 Err(err) => Err(err),
@@ -209,10 +220,11 @@ pub async fn resolve(
 pub struct Pin {
     pub commit: Option<String>,
     pub branch: Option<String>,
+    pub repository_url: Option<String>,
 }
 
-fn cached_path(kind: ScriptKind, commit_or_ref: &str) -> PathBuf {
-    let safe = sanitize_ref(commit_or_ref);
+fn cached_path(kind: ScriptKind, repository_url: &str, commit_or_ref: &str) -> PathBuf {
+    let safe = sanitize_ref(&format!("{repository_url}--{commit_or_ref}"));
     let filename = match kind {
         ScriptKind::Ps1 => format!("install-{safe}.ps1"),
         ScriptKind::Sh => format!("install-{safe}.sh"),
@@ -322,12 +334,52 @@ fn upgrade_cached_script(kind: ScriptKind, cached: &Path, emit_log: &impl Fn(&st
 /// black-holed connection (captive portal, hung proxy, silently dropped
 /// packets) never errors — the whole bootstrap would hang here instead of
 /// falling back to the cached script.
-async fn download(kind: ScriptKind, commit_or_ref: &str, dest_path: &Path) -> Result<()> {
-    let url = format!(
-        "https://raw.githubusercontent.com/NousResearch/hermes-agent/{}/scripts/{}",
-        commit_or_ref,
-        kind.filename()
-    );
+fn github_raw_url(repository_url: &str, commit_or_ref: &str, filename: &str) -> Result<String> {
+    let normalized = if let Some(rest) = repository_url.strip_prefix("git@github.com:") {
+        format!("https://github.com/{rest}")
+    } else if let Some(rest) = repository_url.strip_prefix("ssh://git@github.com/") {
+        format!("https://github.com/{rest}")
+    } else {
+        repository_url.to_string()
+    };
+    let parsed = reqwest::Url::parse(&normalized)
+        .with_context(|| "PhantomBot product repository is not a valid URL")?;
+    let mut parts = parsed
+        .path()
+        .trim_matches('/')
+        .trim_end_matches(".git")
+        .split('/');
+    let owner = parts.next().unwrap_or_default();
+    let repo = parts.next().unwrap_or_default();
+
+    if parsed.scheme() != "https"
+        || parsed.host_str() != Some("github.com")
+        || owner.is_empty()
+        || repo.is_empty()
+        || parts.next().is_some()
+        || (owner.eq_ignore_ascii_case("NousResearch") && repo.eq_ignore_ascii_case("hermes-agent"))
+    {
+        return Err(anyhow!(
+            "PhantomBot product repository must be a public, non-upstream \
+             https://github.com/OWNER/REPO URL"
+        ));
+    }
+
+    let mut raw = reqwest::Url::parse("https://raw.githubusercontent.com")
+        .expect("static raw GitHub URL must parse");
+    raw.set_path(&format!(
+        "/{owner}/{repo}/{commit_or_ref}/scripts/{filename}"
+    ));
+    Ok(raw.to_string())
+}
+
+async fn download(
+    kind: ScriptKind,
+    repository_url: &str,
+    commit_or_ref: &str,
+    dest_path: &Path,
+) -> Result<()> {
+    let url = github_raw_url(repository_url, commit_or_ref, kind.filename())?;
 
     if let Some(parent) = dest_path.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
@@ -463,6 +515,25 @@ mod tests {
             cache_plan(/*immutable=*/ true, /*cached_exists=*/ false),
             CachePlan::Fetch { stale_ok: false }
         );
+    }
+
+    #[test]
+    fn product_repository_builds_raw_github_script_url() {
+        assert_eq!(
+            github_raw_url(
+                "https://github.com/KIDWST/phantombot.git",
+                "phantomforce/release",
+                "install.ps1"
+            )
+            .unwrap(),
+            "https://raw.githubusercontent.com/KIDWST/phantombot/phantomforce/release/scripts/install.ps1"
+        );
+        assert!(github_raw_url(
+            "https://github.com/NousResearch/hermes-agent.git",
+            "main",
+            "install.sh"
+        )
+        .is_err());
     }
 
     #[test]

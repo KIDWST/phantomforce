@@ -11,17 +11,20 @@ fn main() {
     // The COMMIT pin is opt-in. By default a dev build pins ONLY the branch,
     // so the produced installer follows that branch's HEAD at install time
     // (tolerant of fast-forwards/new commits, and never references a SHA the
-    // local checkout hasn't pushed). Set HERMES_BUILD_PIN_COMMIT to bake an
-    // immutable commit pin for reproducible/release installers.
+    // local checkout hasn't pushed). Set PHANTOMBOT_BUILD_PIN_COMMIT to bake
+    // an immutable commit pin for reproducible/release installers. The legacy
+    // HERMES_* aliases remain accepted for compatible local build automation.
     //
     // Commit pin resolution:
-    //   - HERMES_BUILD_PIN_COMMIT, if set and non-empty. Accepts a SHA, tag,
+    //   - PHANTOMBOT_BUILD_PIN_COMMIT (or legacy HERMES_BUILD_PIN_COMMIT), if
+    //     set and non-empty. Accepts a SHA, tag,
     //     or branch name; resolved to an immutable SHA via `git rev-parse`
     //     when possible, else used verbatim if it already looks like a SHA.
     //   - Otherwise: NO commit pin (branch-follow is the default).
     //
     // Branch pin resolution:
-    //   1. HERMES_BUILD_PIN_BRANCH, if set and non-empty.
+    //   1. PHANTOMBOT_BUILD_PIN_BRANCH (or legacy
+    //      HERMES_BUILD_PIN_BRANCH), if set and non-empty.
     //   2. `git rev-parse --abbrev-ref HEAD` of the checkout this build.rs
     //      lives in — the current branch. (None on a detached HEAD.)
     //   3. Last-resort fallback handled below: if neither commit nor branch
@@ -33,6 +36,7 @@ fn main() {
 
     let commit = resolve_commit_pin();
     let branch = resolve_branch_pin();
+    let product_repository = resolve_product_repository();
 
     if let Some(c) = &commit {
         println!("cargo:rustc-env=BUILD_PIN_COMMIT={c}");
@@ -47,7 +51,7 @@ fn main() {
             Some(_) => println!("cargo:warning=phantombot-bootstrap: pinning to branch {b}"),
             None => println!(
                 "cargo:warning=phantombot-bootstrap: following branch {b} HEAD (no commit pin; \
-                 set HERMES_BUILD_PIN_COMMIT for an immutable pin)"
+                 set PHANTOMBOT_BUILD_PIN_COMMIT for an immutable pin)"
             ),
         }
     }
@@ -60,11 +64,20 @@ fn main() {
             "cargo:warning=phantombot-bootstrap: no pin resolved at build time; binary will fail at runtime without HERMES_SETUP_DEV_REPO_ROOT or runtime args"
         );
     }
+    if let Some(repository) = &product_repository {
+        println!("cargo:rustc-env=BUILD_PRODUCT_REPOSITORY={repository}");
+        println!("cargo:warning=phantombot-bootstrap: product source {repository}");
+    } else {
+        println!(
+            "cargo:warning=phantombot-bootstrap: no PhantomBot product repository configured; \
+             dev builds work with HERMES_SETUP_DEV_REPO_ROOT but release installation is blocked"
+        );
+    }
 
     // Rerun build.rs when HEAD moves. With branch-follow as the default the
     // baked commit no longer changes per-commit, but a branch *switch* changes
     // the detected branch name, so we still re-trigger. When an explicit
-    // HERMES_BUILD_PIN_COMMIT resolves a moving ref (tag/branch) to a SHA, a
+    // PHANTOMBOT_BUILD_PIN_COMMIT resolves a moving ref (tag/branch) to a SHA, a
     // HEAD move can also change that resolution. .git/HEAD changes on every
     // commit / branch switch / rebase.
     let git_dir = locate_git_dir();
@@ -79,8 +92,11 @@ fn main() {
             }
         }
     }
+    println!("cargo:rerun-if-env-changed=PHANTOMBOT_BUILD_PIN_COMMIT");
+    println!("cargo:rerun-if-env-changed=PHANTOMBOT_BUILD_PIN_BRANCH");
     println!("cargo:rerun-if-env-changed=HERMES_BUILD_PIN_COMMIT");
     println!("cargo:rerun-if-env-changed=HERMES_BUILD_PIN_BRANCH");
+    println!("cargo:rerun-if-env-changed=PHANTOMBOT_PRODUCT_REPOSITORY");
 
     // -----------------------------------------------------------------
     // Tauri windows manifest. See hermes-setup.manifest for rationale —
@@ -102,9 +118,11 @@ fn main() {
 
 fn resolve_commit_pin() -> Option<String> {
     // Commit pinning is OPT-IN. Only bake a commit when the caller explicitly
-    // asks for one via HERMES_BUILD_PIN_COMMIT. With no env var, we return
-    // None and the installer follows the branch HEAD at install time.
-    let requested = std::env::var("HERMES_BUILD_PIN_COMMIT").ok()?;
+    // asks for one via PHANTOMBOT_BUILD_PIN_COMMIT (or the compatible legacy
+    // alias). With no env var, we return None and follow the branch HEAD.
+    let requested = std::env::var("PHANTOMBOT_BUILD_PIN_COMMIT")
+        .or_else(|_| std::env::var("HERMES_BUILD_PIN_COMMIT"))
+        .ok()?;
     let requested = requested.trim();
     if requested.is_empty() {
         return None;
@@ -132,7 +150,7 @@ fn resolve_commit_pin() -> Option<String> {
         return Some(requested.to_string());
     }
     panic!(
-        "HERMES_BUILD_PIN_COMMIT={requested:?} could not be resolved to a commit \
+        "PHANTOMBOT_BUILD_PIN_COMMIT={requested:?} could not be resolved to a commit \
          (git rev-parse failed and it is not a valid SHA)"
     );
 }
@@ -144,7 +162,9 @@ fn is_sha(s: &str) -> bool {
 }
 
 fn resolve_branch_pin() -> Option<String> {
-    if let Ok(v) = std::env::var("HERMES_BUILD_PIN_BRANCH") {
+    if let Ok(v) = std::env::var("PHANTOMBOT_BUILD_PIN_BRANCH")
+        .or_else(|_| std::env::var("HERMES_BUILD_PIN_BRANCH"))
+    {
         if !v.trim().is_empty() {
             return Some(v.trim().to_string());
         }
@@ -164,6 +184,40 @@ fn resolve_branch_pin() -> Option<String> {
     } else {
         Some(s)
     }
+}
+
+fn resolve_product_repository() -> Option<String> {
+    if let Ok(value) = std::env::var("PHANTOMBOT_PRODUCT_REPOSITORY") {
+        let value = value.trim();
+        if !value.is_empty() {
+            return (!is_upstream_hermes_repository(value)).then(|| value.to_string());
+        }
+    }
+
+    let out = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let value = String::from_utf8(out.stdout).ok()?.trim().to_string();
+    if value.is_empty() || is_upstream_hermes_repository(&value) {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+fn is_upstream_hermes_repository(value: &str) -> bool {
+    let canonical = value
+        .to_ascii_lowercase()
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .to_string();
+
+    canonical == "https://github.com/nousresearch/hermes-agent"
+        || canonical == "git@github.com:nousresearch/hermes-agent"
 }
 
 fn locate_git_dir() -> Option<std::path::PathBuf> {

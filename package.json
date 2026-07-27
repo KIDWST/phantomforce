@@ -26,7 +26,7 @@
     "phantombot:doctor": "node apps/desktop/scripts/phantombot-doctor.mjs",
     "phantombot:audit": "npm audit --omit=dev --audit-level=critical",
     "phantombot:test": "npm run typecheck --workspace apps/desktop && npm run lint --workspace apps/desktop && npm run test --workspace apps/desktop",
-    "phantombot:package": "node apps/desktop/scripts/phantombot-doctor.mjs --release && npm run phantombot:audit && npm run dist:win --workspace apps/desktop",
+    "phantombot:package": "npm run build --workspace apps/desktop && node apps/desktop/scripts/phantombot-doctor.mjs --release && npm run phantombot:audit && npm run builder --workspace apps/desktop -- --win",
     "check": "npm run --ws check",
     "fix": "npm run --ws fix"
   },
