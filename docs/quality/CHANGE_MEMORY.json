@@ -1156,7 +1156,7 @@
       "id": "phantomplay-kids-lane-and-keyboardist-removal",
       "status": "active",
       "title": "Selected PhantomPlay games stay in the under-18 lane and Keyboardist on Tour stays deleted",
-      "ownerDecision": "Neon Drift, Phantom Dash, Word Weld, PhantomCube, Tidefront Tactics, and Kingdom Breakers are kids-lane games. Adult profiles do not see that lane unless they explicitly choose Kids or Under 18; child and toddler profiles see it automatically. Keyboardist on Tour is removed from catalogs, source, and assets and must not be restored.",
+      "ownerDecision": "Neon Drift, Phantom Dash, Word Weld, PhantomCube, Tidefront Tactics, and Kingdom Breakers are kids-lane games. Adult profiles do not see that lane unless they explicitly choose Kids or Under 18; child and toddler profiles see it automatically. Keyboardist on Tour is removed and must not be restored. Cipher Keep is a separate game and must remain available under its own cipher-keep identity.",
       "requiredPatterns": [
         {
           "file": "server/src/phantom-ai/phantomplay.ts",
@@ -1172,6 +1172,11 @@
           "file": "app/js/phantomplay-v2.js",
           "pattern": "sort === \"Kids\" \\|\\| sort === \"Under 18\"",
           "description": "The active PhantomPlay client keeps explicit Kids and Under 18 filters."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomplay-flagship.ts",
+          "pattern": "id: \"cipher-keep\"[\\s\\S]*title: \"Cipher Keep\"[\\s\\S]*\\/app\\/games\\/cipher-keep\\.html",
+          "description": "Cipher Keep remains registered independently from the deleted Keyboardist on Tour identity."
         }
       ],
       "forbiddenPatterns": [

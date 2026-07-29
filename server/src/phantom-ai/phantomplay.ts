@@ -143,6 +143,7 @@ const GAME_ART_BY_SLUG: Record<string, string> = {
   "im-baked": artUrl("im-baked-cover.svg"),
   "phantom-strike": artUrl("phantom-strike-cover.svg"),
   "cubetown": artUrl("cubetown-cover.svg"),
+  "cipher-keep": artUrl("cipher-keep-cover.svg"),
   "phantom-grand-prix": artUrl("phantom-grand-prix-cover.svg"),
   "beat-strike": artUrl("beat-strike-cover.svg"),
   "phantom-dash": artUrl("phantom-dash-cover.svg"),

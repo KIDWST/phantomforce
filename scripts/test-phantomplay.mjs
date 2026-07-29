@@ -9,7 +9,7 @@ const index = read("../app/index.html");
 const css = read("../app/phantomplay.css");
 const v2Css = read("../app/phantomplay-v2.css");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
-const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "rift-frenzy", "serpent-surge", "pixel-bloom", "type-storm", "im-baked", "phantom-strike"];
+const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "rift-frenzy", "serpent-surge", "pixel-bloom", "type-storm", "im-baked", "phantom-strike", "cipher-keep"];
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const colorRush = read("../app/games/color-rush.html");
@@ -126,6 +126,9 @@ assert.match(serverV2Catalog, /hiddenGems: discoveryCatalog\.map/u, "V2 hidden-g
 assert.match(serverV2Catalog, /related: \(isKidsLaneGame\(game\) \? catalog\.filter\(isKidsLaneGame\) : catalog\.filter\(\(item\) => !isKidsLaneGame\(item\)\)\)/u, "V2 related games must keep kids-only related titles inside Kids context only.");
 assert.match(serverV2Catalog, /const game = visibleCatalogFor\(store, v1, tenantId, actorId\)\.find\(\(item\) => item\.id === gameId\)/u, "V2 leaderboard endpoint must respect the viewer's visible catalog before returning scores.");
 assert.doesNotMatch(appFiles.join("\n") + serverCatalog + serverV2Catalog, /keyboardist-on-tour|Keyboardist On Tour/u, "Keyboardist on Tour must be completely removed from PhantomPlay catalogs and app source.");
+assert.match(module, /id: "cipher-keep"[\s\S]*title: "Cipher Keep"[\s\S]*launchUrl: "\/app\/games\/cipher-keep\.html/u, "Cipher Keep must remain a separately named built-in game.");
+assert.match(flagshipCatalog, /id: "cipher-keep"[\s\S]*title: "Cipher Keep"[\s\S]*launchUrl: "\/app\/games\/cipher-keep\.html/u, "The server flagship catalog must serve Cipher Keep independently.");
+assert.match(games[gameSlugs.indexOf("cipher-keep")], /<title>Cipher Keep<\/title>[\s\S]*cipherkeep\.mirror/u, "Cipher Keep must retain its complete playable source and save state.");
 assert.match(module, /sandbox="allow-scripts allow-pointer-lock"/u, "Games must launch in an opaque-origin sandbox with scripts and pointer lock only.");
 assert.doesNotMatch(module, /allow-same-origin|allow-forms|allow-popups/u, "The player must not grant origin, form, or popup powers.");
 assert.match(module, /event\.source !== frame\.contentWindow/u, "Game messages must be bound to the active frame.");

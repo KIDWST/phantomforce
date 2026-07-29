@@ -139,7 +139,7 @@ try {
   const servedIds = new Set((v1Route.json().catalog as Array<{ id: string }>).map((game) => game.id));
   assert(v1Route.statusCode === 200 && servedIds.size === registeredIds.size && [...registeredIds].every((id) => servedIds.has(id)), "The V1 catalog route should serve exactly the registered built-in set.");
   assert(v2.PHANTOMPLAY_V2_GAMES.every((game) => servedIds.has(game.id)), "The V1 catalog route should include the registered V2 games.");
-  for (const flagshipId of ["cubetown", "skyguard-arena", "crown-circuit", "tidefront-tactics", "kingdom-breakers"]) {
+  for (const flagshipId of ["cubetown", "skyguard-arena", "crown-circuit", "tidefront-tactics", "kingdom-breakers", "cipher-keep"]) {
     assert(servedIds.has(flagshipId), `The V1 catalog route should include flagship game ${flagshipId}.`);
   }
   assert(!servedIds.has("keyboardist-on-tour"), "Keyboardist on Tour must not be served by either PhantomPlay catalog.");
