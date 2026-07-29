@@ -6,23 +6,23 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260729-87-creatorrestore1";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260729-88-creatorrestore1";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260729-87-creatorrestore1";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260729-87-creatorrestore1";
+} from "./contenthub.js?v=phantom-live-20260729-88-creatorrestore1";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260729-88-creatorrestore1";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260729-87-creatorrestore1";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260729-87-creatorrestore1";
-import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260729-87-creatorrestore1";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260729-87-creatorrestore1";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260729-87-creatorrestore1";
+} from "./content-editor.js?v=phantom-live-20260729-88-creatorrestore1";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260729-88-creatorrestore1";
+import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260729-88-creatorrestore1";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260729-88-creatorrestore1";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260729-88-creatorrestore1";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -31,19 +31,31 @@ const CONTENT_HUB_OPEN_TAB_KEY = "pf.contenthub.openTab.v1";
 const CONTENT_HUB_OPEN_ASSET_KEY = "pf.contenthub.openAsset.v1";
 const TAU = Math.PI * 2;
 
-const PRIMARY_MEDIA_LANE = "cinematic";
-const normalizeLaneId = (id = "") => String(id || "").toLowerCase();
+const IMAGE_MEDIA_LANE = "chatgpt_bridge";
+const PRIMARY_MEDIA_LANE = "higgsfield";
+const LEGACY_MEDIA_LANE = "cinematic";
+const normalizeLaneId = (id = "") => {
+  const lane = String(id || "").toLowerCase();
+  return lane === LEGACY_MEDIA_LANE ? PRIMARY_MEDIA_LANE : lane;
+};
 
 /* ---------------- media lane registry ---------------- */
 export const DEFAULT_PROVIDERS = [
   {
-    id: PRIMARY_MEDIA_LANE, name: "Cinematic Engine", tagline: "Image and video production",
-    brand: "#8b7bff", keyEnv: "PHANTOM_MEDIA_KEY", enabled: true,
-    modalities: ["image", "video", "edit"],
+    id: IMAGE_MEDIA_LANE, name: "ChatGPT Bridge", tagline: "Photos and still images through your signed-in ChatGPT session",
+    brand: "#10a37f", keyEnv: "PHANTOM_AGENT_ASSIST_BRIDGE_URL", enabled: true,
+    modalities: ["image", "edit"],
     models: {
-      image: ["gpt_image_2", "nano_banana_2"],
-      video: ["seedance_2_0", "kling3_0", "marketing_studio_video"],
-      edit: ["nano_banana_2", "gpt_image_2"],
+      image: ["chatgpt_image", "chatgpt_image_high"],
+      edit: ["chatgpt_image_edit"],
+    },
+  },
+  {
+    id: PRIMARY_MEDIA_LANE, name: "Higgsfield Video", tagline: "Premium motion generation",
+    brand: "#8b7bff", keyEnv: "PHANTOM_MEDIA_KEY", enabled: true,
+    modalities: ["video"],
+    models: {
+      video: ["seedance_2_0", "seedance_2_0_pro", "kling3_0", "soul_v2", "cinema", "cast", "location", "marketing_studio_video"],
     },
   },
   {
@@ -159,9 +171,17 @@ const MEDIA_PRESETS = [
 const LANE_LABELS = {
   "gpt_image_2": "GPT Image 2",
   "nano_banana_2": "Nano Banana 2",
+  "chatgpt_image": "ChatGPT Images",
+  "chatgpt_image_high": "ChatGPT Images · high detail",
+  "chatgpt_image_edit": "ChatGPT Image Edit",
   "marketing_studio_image": "Campaign image",
   "seedance_2_0": "Seedance 2.0",
+  "seedance_2_0_pro": "Seedance 2.0 Pro",
   "kling3_0": "Kling 3.0",
+  "soul_v2": "Soul V2",
+  "cinema": "Cinema",
+  "cast": "Cast",
+  "location": "Location",
   "marketing_studio_video": "Campaign video",
   "gpt-image-1": "Generated stills",
   "sora-2": "Story motion",
@@ -661,6 +681,7 @@ export function loadCfg() {
   for (const c of saved.customProviders || []) {
     const id = normalizeLaneId(c.id);
     if (id === PRIMARY_MEDIA_LANE && providers.some((p) => p.id === PRIMARY_MEDIA_LANE)) continue;
+    if (id === IMAGE_MEDIA_LANE && providers.some((p) => p.id === IMAGE_MEDIA_LANE)) continue;
     providers.push({ ...c, id, custom: true });
   }
   const savedRouting = saved.routing || {};
@@ -668,7 +689,7 @@ export function loadCfg() {
     providers,
     endpointBase: saved.endpointBase || "",
     routing: {
-      image: normalizeLaneId(savedRouting.image || PRIMARY_MEDIA_LANE),
+      image: normalizeLaneId(savedRouting.image || IMAGE_MEDIA_LANE) === PRIMARY_MEDIA_LANE ? IMAGE_MEDIA_LANE : normalizeLaneId(savedRouting.image || IMAGE_MEDIA_LANE),
       video: normalizeLaneId(savedRouting.video || PRIMARY_MEDIA_LANE),
       enhance: normalizeLaneId(savedRouting.enhance || "claude"),
     },
@@ -760,9 +781,9 @@ function renderLaneReady(health, providerId = PRIMARY_MEDIA_LANE) {
   const tools = Array.isArray(engine?.tools) ? engine.tools : [];
   const ownerRenderTool = tools.some((tool) => tool?.available !== false && /render/i.test(String(tool?.name || "")));
   const ownerCliReady = engine?.cliFallbackEnabled === true && engine?.higgsfield?.cli?.present !== false;
+  if (providerId === IMAGE_MEDIA_LANE && h.bridge && h.bridgeAuth) return true;
   if (providerId === PRIMARY_MEDIA_LANE && engine?.status === "connected" && (ownerRenderTool || ownerCliReady || engine?.higgsfield?.availableThroughHermes)) return true;
   if (h.media?.[providerId]) return true;
-  if (providerId === PRIMARY_MEDIA_LANE && h.bridge && h.bridgeAuth) return true;
   return false;
 }
 function engineAttention(health, providerId = PRIMARY_MEDIA_LANE) {
@@ -809,16 +830,17 @@ function cleanBrief(value = "", limit = 2200) {
 }
 function normalizeCinematicModel(req = {}) {
   if (normalizeLaneId(req.provider) !== PRIMARY_MEDIA_LANE) return req.model || "";
-  if (req.modality === "image") {
-    return ["gpt_image_2", "nano_banana_2"].includes(req.model) ? req.model : "gpt_image_2";
-  }
-  return ["seedance_2_0", "kling3_0", "marketing_studio_video"].includes(req.model) ? req.model : "seedance_2_0";
+  return ["seedance_2_0", "seedance_2_0_pro", "kling3_0", "soul_v2", "cinema", "cast", "location", "marketing_studio_video"].includes(req.model) ? req.model : "seedance_2_0";
+}
+function normalizeChatGptImageModel(req = {}) {
+  return ["chatgpt_image", "chatgpt_image_high", "chatgpt_image_edit"].includes(req.model) ? req.model : "chatgpt_image";
 }
 function buildGenerationSpec(req = {}) {
   const params = req.params || {};
   const rawPrompt = cleanBrief(req.prompt);
   const negative = cleanBrief(req.negative, 700);
-  const model = normalizeCinematicModel(req) || req.model || "";
+  const providerId = normalizeLaneId(req.provider || (req.modality === "video" ? PRIMARY_MEDIA_LANE : IMAGE_MEDIA_LANE));
+  const model = providerId === IMAGE_MEDIA_LANE ? normalizeChatGptImageModel(req) : normalizeCinematicModel(req) || req.model || "";
   /* THE PROMPT IS THE PROMPT. Diffusion models are caption-matchers, not
      instruction-followers: meta-text like "Output: image. Frame: 1:1.
      Honor the request literally" gets DRAWN, not obeyed — it was actively
@@ -843,7 +865,7 @@ function buildGenerationSpec(req = {}) {
     provider_prompt: cleanBrief(providerPromptParts, 2600),
     negative_prompt: negative,
     modality: req.modality === "video" ? "video" : "image",
-      provider: normalizeLaneId(req.provider || PRIMARY_MEDIA_LANE),
+    provider: providerId,
     model,
     preset: req.preset || "Custom",
     style: req.style || "None",
@@ -912,14 +934,80 @@ async function draftCinematicRequest(req = {}, spec = {}) {
     clearTimeout(timer);
   }
 }
+async function generateChatGptImageRequest(req = {}, spec = {}, externalSignal = null) {
+  const token = accessSession.token();
+  const ctrl = new AbortController();
+  const signal = externalSignal && typeof AbortSignal.any === "function"
+    ? AbortSignal.any([ctrl.signal, externalSignal])
+    : externalSignal || ctrl.signal;
+  const timer = setTimeout(() => ctrl.abort(), 12 * 60_000);
+  try {
+    const response = await fetch("/phantom-ai/media-lab/chatgpt-image/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        tenant_id: currentTenantId(),
+        prompt: spec.provider_prompt,
+        original_prompt: spec.original_prompt,
+        model: spec.model,
+        aspect_ratio: spec.aspect,
+        count: spec.count,
+        quality: spec.quality,
+        reference_image: req.ref || "",
+      }),
+      signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (payload?.approval_required) return { assets: [], live: false, approvalRequired: true, spec, message: payload.message || "" };
+    if (!response.ok || !payload?.ok) {
+      return {
+        assets: [],
+        live: false,
+        spec,
+        fallbackReason: payload?.error || `chatgpt_bridge_http_${response.status}`,
+        fallbackDetail: cleanBrief(payload?.message || payload?.detail || "", 220),
+      };
+    }
+    const assets = normalizeGeneratedAssets(payload.assets || [], req, spec);
+    if (assets.length) return { assets, live: true, spec, provider: IMAGE_MEDIA_LANE, model: payload.model || spec.model };
+    return {
+      assets: [],
+      live: false,
+      spec,
+      fallbackReason: "chatgpt_bridge_no_image",
+      fallbackDetail: cleanBrief(payload.message || "ChatGPT Bridge completed without returning an image file.", 220),
+    };
+  } catch (error) {
+    if (externalSignal?.aborted) throw error;
+    return {
+      assets: [],
+      live: false,
+      spec,
+      fallbackReason: error?.name === "AbortError" ? "chatgpt_bridge_timeout" : "chatgpt_bridge_unreachable",
+      fallbackDetail: cleanBrief(error?.message || "", 220),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 // Returns { assets:[{type,url,meta}], live:boolean } — never throws; falls back
 // to a procedural preview so Media Lab is always usable.
 async function generate(cfg, req, externalSignal = null) {
   const base = genBase(cfg);
-  req = { ...req, provider: normalizeLaneId(req.provider || PRIMARY_MEDIA_LANE) };
+  req = { ...req, provider: normalizeLaneId(req.provider || (req.modality === "video" ? PRIMARY_MEDIA_LANE : IMAGE_MEDIA_LANE)) };
   const p = provider(cfg, req.provider) || {};
   const spec = buildGenerationSpec(req);
   const health = await checkEngineHealth(cfg).catch(() => engineHealth);
+  if (req.provider === IMAGE_MEDIA_LANE) {
+    const out = await generateChatGptImageRequest(req, spec, externalSignal);
+    if (out.assets?.length || out.approvalRequired) return out;
+    const assets = [];
+    for (let i = 0; i < spec.count; i++) assets.push(previewAsset({ ...req, prompt: spec.provider_prompt, params: { ...req.params } }, i, { spec, fallbackReason: out.fallbackReason || "chatgpt_bridge_no_image", fallbackDetail: out.fallbackDetail }));
+    return { ...out, assets };
+  }
   /* BACKEND LANE FIRST: the same-origin PhantomForce backend brokers the
      brief and returns either real assets or an approval-safe preview packet. */
   const backendLane = req.provider === PRIMARY_MEDIA_LANE && !p.endpoint
@@ -2074,7 +2162,7 @@ function renderPending(body, cfg, opts, root) {
 }
 
 /* ---- Generate ---- */
-const genState = { modality: "image", provider: PRIMARY_MEDIA_LANE, model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, showNeg: false, preset: "custom", stageFull: false };
+const genState = { modality: "image", provider: IMAGE_MEDIA_LANE, model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, showNeg: false, preset: "custom", stageFull: false };
 
 function activePreset() {
   return MEDIA_PRESETS.find((p) => p.id === genState.preset) || null;
@@ -2637,7 +2725,16 @@ function wireGenerate(body, cfg, opts, root, esc) {
           || `${String(lastRenderIssue.reason || "unknown error")} — fix it on the admin box, then hit Re-check.`);
       return;
     }
-    if (h.engine && prov === PRIMARY_MEDIA_LANE) {
+    if (prov === IMAGE_MEDIA_LANE) {
+      if (!h.hasToken && !h.bridgeAuth) {
+        setDoctor("warn", "ChatGPT Bridge — Sign-in expired", ["Sign in, then re-check"],
+          "Photos use the local ChatGPT Bridge. Refresh the admin session and ChatGPT browser session, then hit Re-check.");
+      } else if (ready) {
+        setDoctor("ok", "ChatGPT Bridge — Ready", ["Photos and still images use ChatGPT", "Higgsfield stays for video"]);
+      } else {
+        setDoctor("warn", "ChatGPT Bridge — Needs setup", ["Open Settings → ChatGPT Bridge"]);
+      }
+    } else if (h.engine && prov === PRIMARY_MEDIA_LANE) {
       const e = h.engine;
       const adminTail = null;
       // your session token lives in sessionStorage (tab-scoped) while "signed

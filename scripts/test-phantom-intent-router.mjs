@@ -240,7 +240,7 @@ globalThis.fetch = async (url, init) => {
 const instantQuestion = await handleSmartCommand("what's your favorite food?");
 assert.equal(instantQuestion.say, "I'd pick tacos.");
 assert.equal(capturedChatBody.route_tier, "instant");
-assert.equal(capturedChatBody.requested_model, "qwen3:4b");
+assert.equal(capturedChatBody.requested_model, "phantom-v1:latest");
 assert.equal(capturedChatBody.admin_model, "local_ollama");
 assert.deepEqual(capturedChatBody.allowed_providers, ["local_ollama"]);
 assert.equal(capturedChatBody.allow_provider_fallback, false);
@@ -249,26 +249,25 @@ globalThis.fetch = originalFetch;
 
 let liveChatBody = null;
 globalThis.fetch = async (url, init) => {
-  assert.match(String(url), /\/phantom-ai\/chat$/, "live weather questions should use the chat backend");
+  assert.match(String(url), /\/phantom-ai\/respond$/, "live weather questions should use the protected Phantom response endpoint");
   liveChatBody = JSON.parse(init.body);
   return {
     ok: true,
     json: async () => ({
       ok: true,
-      message: { role: "assistant", content: "New York, NY: 72°F, partly cloudy." },
-      fallback: { all_failed: false },
-      hermes: { route_tier: "instant" },
+      answer: "New York, NY: 72°F, partly cloudy.",
+      effort: "instant",
     }),
   };
 };
 const liveWeather = await handleSmartCommand("tell me the weather in nyc");
 globalThis.fetch = originalFetch;
 assert.equal(liveWeather.say, "New York, NY: 72°F, partly cloudy.");
-assert.equal(liveChatBody.route_tier, "instant", "typed-location weather should use ChatGPT instant effort");
-assert.equal(liveChatBody.admin_model, "chatgpt_bridge", "typed-location weather should route to ChatGPT Bridge");
-assert.equal(liveChatBody.requested_model, "chatgpt-instant", "ChatGPT Bridge instant route should request chatgpt-instant");
-assert.deepEqual(liveChatBody.allowed_providers, ["chatgpt_bridge"], "live weather must not go to local Ollama");
-assert.equal(liveChatBody.max_provider_ms, null, "ChatGPT instant bridge should not inherit local Ollama timeout");
+assert.equal(liveChatBody.mode, "instant", "typed-location weather should use ChatGPT instant mode");
+assert.equal(liveChatBody.effort, "instant", "the bridge should receive the selected effort");
+assert.equal(liveChatBody.caller, "phantombot");
+assert.equal("provider" in liveChatBody, false, "provider identity must remain behind the server curtain");
+assert.equal("requested_model" in liveChatBody, false, "model identity must remain behind the server curtain");
 
 assert.equal(classifyPhantomIntent("why does rain happen?").needsLiveData, false, "stable rain science must not require a live lookup");
 assert.equal(classifyPhantomIntent("write a haiku about rain").needsLiveData, false, "creative rain writing must not require a live lookup");
@@ -336,37 +335,33 @@ assert.match(store.state.memory[0].summary, /brand color is green/i);
 
 let broadChatBody = null;
 globalThis.fetch = async (url, init) => {
-  assert.match(String(url), /\/phantom-ai\/chat$/, "broad thinking requests should use the chat backend");
+  assert.match(String(url), /\/phantom-ai\/respond$/, "broad thinking requests should use the protected Phantom response endpoint");
   broadChatBody = JSON.parse(init.body);
   return {
     ok: true,
     json: async () => ({
       ok: true,
-      message: { role: "assistant", content: "Model-backed answer with a useful plan." },
-      fallback: { all_failed: false },
-      hermes: { route_tier: "reasoning" },
+      answer: "Model-backed answer with a useful plan.",
+      effort: "deep",
     }),
   };
 };
 const broadThought = await handleSmartCommand("help me think through a school growth strategy for PhantomPlay");
 globalThis.fetch = originalFetch;
 assert.equal(broadThought.say, "Model-backed answer with a useful plan.");
-assert.equal(broadChatBody.route_tier, "reasoning", "action-free strategy should use the bounded reasoning lane");
-assert.equal(broadChatBody.allow_provider_fallback, false, "action-free strategy must not walk private provider fallbacks");
-assert.equal(broadChatBody.admin_model, "chatgpt_bridge", "action-free strategy should use ChatGPT Bridge for thinking");
-assert.deepEqual(broadChatBody.allowed_providers, ["chatgpt_bridge"], "action-free strategy must not send thinking to Phantom V1/local Ollama");
-assert.equal(broadChatBody.max_provider_ms, null, "ChatGPT Bridge reasoning should not inherit the local-model timeout");
+assert.equal(broadChatBody.mode, "strategy", "action-free strategy should use the reasoning lane");
+assert.equal(broadChatBody.effort, "deep", "action-free strategy should use ChatGPT deep effort");
+assert.equal("provider" in broadChatBody, false, "provider identity must stay behind the server curtain");
+assert.equal("requested_model" in broadChatBody, false, "model identity must stay behind the server curtain");
 
 globalThis.fetch = async (url, init) => {
-  assert.match(String(url), /\/phantom-ai\/chat$/, "provider failures should still prove the backend was attempted");
+  assert.match(String(url), /\/phantom-ai\/respond$/, "provider failures should still prove the backend was attempted");
   broadChatBody = JSON.parse(init.body);
   return {
-    ok: true,
+    ok: false,
     json: async () => ({
-      ok: true,
-      message: { role: "assistant", content: "I couldn't complete that just now. Your request is still here — try again in a moment." },
-      fallback: { all_failed: true },
-      hermes: { route_tier: "standard" },
+      ok: false,
+      error: "assistant_unavailable",
     }),
   };
 };

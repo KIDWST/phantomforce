@@ -40,6 +40,7 @@
     "test:agent-run-lifecycle": "npm run test:agent-run-lifecycle --workspace @phantomforce/server",
     "test:managed-growth-report": "node scripts/test-managed-growth-report.mjs && npm run test:managed-growth-report --workspace @phantomforce/server",
     "test:analytics-hub": "node scripts/test-analytics-hub.mjs",
+    "test:media-provider-routing": "node scripts/test-media-provider-routing.mjs",
     "test:database-auth": "powershell -NoProfile -ExecutionPolicy Bypass -File server/scripts/test-auth-database-live.ps1",
     "test:release-critical": "node scripts/test-release-critical.mjs",
     "test:nexus-hardening": "node scripts/test-nexus-hardening.mjs",

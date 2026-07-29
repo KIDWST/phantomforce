@@ -22,6 +22,13 @@ export type AgentAssistRequest = {
   execute_bridge?: boolean;
 };
 
+export type AgentAssistAttachment = {
+  type: "image" | "file";
+  url: string;
+  mime_type?: string;
+  name?: string;
+};
+
 export type AgentAssistStatus = {
   bridge_id: "phantom-agent-assist-chatgpt";
   label: "ChatGPT Bridge";
@@ -69,6 +76,7 @@ export type AgentAssistBridgeResult = {
   provider: "chatgpt_plus";
   provider_mode: AgentAssistEffort;
   output_text: string;
+  attachments: AgentAssistAttachment[];
   relay_packet: {
     title: string;
     prompt: string;
@@ -84,11 +92,11 @@ export type AgentAssistBridgeResult = {
   error_message: string | null;
 };
 
-const MAX_TASK_CHARS = 1800;
-const MAX_CONTEXT_CHARS = 4200;
+const MAX_TASK_CHARS = 200_000;
+const MAX_CONTEXT_CHARS = 24_000;
 const MAX_CONSTRAINTS = 18;
 const MAX_CONSTRAINT_CHARS = 260;
-const MAX_OUTPUT_CHARS = 12000;
+const MAX_OUTPUT_CHARS = 128_000;
 const VALID_CALLERS: AgentAssistCaller[] = ["codex", "phantombot", "phantom_ai", "agent_workforce", "operator", "unknown"];
 const VALID_MODES: AgentAssistMode[] = ["instant", "review", "strategy", "copy", "debug"];
 const VALID_EFFORTS: AgentAssistEffort[] = ["instant", "standard", "deep"];
@@ -99,6 +107,26 @@ function clean(value: unknown, maxChars: number) {
 
 function cleanMultiline(value: unknown, maxChars: number) {
   return redactSensitiveText(String(value ?? "").replace(/\r\n/g, "\n").trim()).slice(0, maxChars);
+}
+
+function bridgeAttachments(payload: any): AgentAssistAttachment[] {
+  const raw = [
+    ...(Array.isArray(payload?.attachments) ? payload.attachments : []),
+    ...(Array.isArray(payload?.assets) ? payload.assets : []),
+    ...(Array.isArray(payload?.images) ? payload.images : []),
+  ];
+  return raw.map((item: any) => {
+    const url = cleanMultiline(item?.url ?? item?.src ?? item?.href ?? item?.data_url ?? item?.dataUrl ?? "", 300_000);
+    if (!url || !/^(?:https?:|data:image\/)/i.test(url)) return null;
+    const mime = clean(item?.mime_type ?? item?.mimeType ?? item?.content_type ?? item?.contentType ?? "", 120);
+    const type = /^image\//i.test(mime) || /^data:image\//i.test(url) || /\.(?:png|jpe?g|webp|gif)(?:[?#]|$)/i.test(url) ? "image" : "file";
+    return {
+      type,
+      url,
+      ...(mime ? { mime_type: mime } : {}),
+      ...(item?.name ? { name: clean(item.name, 160) } : {}),
+    } satisfies AgentAssistAttachment;
+  }).filter((item: AgentAssistAttachment | null): item is AgentAssistAttachment => !!item);
 }
 
 function safeCaller(value: unknown): AgentAssistCaller {
@@ -117,7 +145,7 @@ function safeEffort(value: unknown): AgentAssistEffort {
 }
 
 function bridgeUrl() {
-  return clean(process.env.PHANTOM_AGENT_ASSIST_BRIDGE_URL || "http://127.0.0.1:8791/assist", 500);
+  return clean(process.env.PHANTOM_AGENT_ASSIST_BRIDGE_URL || "http://127.0.0.1:8792/assist", 500);
 }
 
 function bridgeEnabled() {
@@ -152,16 +180,26 @@ export async function checkAgentAssistBridgeHealth(timeoutMs = 5000): Promise<Ag
   try {
     const response = await fetch(healthUrl, { signal: controller.signal });
     const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+    const browserState = payload?.browser && typeof payload.browser === "object"
+      ? payload.browser as Record<string, unknown>
+      : null;
+    const chatGptPlusBackend = payload?.service === "phantom-chatgpt-plus-backend";
+    const chatGptPlusReady = chatGptPlusBackend
+      && payload?.browser_up === true
+      && browserState?.page_ready === true
+      && payload?.logged_in !== false;
     const adapterDetected = response.ok && (
       payload?.adapter === "phantomforce-chatgpt-assist-adapter"
       || payload?.provider === "chatgpt_plus"
       || payload?.phantom_assist === true
+      || chatGptPlusBackend
     );
     const executable = response.ok && (
       payload?.session_connected === true
       || payload?.command_configured === true
       || payload?.executable === true
       || payload?.configured === true
+      || chatGptPlusReady
     );
     return {
       reachable: response.ok,
@@ -193,6 +231,8 @@ function baseConstraints(input: AgentAssistRequest) {
     : [];
   return [
     "Use the user's connected ChatGPT session bridge.",
+    "You are the ChatGPT supervisor inside the Phantom V1 stack, alongside Phantom/Qwen, Qwen3-Coder, and Kimi K3.",
+    "PhantomBot has governed filesystem, terminal, browser, code execution, storage, and test lanes. Never claim the product lacks them.",
     "Return judgment or help only; do not send, post, upload, deploy, charge, scan, or mutate external systems.",
     "Do not claim execution happened unless the calling agent provides a real receipt.",
     "Do not expose secrets, credentials, tokens, cookies, raw prompts, or hidden chain-of-thought.",
@@ -229,7 +269,7 @@ export function getAgentAssistBridgeStatus(): AgentAssistStatus {
         id: "chatgpt_session_adapter",
         label: "ChatGPT session adapter",
         ready: executable,
-        note: "Expected at http://127.0.0.1:8791/assist and backed by the user's own ChatGPT session adapter command.",
+        note: "Expected at the configured local session adapter and backed by the user's authenticated ChatGPT session.",
       },
     ],
     env: {
@@ -261,7 +301,7 @@ export function buildAgentAssistRelayPacket(input: AgentAssistRequest) {
   const desiredOutput = clean(input.desired_output || "Return a concise verdict, recommendation, or replacement wording that the calling agent can use.", 500);
   const constraints = baseConstraints(input);
   const prompt = [
-    "You are ChatGPT acting as the universal assist brain for PhantomForce agents.",
+    "You are ChatGPT acting as the supervisor and assist brain inside Phantom V1 for PhantomForce agents.",
     `Caller: ${caller}`,
     `Mode: ${mode}`,
     `Effort: ${effort}`,
@@ -292,7 +332,7 @@ export function buildAgentAssistRelayPacket(input: AgentAssistRequest) {
 async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPacket>["relay_packet"], effort: AgentAssistEffort) {
   const url = bridgeUrl();
   if (!bridgeEnabled() || !url) {
-    return { ok: false as const, status: "bridge_unavailable" as const, output_text: "", error_message: "ChatGPT bridge is not configured for execution." };
+    return { ok: false as const, status: "bridge_unavailable" as const, output_text: "", attachments: [], error_message: "ChatGPT bridge is not configured for execution." };
   }
 
   const controller = new AbortController();
@@ -313,17 +353,19 @@ async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPac
       }),
       signal: controller.signal,
     });
-    const payload = await response.json().catch(() => null) as { output_text?: unknown; message?: unknown; error?: unknown } | null;
+    const payload = await response.json().catch(() => null) as { output_text?: unknown; message?: unknown; error?: unknown; attachments?: unknown; assets?: unknown; images?: unknown } | null;
     const output = cleanMultiline(payload?.output_text ?? payload?.message ?? "", MAX_OUTPUT_CHARS);
-    if (!response.ok || !output) {
+    const attachments = bridgeAttachments(payload);
+    if (!response.ok || (!output && !attachments.length)) {
       return {
         ok: false as const,
         status: "bridge_error" as const,
         output_text: "",
+        attachments: [],
         error_message: clean(payload?.error ?? `Bridge returned HTTP ${response.status} without usable text.`, 1200),
       };
     }
-    return { ok: true as const, status: "bridge_called" as const, output_text: output, error_message: null };
+    return { ok: true as const, status: "bridge_called" as const, output_text: output, attachments, error_message: null };
   } catch (error) {
     const message = error instanceof Error && error.name === "AbortError"
       ? `ChatGPT bridge timed out after ${bridgeTimeoutMs()} ms.`
@@ -332,6 +374,7 @@ async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPac
       ok: false as const,
       status: "bridge_error" as const,
       output_text: "",
+      attachments: [],
       error_message: clean(message, 1200),
     };
   } finally {
@@ -359,6 +402,7 @@ export async function requestAgentAssist(input: AgentAssistRequest): Promise<Age
     provider: "chatgpt_plus",
     provider_mode: effort,
     output_text: outputText,
+    attachments: bridge?.attachments ?? [],
     relay_packet,
     bridge_called: called,
     provider_called: called,

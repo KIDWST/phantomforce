@@ -67,9 +67,9 @@ export type OpenRouterGlm52ChatResult = {
   };
 };
 
-const MAX_CONTEXT_CHARS = 5000;
-const MAX_MESSAGE_CHARS = 1600;
-const MAX_RESPONSE_CHARS = 5000;
+const MAX_CONTEXT_CHARS = 24_000;
+const MAX_MESSAGE_CHARS = 200_000;
+const MAX_RESPONSE_CHARS = 128_000;
 
 function envEnabled(value: string | undefined) {
   return value === "true";
@@ -198,6 +198,8 @@ export async function callOpenRouterGlm52(
     "For image requests, produce prompt-ready art direction, crop, subject, style, and delivery notes through Media Lab.",
     "For video requests, produce a generation-ready brief, source analysis if relevant, shot list, pacing notes, caption, and approval path through Media Lab.",
     "For build requests, produce a practical implementation plan: app/site/dashboard structure, data model, UI flow, files/modules likely needed, test path, and next action.",
+    "For new-project requests, choose a reasonable structure; never ask for repository files that do not exist.",
+    "Do not refuse safe work because it is large. Preserve later requirements and complete every requested output section.",
     "For local operator requests, behave like Phantom Operator: analyze the request and produce concrete execution steps for the admin-only operator lane. Do not expose backend tool names.",
     "Do not claim that you sent, posted, uploaded, charged, deployed, deleted, or changed production state.",
     "If the user asks for an external action, draft the action and say it needs owner approval before execution.",
@@ -223,7 +225,7 @@ export async function callOpenRouterGlm52(
       },
     ],
     temperature: 0.4,
-    max_tokens: input.maxTokens ?? 700,
+    max_tokens: input.maxTokens ?? 4096,
   });
 
   const timeoutMs = Number(env.PHANTOM_OPENROUTER_TIMEOUT_MS ?? DEFAULT_OPENROUTER_TIMEOUT_MS);

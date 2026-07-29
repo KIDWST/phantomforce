@@ -6,56 +6,56 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260729-87";
+} from "./store.js?v=phantom-live-20260729-88";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems, cachedOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260729-87";
+} from "./organizationpulse.js?v=phantom-live-20260729-88";
 import {
   loadSecurityMonitorStatus, cachedSecurityMonitorStatus, securityMonitorIsAdmin, runSecurityMonitorScan, securityMonitorRunning,
-} from "./securitystatus.js?v=phantom-live-20260729-87";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260729-87";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260729-87";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260729-87";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260729-87";
-import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260729-87-creatorrestore1";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260729-87-creatorrestore1";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260729-87";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260729-87";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260729-87";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260729-87";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260729-87";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260729-87";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260729-87";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260729-87";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260729-87";
-import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260729-87";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260729-87";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260729-87";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260729-87";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260729-87";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260729-87";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260729-87";
-import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260729-87-creatorrestore1";
+} from "./securitystatus.js?v=phantom-live-20260729-88";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260729-88";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260729-88";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260729-88";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260729-88";
+import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260729-88-creatorrestore1";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260729-88-creatorrestore1";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260729-88";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260729-88";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260729-88";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260729-88";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260729-88";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260729-88";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260729-88";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260729-88";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260729-88";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260729-88";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260729-88";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260729-88";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260729-88";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260729-88";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260729-88";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260729-88";
+import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260729-88-creatorrestore1";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260729-87";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260729-87";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260729-87";
+} from "./orgs.js?v=phantom-live-20260729-88";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260729-88";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260729-88";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260729-87";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260729-88";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260729-87";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260729-88";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260729-87";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260729-87";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260729-87";
-import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260729-87";
+} from "./customization.js?v=phantom-live-20260729-88";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260729-88";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260729-88";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260729-88";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1691,7 +1691,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260729-87";
+const POSE_VERSION = "phantom-live-20260729-88";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -4057,7 +4057,7 @@ const CUSTOM = {
               <button type="button" data-phantomai-tab="memory"><span>Memory</span></button>
               <button type="button" data-phantomai-tab="media"><span>Outputs</span></button>
               <span class="phantombot-session-clock" data-phantombot-session-clock>Session 0:00</span>
-              <button type="button" data-phantombot-companion><i></i><span>PhantomBot connected</span></button>
+              <button type="button" data-phantombot-companion><i></i><span>${session.token() ? "PhantomBot connected" : "PhantomBot local"}</span></button>
               <span>Phantom V1</span>
             </footer>
           </section>
@@ -4489,8 +4489,39 @@ function enterPhantom() {
   }, 1400);
 }
 
+async function resolveBootSession() {
+  const restored = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
+  if (!restored) return null;
+  const token = session.token();
+  if (token) {
+    try {
+      const response = await fetch("/session", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (response.ok) return restored;
+      session.clear();
+      return null;
+    } catch {
+      return restored;
+    }
+  }
+  try {
+    const response = await fetch("/sessions", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    const auth = payload?.auth || {};
+    if (response.ok && (auth.databaseAuthEnabled || auth.ownerProductionAuthEnabled || auth.gatewayForwardedAuthEnabled)) {
+      session.clear();
+      return null;
+    }
+  } catch {
+    // Preserve the local visual shell when no backend is reachable at all.
+  }
+  return restored;
+}
+
 async function boot() {
-  ctx.session = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
+  ctx.session = await resolveBootSession();
   wireDeck();
   initCommandOS();
   store.onChange(() => {

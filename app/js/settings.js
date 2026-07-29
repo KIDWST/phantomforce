@@ -1,13 +1,13 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260729-87";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260729-87";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260729-87";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260729-87";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260729-87";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260729-87";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260729-87";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260729-88";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260729-88";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260729-88";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260729-88";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260729-88";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260729-88";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260729-88";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -80,10 +80,10 @@ const PROVIDERS = [
   },
   {
     id: "local",
-    name: "Local / Ollama",
+    name: "Phantom V1",
     short: "PC",
-    role: "Installed Ollama models plus the direct Kimi K3 Hugging Face bridge",
-    models: ["local-auto", KIMI_OLLAMA_MODEL],
+    role: "Phantom V1, Qwen3-Coder, installed Ollama models, and direct Kimi K3 reasoning",
+    models: ["phantom-v1:latest", "qwen3-coder:30b", KIMI_OLLAMA_MODEL, "local-auto"],
     allowCustomModel: true,
   },
 ];
@@ -147,16 +147,16 @@ function providerModels(provider) {
 }
 
 const DEFAULT_SETTINGS = {
-  provider: "claude",
+  provider: "local",
   providerMode: "smart",
-  selectedProviders: ["claude", "private", "chatgpt", "openrouter", "local"],
+  selectedProviders: ["local", "chatgpt"],
   brainMode: "subscription",
   models: {
     claude: "claude-cli",
     private: "private-default",
     chatgpt: "chatgpt-standard",
     openrouter: "openrouter-auto",
-    local: "local-auto",
+    local: "phantom-v1:latest",
   },
   responseStyle: "operator",
   responseLength: "balanced",
@@ -276,13 +276,12 @@ export function getOperatorSettings() {
 }
 
 export function getOperatorInfrastructureStatus() {
-  const saved = rawOperatorSettingsSaved();
   const settings = loadOperatorSettings();
   const activeProvider = providerFor(settings.provider);
   const activeModels = providerModels(activeProvider);
   const activeModel = settings.models[activeProvider.id] || activeModels[0] || activeProvider.models[0] || "";
   const modelLabel = activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel);
-  if (!saved || !activeProvider?.id || !activeModel) {
+  if (!activeProvider?.id || !activeModel) {
     return {
       label: "Needs configuration",
       detail: "Choose a model in Settings",
@@ -291,13 +290,10 @@ export function getOperatorInfrastructureStatus() {
     };
   }
   if (settings.providerMode === "smart") {
-    const leadModel = settings.selectedProviders.includes("chatgpt")
-      ? modelDisplayLabel(settings.models.chatgpt || "chatgpt-standard")
-      : modelDisplayLabel(settings.models.claude || "claude-cli");
     return {
-      label: `Hybrid · ${leadModel}`,
-      detail: `${settings.selectedProviders.length} provider lanes allowed`,
-      tone: "warn",
+      label: "Phantom V1 · Ready",
+      detail: "Local operating model with private intelligence routing",
+      tone: "ok",
       configured: true,
     };
   }

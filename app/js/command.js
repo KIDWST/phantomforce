@@ -12,10 +12,11 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260729-87";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260729-87";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260729-87";
-import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260729-87";
+} from "./store.js?v=phantom-live-20260729-88";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260729-88";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260729-88";
+import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260729-88";
+import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260729-88";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -118,9 +119,11 @@ const PRIVATE_BACKEND_MODEL_BY_ALIAS = Object.freeze({
   "private-default": "gpt-5.5",
   "private-high": "gpt-5.6-sol",
 });
-const INSTANT_CHAT_MODEL = "qwen3:4b";
+const PHANTOM_V1_MODEL = "phantom-v1:latest";
+const PHANTOM_V1_CODE_MODEL = "qwen3-coder:30b";
+const PHANTOM_V1_REASONING_MODEL = "kimi-k3-hf:latest";
+const INSTANT_CHAT_MODEL = PHANTOM_V1_MODEL;
 const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
-const REASONING_CHAT_MAX_PROVIDER_MS = 12000;
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
 const REASONING_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat", "brainstorm", "feedback", "plan"]);
 const ADVISORY_CHAT_INTENTS = new Set(["brainstorm", "feedback", "plan"]);
@@ -131,6 +134,7 @@ const INSTANT_CHAT_PRIVATE_BUSINESS = /\b(?:my|our|this)\s+(?:business|company|w
 const ADVISORY_PRIVATE_BUSINESS = /\b(?:my|our|this|the)\s+(?:[a-z]+\s+){0,2}(?:business|company|workspace|brand|proposal|website|site|pipeline|crm|client|customer|lead|accounting|content|campaign|calendar|project|team|offer|product|service|organization)\b/i;
 const INSTANT_CHAT_SIGNAL = /\b(?:favorite|do you like|would you rather|tell me a joke|joke|how are you|what'?s your|what is your|who are you|are you|can you|what is \d|what'?s \d)\b/i;
 const DEEP_THINKING_SIGNAL = /\b(strategy|strategic|think through|reason through|break down|roadmap|plan|growth|business model|moat|positioning|prioriti[sz]e|compare|critique|diagnose|why is|why does|what should|how should)\b/i;
+const PHANTOM_V1_CODE_SIGNAL = /\b(?:code|coding|software|app|application|website|frontend|backend|api|repository|repo|typescript|javascript|python|node(?:\.js)?|react|debug|refactor|implement|compile|test suite|filesystem|terminal|powershell|database|sql|algorithm)\b/i;
 const INSTANT_DEEP_EXCLUSION = /\b(?:strategy|strategic|think through|reason through|roadmap|business model|moat|positioning|prioriti[sz]e|critique)\b|\bcompare(?!\s+(?:them|these|those|it)\b)/i;
 
 function selectedProviderIds(settings) {
@@ -195,9 +199,11 @@ function shouldUseDeepReasoning(raw, intent) {
   return ["brainstorm", "plan"].includes(intent.primaryIntent) || DEEP_THINKING_SIGNAL.test(String(raw || ""));
 }
 
-function providerIdForRequest(settings, intent, deepReasoning = false) {
+function providerIdForRequest(settings, intent, deepReasoning = false, raw = "") {
   const selected = selectedProviderIds(settings);
   if (settings.providerMode !== "smart") return selected.includes(settings.provider) ? settings.provider : selected[0];
+  if ((deepReasoning || ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent)) && selected.includes("local")) return "local";
+  if (PHANTOM_V1_CODE_SIGNAL.test(String(raw || "")) && selected.includes("local")) return "local";
   if ((deepReasoning || ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent)) && selected.includes("chatgpt")) return "chatgpt";
   if ((deepReasoning || ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent)) && selected.includes("claude")) return "claude";
   if (selected.includes("private")) return "private";
@@ -237,15 +243,8 @@ function selectedModelForProvider(settings, providerId, routeProfile = null) {
   return providerId === "private" ? (PRIVATE_BACKEND_MODEL_BY_ALIAS[model] || model || "gpt-5.5") : model;
 }
 
-function thoughtProviderIdForRequest(settings, normalProviderId) {
-  const selected = selectedProviderIds(settings);
-  if (normalProviderId === "kimi") return "kimi";
-  if (normalProviderId === "chatgpt" || (settings.providerMode === "smart" && selected.includes("chatgpt"))) return "chatgpt";
-  return "local";
-}
-
-function maxProviderMsForThoughtProvider(providerId) {
-  return providerId === "local" ? REASONING_CHAT_MAX_PROVIDER_MS : null;
+function thoughtProviderIdForRequest() {
+  return "chatgpt";
 }
 
 function allowedProvidersForSettings(settings, routeProfile = null) {
@@ -260,7 +259,7 @@ function allowedProvidersForSettings(settings, routeProfile = null) {
 
 function chatRouteProfileForRequest(raw, intent, settings) {
   const deepReasoning = shouldUseDeepReasoning(raw, intent);
-  const selectedProviderId = providerIdForRequest(settings, intent, deepReasoning);
+  const selectedProviderId = providerIdForRequest(settings, intent, deepReasoning, raw);
   const normalProviderId = effectiveProviderId(settings, selectedProviderId);
   if (isLiveDataChatRequest(raw, intent)) {
     const selected = selectedProviderIds(settings);
@@ -297,12 +296,10 @@ function chatRouteProfileForRequest(raw, intent, settings) {
     return {
       tier: "reasoning",
       providerId,
-      requestedModel: providerId === "local"
-        ? INSTANT_CHAT_MODEL
-        : selectedModelForProvider(settings, providerId, { tier: "reasoning" }),
-      allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
+      requestedModel: selectedModelForProvider(settings, providerId, { tier: "reasoning" }),
+      allowedProviders: [PROVIDER_TO_BACKEND.chatgpt],
       allowFallback: false,
-      maxProviderMs: maxProviderMsForThoughtProvider(providerId),
+      maxProviderMs: null,
     };
   }
   if (isAdvisoryChatRequest(raw, intent)) {
@@ -310,18 +307,22 @@ function chatRouteProfileForRequest(raw, intent, settings) {
     return {
       tier: "advisory",
       providerId,
-      requestedModel: providerId === "local"
-        ? INSTANT_CHAT_MODEL
-        : selectedModelForProvider(settings, providerId, { tier: "advisory" }),
-      allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
+      requestedModel: selectedModelForProvider(settings, providerId, { tier: "advisory" }),
+      allowedProviders: [PROVIDER_TO_BACKEND.chatgpt],
       allowFallback: false,
-      maxProviderMs: maxProviderMsForThoughtProvider(providerId),
+      maxProviderMs: null,
     };
   }
   return {
     tier: deepReasoning ? "deep" : "standard",
     providerId: normalProviderId,
-    requestedModel: selectedModelForProvider(settings, normalProviderId),
+    requestedModel: settings.providerMode === "smart" && normalProviderId === "local"
+      ? (PHANTOM_V1_CODE_SIGNAL.test(String(raw || ""))
+        ? PHANTOM_V1_CODE_MODEL
+        : deepReasoning
+          ? PHANTOM_V1_REASONING_MODEL
+          : PHANTOM_V1_MODEL)
+      : selectedModelForProvider(settings, normalProviderId),
     allowedProviders: allowedProvidersForSettings(settings),
     allowFallback: settings.providerMode !== "single",
     maxProviderMs: null,
@@ -472,7 +473,41 @@ function routeProfileForEffort(raw, intent, settings, effortOverride = "") {
   };
 }
 
-async function askPhantomAssist(raw, intent, settings, routeProfile, signal, recentConversation, headers) {
+function isLocalDevelopmentHost() {
+  try {
+    return ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function refreshLocalDevelopmentToken(signal) {
+  if (!isLocalDevelopmentHost()) return "";
+  const sessionId = ctx.session?.canManageAccess ? "admin-jordan" : "client-sports-demo";
+  try {
+    const response = await fetch("/auth/demo-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal,
+      body: JSON.stringify({ sessionId }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.token || !payload?.session) return "";
+    ctx.session = {
+      ...(ctx.session || {}),
+      sessionId: payload.session.id,
+      label: payload.session.label || ctx.session?.label || "",
+      canManageAccess: !!payload.session.canManageAccess,
+      token: payload.token,
+    };
+    session.set(ctx.session);
+    return session.token();
+  } catch {
+    return "";
+  }
+}
+
+async function askPhantomAssist(raw, intent, settings, routeProfile, signal, recentConversation, headers, promptIntegrity) {
   const includeBusinessContext = needsBusinessContext(raw, intent);
   const boundedConversation = Array.isArray(recentConversation) ? recentConversation.slice(-10) : [];
   const contextModules = buildContextModules(settings, raw, intent, boundedConversation);
@@ -494,21 +529,30 @@ async function askPhantomAssist(raw, intent, settings, routeProfile, signal, rec
     "Do not expose hidden reasoning, tokens, credentials, cookies, or secrets.",
     "Return only the answer that PhantomBot should display.",
   ];
+  const requestBody = JSON.stringify({
+    caller: "phantombot",
+    mode: assistMode(routeProfile.tier),
+    effort: assistEffort(routeProfile.tier),
+    task: String(raw || ""),
+    context,
+    constraints,
+    desired_output: "Return the complete answer PhantomBot should display to the user.",
+    prompt_integrity: promptIntegrity,
+  });
+  const request = (requestHeaders) => fetch("/phantom-ai/respond", {
+    method: "POST",
+    headers: requestHeaders,
+    signal,
+    body: requestBody,
+  });
   try {
-    const response = await fetch("/phantom-ai/respond", {
-      method: "POST",
-      headers,
-      signal,
-      body: JSON.stringify({
-        caller: "phantombot",
-        mode: assistMode(routeProfile.tier),
-        effort: assistEffort(routeProfile.tier),
-        task: String(raw || "").slice(0, 2200),
-        context,
-        constraints,
-        desired_output: "Return the complete answer PhantomBot should display to the user.",
-      }),
-    });
+    let response = await request(headers);
+    if (response.status === 401) {
+      const refreshedToken = await refreshLocalDevelopmentToken(signal);
+      if (refreshedToken) {
+        response = await request({ ...headers, Authorization: `Bearer ${refreshedToken}` });
+      }
+    }
     const payload = await response.json().catch(() => ({}));
     const output = String(payload?.answer || "").trim();
     if (!response.ok || payload?.ok !== true || !output) return null;
@@ -552,9 +596,13 @@ async function askHermesBrain(raw, intent, settings, effortOverride = "") {
   const requestedProviderId = routeProfile.providerId;
   const recentConversation = recentChatTurns(10, raw);
   const includeBusinessContext = needsBusinessContext(raw, intent);
+  const promptIntegrity = await buildPromptIntegrityEnvelope(raw, {
+    messageId: uid("chat-message"),
+    conversationId: currentTenantId() || currentWs() || "phantom-chat",
+  });
   try {
     if (requestedProviderId === "chatgpt") {
-      return await askPhantomAssist(raw, intent, settings, routeProfile, controller.signal, recentConversation, headers);
+      return await askPhantomAssist(raw, intent, settings, routeProfile, controller.signal, recentConversation, headers, promptIntegrity);
     }
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
@@ -585,6 +633,7 @@ async function askHermesBrain(raw, intent, settings, effortOverride = "") {
            included only when the current request calls for them. */
         module_data: buildContextModules(settings, raw, intent, recentConversation),
         conversation_history: recentConversation,
+        prompt_integrity: promptIntegrity,
         phantom_loop: loop.enabled ? {
           target_provider: loop.targetProvider,
           target_model: loop.targetModel,

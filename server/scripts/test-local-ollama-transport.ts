@@ -98,7 +98,7 @@ assert.equal(conversation.status, "called");
 assert.equal(conversation.model_id, "qwen2.5:7b");
 assert.equal(conversationBody.keep_alive, "90s");
 assert.equal(conversationBody.options.num_predict, 80);
-assert.equal(conversationBody.options.num_ctx, 2048);
+assert.equal(conversationBody.options.num_ctx, 8192);
 assert.match(conversationBody.messages[0].content, /general-purpose assistant/i);
 assert.match(conversationBody.messages[0].content, /preserve named subjects/i);
 assert.match(conversationBody.messages[0].content, /exact output constraints/i);
@@ -106,6 +106,48 @@ assert.match(conversationBody.messages[0].content, /real, specific conversationa
 assert.doesNotMatch(conversationBody.messages[0].content, /business operator|ChicagoShots|action lanes/i);
 assert.doesNotMatch(conversationBody.messages[1].content, /Execution mode|action cards|backend ops/i);
 assert.match(conversationBody.messages[1].content, /Why is the sky blue/);
+
+let kimiEndpoint = "";
+let kimiBody: Record<string, any> = {};
+const kimi = await callLocalOllamaChat(
+  {
+    ...baseInput,
+    taskType: "plan",
+    userMessage: "Reason through this architecture and preserve the final requirement.",
+    compactContext: "Phantom V1 deep reasoning lane.",
+    maxTokens: 2048,
+  },
+  {
+    env: {
+      OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+      PHANTOM_KIMI_OLLAMA_BASE_URL: "http://127.0.0.1:11435",
+      PHANTOM_OLLAMA_MODEL: "kimi-k3-hf:latest",
+    },
+    fetchImpl: async (url, init) => {
+      kimiEndpoint = url;
+      if (url.endsWith("/api/tags")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ models: [{ name: "kimi-k3-hf:latest", model: "kimi-k3-hf:latest" }] }),
+          text: async () => "",
+        };
+      }
+      kimiBody = JSON.parse(init.body ?? "{}");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ message: { role: "assistant", content: "Architecture verified." } }),
+        text: async () => "",
+      };
+    },
+  },
+);
+assert.equal(kimi.status, "called");
+assert.equal(kimiEndpoint, "http://127.0.0.1:11435/api/chat");
+assert.equal(kimiBody.model, "kimi-k3-hf:latest");
+assert.match(kimiBody.messages[0].content, /Phantom V1 stack combines/i);
+assert.match(kimiBody.messages[0].content, /filesystem, terminal, browser, code execution/i);
 
 let unleashedBody: Record<string, any> = {};
 await callLocalOllamaChat(

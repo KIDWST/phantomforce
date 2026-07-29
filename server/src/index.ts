@@ -440,6 +440,7 @@ import {
   reopenHermesOperatorSession,
 } from "./phantom-ai/hermes-acp-operator.js";
 import { registerHermesOperatorStream } from "./phantom-ai/hermes-operator-stream.js";
+import { MAX_PROMPT_CHARS, verifyPromptIntegrity } from "./phantom-ai/prompt-integrity.js";
 import {
   addSiteDomain,
   createSiteBuild,
@@ -873,6 +874,17 @@ const HiggsfieldDraftSchema = z.object({
   media_role: z.enum(["image", "start-image", "end-image", "video", "audio"]).optional().default("video"),
   product_url: z.string().trim().max(600).optional().default(""),
   generate_audio: z.enum(["", "true", "false", "yes", "no"]).optional().default(""),
+});
+
+const ChatGptImageGenerateSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  prompt: z.string().trim().min(1).max(3000),
+  original_prompt: z.string().trim().max(3000).optional().default(""),
+  model: z.string().trim().max(80).optional().default("chatgpt_image"),
+  aspect_ratio: z.enum(["9:16", "16:9", "1:1", "4:5", "3:2"]).optional().default("1:1"),
+  count: z.coerce.number().int().min(1).max(4).optional().default(1),
+  quality: z.enum(["standard", "high"]).optional().default("standard"),
+  reference_image: z.string().trim().max(300_000).optional().default(""),
 });
 
 const BrainMemoryCreateSchema = z.object({
@@ -4136,7 +4148,7 @@ function buildModelRouterRequestFromBody(
     sensitivity_level: parseSensitivityLevel(body.sensitivity_level),
     user_request:
       typeof body.user_request === "string"
-        ? body.user_request.slice(0, 1600)
+        ? body.user_request.slice(0, MAX_PROMPT_CHARS)
         : "Summarize the PhantomForce workspace and recommend the next safe business action.",
     business_summary:
       typeof body.business_summary === "string"
@@ -5323,11 +5335,12 @@ const AgentAssistBridgeBodySchema = z.object({
   caller: z.string().trim().max(80).optional(),
   mode: z.string().trim().max(80).optional(),
   effort: z.string().trim().max(80).optional(),
-  task: z.string().trim().min(1).max(2200),
+  task: z.string().trim().min(1),
   context: z.string().trim().max(5200).optional(),
   constraints: z.array(z.string().trim().max(320)).max(20).optional(),
   desired_output: z.string().trim().max(700).optional(),
   execute_bridge: z.boolean().optional(),
+  prompt_integrity: z.unknown(),
 });
 
 app.get("/phantom-ai/agent-assist/status", async (request, reply) => {
@@ -5372,6 +5385,15 @@ app.post("/phantom-ai/agent-assist", async (request, reply) => {
       status: getAgentAssistBridgeStatus(),
     });
   }
+  const integrity = verifyPromptIntegrity(parsed.data.task, parsed.data.prompt_integrity);
+  if (!integrity.ok) {
+    return reply.code(integrity.state === "rejected" ? 413 : 400).send({
+      ok: false,
+      error: "prompt_integrity_error",
+      integrity_state: integrity.state,
+      detail: integrity.error,
+    });
+  }
 
   const result = await requestAgentAssist({
     ...parsed.data,
@@ -5399,6 +5421,15 @@ app.post("/phantom-ai/respond", async (request, reply) => {
     return reply.code(400).send({
       ok: false,
       error: "invalid_assistant_request",
+    });
+  }
+  const integrity = verifyPromptIntegrity(parsed.data.task, parsed.data.prompt_integrity);
+  if (!integrity.ok) {
+    return reply.code(integrity.state === "rejected" ? 413 : 400).send({
+      ok: false,
+      error: "prompt_integrity_error",
+      integrity_state: integrity.state,
+      detail: integrity.error,
     });
   }
 
@@ -8135,8 +8166,9 @@ const AgentRunStartSchema = z.object({
 });
 
 const HermesOperatorStartSchema = z.object({
-  prompt: z.string().trim().min(1).max(8000),
+  prompt: z.string().trim().min(1),
   workspace: z.string().trim().min(1).max(180),
+  prompt_integrity: z.unknown(),
 });
 
 async function resolveOperatorStreamToken(token: string): Promise<AccessSession | null> {
@@ -8164,6 +8196,15 @@ app.post("/phantom-ai/hermes-acp/sessions", async (request, reply) => {
       detail: parsed.error.flatten(),
     });
   }
+  const integrity = verifyPromptIntegrity(parsed.data.prompt, parsed.data.prompt_integrity);
+  if (!integrity.ok) {
+    return reply.code(integrity.state === "rejected" ? 413 : 400).send({
+      ok: false,
+      error: "prompt_integrity_error",
+      integrity_state: integrity.state,
+      detail: integrity.error,
+    });
+  }
   const verdict = await screenText(parsed.data.prompt, "hermes_acp_operator_request");
   if (verdict.classification === "block") {
     return reply.code(400).send({
@@ -8173,7 +8214,11 @@ app.post("/phantom-ai/hermes-acp/sessions", async (request, reply) => {
       detail: verdict.reason,
     });
   }
-  const operatorSession = await createHermesOperatorSession(session, parsed.data);
+  const operatorSession = await createHermesOperatorSession(session, {
+    prompt: parsed.data.prompt,
+    workspace: parsed.data.workspace,
+    promptIntegrity: integrity.envelope,
+  });
   return reply.code(202).send({
     ok: true,
     session: operatorSession,
@@ -9926,6 +9971,102 @@ app.post(
   },
 );
 
+app.post("/phantom-ai/media-lab/chatgpt-image/generate", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  if (!hasMediaLabAccess(session)) {
+    return reply.code(403).send({
+      ok: false,
+      error: "Media Lab image generation is not enabled for this workspace.",
+      provider: "chatgpt_bridge",
+      provider_called: false,
+      paid_higgsfield_called: false,
+    });
+  }
+
+  const parsed = ChatGptImageGenerateSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+      provider: "chatgpt_bridge",
+      provider_called: false,
+      paid_higgsfield_called: false,
+    });
+  }
+
+  const data = parsed.data;
+  const prompt = [
+    "Generate image(s) in ChatGPT for PhantomForce Media Lab.",
+    `Prompt: ${data.prompt}`,
+    `Aspect ratio: ${data.aspect_ratio}`,
+    `Number of outputs: ${data.count}`,
+    `Quality: ${data.quality}`,
+    data.reference_image ? "Use the supplied reference image/edit context from PhantomForce when the bridge supports image references." : "",
+    "Return completed image attachments or image URLs to PhantomForce. Do not return instructions instead of the image if generation succeeds.",
+  ].filter(Boolean).join("\n");
+
+  const result = await requestAgentAssist({
+    caller: "phantom_ai",
+    mode: "copy",
+    effort: data.quality === "high" ? "deep" : "standard",
+    task: prompt,
+    context: data.reference_image
+      ? "A reference image was supplied by the user inside PhantomForce. The bridge adapter may use it as an image-edit input if supported."
+      : "Text-to-image request from PhantomForce Media Lab.",
+    constraints: [
+      "Use the authenticated local ChatGPT browser session only.",
+      "Do not call Higgsfield for still images.",
+      "Do not expose cookies, tokens, browser storage, or account details.",
+      "Return image attachments/URLs for only this request.",
+    ],
+    desired_output: "One or more generated image attachments or image URLs plus a short status note.",
+    execute_bridge: true,
+  });
+
+  const imageAttachments = result.attachments.filter((attachment) => attachment.type === "image");
+  if (!result.provider_called) {
+    return reply.code(503).send({
+      ok: false,
+      error: result.error_message || "chatgpt_bridge_unavailable",
+      provider: "chatgpt_bridge",
+      model: data.model,
+      provider_called: false,
+      paid_higgsfield_called: false,
+    });
+  }
+
+  return {
+    ok: true,
+    provider: "chatgpt_bridge",
+    model: data.model,
+    assets: imageAttachments.slice(0, data.count).map((attachment, index) => ({
+      type: "image",
+      url: attachment.url,
+      mime_type: attachment.mime_type || "",
+      meta: {
+        provider: "chatgpt_bridge",
+        model: data.model,
+        prompt: data.original_prompt || data.prompt,
+        provider_prompt: data.prompt,
+        aspect: data.aspect_ratio,
+        quality: data.quality,
+        index,
+        source: "chatgpt-plus-hermes-browser",
+      },
+    })),
+    message: imageAttachments.length
+      ? result.output_text
+      : "ChatGPT Bridge answered, but no image attachment was returned for import.",
+    provider_called: result.provider_called,
+    paid_higgsfield_called: false,
+  };
+});
+
 async function handleMediaLabCreativeDraft(request: FastifyRequest, reply: FastifyReply) {
   const session = requireAccessSession(request, reply);
 
@@ -10516,6 +10657,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     business_summary?: unknown;
     module_data?: unknown;
     conversation_history?: unknown;
+    prompt_integrity?: unknown;
   };
   const providerChoice = parsePhantomAiChatProvider(body.provider);
 
@@ -10537,6 +10679,15 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       : typeof body.user_request === "string"
         ? body.user_request
       : "Summarize the current PhantomForce workspace.";
+  const promptIntegrity = verifyPromptIntegrity(userMessage, body.prompt_integrity);
+  if (!promptIntegrity.ok) {
+    return reply.code(promptIntegrity.state === "rejected" ? 413 : 400).send({
+      ok: false,
+      error: "prompt_integrity_error",
+      integrity_state: promptIntegrity.state,
+      detail: promptIntegrity.error,
+    });
+  }
 
   /* Prompt Injection Guard: this is the main chat pipeline — the highest-
      volume place free text (user-typed or otherwise) reaches a real model.

@@ -14,16 +14,21 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260729-87";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260729-87";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260729-87";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260729-87";
-import { esc } from "./workspaces.js?v=phantom-live-20260729-87";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260729-87";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260729-87";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260729-87-creatorrestore1";
-import { setCompanionState } from "./companion.js?v=phantom-live-20260729-87";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260729-87";
+} from "./store.js?v=phantom-live-20260729-88";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260729-88";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260729-88";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260729-88";
+import { esc } from "./workspaces.js?v=phantom-live-20260729-88";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260729-88";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260729-88";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260729-88-creatorrestore1";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260729-88";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260729-88";
+import {
+  buildPromptIntegrityEnvelope,
+  MAX_PROMPT_CHARS,
+  promptSizeError,
+} from "./prompt-integrity.js?v=phantom-live-20260729-88";
 
 const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -74,7 +79,7 @@ function composeMessage(userText, attachments) {
   return `${ask}\n\n[Attached files for analysis]\n${blocks}`;
 }
 
-function cleanText(value, max = 12000) {
+function cleanText(value, max = 128000) {
   return String(value || "").replace(/\u0000/g, "").slice(0, max);
 }
 
@@ -82,8 +87,8 @@ function normalizedMessage(message = {}) {
   const pending = !!message.pending && !message.say;
   return {
     id: cleanText(message.id || uid("pbmsg"), 80),
-    q: cleanText(message.q, 6000),
-    say: cleanText(pending ? INTERRUPTED_REPLY : message.say, 12000),
+    q: cleanText(message.q, MAX_PROMPT_CHARS),
+    say: cleanText(pending ? INTERRUPTED_REPLY : message.say, 128000),
     cards: Array.isArray(message.cards) ? message.cards.slice(0, 12) : [],
     media: Array.isArray(message.media) ? message.media.slice(0, 8) : [],
     attachments: Array.isArray(message.attachments) ? message.attachments.slice(0, 8) : [],
@@ -865,7 +870,7 @@ function setBusy(busy) {
   const runtime = rootEl.querySelector("[data-phantombot-runtime]");
   if (runtime) runtime.querySelector("span").textContent = busy ? "Working" : "Ready";
   const companion = rootEl.querySelector("[data-phantombot-companion] span");
-  if (companion) companion.textContent = busy ? "PhantomBot working" : "PhantomBot connected";
+  if (companion) companion.textContent = busy ? "PhantomBot working" : (session.token() ? "PhantomBot connected" : "PhantomBot local");
   const status = rootEl.querySelector("[data-phantombot-composer-status]");
   if (status) {
     status.hidden = !busy;
@@ -1021,8 +1026,13 @@ function mountChatTab() {
   };
 
   const submitPrompt = async (rawPrompt, attachments = []) => {
-    const prompt = cleanText(rawPrompt, 6000).trim();
+    const prompt = String(rawPrompt || "").replace(/\u0000/g, "").trim();
     if ((!prompt && !attachments.length) || runningRequest) return;
+    const sizeError = promptSizeError(prompt);
+    if (sizeError) {
+      setComposerStatus(sizeError, "error", 6000);
+      return;
+    }
     const displayQ = prompt || `Analyze ${attachments.length} file${attachments.length === 1 ? "" : "s"}`;
     const task = activeTask();
     const message = normalizedMessage({
@@ -1051,12 +1061,17 @@ function mountChatTab() {
     setBusy(true);
     try {
       const outbound = composeMessage(prompt, attachments);
+      const promptIntegrity = await buildPromptIntegrityEnvelope(outbound, {
+        messageId: message.id,
+        conversationId: task.id,
+      });
       if (isEngineeringPrompt(prompt) && session.token()) {
         const started = await operatorApi("/phantom-ai/hermes-acp/sessions", {
           method: "POST",
           body: JSON.stringify({
             prompt: outbound,
             workspace: currentTenantId() || currentWs(),
+            prompt_integrity: promptIntegrity,
           }),
         });
         message.operator = { ...started.session, run: null };
@@ -1078,7 +1093,7 @@ function mountChatTab() {
       const targetTask = taskState.tasks.find((item) => item.id === task.id);
       const targetMessage = targetTask?.messages.find((item) => item.id === message.id);
       if (!targetMessage || runningRequest?.id !== requestId) return;
-      targetMessage.say = cleanText(result?.say || "I could not return a usable answer. Try that again.", 12000);
+      targetMessage.say = cleanText(result?.say || "I could not return a usable answer. Try that again.", 128000);
       targetMessage.cards = Array.isArray(result?.cards) ? [...result.cards] : [];
       targetMessage.media = (Array.isArray(result?.media) ? result.media : []).map((item) => {
         const registered = registerContentAsset({ ...item, source: item.source || "PhantomBot" });
@@ -1227,7 +1242,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260729-87")
+  import("./brain.js?v=phantom-live-20260729-88")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }
@@ -1250,7 +1265,7 @@ function mountMediaTab() {
   const mount = pane("media")?.querySelector("[data-phantombot-media-mount]");
   if (!mount) return;
   const assets = loadContentAssets();
-  mount.innerHTML = `<header class="phantombot-panel-head"><div><span>Library</span><h2>Media</h2></div><button type="button" data-phantombot-open-media>Open Media Lab</button></header><p class="ws-note">Generated images and videos stay on this PC and expire according to your retention setting.</p><label class="settings-field"><span>Keep generated media</span><select data-phantombot-retention>${MEDIA_RETENTION_OPTIONS.map((option) => `<option value="${option.days}" ${option.days === getMediaRetentionDays() ? "selected" : ""}>${option.label}</option>`).join("")}</select></label><div class="ml-pool-grid">${assets.slice(0, 12).map((asset) => { const url = contentAssetDisplayUrl(asset); const preview = asset.type === "video" ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video>` : (url ? `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy">` : `<span>${esc(asset.type.toUpperCase())}</span>`); return `<article class="ml-pool-thumb">${preview}<b>${esc(asset.title)}</b><i>${esc(asset.provider || asset.source || "Media")}</i><div class="phantombot-media-actions"><button type="button" data-phantombot-edit-media="${esc(asset.id)}">Edit in PhantomCut</button><button type="button" data-phantombot-publish-media="${esc(asset.id)}">Publish</button></div></article>`; }).join("") || `<div class="ml-idle"><h3>No generated media yet.</h3><p>Ask PhantomBot to create an image or video and it will appear here.</p></div>`}</div>`;
+  mount.innerHTML = `<header class="phantombot-panel-head"><div><span>Library</span><h2>Media</h2></div><button type="button" data-phantombot-open-media>Open Media Lab</button></header><p class="ws-note">Generated images and videos stay on this PC and expire according to your retention setting.</p><label class="settings-field"><span>Keep generated media</span><select data-phantombot-retention>${MEDIA_RETENTION_OPTIONS.map((option) => `<option value="${option.days}" ${option.days === getMediaRetentionDays() ? "selected" : ""}>${option.label}</option>`).join("")}</select></label><div class="ml-pool-grid">${assets.map((asset) => { const url = contentAssetDisplayUrl(asset); const preview = asset.type === "video" ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video>` : (url ? `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy">` : `<span>${esc(asset.type.toUpperCase())}</span>`); return `<article class="ml-pool-thumb">${preview}<b>${esc(asset.title)}</b><i>${esc(asset.provider || asset.source || "Media")}</i><div class="phantombot-media-actions"><button type="button" data-phantombot-edit-media="${esc(asset.id)}">Edit in PhantomCut</button><button type="button" data-phantombot-publish-media="${esc(asset.id)}">Publish</button></div></article>`; }).join("") || `<div class="ml-idle"><h3>No generated media yet.</h3><p>Ask PhantomBot to create an image or video and it will appear here.</p></div>`}</div>`;
   mount.querySelector("[data-phantombot-retention]")?.addEventListener("change", (event) => { setMediaRetentionDays(event.target.value); mountMediaTab(); });
 }
 

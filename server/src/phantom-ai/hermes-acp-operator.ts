@@ -35,6 +35,10 @@ import {
 } from "./hermes-engineering-tools.js";
 import { composeHermesEcosystemContext } from "./hermes-ecosystem-knowledge.js";
 import { createBrainMemory } from "./neural-spine.js";
+import {
+  MAX_PROMPT_CHARS,
+  type PromptIntegrityEnvelope,
+} from "./prompt-integrity.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
@@ -47,7 +51,6 @@ export const DEFAULT_HERMES_ACP_SESSIONS_PATH = resolve(
 );
 
 const MAX_EVENTS = 500;
-const MAX_PROMPT_CHARS = 8_000;
 const MAX_PATCH_TEXT_CHARS = 4_000;
 const MAX_COMMAND_OUTPUT_CHARS = 64_000;
 const ALLOWED_TEST_COMMANDS = new Map<string, { executable: string; args: string[] }>([
@@ -96,6 +99,7 @@ export type HermesOperatorSessionRecord = {
   actorUserId: string;
   accessSessionId: string;
   prompt: string;
+  promptIntegrity: PromptIntegrityEnvelope | null;
   summary: string;
   state: HermesOperatorSessionState;
   hermesSessionId: string | null;
@@ -245,7 +249,11 @@ async function persist(record: HermesOperatorSessionRecord, options: OperatorSto
   await mkdir(dirname(target), { recursive: true });
   record.updatedAt = nowIso();
   sessions.set(record.id, structuredClone(record));
-  await appendFile(target, `${JSON.stringify(record)}\n`, "utf8");
+  const persisted = {
+    ...record,
+    prompt: "[private prompt omitted; integrity metadata retained]",
+  };
+  await appendFile(target, `${JSON.stringify(persisted)}\n`, "utf8");
   operatorSessionChangeEvents.emit(record.id, record.id);
 }
 
@@ -271,7 +279,7 @@ function canAccessRecord(session: AccessSession, record: HermesOperatorSessionRe
 function publicRecord(record: HermesOperatorSessionRecord) {
   return {
     ...record,
-    prompt: record.prompt.slice(0, 2_000),
+    prompt: "[private prompt omitted]",
     events: record.events.slice(-MAX_EVENTS),
   };
 }
@@ -281,7 +289,7 @@ function eventText(events: HermesAcpNormalizedEvent[]) {
     .filter((event) => event.type === "message_delta")
     .map((event) => event.summary)
     .join("")
-    .slice(0, 20_000);
+    .slice(0, 128_000);
 }
 
 export function parseHermesDocumentationIntent(
@@ -346,7 +354,7 @@ export function parseHermesEngineeringPlan(assistantText: string): EngineeringTa
   }
 }
 
-function planningPrompt(userPrompt: string, workspace: string) {
+export function planningPrompt(userPrompt: string, workspace: string) {
   return [
     "You are Hermes, the governed engineering planner inside PhantomBot.",
     "This planning turn is Observe mode. Inspect and reason, but do not edit files, run commands, install, deploy, restart services, use credentials, or use network tools.",
@@ -356,6 +364,10 @@ function planningPrompt(userPrompt: string, workspace: string) {
     "Command operations: run_npm_script(script,args,timeoutMs); run_typescript_build(workspace,timeoutMs); run_typecheck(workspace,timeoutMs); run_powershell_script(path,args,timeoutMs); run_secret_scan(strict,timeoutMs). Git add or commit, if truly needed, must be a separate single-operation plan.",
     "Every operation needs a unique id, kind, and concise summary. Paths are project-relative. Writes require exact current hashes/state. Include only actions necessary for this request; do not grant future discretion.",
     "Read-only plans run without approval. Any write or command requires explicit approval of the immutable full plan.",
+    "Classify the request before planning: new_project, repository_modification, debugging, explanation, reasoning, artifact_generation, tool_required, unsafe, or genuinely_ambiguous.",
+    "For a new project, choose a reasonable structure and plan its creation. Never request repository files that do not exist.",
+    "Do not refuse a safe task merely because it is large. Break it into bounded operations while preserving every requirement.",
+    "Maintain a requirement ledger with objective, deliverables, constraints, files, algorithms, tests, prohibitions, response format, and final instruction. Do not stop after the first section.",
     "Explain your evidence concisely, then end with exactly one JSON block using this shape:",
     "<phantom_engineering_plan>",
     '{"version":1,"workspace":"workspace label","summary":"bounded task summary","operations":[{"id":"inspect-1","kind":"repo_status","summary":"Inspect repository state"}],"verification":{"inspectDiff":true,"requireCleanRollback":true}}',
@@ -363,18 +375,19 @@ function planningPrompt(userPrompt: string, workspace: string) {
     "If no safe, evidence-backed bounded plan is possible, do not emit the block.",
     composeHermesEcosystemContext(userPrompt, workspace),
     `Workspace label: ${workspace}`,
-    `User request: ${clean(userPrompt, MAX_PROMPT_CHARS)}`,
+    "User request (formatting and later instructions are authoritative):",
+    redactSensitiveText(userPrompt),
   ].join("\n");
 }
 
 export async function createHermesOperatorSession(
   session: AccessSession,
-  input: { prompt: string; workspace: string },
+  input: { prompt: string; workspace: string; promptIntegrity?: PromptIntegrityEnvelope | null },
   options: OperatorStoreOptions = {},
 ) {
   await loadStore(options);
   const workspace = clean(input.workspace, 180);
-  const prompt = clean(input.prompt, MAX_PROMPT_CHARS);
+  const prompt = redactSensitiveText(String(input.prompt ?? "").replace(/\r\n?/g, "\n").trim()).slice(0, MAX_PROMPT_CHARS);
   if (!workspace) throw new Error("workspace_required");
   if (!prompt) throw new Error("prompt_required");
   const scope = sessionScope(session, workspace);
@@ -386,6 +399,7 @@ export async function createHermesOperatorSession(
     actorUserId: scope.actorUserId,
     accessSessionId: scope.accessSessionId,
     prompt,
+    promptIntegrity: input.promptIntegrity ?? null,
     summary: prompt.slice(0, 240),
     state: "connecting",
     hermesSessionId: null,

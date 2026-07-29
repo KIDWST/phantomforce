@@ -6,7 +6,7 @@ const source = readFileSync(new URL("../app/js/customization.js", import.meta.ur
 assert.match(source, /function defaultConfiguration/u, "Workspace Studio needs a local default configuration.");
 assert.match(source, /PLATFORM_MODULES/u, "Workspace modules need a local platform-module fallback.");
 assert.match(source, /activeConfiguration = defaultConfiguration\(\)/u, "Customization loading must fail open to local defaults.");
-assert.match(source, /Modules are available now; publishing waits for the server/u, "Fallback mode needs a clear operator message.");
+assert.match(source, /Modules remain available; publishing will resume automatically/u, "Fallback mode needs a clear operator message.");
 assert.doesNotMatch(source, /Workspace Studio could not load/u, "Workspace Studio must not dead-end when the backend is temporarily unavailable.");
 
 for (const id of ["dashboard", "crm", "sites", "money", "phantomplay", "intelligence", "analytics", "customize", "settings"]) {

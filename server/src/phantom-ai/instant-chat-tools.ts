@@ -888,25 +888,33 @@ function identityReply(userRequest: string, modelId: string): InstantChatToolRep
   const text = userRequest.trim();
   if (/^(?:who|what) are you\b/i.test(text)) {
     return {
-      output_text: "I'm Phantom AI, the general-purpose assistant inside PhantomForce.",
+      output_text: "I'm Phantom V1, PhantomBot's AI and execution runtime inside PhantomForce.",
       tool_id: "phantom-identity",
     };
   }
   if (/\bare you (?:chatgpt|gpt)\b/i.test(text)) {
     return {
-      output_text: "No. I'm Phantom AI inside PhantomForce.",
+      output_text: "I'm Phantom V1. ChatGPT is one supervisor/fallback lane in the stack, alongside local Phantom/Qwen, Qwen3-Coder, and Kimi K3.",
       tool_id: "phantom-identity",
     };
   }
   const asksRunningModel = /\b(?:what|which)\s+(?:ai\s+)?model\b.{0,40}\b(?:running|using|powering|for this conversation)\b|\bmodel\s+(?:are|is)\b.{0,24}\b(?:running|using)\b/i.test(text);
   if (asksRunningModel) {
-    const safeModel = /^[\w./:@+-]{1,100}$/.test(modelId) ? modelId : "qwen3:4b";
+    const safeModel = /^[\w./:@+-]{1,100}$/.test(modelId) ? modelId : "phantom-v1:latest";
     return {
-      output_text: `Phantom's fast conversation lane is currently ${safeModel}.`,
+      output_text: `You're using Phantom V1:Latest. Its fast lane is ${safeModel}; software work routes to Qwen3-Coder, deep reasoning routes to Kimi K3 when available, and ChatGPT supervises or takes fallback.`,
       tool_id: "phantom-identity",
     };
   }
   return null;
+}
+
+function capabilityReply(userRequest: string): InstantChatToolReply | null {
+  if (!/\b(?:what can you do|your capabilities|can you (?:access|use|run|execute|edit|create)|do you have access to)\b/i.test(userRequest)) return null;
+  return {
+    output_text: "PhantomBot has governed filesystem, terminal, browser, code execution, storage, and test lanes. Phantom V1 uses them for authorized work and only claims a file change, command, deployment, or external action when the runtime returns evidence or a receipt.",
+    tool_id: "phantom-capability-contract",
+  };
 }
 
 function personalityReply(userRequest: string): InstantChatToolReply | null {
@@ -986,6 +994,7 @@ function ambiguityClarificationReply(userRequest: string, turns: InstantChatTool
 
 export function buildInstantChatToolReply(userRequest: string, turns: InstantChatToolTurn[] = [], modelId = "qwen3:4b") {
   return identityReply(userRequest, modelId)
+    || capabilityReply(userRequest)
     || personalityReply(userRequest)
     || stableFactReply(userRequest)
     || ambiguityClarificationReply(userRequest, turns)

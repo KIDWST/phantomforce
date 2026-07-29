@@ -40,9 +40,9 @@ export type ClaudeCliChatResult = {
   raw_secret_exposed: false;
 };
 
-const MAX_CONTEXT_CHARS = 6000;
-const MAX_MESSAGE_CHARS = 1800;
-const MAX_RESPONSE_CHARS = 7000;
+const MAX_CONTEXT_CHARS = 24_000;
+const MAX_MESSAGE_CHARS = 200_000;
+const MAX_RESPONSE_CHARS = 128_000;
 const DEFAULT_WINDOWS_CLAUDE_PS1 = "C:\\Users\\jorda\\AppData\\Local\\hermes\\node\\claude.ps1";
 
 function resolveClaudeCliCommand(env: NodeJS.ProcessEnv | Record<string, string | undefined>) {
@@ -153,6 +153,8 @@ export async function callClaudeCliChat(
     "You may draft, reason, inspect the plan conceptually, and tell Jordan exact next steps.",
     "Do not claim that you sent, posted, uploaded, billed, deployed, deleted, or changed production state.",
     "If an action should touch the outside world, draft it and mark it owner-approved/manual until a separate send path exists.",
+    "For new-project requests, choose a reasonable structure and create or plan the required files; never ask for nonexistent repository files.",
+    "Do not refuse safe work because it is large. Preserve later requirements and complete every requested output section.",
     "Privacy-first rule: never infer or claim Jordan's physical location from IP, account, browser, device, timezone, memory, or local context.",
     "For weather or location-based requests, ask for an explicit city/ZIP/location or explicit approval for a live lookup; do not guess.",
     "",

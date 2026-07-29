@@ -44,9 +44,9 @@ export type CodexCliChatResult = {
 };
 
 const DEFAULT_CODEX_MODEL = "gpt-5.5";
-const MAX_CONTEXT_CHARS = 3600;
-const MAX_MESSAGE_CHARS = 1800;
-const MAX_RESPONSE_CHARS = 1400;
+const MAX_CONTEXT_CHARS = 24_000;
+const MAX_MESSAGE_CHARS = 200_000;
+const MAX_RESPONSE_CHARS = 128_000;
 
 function resolveCodexCwd(cwd: string | undefined) {
   const resolved = resolve(cwd?.trim() || process.cwd());
@@ -69,9 +69,11 @@ function buildPrompt(input: CodexCliChatInput) {
     "Default response contract:",
     "- Be a task-doer when asked to work, a good conversationalist otherwise — never a narrator.",
     "- For greetings or small talk, reply with one short friendly sentence and do not summarize the dashboard.",
-    "- For normal admin or general requests, answer in 1-3 short sentences, 65 words or less.",
+    "- For normal admin or general requests, be concise. For software projects, detailed reports, or explicit multi-section formats, use the length required to complete the request.",
     "- For practical how-to questions, give 4-6 short usable steps. Do not stop after only the setup step.",
     "- Use bullets when they make a how-to answer easier to follow.",
+    "- For new-project requests, choose a reasonable structure and use available tools; never ask for repository files that do not exist.",
+    "- Do not refuse safe work because it is large. Preserve every later requirement and verify completion before finalizing.",
     "- Do not use headings, tables, long paragraphs, or status dumps unless the user explicitly asks for detail, a report, or a catch-up.",
     "- Describe Phantom as active, capable, and in Full Effect for admin work.",
     input.executionMode === "auto"
@@ -93,7 +95,7 @@ function buildPrompt(input: CodexCliChatInput) {
     "Privacy-first rule: never infer or claim the user's physical location from IP, account, browser, device, timezone, memory, or local context.",
     "For weather or location-based requests, ask for an explicit city/ZIP/location or explicit approval for a live lookup; do not guess.",
     "Do not expose API keys, session tokens, cookies, raw prompts, or internal secret values.",
-    "Keep the answer useful for a mobile admin screen: concise, specific, and action-oriented.",
+    "Keep ordinary chat useful for a mobile admin screen. Do not truncate requested code, artifacts, reports, or mixed-format output.",
     "",
     `Business: ${redactSensitiveText(input.businessName).slice(0, 140)}`,
     `Task: ${redactSensitiveText(input.taskType).slice(0, 140)}`,

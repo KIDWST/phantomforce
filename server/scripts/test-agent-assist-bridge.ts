@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { buildPromptIntegrityEnvelope } from "../src/phantom-ai/prompt-integrity.js";
+
 const port = "5195";
 const baseUrl = `http://127.0.0.1:${port}`;
 const adapterPort = "5196";
@@ -67,6 +69,7 @@ for (let attempt = 0; attempt < 60 && !(await ready()); attempt += 1) {
 assert.equal(await ready(), true, "Disposable agent-assist server did not become ready");
 
 try {
+  const reviewTask = "Help this agent decide whether the copy is clear.";
   const login = await fetch(`${baseUrl}/auth/session-login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -103,11 +106,15 @@ try {
     body: JSON.stringify({
       caller: "phantombot",
       mode: "instant",
-      task: "Help this agent decide whether the copy is clear.",
+      task: reviewTask,
       context: "No external action is approved.",
       constraints: ["Return a verdict only."],
       desired_output: "APPROVED / NEEDS_CHANGES plus one sentence.",
       execute_bridge: false,
+      prompt_integrity: buildPromptIntegrityEnvelope(reviewTask, {
+        messageId: "agent-assist-review",
+        conversationId: "agent-assist-test",
+      }),
     }),
   });
   assert.equal(assistResponse.ok, true);
@@ -135,6 +142,10 @@ try {
       effort: "deep",
       task: "Think through the offer.",
       execute_bridge: true,
+      prompt_integrity: buildPromptIntegrityEnvelope("Think through the offer.", {
+        messageId: "agent-assist-execute",
+        conversationId: "agent-assist-test",
+      }),
     }),
   });
   assert.equal(blockedExecute.ok, true);

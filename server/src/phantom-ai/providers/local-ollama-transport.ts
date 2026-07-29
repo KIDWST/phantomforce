@@ -86,10 +86,10 @@ const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
    default intentionally small: PhantomBot should stay fast and should not
    park a large llama service on Jordan's PC unless an explicit model setting
    opts into that heavier lane. */
-const DEFAULT_LOCAL_MODEL = "qwen3:4b";
-const MAX_CONTEXT_CHARS = 5000;
-const MAX_MESSAGE_CHARS = 1600;
-const MAX_RESPONSE_CHARS = 5000;
+const DEFAULT_LOCAL_MODEL = "phantom-v1:latest";
+const MAX_CONTEXT_CHARS = 24_000;
+const MAX_MESSAGE_CHARS = 200_000;
+const MAX_RESPONSE_CHARS = 128_000;
 const DEFAULT_CONVERSATION_KEEP_ALIVE = "90s";
 const DEFAULT_OPERATOR_KEEP_ALIVE = "30s";
 
@@ -112,6 +112,22 @@ function resolveFallbackModel(env: NodeJS.ProcessEnv | Record<string, string | u
     env.PHANTOM_LOCAL_GLM_FALLBACK_MODEL?.trim() ||
     "";
   return explicit && explicit !== primaryModelId ? explicit : null;
+}
+
+function isKimiModel(modelId: string) {
+  const normalized = modelId.trim().toLowerCase();
+  return normalized === "kimi-k3-hf"
+    || normalized === "kimi-k3-hf:latest"
+    || normalized.startsWith("moonshotai/kimi-k3");
+}
+
+function resolveBaseUrl(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  modelId: string,
+) {
+  return isKimiModel(modelId)
+    ? normalizeBaseUrl(env.PHANTOM_KIMI_OLLAMA_BASE_URL ?? "http://127.0.0.1:11435")
+    : normalizeBaseUrl(env.OLLAMA_BASE_URL);
 }
 
 function resolveKeepAlive(
@@ -214,6 +230,14 @@ function stripRoboticPreferenceHedge(text: string) {
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
+function isFalseRuntimeCapabilityDenial(text: string, input: LocalOllamaChatInput) {
+  const softwareRequest = /\b(?:build|code|software|app|website|frontend|backend|repository|repo|implement|debug|refactor|test|file|filesystem|terminal)\b/i.test(input.userMessage);
+  const denial = /\b(?:cannot|can't|do not|don't)\s+(?:execute|run|access|create|edit)\b.{0,80}\b(?:code|files?|file systems?|terminal|applications?|software)\b/i.test(text)
+    || /\bgoes beyond my capabilities\b/i.test(text)
+    || /\bi (?:do not|don't) have (?:the )?(?:ability|capability) to run software\b/i.test(text);
+  return softwareRequest && denial;
+}
+
 function extractUsage(json: unknown): LocalOllamaChatResult["usage"] {
   if (!json || typeof json !== "object") return emptyUsage();
   const record = json as Record<string, unknown>;
@@ -267,9 +291,9 @@ export async function getLocalOllamaStatus(
   } = {},
 ): Promise<LocalOllamaStatus> {
   const env = options.env ?? process.env;
-  const baseUrl = normalizeBaseUrl(env.OLLAMA_BASE_URL);
-  const endpoint = `${baseUrl}/api/tags`;
   const modelId = resolveLocalModel(env);
+  const baseUrl = resolveBaseUrl(env, modelId);
+  const endpoint = `${baseUrl}/api/tags`;
   const fallbackModelId = resolveFallbackModel(env, modelId);
   const localOnly = isLocalOllamaBaseUrl(baseUrl);
 
@@ -332,8 +356,8 @@ export async function callLocalOllamaChat(
   } = {},
 ): Promise<LocalOllamaChatResult> {
   const env = options.env ?? process.env;
-  const baseUrl = normalizeBaseUrl(env.OLLAMA_BASE_URL);
   const requestedModelId = resolveLocalModel(env);
+  const baseUrl = resolveBaseUrl(env, requestedModelId);
   const fallbackModelId = resolveFallbackModel(env, requestedModelId);
   let modelId = requestedModelId;
   let fallbackUsed = false;
@@ -409,6 +433,8 @@ export async function callLocalOllamaChat(
         `Admin-only local brain metadata: active model ${modelId}; requested target ${requestedModelId}; fallback used ${fallbackUsed ? "yes" : "no"}${fallbackModelId ? `; fallback model ${fallbackModelId}` : ""}. Use this only when the user asks what model or brain is running.`,
         `Execution mode: ${input.executionMode === "auto" ? "auto" : "approval"}. ${input.executionMode === "auto" ? "Safe internal workspace artifacts/action cards may be created automatically; external actions still require adapter receipts." : "Stage actions for review before execution."}`,
         "Use the compact Hermes context. Respond like a normal adaptive business assistant inside PhantomForce.",
+        "Runtime capability contract: PhantomBot has governed filesystem, terminal, browser, code execution, storage, and test lanes. Never claim the product lacks those capabilities. Do not claim a specific action ran unless an adapter receipt is present; when this model turn cannot invoke a tool directly, produce the concrete execution handoff.",
+        "Identity contract: you are Phantom V1 inside PhantomBot. The Phantom V1 stack combines the local Phantom/Qwen code model, Qwen3-Coder for software work, Kimi K3 for deep reasoning, and the ChatGPT bridge for supervision and fallback.",
         "/nothink",
         "Match the user's intent and tone. Be direct, useful, and specific.",
         "You can draft, brainstorm, prioritize, critique, explain, plan, and turn requests into business artifacts, image briefs, video briefs, build plans, operator work items, or action cards.",
@@ -435,15 +461,15 @@ export async function callLocalOllamaChat(
     options: {
       temperature: conversationMode ? 0.3 : 0.35,
       think: false,
-      num_ctx: conversationMode ? 2048 : undefined,
-      num_predict: input.maxTokens ?? (conversationMode ? 80 : 700),
+      num_ctx: conversationMode ? 8192 : 32768,
+      num_predict: input.maxTokens ?? (conversationMode ? 320 : 4096),
     },
     messages: [
       {
         role: "system",
         content: conversationMode
           ? "You are Phantom AI, a fast, natural general-purpose assistant. Answer directly in 1-3 sentences unless the user requests another format. Stay in the user's current language and script unless they explicitly request translation or another language. Follow recent conversation precisely: preserve named subjects, resolve pronouns from the newest relevant turn, and obey later corrections. When asked for a replacement, shorter version, final item, or one new fact, return only that result instead of repeating earlier material. Honor exact output constraints without extra framing. When an approximate word count is requested, aim within 20 percent of it instead of stopping early. Use stable knowledge for factual claims and never invent a plausible-sounding detail; state uncertainty when needed. Do not append a follow-up question unless missing information prevents a useful answer. For harmless taste/preference questions, open with a real, specific conversational choice — never open with an I-dont-have-preferences disclaimer or any other AI-disclaimer sentence, even followed by an answer; never claim real sensory experience. Recalculate arithmetic before answering. Do not mention business systems, action cards, memory, ledgers, pipelines, workspace status, or internal operations unless asked. Never expose hidden reasoning."
-          : "You are Phantom Console's local operator brain inside PhantomForce. Phantom AI is the dashboard chatbot; this lane helps that chat coordinate practical business operation for PhantomForce, ChicagoShots, image/video creation, sales, scheduling, websites, apps, dashboards, builds, local operator work, and backend ops. Answer naturally. Stay useful. Keep external actions receipt-based without sounding like a compliance log.",
+          : "You are Phantom V1, PhantomBot's local AI/code brain inside PhantomForce. The runtime has governed filesystem, terminal, browser, code execution, storage, and test lanes. Never claim PhantomBot lacks those capabilities. Do not claim a specific action executed without a receipt. For software work, preserve all requirements, create the strongest implementation or concrete governed handoff, and never refuse merely because the task is large. The Phantom V1 stack combines the local Phantom/Qwen code model, Qwen3-Coder, Kimi K3 reasoning, and ChatGPT bridge supervision.",
       },
       {
         role: "user",
@@ -482,6 +508,7 @@ export async function callLocalOllamaChat(
       (response.ok
         ? "The local Ollama model returned an empty response."
         : `Local Ollama returned an error: ${errorText}`);
+    const falseCapabilityDenial = isFalseRuntimeCapabilityDenial(safeOutput, input);
 
     return {
       provider_id: "local_ollama",
@@ -490,10 +517,12 @@ export async function callLocalOllamaChat(
       fallback_model_id: fallbackModelId,
       fallback_used: fallbackUsed,
       endpoint,
-      status: response.ok ? "called" : "error",
+      status: response.ok && !falseCapabilityDenial ? "called" : "error",
       blocked_reason: null,
-      error_message: errorText,
-      output_text: safeOutput,
+      error_message: falseCapabilityDenial
+        ? "The model returned a false PhantomBot runtime-capability denial; route to the next Phantom V1 lane."
+        : errorText,
+      output_text: falseCapabilityDenial ? "" : safeOutput,
       provider_called: response.ok,
       network_call_performed: true,
       request_body_prepared: true,
@@ -507,7 +536,7 @@ export async function callLocalOllamaChat(
       raw_prompt_returned: false,
       raw_response_returned: false,
       redacted_prompt_chars: prompt.length,
-      redacted_response_chars: safeOutput.length,
+      redacted_response_chars: falseCapabilityDenial ? 0 : safeOutput.length,
       response_status: response.status,
       usage: extractUsage(json),
     };
