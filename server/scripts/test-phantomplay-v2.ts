@@ -139,9 +139,10 @@ try {
   const servedIds = new Set((v1Route.json().catalog as Array<{ id: string }>).map((game) => game.id));
   assert(v1Route.statusCode === 200 && servedIds.size === registeredIds.size && [...registeredIds].every((id) => servedIds.has(id)), "The V1 catalog route should serve exactly the registered built-in set.");
   assert(v2.PHANTOMPLAY_V2_GAMES.every((game) => servedIds.has(game.id)), "The V1 catalog route should include the registered V2 games.");
-  for (const flagshipId of ["cubetown", "skyguard-arena", "crown-circuit", "keyboardist-on-tour", "tidefront-tactics", "kingdom-breakers"]) {
+  for (const flagshipId of ["cubetown", "skyguard-arena", "crown-circuit", "tidefront-tactics", "kingdom-breakers"]) {
     assert(servedIds.has(flagshipId), `The V1 catalog route should include flagship game ${flagshipId}.`);
   }
+  assert(!servedIds.has("keyboardist-on-tour"), "Keyboardist on Tour must not be served by either PhantomPlay catalog.");
   const gamePageRoute = await app.inject({ method: "GET", url: "/api/phantomplay/v2/games/phantom-rumble", headers: { Authorization: `Bearer ${ownerToken}` } });
   assert(gamePageRoute.statusCode === 200 && gamePageRoute.json().game.id === "phantom-rumble", "Game-page route should resolve V2 games.");
   const policyForbidden = await app.inject({ method: "PATCH", url: "/api/phantomplay/v2/workspace-policy", payload: { dailyMinuteLimit: 10 } });

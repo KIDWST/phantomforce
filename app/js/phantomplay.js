@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260726-66";
+} from "./store.js?v=phantom-live-20260728-67";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -21,12 +21,13 @@ function applyColorMode(mode) {
 }
 applyColorMode(currentColorMode());
 const CATEGORIES = ["All", "Kids", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
-const GAME_SORTS = ["All", "Solo", "Multiplayer", "Kids", ...CATEGORIES.filter((category) => category !== "All" && category !== "Kids")];
+const GAME_SORTS = ["All", "Solo", "Multiplayer", "Kids", "Under 18", ...CATEGORIES.filter((category) => category !== "All" && category !== "Kids")];
 const KIDS_ONLY_GAME_IDS = new Set([
   "signal-match", "focus-stack", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge",
   "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom",
   "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights",
-  "sudoku-signal",
+  "sudoku-signal", "neon-drift", "phantom-dash", "word-weld", "phantom-cube",
+  "tidefront-tactics", "kingdom-breakers",
 ]);
 const GAME_CONTROL_KEYS = new Set([
   "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
@@ -97,7 +98,6 @@ const GAME_ART_BY_SLUG = {
   "skyguard-arena": artUrl("skyguard-arena-cover.svg"),
   "penalty-kick": artUrl("penalty-kick-cover.webp"),
   "cubetown": artUrl("cubetown-cover.svg"),
-  "keyboardist-on-tour": artUrl("keyboardist-on-tour-cover.svg"),
   "phantom-grand-prix": artUrl("phantom-grand-prix-cover.svg"),
   "beat-strike": artUrl("beat-strike-cover.svg"),
   "im-baked": artUrl("im-baked-cover.svg"),
@@ -160,7 +160,6 @@ const BUILT_INS = [
   { id: "phantom-rumble", title: "Phantom Rumble", summary: "Local platform fighter with guard, parry, dodge, recovery, bots, and online room modes.", description: "A PhantomPlay fighter with solo, local multiplayer, Race to the Top, and networked private-room modes.", category: "Arcade", tags: ["fighter", "platform", "multiplayer", "pvp"], contentRating: "everyone10", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-rumble.html?v=2.2.4", thumbnail: GAME_ART_BY_SLUG["phantom-rumble"], featured: true, version: "2.2.4", controls: "Keyboard controls.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "sudoku-signal", title: "Sudoku Signal", summary: "A calm Sudoku board with three difficulties and resume support.", description: "Sudoku with difficulty selection, pencil marks, and clean PhantomPlay save-state support.", category: "Puzzle", tags: ["sudoku", "logic", "calm"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/sudoku-signal.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["sudoku-signal"], featured: false, version: "1.0.0", controls: "Click cells and number buttons, or use keyboard.", progressSupport: true, scoreSupport: true },
   { id: "cubetown", title: "CubeTown", summary: "A living blocky town — residents work, wander, fish, and chat through their day while you build.", description: "A cozy town-builder where the residents actually live: they walk their own daily routes, swing picks and axes at work, fish the pond, sweep the shrine, pair up to chat, and head home when it rains — with birds, butterflies, chimney smoke, and dusk-lit windows rounding out the town. Gathering, building, cooking, fishing, quests, farming, and safe private-room together play, now running noticeably smoother on big maps, with a gentle generative soundscape — wind, birdsong, crickets, and music-box notes that follow the time of day.", category: "Creative", tags: ["building", "life-sim", "cozy", "farming", "multiplayer", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/cubetown/index.html?v=1.3.0", thumbnail: GAME_ART_BY_SLUG["cubetown"], featured: true, version: "1.3.0", controls: "WASD/arrow keys or tap an adjacent tile. Space/E to interact.", progressSupport: true, scoreSupport: true, engine: { tier: "sandbox-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
-  { id: "keyboardist-on-tour", title: "Cipher Keep", summary: "A typing roguelike dungeon crawl — type your way through rooms, foes, and vaults.", description: "Type words to move through a shifting procedural dungeon, strike down foes in real-time typing duels, crack sealed vaults before their fuse burns out, and choose relics to empower your run. Every cleared room can recover an evidence fragment for your Clue Journal — and at each chapter gate, Archivist Sable asks you to type your own deduction about the Echo Warden case, with your answers, choices, and final typed verdict (mercy, bind, or teach) steering the story to one of three endings. Typing speed lands harder hits while mistake-free accuracy builds a Combo multiplier and fills Ink for Focus Surges.", category: "Focus", tags: ["typing", "roguelike", "dungeon", "keyboard", "permadeath", "procedural"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/keyboardist-on-tour.html?v=2.1.0", thumbnail: GAME_ART_BY_SLUG["keyboardist-on-tour"], featured: true, version: "2.1.0", controls: "Just type — full keyboard input, no fixed lane keys. Backspace corrects mistakes. P or Esc pauses. On-screen keyboard shown for touch.", progressSupport: true, scoreSupport: true },
   { id: "phantom-grand-prix", title: "Chicklet Grand Prix", summary: "Super Monkey Ball–style roll racing: tilt the world, chain Flow, and roll little chicks to the flag across three worlds.", description: "A tilt-and-roll racer with the soul of a marble party game. You don't drive — you lean the whole world and let momentum carry your chick, tucked in a glass roll-ball, down a floating ribbon circuit. Hold a clean line to charge Flow, tap it for a burst, and draft rivals for a slipstream through Sunrise Meadow, Cloudtop Isles, and Aurora Ridge. Calm, readable, un-chaotic racing against gently rubber-banded chicklets — Single Race, a three-round Grand Prix Cup, or a solo Time Trial. Pseudo-3D world-tilt rendering, all drawn on the fly.", category: "Arcade", tags: ["racing", "roll", "marble", "arcade", "cup", "cute", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/phantom-grand-prix/index.html?v=3.0.0", thumbnail: GAME_ART_BY_SLUG["phantom-grand-prix"], featured: true, version: "3.0.0", controls: "Steer: ←/→ or A/D (tilt). Space: Flow burst. ↓/S: brake. P: pause. M: mute. Touch: tilt buttons + Flow.", progressSupport: true, scoreSupport: true },
   { id: "beat-strike", title: "BeatStrike", summary: "Full-keyboard tap/hold rhythm game on a generated 128 BPM beatmap.", description: "Every letter key is live: tap and hold notes falling toward the hit line on a synthesized click track.", category: "Focus", tags: ["rhythm", "music", "keyboard", "timing"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/beat-strike/index.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["beat-strike"], featured: false, version: "1.0.0", controls: "Every letter key is live.", progressSupport: false, scoreSupport: false },
   { id: "im-baked", title: "I'm Baked", summary: "Run a future cake shop: read orders, time the oven, decorate showpieces, and grow the shift.", description: "A complete cake-shop day loop with distinct customers, order tickets, bake timing, layered procedural cakes, visual finishes, customer patience, grades, coins, streaks, Story Shift, and Rush Counter modes.", category: "Creative", tags: ["cooking", "cakes", "shop", "creative", "simulation", "touch"], contentRating: "everyone", contentDescriptors: ["simulated_economy"], developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/im-baked.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["im-baked"], featured: true, version: "1.0.0", controls: "Choose the ticketed ingredients, stop the oven in the green, decorate, and serve.", progressSupport: true, scoreSupport: true, engine: { tier: "creative-sim", minVersion: PHANTOMPLAY_ENGINE.version } },
@@ -407,7 +406,7 @@ function historyFor(gameId) {
 
 function fallbackLeaderboards(snapshot = ui.snapshot) {
   const history = Array.isArray(snapshot?.history) ? snapshot.history : [];
-  const catalog = generalPlayGames(Array.isArray(snapshot?.catalog) ? snapshot.catalog : []);
+  const catalog = viewerPlayGames(Array.isArray(snapshot?.catalog) ? snapshot.catalog : [], snapshot);
   const catalogIds = new Set(catalog.map((game) => game.id));
   const rows = history.filter((item) => item.score != null && catalogIds.has(item.gameId)).map((item) => {
     const game = catalog.find((entry) => entry.id === item.gameId);
@@ -476,13 +475,15 @@ function savedDateLabel(value) {
 const multiplayerGame = (game) => game.localMultiplayer || game.onlineMultiplayer || game.multiplayerDescriptor || game.tags?.some((tag) => /multiplayer|friends|party|duel|arena|io/i.test(tag)) || ["phantom-rumble"].includes(game.id);
 const kidsPick = (game) => KIDS_ONLY_GAME_IDS.has(game.id) || String(game.category || "").toLowerCase() === "kids";
 const generalPlayGames = (games) => games.filter((game) => !kidsPick(game));
+const under18Profile = (snapshot = ui.snapshot) => ["child", "toddler"].includes(snapshot?.profileType);
+const viewerPlayGames = (games, snapshot = ui.snapshot) => under18Profile(snapshot) ? games : generalPlayGames(games);
 const displayCategoryFor = (game) => kidsPick(game) ? "Kids" : game.category;
 function sortGames(games, sort = ui.category) {
-  if (sort === "Kids") return games.filter(kidsPick);
-  if (sort === "Solo") return generalPlayGames(games).filter((game) => !multiplayerGame(game));
-  if (sort === "Multiplayer") return generalPlayGames(games).filter(multiplayerGame);
-  if (CATEGORIES.includes(sort) && sort !== "All") return generalPlayGames(games).filter((game) => game.category === sort);
-  return generalPlayGames(games);
+  if (sort === "Kids" || sort === "Under 18") return games.filter(kidsPick);
+  if (sort === "Solo") return viewerPlayGames(games).filter((game) => !multiplayerGame(game));
+  if (sort === "Multiplayer") return viewerPlayGames(games).filter(multiplayerGame);
+  if (CATEGORIES.includes(sort) && sort !== "All") return viewerPlayGames(games).filter((game) => game.category === sort);
+  return viewerPlayGames(games);
 }
 
 function canLaunchGames(snapshot = ui.snapshot) {
@@ -541,7 +542,7 @@ function gameRows(games, title, copy = "") {
 }
 
 function renderHome() {
-  const visibleCatalog = generalPlayGames(ui.snapshot.catalog);
+  const visibleCatalog = viewerPlayGames(ui.snapshot.catalog);
   const featured = visibleCatalog.filter((game) => game.featured);
   const recent = ui.snapshot.history.map((item) => visibleCatalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
   const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => visibleCatalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
@@ -600,7 +601,7 @@ function renderLibrary() {
 }
 
 function renderFavorites() {
-  const games = generalPlayGames(ui.snapshot.catalog).filter((game) => ui.snapshot.favorites.includes(game.id));
+  const games = viewerPlayGames(ui.snapshot.catalog).filter((game) => ui.snapshot.favorites.includes(game.id));
   return games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No favorites yet", "Tap the heart on any game to save it here.");
 }
 
@@ -667,7 +668,7 @@ function roomCard(room) {
 
 function renderTogether() {
   const rooms = Array.isArray(ui.snapshot.rooms) ? ui.snapshot.rooms : [];
-  const classroomGames = generalPlayGames(ui.snapshot.catalog).filter((game) => ui.roomMode !== "classroom" || game.contentRating === "everyone");
+  const classroomGames = viewerPlayGames(ui.snapshot.catalog).filter((game) => ui.roomMode !== "classroom" || game.contentRating === "everyone");
   const selectedGameId = classroomGames.some((game) => game.id === ui.roomGameId) ? ui.roomGameId : (classroomGames[0]?.id || "");
   return `<div class="pp-together" data-pp-private-rooms>
     <section class="pp-room-hero">

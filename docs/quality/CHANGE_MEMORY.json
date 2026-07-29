@@ -1151,6 +1151,41 @@
           "description": "Database auth advertises the real password-recovery endpoint."
         }
       ]
+    },
+    {
+      "id": "phantomplay-kids-lane-and-keyboardist-removal",
+      "status": "active",
+      "title": "Selected PhantomPlay games stay in the under-18 lane and Keyboardist on Tour stays deleted",
+      "ownerDecision": "Neon Drift, Phantom Dash, Word Weld, PhantomCube, Tidefront Tactics, and Kingdom Breakers are kids-lane games. Adult profiles do not see that lane unless they explicitly choose Kids or Under 18; child and toddler profiles see it automatically. Keyboardist on Tour is removed from catalogs, source, and assets and must not be restored.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/phantomplay.ts",
+          "pattern": "sudoku-signal[\\s\\S]*neon-drift[\\s\\S]*phantom-dash[\\s\\S]*word-weld[\\s\\S]*phantom-cube[\\s\\S]*tidefront-tactics[\\s\\S]*kingdom-breakers",
+          "description": "The server's canonical kids-only set includes every owner-selected game."
+        },
+        {
+          "file": "app/js/phantomplay.js",
+          "pattern": "const under18Profile[\\s\\S]*child[\\s\\S]*toddler[\\s\\S]*const viewerPlayGames",
+          "description": "The default client automatically exposes the kids lane only to under-18 profile types."
+        },
+        {
+          "file": "app/js/phantomplay-v2.js",
+          "pattern": "sort === \"Kids\" \\|\\| sort === \"Under 18\"",
+          "description": "The active PhantomPlay client keeps explicit Kids and Under 18 filters."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/phantomplay.js",
+          "pattern": "keyboardist-on-tour|Keyboardist On Tour",
+          "description": "The deleted game cannot return through the client fallback catalog."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomplay-flagship.ts",
+          "pattern": "keyboardist-on-tour|Keyboardist On Tour",
+          "description": "The deleted game cannot return through flagship server registration."
+        }
+      ]
     }
   ]
 }

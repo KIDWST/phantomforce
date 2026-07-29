@@ -143,7 +143,6 @@ const GAME_ART_BY_SLUG: Record<string, string> = {
   "im-baked": artUrl("im-baked-cover.svg"),
   "phantom-strike": artUrl("phantom-strike-cover.svg"),
   "cubetown": artUrl("cubetown-cover.svg"),
-  "keyboardist-on-tour": artUrl("keyboardist-on-tour-cover.svg"),
   "phantom-grand-prix": artUrl("phantom-grand-prix-cover.svg"),
   "beat-strike": artUrl("beat-strike-cover.svg"),
   "phantom-dash": artUrl("phantom-dash-cover.svg"),
@@ -409,7 +408,8 @@ export const PHANTOMPLAY_KIDS_ONLY_GAME_IDS = new Set([
   "signal-match", "focus-stack", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge",
   "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom",
   "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights",
-  "sudoku-signal",
+  "sudoku-signal", "neon-drift", "phantom-dash", "word-weld", "phantom-cube",
+  "tidefront-tactics", "kingdom-breakers",
 ]);
 
 export function isKidsLaneGame(game: PhantomPlayGame): boolean {

@@ -6,9 +6,9 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260726-66";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260726-66";
-import { getOperatorInfrastructureStatus, renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260726-66";
+} from "./store.js?v=phantom-live-20260728-67";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260728-67";
+import { getOperatorInfrastructureStatus, renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260728-67";
 
 let executionMode = "advise";
 let syncFrame = 0;

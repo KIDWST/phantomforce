@@ -9,19 +9,20 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260726-66";
+} from "./store.js?v=phantom-live-20260728-67";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 const controlsCopy = (game) => mobilePlaySurface() ? "" : String(game?.controls || "").trim();
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const CATEGORIES = ["All", "Kids", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
-const GAME_SORTS = ["All", "Solo", "Multiplayer", "Kids", ...CATEGORIES.filter((cat) => cat !== "All" && cat !== "Kids")];
+const GAME_SORTS = ["All", "Solo", "Multiplayer", "Kids", "Under 18", ...CATEGORIES.filter((cat) => cat !== "All" && cat !== "Kids")];
 const KIDS_ONLY_GAME_IDS = new Set([
   "signal-match", "focus-stack", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge",
   "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom",
   "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights",
-  "sudoku-signal",
+  "sudoku-signal", "neon-drift", "phantom-dash", "word-weld", "phantom-cube",
+  "tidefront-tactics", "kingdom-breakers",
 ]);
 const GAME_CONTROL_KEYS = new Set([
   "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
@@ -163,15 +164,17 @@ const wishlisted = (gameId) => !!ui.v2?.wishlist?.includes(gameId);
 const multiplayerGame = (game) => game.localMultiplayer || game.onlineMultiplayer || game.tags?.some((tag) => /multiplayer|friends|party|duel/i.test(tag)) || ["phantom-rumble"].includes(game.id);
 const kidsPick = (game) => KIDS_ONLY_GAME_IDS.has(game.id) || String(game.category || "").toLowerCase() === "kids";
 const generalPlayGames = (games) => games.filter((game) => !kidsPick(game));
+const under18Profile = (snapshot = ui.snapshot) => ["child", "toddler"].includes(snapshot?.profileType);
+const viewerPlayGames = (games, snapshot = ui.snapshot) => under18Profile(snapshot) ? games : generalPlayGames(games);
 const displayCategoryFor = (game) => kidsPick(game) ? "Kids" : game.category;
 const builtInGames = () => ui.snapshot.catalog.filter((game) => game.kind === "built_in");
-const visibleMultiplayerGames = () => generalPlayGames(ui.snapshot.catalog).filter(multiplayerGame);
+const visibleMultiplayerGames = () => viewerPlayGames(ui.snapshot.catalog).filter(multiplayerGame);
 function sortGames(games, sort = ui.category) {
-  if (sort === "Kids") return games.filter(kidsPick);
-  if (sort === "Solo") return generalPlayGames(games).filter((game) => !multiplayerGame(game));
-  if (sort === "Multiplayer") return generalPlayGames(games).filter(multiplayerGame);
-  if (CATEGORIES.includes(sort) && sort !== "All") return generalPlayGames(games).filter((game) => game.category === sort);
-  return generalPlayGames(games);
+  if (sort === "Kids" || sort === "Under 18") return games.filter(kidsPick);
+  if (sort === "Solo") return viewerPlayGames(games).filter((game) => !multiplayerGame(game));
+  if (sort === "Multiplayer") return viewerPlayGames(games).filter(multiplayerGame);
+  if (CATEGORIES.includes(sort) && sort !== "All") return viewerPlayGames(games).filter((game) => game.category === sort);
+  return viewerPlayGames(games);
 }
 function stars(value, interactive = false) {
   const rating = Math.round(Number(value) || 0);
@@ -242,10 +245,10 @@ function v2Note(copy) {
 function mapIds(rows, key = "gameId") { return (rows || []).map((item) => gameById(item[key])).filter(Boolean); }
 function renderHome() {
   if (ui.loading) return `${skeletonRow("Featured")}${skeletonRow("Trending this week")}`;
-  const visibleCatalog = generalPlayGames(ui.snapshot.catalog);
+  const visibleCatalog = viewerPlayGames(ui.snapshot.catalog);
   const featured = visibleCatalog.filter((game) => game.featured);
   const hero = gameById("phantom-rumble") || featured[0] || visibleCatalog[0];
-  const continuing = generalPlayGames(ui.snapshot.history.filter((item) => item.canContinue).map((item) => gameById(item.gameId)).filter(Boolean)).slice(0, 4);
+  const continuing = viewerPlayGames(ui.snapshot.history.filter((item) => item.canContinue).map((item) => gameById(item.gameId)).filter(Boolean)).slice(0, 4);
   const d = ui.discovery;
   const ratingNotes = {};
   for (const item of [...(d?.topRated || []), ...(d?.hiddenGems || [])]) if (item.averageRating) ratingNotes[item.gameId] = `${item.averageRating}★`;
@@ -254,11 +257,11 @@ function renderHome() {
   return `<div class="pp2-home">
     ${hero ? `<section class="pp2-hero"><div class="pp2-hero-art">${art(hero)}</div><div class="pp2-hero-copy"><p class="pp2-kicker">FEATURED</p><h1>${esc(hero.title)}</h1><p>${esc(hero.summary)}</p><div><button class="pp2-play" ${canLaunchGames() ? `data-pp2-play="${esc(hero.id)}"` : `data-pp2-session-required="${esc(hero.id)}"`}>${canLaunchGames() ? "Play now" : "Plan locked"}</button><button class="pp2-ghost" data-pp2-open="${esc(hero.id)}">Game page</button></div></div></section>` : ""}
     ${row("Continue playing", continuing, "Pick up exactly where you left off — saves follow your profile.")}
-    ${d ? row("Friends playing now", generalPlayGames(mapIds(d.friendsPlaying)), "", friendNotes) : ""}
-    ${d ? row("Trending this week", generalPlayGames(mapIds(d.trending)), "Ranked by real plays across this workspace.") : ""}
-    ${d ? row("Top rated", generalPlayGames(mapIds(d.topRated)), "", ratingNotes) : ""}
-    ${d ? row("Hidden gems", generalPlayGames(mapIds(d.hiddenGems)), "Loved by the few who found them.", ratingNotes) : ""}
-    ${d ? row("New community releases", generalPlayGames(mapIds(d.newReleases))) : ""}
+    ${d ? row("Friends playing now", viewerPlayGames(mapIds(d.friendsPlaying)), "", friendNotes) : ""}
+    ${d ? row("Trending this week", viewerPlayGames(mapIds(d.trending)), "Ranked by real plays across this workspace.") : ""}
+    ${d ? row("Top rated", viewerPlayGames(mapIds(d.topRated)), "", ratingNotes) : ""}
+    ${d ? row("Hidden gems", viewerPlayGames(mapIds(d.hiddenGems)), "Loved by the few who found them.", ratingNotes) : ""}
+    ${d ? row("New community releases", viewerPlayGames(mapIds(d.newReleases))) : ""}
     ${row("Featured", featured)}
     ${ui.v2Offline ? v2Note("Discovery, reviews, friends, and wishlists need the PhantomForce server. Built-in games and saves still work.") : ""}
     <section class="pp2-spotlight"><div><p class="pp2-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Publish a game to PhantomPlay and PhantomForce becomes your publishing team — analytics, patch notes, art and campaign briefs, all in the Dev Hub.</p><button class="pp2-ghost" data-pp2-tab="developer">Open Dev Hub</button></div></section>
@@ -306,7 +309,7 @@ function renderWorkspace() {
   const policy = ui.v2?.policy;
   const admin = isAdmin();
   const draft = ui.policyDraft;
-  const builtIns = generalPlayGames(ui.snapshot.catalog).filter((game) => game.kind === "built_in");
+  const builtIns = viewerPlayGames(ui.snapshot.catalog).filter((game) => game.kind === "built_in");
   const board = ui.leaderboard;
   return `<div class="pp2-workspace">
     <section class="pp2-lead"><h2>Workspace</h2><p>The safe mode: schools, teams, and clubs. Organization-controlled catalog, ratings ceiling, and time limits — no public discovery, no strangers.</p></section>

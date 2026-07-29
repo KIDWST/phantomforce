@@ -35,7 +35,6 @@ const vespergateIndex = read("../app/games/vespergate/index.html");
 const coverArt = [
   "beat-strike",
   "cubetown",
-  "keyboardist-on-tour",
   "kingdom-breakers",
   "phantom-ages",
   "phantom-grand-prix",
@@ -46,7 +45,6 @@ const upgradedCoverArt = Object.fromEntries([
   "breath-pacer",
   "cubetown",
   "echo-sequence",
-  "keyboardist-on-tour",
   "kingdom-breakers",
   "phantom-ages",
   "phantom-grand-prix",
@@ -62,7 +60,8 @@ const kidsOnlyGameIds = [
   "signal-match", "focus-stack", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge",
   "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom",
   "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights",
-  "sudoku-signal",
+  "sudoku-signal", "neon-drift", "phantom-dash", "word-weld", "phantom-cube",
+  "tidefront-tactics", "kingdom-breakers",
 ];
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
@@ -80,18 +79,18 @@ assert.match(v2Module, /const mobilePlaySurface/u, "PhantomPlay V2 must detect m
 assert.match(v2Module, /const controlsCopy[\s\S]*mobilePlaySurface\(\) \? ""/u, "PhantomPlay V2 must hide redundant controls copy on touch-first play surfaces.");
 assert.doesNotMatch(module, /touch-drag|touch pressure|mobile touch controls/u, "Catalog/player copy must not print obvious touch instructions.");
 assert.doesNotMatch(v2Module, /touch-drag|touch pressure|mobile touch controls/u, "V2 catalog/player copy must not print obvious touch instructions.");
-assert.match(module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Kids"/u, "Default PhantomPlay must keep Kids as a sort chip.");
+assert.match(module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Kids", "Under 18"/u, "Default PhantomPlay must keep Kids and Under 18 sort chips.");
 assert.match(module, /const tabs = \[\["library", "Games"\], \["together", "Multiplayer"\], \["favorites", "Saved"\]/u, "Default PhantomPlay tabs must start with Games, Multiplayer, and Saved.");
-assert.match(module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Kids"[\s\S]*kidsPick/u, "Default PhantomPlay must sort kids-only games through the sorter.");
+assert.match(module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Kids" \|\| sort === "Under 18"[\s\S]*kidsPick/u, "Default PhantomPlay must sort kids-only games through the Kids and Under 18 filters.");
 assert.match(module, /KIDS_ONLY_GAME_IDS[\s\S]*signal-match[\s\S]*logic-lights[\s\S]*sudoku-signal/u, "Default PhantomPlay must keep the requested kids-only game list.");
 for (const gameId of kidsOnlyGameIds) {
   assert.match(module, new RegExp(JSON.stringify(gameId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"), `Default PhantomPlay must include ${gameId} in the kids-only ID set.`);
   assert.match(v2Module, new RegExp(JSON.stringify(gameId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "u"), `PhantomPlay V2 must include ${gameId} in the kids-only ID set.`);
 }
-assert.match(module, /return generalPlayGames\(games\)/u, "Default PhantomPlay must hide kids-only games from normal catalog views.");
-assert.match(module, /function fallbackLeaderboards\(snapshot = ui\.snapshot\)[\s\S]*generalPlayGames\(Array\.isArray\(snapshot\?\.catalog\)/u, "Default PhantomPlay leaderboards must not surface kids-only games outside Kids.");
-assert.match(module, /function renderFavorites\(\)[\s\S]*generalPlayGames\(ui\.snapshot\.catalog\)/u, "Default PhantomPlay Saved tab must not re-surface kids-only games outside Kids.");
-assert.match(module, /const classroomGames = generalPlayGames\(ui\.snapshot\.catalog\)\.filter/u, "Default PhantomPlay private room picker must not leak kids-only games.");
+assert.match(module, /const under18Profile[\s\S]*\["child", "toddler"\][\s\S]*const viewerPlayGames[\s\S]*under18Profile\(snapshot\) \? games : generalPlayGames\(games\)/u, "Default PhantomPlay must show the kids lane automatically only for under-18 profiles.");
+assert.match(module, /function fallbackLeaderboards\(snapshot = ui\.snapshot\)[\s\S]*viewerPlayGames\(Array\.isArray\(snapshot\?\.catalog\)/u, "Default PhantomPlay leaderboards must respect the viewer's age lane.");
+assert.match(module, /function renderFavorites\(\)[\s\S]*viewerPlayGames\(ui\.snapshot\.catalog\)/u, "Default PhantomPlay Saved tab must respect the viewer's age lane.");
+assert.match(module, /const classroomGames = viewerPlayGames\(ui\.snapshot\.catalog\)\.filter/u, "Default PhantomPlay private room picker must respect the viewer's age lane.");
 assert.match(module, /return sortGames\(ui\.snapshot\.catalog, "All"\)/u, "Default PhantomPlay must render the full general catalog without search/filter chrome.");
 assert.doesNotMatch(module, /data-pp-search|Search games, modes, categories, creators/u, "Default PhantomPlay must not restore the redundant game search bar.");
 assert.doesNotMatch(module, /renderToddlerSpace|pp-shell-toddler|pp-toddler-space|data-pp-toddler-play/u, "Default PhantomPlay must not keep a separate Toddler Space page.");
@@ -105,12 +104,12 @@ assert.match(css, /\.pp-game-grid:not\(\.pp-game-grid-full\) \.pp-game\{[\s\S]*?
 assert.match(css, /\.pp-game-grid:not\(\.pp-game-grid-full\) \.pp-game-art\{[\s\S]*?width:calc\(100% - 14px\)[\s\S]*?aspect-ratio:16\/9[\s\S]*?margin:14px 0 14px 14px/u, "Desktop PhantomPlay compact art must render as a framed widescreen cover, not a tall empty column.");
 assert.doesNotMatch(css, /Toddler Space|pp-toddler-space|pp-shell-toddler/u, "Default PhantomPlay stylesheet must not preserve a separate Toddler Space destination.");
 assert.match(v2Module, /tab:\s*"solo"/u, "PhantomPlay V2 must open straight to games, not a marketing/home screen.");
-assert.match(v2Module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Kids"/u, "Kids must be a sort chip, not a separate destination.");
+assert.match(v2Module, /const GAME_SORTS = \["All", "Solo", "Multiplayer", "Kids", "Under 18"/u, "Kids and Under 18 must be explicit sort chips.");
 assert.match(v2Module, /const tabs = \[\["solo", "Games"\], \["friends", "Multiplayer"\], \["library", "Library"\]/u, "V2 top tabs must start with Games, Multiplayer, and Library.");
-assert.match(v2Module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Kids"[\s\S]*kidsPick/u, "V2 must sort kids-only games through the sorter.");
+assert.match(v2Module, /function sortGames\(games, sort = ui\.category\)[\s\S]*sort === "Kids" \|\| sort === "Under 18"[\s\S]*kidsPick/u, "V2 must sort kids-only games through the Kids and Under 18 filters.");
 assert.match(v2Module, /KIDS_ONLY_GAME_IDS[\s\S]*signal-match[\s\S]*logic-lights[\s\S]*sudoku-signal/u, "V2 must keep the requested kids-only game list.");
-assert.match(v2Module, /return generalPlayGames\(games\)/u, "V2 must hide kids-only games from normal catalog views.");
-assert.match(v2Module, /const builtIns = generalPlayGames\(ui\.snapshot\.catalog\)\.filter/u, "V2 workspace policy and leaderboard selectors must not leak kids-only games.");
+assert.match(v2Module, /const under18Profile[\s\S]*\["child", "toddler"\][\s\S]*const viewerPlayGames[\s\S]*under18Profile\(snapshot\) \? games : generalPlayGames\(games\)/u, "V2 must show the kids lane automatically only for under-18 profiles.");
+assert.match(v2Module, /const builtIns = viewerPlayGames\(ui\.snapshot\.catalog\)\.filter/u, "V2 workspace policy and leaderboard selectors must respect the viewer's age lane.");
 assert.match(v2Module, /return sortGames\(ui\.snapshot\.catalog\)\.filter/u, "V2 library search must reuse the same sort pipeline as the Games tab.");
 assert.doesNotMatch(v2Module, /renderToddlerSpace|pp2-shell-toddler|pp2-toddler-space/u, "V2 must not bring back a separate Toddler Space page.");
 assert.match(v2Css, /\.pp2-play-header/u, "V2 game-first landing header must be styled.");
@@ -126,6 +125,7 @@ assert.match(serverV2Catalog, /topRated: discoveryCatalog\.map/u, "V2 top-rated 
 assert.match(serverV2Catalog, /hiddenGems: discoveryCatalog\.map/u, "V2 hidden-gem discovery must use the general-only catalog.");
 assert.match(serverV2Catalog, /related: \(isKidsLaneGame\(game\) \? catalog\.filter\(isKidsLaneGame\) : catalog\.filter\(\(item\) => !isKidsLaneGame\(item\)\)\)/u, "V2 related games must keep kids-only related titles inside Kids context only.");
 assert.match(serverV2Catalog, /const game = visibleCatalogFor\(store, v1, tenantId, actorId\)\.find\(\(item\) => item\.id === gameId\)/u, "V2 leaderboard endpoint must respect the viewer's visible catalog before returning scores.");
+assert.doesNotMatch(appFiles.join("\n") + serverCatalog + serverV2Catalog, /keyboardist-on-tour|Keyboardist On Tour/u, "Keyboardist on Tour must be completely removed from PhantomPlay catalogs and app source.");
 assert.match(module, /sandbox="allow-scripts allow-pointer-lock"/u, "Games must launch in an opaque-origin sandbox with scripts and pointer lock only.");
 assert.doesNotMatch(module, /allow-same-origin|allow-forms|allow-popups/u, "The player must not grant origin, form, or popup powers.");
 assert.match(module, /event\.source !== frame\.contentWindow/u, "Game messages must be bound to the active frame.");
