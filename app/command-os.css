@@ -6331,6 +6331,17 @@ html[data-command-os="2040"] .phantombot-composer-controls label {
   cursor: pointer;
 }
 
+html[data-command-os="2040"] .phantombot-composer-controls .sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 html[data-command-os="2040"] .phantombot-composer-controls button:hover,
 html[data-command-os="2040"] .phantombot-composer-controls button.is-active,
 html[data-command-os="2040"] .phantombot-composer-controls label:hover {
