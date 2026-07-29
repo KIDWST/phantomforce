@@ -40,6 +40,8 @@ assert.match(phantomAi, /event\.key === "Enter" && !event\.shiftKey && !event\.i
 assert.match(phantomAi, /Math\.min\(Math\.max\(input\.scrollHeight, 28\), 168\)/u, "The multiline composer must grow with its content while remaining bounded.");
 assert.match(phantomAi, /data-phantombot-jump/u, "Long task conversations must provide a jump-to-latest control.");
 assert.match(phantomAi, /event\.key\.toLowerCase\(\) === "n"/u, "PhantomBot must support the Ctrl/Cmd+N new-task shortcut.");
+assert.match(phantomAi, /usage limit\|quota\|rate limit\|too many requests\|429\|subscription limit[\s\S]*data-phantombot-chatgpt-account/u, "PhantomBot usage-limit errors must offer a ChatGPT account-switch action.");
+assert.match(phantomAi, /data-phantombot-chatgpt-account[\s\S]*pf\.settings\.tab\.v1[\s\S]*bridge/u, "The PhantomBot account-switch action must open ChatGPT Bridge settings.");
 assert.match(pageWorker, /const SKIP_PAGES = new Set\(\[[\s\S]*"phantomai"[\s\S]*\]\);/u, "PhantomBot must skip the generic page-intelligence prompt because chat is the native primary surface.");
 assert.doesNotMatch(index, /data-chatbox-toggle/u, "Phantom Console minimize belongs inside the rendered header, not stranded in static markup.");
 assert.match(index, /data-dashboard-brief-title/u, "Dashboard must keep a data-backed business brief.");

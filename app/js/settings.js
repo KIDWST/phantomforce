@@ -1,13 +1,13 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260728-68";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260728-68";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260728-68";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260728-68";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260728-68";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260728-68";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260728-68";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260728-69";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260728-69";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260728-69";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260728-69";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260728-69";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260728-69";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260728-69";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -106,6 +106,25 @@ let agentAssistBridgeStatus = {
   error: null,
   status: null,
 };
+let chatGptAccountMessage = "";
+
+async function openChatGptAccountPage(action = "switch") {
+  const url = action === "logout" ? "https://chatgpt.com/auth/logout" : "https://chatgpt.com/";
+  try {
+    if (window.PhantomBotDesktop?.openExternal) {
+      const result = await window.PhantomBotDesktop.openExternal(url);
+      if (result?.ok === false) throw new Error(result.error || "Could not open ChatGPT.");
+    } else {
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) throw new Error("Your browser blocked the ChatGPT window.");
+    }
+    chatGptAccountMessage = action === "logout"
+      ? "ChatGPT sign-out opened. Return here, choose Switch / add account, then refresh the bridge."
+      : "ChatGPT opened. Use its account menu to switch or add an account, then return and refresh the bridge.";
+  } catch (error) {
+    chatGptAccountMessage = error instanceof Error ? error.message : "Could not open ChatGPT account controls.";
+  }
+}
 
 const PROVIDER_MODES = [
   { id: "smart", name: "Phantom Hybrid", note: "Phantom routes across the allowed brain lanes and falls back when a lane is unavailable." },
@@ -833,6 +852,17 @@ function renderChatGptBridgeTab() {
           <b>${setupRequired ? "Bridge is not executable yet" : "Bridge adapter is callable"}</b>
           <span>${esc(status.subscription_billing_note || "ChatGPT app subscriptions and OpenAI API usage are separate billing paths. PhantomForce never stores a ChatGPT password.")}</span>
         </div>
+        <p class="set-label">ChatGPT subscription account</p>
+        <article class="set-bridge-card is-ready">
+          <b>Change the account used by the bridge</b>
+          <i>ChatGPT-managed sign-in</i>
+          <span>Open ChatGPT’s account menu to switch between signed-in accounts or add another subscription account. Accounts, billing, chats, and usage limits remain separate.</span>
+          <div class="record-actions">
+            <button class="btn" type="button" data-chatgpt-account="switch">Switch / add account</button>
+            <button class="btn btn-quiet" type="button" data-chatgpt-account="logout">Log out of ChatGPT</button>
+          </div>
+          ${chatGptAccountMessage ? `<span class="set-status-pill">${esc(chatGptAccountMessage)}</span>` : ""}
+        </article>
         <p class="set-label">Setup options</p>
         <div class="set-bridge-grid">
           ${options.map((item) => `
@@ -1335,6 +1365,12 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const bridgeRefresh = el.querySelector("[data-agent-assist-refresh]");
   if (bridgeRefresh) bridgeRefresh.onclick = () => refreshAgentAssistBridge(el, opts);
+  el.querySelectorAll("[data-chatgpt-account]").forEach((button) => {
+    button.onclick = async () => {
+      await openChatGptAccountPage(button.dataset.chatgptAccount);
+      if (el.isConnected) renderOperatorSettings(el, opts);
+    };
+  });
 
   el.querySelectorAll("[data-ai-field]").forEach((field) => {
     field.onchange = () => {

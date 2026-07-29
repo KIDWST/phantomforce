@@ -14,12 +14,12 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260726-67";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260726-67";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260726-67";
-import { esc } from "./workspaces.js?v=phantom-live-20260726-67";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260726-67";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260726-67";
+} from "./store.js?v=phantom-live-20260728-69";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260728-69";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260728-69";
+import { esc } from "./workspaces.js?v=phantom-live-20260728-69";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260728-69";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260728-69";
 
 const TABS = ["chat", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -432,6 +432,7 @@ function assistantTurnHtml(message, messageIndex) {
         </div>
       </article>`;
   }
+  const accountLimit = message.error && /usage limit|quota|rate limit|too many requests|429|subscription limit/i.test(String(message.say || ""));
   return `
     <article class="phantombot-turn is-assistant ${message.error ? "is-error" : ""}">
       <div class="phantombot-avatar"><img src="/app/assets/brand-phantom-favicon.png" alt="" /></div>
@@ -440,6 +441,7 @@ function assistantTurnHtml(message, messageIndex) {
         <p class="phantomai-chat-reply">${esc(message.say)}</p>
         ${operatorTimelineHtml(message.operator)}
         ${message.background ? `<p class="phantomai-chat-status">The task is still running. Results will stay attached to this workspace.</p>` : ""}
+        ${accountLimit ? `<div class="record-actions"><button class="btn" type="button" data-phantombot-chatgpt-account data-open-ws="settings">Switch ChatGPT account</button></div>` : ""}
         ${(message.media || []).map(chatMediaHtml).join("")}
         ${(message.cards || []).map((card, cardIndex) => chatCardHtml(card, cardIndex, messageIndex)).join("")}
         <footer class="phantombot-turn-actions">
@@ -883,7 +885,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260726-67")
+  import("./brain.js?v=phantom-live-20260728-69")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }
@@ -926,6 +928,9 @@ function bindRootActions(root) {
     if (button.matches("[data-phantombot-stop]")) {
       stopRunningRequest();
       return;
+    }
+    if (button.matches("[data-phantombot-chatgpt-account]")) {
+      try { localStorage.setItem("pf.settings.tab.v1", "bridge"); } catch {}
     }
     if (button.dataset.phantombotTask) {
       activateTask(button.dataset.phantombotTask);

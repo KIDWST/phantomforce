@@ -3,8 +3,8 @@
    with the same caching/honest-empty-state idiom as organizationpulse.js.
    Never fabricates a scan result: shows "not yet scanned" until a real
    scan has actually run and been persisted server-side. */
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260728-68";
-import { createLatestOperation } from "./product-grammar.js?v=phantom-live-20260728-68";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260728-69";
+import { createLatestOperation } from "./product-grammar.js?v=phantom-live-20260728-69";
 
 const STATUS_TTL_MS = 45_000;
 const statusRequest = createLatestOperation("security-monitor-status");

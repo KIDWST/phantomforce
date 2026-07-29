@@ -7,8 +7,8 @@
  * and its OAuth/Hermes bridge machinery — no media generation.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260728-68";
-import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260728-68";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260728-69";
+import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260728-69";
 
 const SOCIAL_LOGIN_URLS = {
   instagram: "https://www.instagram.com/accounts/login/",

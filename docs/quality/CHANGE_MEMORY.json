@@ -1191,6 +1191,36 @@
           "description": "The deleted game cannot return through flagship server registration."
         }
       ]
+    },
+    {
+      "id": "phantombot-chatgpt-account-switching",
+      "status": "active",
+      "title": "PhantomBot provides a recovery path when a ChatGPT account reaches its limit",
+      "ownerDecision": "ChatGPT Bridge settings must offer Switch / add account and Log out actions through ChatGPT-managed authentication without collecting passwords. PhantomBot usage-limit errors must link directly to those controls so the operator can change subscription accounts and refresh the bridge.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/settings.js",
+          "pattern": "data-chatgpt-account=\"switch\"[\\s\\S]*Switch / add account[\\s\\S]*data-chatgpt-account=\"logout\"[\\s\\S]*Log out of ChatGPT",
+          "description": "ChatGPT Bridge settings expose both account switching and logout."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "PhantomBotDesktop[?]\\.openExternal[\\s\\S]*window\\.open",
+          "description": "Account controls open ChatGPT's own authentication surface in desktop and browser shells."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "usage limit\\|quota\\|rate limit\\|too many requests\\|429\\|subscription limit[\\s\\S]*data-phantombot-chatgpt-account",
+          "description": "Usage-limit failures provide an immediate account-switch recovery action."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/settings.js",
+          "pattern": "chatgpt_password|ChatGPT password.*input",
+          "description": "PhantomForce must never collect or store a ChatGPT password."
+        }
+      ]
     }
   ]
 }

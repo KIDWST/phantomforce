@@ -6,9 +6,9 @@
 import {
   store, isAdmin, isOwnerOperator, session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260728-68";
-import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260728-68";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260728-68";
+} from "./store.js?v=phantom-live-20260728-69";
+import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260728-69";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260728-69";
 
 const LAST_DOMAIN_KEY = "pf.analytics.lastDomain.v1";
 const CUSTOM_SOURCES_KEY = "pf.analytics.customSources.v1";

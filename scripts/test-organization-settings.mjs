@@ -33,6 +33,12 @@ assert.match(settings, /OPENAI_API_KEY/u,
   "Settings must expose the OpenAI API key setup path without capturing secrets.");
 assert.match(settings, /Do not paste ChatGPT passwords here/u,
   "Settings must forbid ChatGPT password capture.");
+assert.match(settings, /data-chatgpt-account="switch"[\s\S]*Switch \/ add account/u,
+  "ChatGPT Bridge settings must offer a direct account-switch action.");
+assert.match(settings, /data-chatgpt-account="logout"[\s\S]*Log out of ChatGPT/u,
+  "ChatGPT Bridge settings must offer a direct logout action.");
+assert.match(settings, /window\.PhantomBotDesktop\?\.openExternal[\s\S]*window\.open/u,
+  "ChatGPT account controls must work in both PhantomBot desktop and browser settings.");
 assert.match(settings, /data-agent-assist-refresh/u,
   "Settings must let the owner refresh bridge status.");
 assert.match(settings, /renderOrganizationPanel\(organizationMount, opts\)/u,
