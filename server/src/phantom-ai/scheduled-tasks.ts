@@ -1,4 +1,4 @@
-/* PhantomForce — deferred / recurring scheduled-task registry.
+/* PhantomBot — deferred / recurring PhantomForce scheduled-task registry.
 
    This is the canonical, native way to say "recheck / resync in N hours".
    It exists so that agents (Claude, Codex) and PhantomForce code NEVER
@@ -9,7 +9,7 @@
    local n8n webhook.
 
    Rule of thumb for agents: if you ever wanted to "wake yourself up in N
-   hours to recheck X", register a scheduled task here instead. Deterministic
+   hours to recheck X", hand it to PhantomBot here instead. Deterministic
    steps run for free on the tick; the only time a paid model should ever be
    involved is a single on-demand call made *inside* the n8n workflow this
    task triggers — never a background agent left open.

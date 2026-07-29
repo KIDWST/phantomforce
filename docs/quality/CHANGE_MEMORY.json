@@ -1221,6 +1221,41 @@
           "description": "PhantomForce must never collect or store a ChatGPT password."
         }
       ]
+    },
+    {
+      "id": "phantombot-automation-control-plane",
+      "status": "active",
+      "title": "PhantomBot owns PhantomForce internal and workspace automations",
+      "ownerDecision": "Automations are managed inside PhantomBot rather than as a separate top-level application. PhantomBot owns the native scheduler, run-now controls, approvals, logs, and receipts. Legacy Automation routes redirect into PhantomBot. A Codex schedule may be removed only after an equivalent PhantomBot-native job is verified, so migration never silently drops real work.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "data-phantomai-tab=\"automations\"[\\s\\S]*data-phantombot-automations-mount",
+          "description": "PhantomBot contains the automation control-plane surface."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "const TABS = \\[\"chat\", \"automations\", \"memory\", \"activity\"\\][\\s\\S]*renderAutomation\\(mount\\)",
+          "description": "PhantomBot routes to and mounts the real automation workspace."
+        },
+        {
+          "file": "server/src/phantom-ai/automation-engine.ts",
+          "pattern": "actor_user_id: \"phantombot-automation-engine\"[\\s\\S]*model_id: \"phantombot-automation-engine\"",
+          "description": "Internal automation receipts identify PhantomBot as the runner."
+        },
+        {
+          "file": "server/src/phantom-ai/automation-engine.ts",
+          "pattern": "id: \"phantomstore-live-route-guard\"[\\s\\S]*cadence: \"hourly\"",
+          "description": "The former Codex PhantomStore route guard has a native hourly PhantomBot replacement."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "\\{ id: \"automation\",\\s+label: \"Automations\"",
+          "description": "Automations cannot regress into a separate top-level application."
+        }
+      ]
     }
   ]
 }

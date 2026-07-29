@@ -1,7 +1,7 @@
-/* PhantomForce — autonomous automation engine.
+/* PhantomBot — autonomous PhantomForce automation engine.
    Real, scheduled (daily/weekly/monthly), toggle-on/off jobs that read live
    system state (rembg, ai-proxy, PhantomCut, the tool registry, the access
-   database when one is configured) and log an honest result to the Hermes
+   database when one is configured) and log an honest result to the durable
    ledger every time they run. Every job here is read-only/prep-only: none
    of them send, post, pay, publish, or call a paid provider — a job that
    can't verify something real reports that honestly instead of guessing.
@@ -36,6 +36,7 @@ const STATE_FILE = path.join(STATE_DIR, "state.json");
 const TICK_MS = 10 * 60 * 1000;
 
 const CADENCE_MS = {
+  hourly: 60 * 60 * 1000,
   daily: 22 * 60 * 60 * 1000,
   weekly: 6.5 * 24 * 60 * 60 * 1000,
   monthly: 27 * 24 * 60 * 60 * 1000,
@@ -215,6 +216,40 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
           ? `PhantomCut media lane reachable at ${phantomCutBaseUrl()}.`
           : `PhantomCut media lane unreachable at ${phantomCutBaseUrl()}.`,
         next_action: res.ok ? "No action needed." : "Start the PhantomCut bridge or set PHANTOMCUT_BASE_URL.",
+      };
+    },
+  },
+  {
+    id: "phantomstore-live-route-guard",
+    name: "PhantomStore Live Route Guard",
+    category: "health",
+    cadence: "hourly",
+    description: "Checks the live source identity, PhantomStore client wiring/assets, and the authenticated API route without mutating the deployment.",
+    benefit: "Keeps PhantomStore route drift and stale-deployment failures visible inside PhantomBot.",
+    output: "Proof-logged source, asset, and API route status.",
+    setup_fields: ["local PhantomForce service", "PhantomStore assets"],
+    approval_required: false,
+    external_action: false,
+    run: async () => {
+      const appRoot = path.join(process.cwd(), "app");
+      const [mainSource, storeSource, coverSource] = await Promise.all([
+        readFile(path.join(appRoot, "js", "main.js"), "utf8").catch(() => ""),
+        readFile(path.join(appRoot, "js", "phantomstore.js"), "utf8").catch(() => ""),
+        readFile(path.join(appRoot, "assets", "phantomstore", "phantombot-cover.svg"), "utf8").catch(() => ""),
+      ]);
+      const wired = /renderPhantomStore/.test(mainSource) && /phantomstore/i.test(storeSource);
+      const assetReady = coverSource.length > 100;
+      const baseUrl = String(process.env.PHANTOMFORCE_INTERNAL_BASE_URL || `http://127.0.0.1:${process.env.PORT || 5177}`).replace(/\/+$/u, "");
+      const [health, api] = await Promise.all([
+        fetchJsonWithTimeout(`${baseUrl}/health`),
+        fetchJsonWithTimeout(`${baseUrl}/api/phantomstore`),
+      ]);
+      const apiAcceptable = api.ok || api.status === 401 || api.status === 403;
+      const ok = health.ok && wired && assetReady && apiAcceptable;
+      return {
+        ok,
+        summary: `Health ${health.ok ? "ok" : `failed (${health.status || "network"})`}; client wiring ${wired ? "ok" : "missing"}; cover asset ${assetReady ? "ok" : "missing"}; API ${apiAcceptable ? `reachable (${api.status || 200})` : `failed (${api.status || "network"})`}.`,
+        next_action: ok ? "No action needed." : "Review the live source checkout and PhantomStore route before changing proxy configuration.",
       };
     },
   },
@@ -677,13 +712,13 @@ async function executeJob(job: AutomationJobDefinition): Promise<{ last_run_at: 
     timestamp: now,
     tenant_id: "phantomforce-admin",
     business_name: "PhantomForce",
-    actor_user_id: "system-automation-engine",
+    actor_user_id: "phantombot-automation-engine",
     actor_role: "platform_admin",
     request_id: randomUUID(),
     task_type: `automation:${job.category}:${job.id}`,
     sensitivity_level: "low",
     provider_route: "mock",
-    model_id: "phantom-automation-engine",
+    model_id: "phantombot-automation-engine",
     context_chars: 0,
     estimated_tokens: 0,
     estimated_cost_usd: 0,

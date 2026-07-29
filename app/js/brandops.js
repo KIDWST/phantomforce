@@ -1,18 +1,17 @@
-/* PhantomForce — Automation workspace.
-   A standalone system: automations are real user-created workflow records
-   that run independently of any other feature. Vacation Mode (its own
-   first-class page) can lean on automations while it's active, but this
-   page never renders vacation-specific UI — that would blur two different
-   products into one confusing surface. Customer/brand context belongs in
-   the real Memory/Hermes notes layer; this file renders only real,
+/* PhantomBot — Automation control plane.
+   Automations are real user-created workflow records and internal scheduled
+   jobs owned by PhantomBot. Vacation Mode can lean on automations while it
+   is active, but it never owns or duplicates their schedules.
+   Customer/brand context belongs in the real Memory/Hermes notes layer;
+   this file renders only real,
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260728-69";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260728-70";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260728-69";
+} from "./content-ideas.js?v=phantom-live-20260728-70";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -32,12 +31,23 @@ function authHeaders(extra = {}) {
   return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
+function friendlyBackendError(status, area) {
+  if (status === 401 || status === 403) {
+    return area === "automations"
+      ? "Sign in to load automation jobs."
+      : "Sign in to load the run engine.";
+  }
+  return area === "automations"
+    ? `Automation request failed (${status}).`
+    : `Run engine request failed (${status}).`;
+}
+
 async function fetchAutopilotJobs() {
   try {
     const r = await fetch("/phantom-ai/automations", { headers: authHeaders() });
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok) return { ok: true, jobs: d.jobs };
-    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+    return { ok: false, error: friendlyBackendError(r.status, "automations") };
   } catch {
     return { ok: false, error: "Could not reach the automation engine." };
   }
@@ -51,7 +61,7 @@ async function toggleAutopilotJob(id, enabled) {
       body: JSON.stringify({ enabled }),
     });
     const d = await r.json().catch(() => null);
-    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: friendlyBackendError(r.status, "automations") };
   } catch {
     return { ok: false, error: "Could not reach the automation engine." };
   }
@@ -61,7 +71,7 @@ async function runAutopilotJobNow(id) {
   try {
     const r = await fetch(`/phantom-ai/automations/${encodeURIComponent(id)}/run`, { method: "POST", headers: authHeaders() });
     const d = await r.json().catch(() => null);
-    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: friendlyBackendError(r.status, "automations") };
   } catch {
     return { ok: false, error: "Could not reach the automation engine." };
   }
@@ -76,7 +86,7 @@ const AUTOPILOT_CATEGORY_LABEL = {
   crm: "CRM discovery",
   outreach: "Outreach prep",
 };
-const AUTOPILOT_CADENCE_LABEL = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
+const AUTOPILOT_CADENCE_LABEL = { hourly: "Hourly", daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 
 const AGENT_STATE = {
   active: { label: "ON", cls: "on" },
@@ -449,7 +459,7 @@ async function fetchAgentRunsData() {
       return { ok: true, operations: ops.operations, runs: runsPayload.runs };
     }
     const status = !opsRes.ok ? opsRes.status : runsRes.status;
-    return { ok: false, error: status === 401 || status === 403 ? "This session isn't authorized for the run engine." : `Run engine request failed (${status}).` };
+    return { ok: false, error: friendlyBackendError(status, "runs") };
   } catch {
     return { ok: false, error: "Could not reach the run engine." };
   }
@@ -644,7 +654,7 @@ export function renderAutomation(el, opts = {}) {
 
   el.innerHTML = `
     <div class="au">
-      <div class="bm-note au-note"><i></i>Tell Phantom about your business — website, store, emails, CRM/source, offer, audience, and competitors — so automations use the right data from day one.</div>
+      <div class="bm-note au-note"><i></i>Configured automations live here. PhantomBot is the control plane for PhantomForce internals and workspace automations. Schedules, approvals, run-now controls, logs, and receipts stay together here.</div>
       <div class="au-summary" aria-label="Automation summary">
         <span><b>${count}</b><i>Configured</i></span>
         <span><b>${running}</b><i>On</i></span>

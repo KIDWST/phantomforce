@@ -14,14 +14,15 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260728-69";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260728-69";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260728-69";
-import { esc } from "./workspaces.js?v=phantom-live-20260728-69";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260728-69";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260728-69";
+} from "./store.js?v=phantom-live-20260728-70";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260728-70";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260728-70";
+import { esc } from "./workspaces.js?v=phantom-live-20260728-70";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260728-70";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260728-70";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260728-70";
 
-const TABS = ["chat", "memory", "activity"];
+const TABS = ["chat", "automations", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
 const MAX_TASKS = 30;
 const MAX_MESSAGES = 80;
@@ -885,7 +886,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260728-69")
+  import("./brain.js?v=phantom-live-20260728-70")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }
@@ -896,6 +897,13 @@ function mountActivityTab() {
     mount.dataset.mounted = "1";
     mountAgentConsole(mount);
   }
+}
+
+function mountAutomationsTab() {
+  const mount = pane("automations")?.querySelector("[data-phantombot-automations-mount]");
+  if (!mount || mount.dataset.mounted) return;
+  mount.dataset.mounted = "1";
+  renderAutomation(mount);
 }
 
 export function activatePhantomAiTab(tab) {
@@ -912,6 +920,7 @@ export function activatePhantomAiTab(tab) {
     if (button.getAttribute("role") === "tab") button.setAttribute("aria-selected", active ? "true" : "false");
   });
   if (tab === "chat") mountChatTab();
+  if (tab === "automations") mountAutomationsTab();
   if (tab === "memory") mountMemoryTab();
   if (tab === "activity") mountActivityTab();
 }

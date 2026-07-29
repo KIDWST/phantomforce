@@ -48,6 +48,7 @@
     "test:stripe-billing": "node scripts/test-stripe-billing.mjs && npm run test:stripe-billing --workspace @phantomforce/server",
     "test:change-memory": "node scripts/guard-change-memory.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
+    "test:automation-workspace": "node scripts/test-automation-workspace.mjs",
     "test:phantombot-desktop": "npm test --workspace @phantomforce/phantombot-desktop",
     "test:phantombot-operator": "npm run test:hermes-acp-transport --workspace @phantomforce/server && npm run test:hermes-acp-operator --workspace @phantomforce/server && npm run test:hermes-engineering-tools --workspace @phantomforce/server && npm run test:hermes-operator-stream --workspace @phantomforce/server && npm run test:hermes-ecosystem-knowledge --workspace @phantomforce/server && npm run test:phantom-capability-registry --workspace @phantomforce/server",
     "test:game-visuals": "node scripts/test-game-runtime-visuals.mjs",
