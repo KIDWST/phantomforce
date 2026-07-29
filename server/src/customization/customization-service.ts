@@ -33,11 +33,7 @@ export type ValidationIssue = { path: string; message: string; severity: "error"
 
 function defaultModuleEnabled(moduleId: string, tenantId: string) {
   if (moduleId === "developer") return tenantId === "phantomforce-owner" || tenantId === "phantomforce";
-  // Migration rule: existing configuration documents keep their current
-  // PhantomPlay setting. Only newly created/reset organization configs start
-  // with PhantomPlay disabled so business workspaces never see games unless an
-  // owner deliberately enables the optional module.
-  if (moduleId === "phantomplay") return false;
+  if (moduleId === "phantomplay") return true;
   return true;
 }
 
@@ -67,7 +63,7 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
       roles: module.allowedRoles.includes("platform_owner")
         ? ["owner"]
         : module.allowedRoles,
-      accessMode: module.id === "phantomplay" ? "owner_only" : "entire_organization",
+      accessMode: "entire_organization",
       allowedMemberIds: [],
       activityEnabled: false,
       challengesEnabled: false,
@@ -222,6 +218,18 @@ function repairStoredConfiguration(configuration: OrganizationConfiguration): Or
        back office — narrow any config still carrying the older, wider
        manager/member roles down to the current registry default. */
     .map((module) => {
+      if (module.id === "phantomplay") {
+        const roles = ["owner", "admin", "manager", "member", "client"] as const;
+        if (module.enabled && module.accessMode === "entire_organization" && roles.every((role) => module.roles.includes(role))) return module;
+        repaired = true;
+        return {
+          ...module,
+          enabled: true,
+          roles,
+          accessMode: "entire_organization" as const,
+          allowedMemberIds: [],
+        };
+      }
       if (module.id !== "crm") return module;
       if (!module.roles.some((role) => role === "manager" || role === "member")) return module;
       repaired = true;
@@ -241,7 +249,7 @@ function repairStoredConfiguration(configuration: OrganizationConfiguration): Or
         ? (["owner"] as const)
         : registryModule.allowedRoles.filter((role): role is "owner" | "admin" | "manager" | "member" | "client" =>
           ["owner", "admin", "manager", "member", "client"].includes(role)),
-      accessMode: registryModule.id === "phantomplay" ? "owner_only" : "entire_organization",
+      accessMode: "entire_organization",
       allowedMemberIds: [],
       activityEnabled: false,
       challengesEnabled: false,

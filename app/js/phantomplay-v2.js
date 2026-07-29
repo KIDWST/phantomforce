@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260728-70";
+} from "./store.js?v=phantom-live-20260729-86";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const mobilePlaySurface = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -224,7 +224,7 @@ function card(game, opts = {}) {
       <p class="pp2-dev">by ${esc(game.developer)}${opts.note ? ` · <i>${esc(opts.note)}</i>` : ""}</p>
       <p class="pp2-summary">${esc(game.summary)}</p>
       ${history?.canContinue ? `<div class="pp2-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
-      <div class="pp2-card-actions"><button type="button" class="pp2-play" ${launchable ? `data-pp2-play="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`}>${launchable ? playLabel : "Plan locked"}</button>${game.devModeAvailable ? `<button type="button" class="pp-devsandbox-card-open" ${launchable ? `data-pp2-devsandbox-card-open="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`} aria-label="Launch Dev Mode for ${esc(game.title)}" title="Launch this game in full sandboxed Dev Mode">⚡<b>Dev Mode</b></button><button type="button" class="pp-devsandbox-code-open" ${launchable ? `data-pp2-devsandbox-code-open="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`} aria-label="Open code workbench for ${esc(game.title)}" title="Open code and mod menu without launching the game">⌘<i></i></button>` : ""}${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
+      <div class="pp2-card-actions"><button type="button" class="pp2-play" ${launchable ? `data-pp2-play="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`}>${launchable ? playLabel : "Sign in to play"}</button>${game.devModeAvailable ? `<button type="button" class="pp-devsandbox-card-open" ${launchable ? `data-pp2-devsandbox-card-open="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`} aria-label="Launch Dev Mode for ${esc(game.title)}" title="Launch this game in full sandboxed Dev Mode">⚡<b>Dev Mode</b></button><button type="button" class="pp-devsandbox-code-open" ${launchable ? `data-pp2-devsandbox-code-open="${esc(game.id)}"` : `data-pp2-session-required="${esc(game.id)}"`} aria-label="Open code workbench for ${esc(game.title)}" title="Open code and mod menu without launching the game">⌘<i></i></button>` : ""}${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     </div>
   </article>`;
 }
@@ -256,7 +256,7 @@ function renderHome() {
   const friendNotes = {};
   for (const item of d?.friendsPlaying || []) friendNotes[item.gameId] = `${item.label} is playing`;
   return `<div class="pp2-home">
-    ${hero ? `<section class="pp2-hero"><div class="pp2-hero-art">${art(hero)}</div><div class="pp2-hero-copy"><p class="pp2-kicker">FEATURED</p><h1>${esc(hero.title)}</h1><p>${esc(hero.summary)}</p><div><button class="pp2-play" ${canLaunchGames() ? `data-pp2-play="${esc(hero.id)}"` : `data-pp2-session-required="${esc(hero.id)}"`}>${canLaunchGames() ? "Play now" : "Plan locked"}</button><button class="pp2-ghost" data-pp2-open="${esc(hero.id)}">Game page</button></div></div></section>` : ""}
+    ${hero ? `<section class="pp2-hero"><div class="pp2-hero-art">${art(hero)}</div><div class="pp2-hero-copy"><p class="pp2-kicker">FEATURED</p><h1>${esc(hero.title)}</h1><p>${esc(hero.summary)}</p><div><button class="pp2-play" ${canLaunchGames() ? `data-pp2-play="${esc(hero.id)}"` : `data-pp2-session-required="${esc(hero.id)}"`}>${canLaunchGames() ? "Play now" : "Sign in to play"}</button><button class="pp2-ghost" data-pp2-open="${esc(hero.id)}">Game page</button></div></div></section>` : ""}
     ${row("Continue playing", continuing, "Pick up exactly where you left off — saves follow your profile.")}
     ${d ? row("Friends playing now", viewerPlayGames(mapIds(d.friendsPlaying)), "", friendNotes) : ""}
     ${d ? row("Trending this week", viewerPlayGames(mapIds(d.trending)), "Ranked by real plays across this workspace.") : ""}
@@ -1043,7 +1043,7 @@ function render() {
   const view = { home: renderHome, solo: renderSolo, friends: renderFriends, workspace: renderWorkspace, library: renderLibrary, developer: renderDeveloper, submit: renderDeveloper, admin: renderAdmin }[ui.tab] || renderSolo;
   mountedRoot.innerHTML = `<div class="pp2-shell">
     <header class="pp2-top"><div><p class="pp2-kicker">PHANTOMFORCE ENTERTAINMENT</p><h1>PhantomPlay</h1><span>Work hard. Take a real break. Come back sharper.</span></div>
-      <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button><button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
+      <div class="pp2-top-right"><span class="pp2-access ${snapshot.access.enabled ? "is-on" : "is-off"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Sign in required"}</span><button class="pp2-ghost" data-pp2-settings aria-label="Play settings">Settings</button><button class="pp2-ghost" data-pp2-classic title="Return to the classic PhantomPlay experience">Classic view</button></div></header>
     ${ui.offline ? `<div class="pp2-banner"><b>Local Play mode</b><span>Games are available locally right now. Cloud saves, rooms, submissions, reviews, and analytics will reconnect when the PhantomPlay sync lane answers.</span><button data-pp2-retry>Re-check sync</button></div>` : ""}
     ${!ui.offline && ui.error ? `<div class="pp2-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp2-retry>Retry</button></div>` : ""}
     <nav class="pp2-tabs" aria-label="PhantomPlay experiences">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp2-tab="${id}">${esc(label)}</button>`).join("")}</nav>

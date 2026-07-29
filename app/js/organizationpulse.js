@@ -1,10 +1,36 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260728-70";
-import { createLatestOperation, normalizeOperationStatus } from "./product-grammar.js?v=phantom-live-20260728-70";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260729-86";
+import { createLatestOperation, normalizeOperationStatus } from "./product-grammar.js?v=phantom-live-20260729-86";
 
 const PULSE_TTL_MS = 45_000;
 const BRAIN_CONTRACT_TTL_MS = 45_000;
 const pulseRequest = createLatestOperation("organization-pulse");
 const brainRequest = createLatestOperation("brain-contract");
+
+function pulseCurtainText(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/phantomcut.+(?:unreachable|offline|failed)/i.test(text)) return "Media creation is reconnecting.";
+  return text
+    .replace(/\b(?:https?|wss?):\/\/(?:127\.0\.0\.1|localhost|\[?::1\]?)(?::\d+)?(?:\/[^\s),;]*)?/gi, "the local service")
+    .replace(/\b(?:127\.0\.0\.1|localhost)(?::\d+)\b/gi, "the local service")
+    .replace(/\bbackend\b/gi, "workspace service")
+    .replace(/\bprovider\b/gi, "service")
+    .replace(/\bOAuth\b/gi, "account connection")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function pulseWorkflowTitle(job = {}) {
+  const name = String(job.name || "").trim();
+  if (/phantomcut|media.+health/i.test(name)) return "Media creation needs attention";
+  return name ? `Workflow needs attention: ${pulseCurtainText(name)}` : "Workflow needs attention";
+}
+
+function pulseSignalTitle(signal = {}) {
+  const title = pulseCurtainText(signal.title || "Business signal");
+  if (/platform automation failing|automation failing/i.test(title)) return "Workflow needs attention";
+  return title;
+}
 
 const state = {
   tenant: "",
@@ -192,8 +218,8 @@ export function brainContractAttentionItems(contract = cachedBrainContract()) {
   }).slice(0, 6).map((signal) => ({
     icon: signalIcon(signal),
     tone: signalTone(signal),
-    title: signal.title || "Business signal",
-    sub: signal.recommendedAction?.label || signal.whatHappened || "Review the signal",
+    title: pulseSignalTitle(signal),
+    sub: pulseCurtainText(signal.recommendedAction?.label || signal.whatHappened || "Review the signal"),
     open: signal.recommendedAction?.route || "analytics",
     signal,
   }));
@@ -216,7 +242,7 @@ export function pulseAttentionItems(pulse = cachedOrganizationPulse()) {
         icon: "check",
         tone: "warn",
         title: `${plural(growth.pendingWorkspaceApprovals, "approval")} waiting`,
-        sub: "Server-backed workspace approvals",
+        sub: "Workspace approvals",
         open: "approvals",
       });
     }
@@ -263,8 +289,8 @@ export function pulseAttentionItems(pulse = cachedOrganizationPulse()) {
     automations.failing?.slice(0, 2).forEach((job) => items.push({
       icon: "auto",
       tone: "warn",
-      title: `Automation failing: ${job.name}`,
-      sub: job.lastSummary || "Open Automations",
+      title: pulseWorkflowTitle(job),
+      sub: pulseCurtainText(job.lastSummary || "Open workflows"),
       open: "automation",
     }));
   }

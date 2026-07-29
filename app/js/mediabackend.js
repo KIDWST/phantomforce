@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260728-70";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260728-70";
+import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260729-86";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260729-86";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -310,5 +310,16 @@ export async function fetchSyncedAssetFile(id) {
     return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
   } catch {
     return { ok: false, error: "Could not reach the sync backend." };
+  }
+}
+
+export async function listMediaGenerationJobs() {
+  try {
+    const r = await fetchWithTimeout(`/api/media-generation/jobs?tenant_id=${encodeURIComponent(currentTenantId())}`, { headers: authHeaders() }, 12000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d?.ok && Array.isArray(d.jobs)) return { ok: true, jobs: d.jobs };
+    return { ok: false, jobs: [], error: d?.error || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, jobs: [], error: "Generation history is offline." };
   }
 }

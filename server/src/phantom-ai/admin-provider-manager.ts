@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
-import { getAgentAssistBridgeStatus } from "./agent-assist-bridge.js";
+import { checkAgentAssistBridgeHealth, getAgentAssistBridgeStatus } from "./agent-assist-bridge.js";
 import { sanitizeProviderDetail } from "./provider-error.js";
 
 export type AdminProviderId = "codex_cli" | "claude_cli" | "chatgpt_bridge" | "openrouter_glm" | "local_ollama";
@@ -82,7 +82,7 @@ function quotaFromFailure(detail: string): AdminProviderQuota {
 function publicProviderMeta(providerId: AdminProviderId): { display_id: PublicAdminProviderId; display_name: string } {
   if (providerId === "codex_cli") return { display_id: "private", display_name: "Private" };
   if (providerId === "claude_cli") return { display_id: "claude", display_name: "Claude" };
-  if (providerId === "chatgpt_bridge") return { display_id: "chatgpt", display_name: "ChatGPT" };
+  if (providerId === "chatgpt_bridge") return { display_id: "chatgpt", display_name: "ChatGPT Bridge" };
   if (providerId === "openrouter_glm") return { display_id: "openrouter", display_name: "OpenRouter" };
   return { display_id: "local", display_name: "Local" };
 }
@@ -220,12 +220,14 @@ async function checkProvider(providerId: AdminProviderId) {
   }
   if (providerId === "chatgpt_bridge") {
     const status = getAgentAssistBridgeStatus();
+    if (!status.executable) {
+      return { online: false, latencyMs: 0, detail: "ChatGPT bridge is not configured." };
+    }
+    const health = await checkAgentAssistBridgeHealth(5000);
     return {
-      online: status.executable,
-      latencyMs: 0,
-      detail: status.executable
-        ? "User-owned ChatGPT assist adapter is callable."
-        : "ChatGPT bridge is relay-only until the local adapter env is configured.",
+      online: health.executable,
+      latencyMs: health.latency_ms ?? 0,
+      detail: health.detail,
     };
   }
   const baseUrl = process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434";

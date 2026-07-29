@@ -103,7 +103,8 @@ assert.ok(siteStudioSource.includes("workspaceStorageGetItem(CONTENT_ASSETS_KEY)
 assert.ok(siteStudioSource.includes("data-ss-direct-form"), "selected website regions must support direct manual editing.");
 assert.ok(siteStudioSource.includes("Preview before applying"), "AI website edits must show a proposal diff before mutation.");
 assert.ok(siteStudioSource.includes("data-ss-compare"), "saved website versions must support comparison before restore.");
-assert.ok(siteStudioSource.includes("Launch readiness"), "Website Builder must expose explicit launch readiness.");
+assert.ok(siteStudioSource.includes("Unconfigured settings") && siteStudioSource.includes("Ready to publish"), "Website Builder must expose compact launch readiness states.");
+assert.equal(/<details class="ss-readiness"[^>]*open/u.test(siteStudioSource), false, "Launch readiness must not auto-expand over the website editor.");
 assert.ok(siteStudioSource.includes("data-act=\"ss-connect-domain\""), "server-backed sites must expose domain connection.");
 assert.ok(siteStudioSource.includes("data-act=\"ss-rollback-live\""), "verified deployments must expose rollback when a prior version exists.");
 assert.equal(siteStudioSource.includes("Load current code"), false, "the old oversized load-code affordance should not return.");

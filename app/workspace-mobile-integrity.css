@@ -189,6 +189,9 @@
   }
 
   .workspace-page[data-workspace-page="phantomstore"] .ps-shell,
+  .workspace-page[data-workspace-page="phantomstore"] .ps-spotlight,
+  .workspace-page[data-workspace-page="phantomstore"] .ps-spotlight-copy,
+  .workspace-page[data-workspace-page="phantomstore"] .ps-spotlight-panel,
   .workspace-page[data-workspace-page="phantomstore"] .ps-product-grid,
   .workspace-page[data-workspace-page="phantomstore"] .ps-product,
   .workspace-page[data-workspace-page="phantomstore"] .ps-product > * {
@@ -202,6 +205,32 @@
     min-width: 0;
     max-width: 100%;
     overflow: visible;
+  }
+
+  .workspace-page[data-workspace-page="analytics"] .an-domain-shell,
+  .workspace-page[data-workspace-page="analytics"] .an-domain-picker,
+  .workspace-page[data-workspace-page="analytics"] .an-domain-controls,
+  .workspace-page[data-workspace-page="analytics"] [data-analytics-domain-root],
+  .workspace-page[data-workspace-page="analytics"] .an,
+  .workspace-page[data-workspace-page="analytics"] .ch-card,
+  .workspace-page[data-workspace-page="analytics"] .ch-bars {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .workspace-page[data-workspace-page="analytics"] .ch-bar-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .workspace-page[data-workspace-page="analytics"] .ch-bar-lab,
+  .workspace-page[data-workspace-page="analytics"] .ch-bar-val {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 }
 

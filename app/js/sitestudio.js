@@ -2,15 +2,15 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney, workspaceStorageGetItem,
-} from "./store.js?v=phantom-live-20260728-70";
+} from "./store.js?v=phantom-live-20260729-86";
 import {
   esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
   SITE_TEMPLATES, applySiteTemplate, cadenceSuffix,
-} from "./workspaces.js?v=phantom-live-20260728-70";
+} from "./workspaces.js?v=phantom-live-20260729-86";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun, fetchServerSites,
   addServerSiteDomain, verifyServerSiteDomain, rollbackServerSite,
-} from "./orgs.js?v=phantom-live-20260728-70";
+} from "./orgs.js?v=phantom-live-20260729-86";
 
 const siteUi = {
   activeSiteId: null, device: "desktop", selectedSection: -1,
@@ -726,11 +726,11 @@ function siteReadinessMarkup(site) {
   const readiness = websiteReadiness(site, isDatabaseSession());
   const firstBlocker = readiness.checks.find((check) => !check.pass);
   return `
-    <details class="ss-readiness" ${readiness.ready ? "" : "open"}>
-      <summary>
-        <span>Launch readiness</span>
+    <details class="ss-readiness ${readiness.ready ? "is-ready" : "is-warning"}">
+      <summary title="${esc(readiness.ready ? "Ready to publish" : firstBlocker?.fix || "Review unconfigured settings")}">
+        <span aria-hidden="true">${readiness.ready ? "✓" : "!"}</span>
+        <i>${readiness.ready ? "Ready to publish" : "Unconfigured settings"}</i>
         <b>${readiness.passed}/${readiness.total}</b>
-        <i>${readiness.ready ? "Ready for verified publish" : esc(firstBlocker?.fix || "Review required")}</i>
       </summary>
       <div>
         ${readiness.checks.map((check) => `
@@ -797,40 +797,49 @@ function shellMarkup(active, sites, products) {
   const domain = siteDomain(active);
   return `
     <section class="ss-simple">
-      <header class="ss-simple-top">
-        <div class="ss-simple-switcher">
-          <select data-ss-switch aria-label="Website">
-            ${sites.map((site) => `<option value="${site.id}" ${site.id === active.id ? "selected" : ""}>${esc(siteOptionLabel(site))}</option>`).join("")}
-          </select>
-          <span>${sites.length} website${sites.length === 1 ? "" : "s"}</span>
-        </div>
-        <div class="ss-simple-actions">
-          <details class="ss-template-picker">
-            <summary>Templates</summary>
-            <div>${Object.values(SITE_TEMPLATES).map((template) => `<button type="button" data-ss-template="${esc(template.id)}">${esc(template.label)}</button>`).join("")}</div>
-          </details>
-          <button class="btn btn-quiet" type="button" data-act="ss-new-site">New website</button>
-          <button class="btn btn-quiet" type="button" data-act="ss-remove-site" data-id="${esc(active.id)}">Delete</button>
-        </div>
-      </header>
+      <details class="ss-project-settings">
+        <summary>
+          <span aria-hidden="true">◇</span>
+          <div><b>${esc(active.title)}</b><i>${esc(domain || "Domain not connected")}</i></div>
+          <em>Website settings</em>
+        </summary>
+        <div class="ss-project-settings-body">
+          <header class="ss-simple-top">
+            <div class="ss-simple-switcher">
+              <select data-ss-switch aria-label="Website">
+                ${sites.map((site) => `<option value="${site.id}" ${site.id === active.id ? "selected" : ""}>${esc(siteOptionLabel(site))}</option>`).join("")}
+              </select>
+              <span>${sites.length} website${sites.length === 1 ? "" : "s"}</span>
+            </div>
+            <div class="ss-simple-actions">
+              <details class="ss-template-picker">
+                <summary>Templates</summary>
+                <div>${Object.values(SITE_TEMPLATES).map((template) => `<button type="button" data-ss-template="${esc(template.id)}">${esc(template.label)}</button>`).join("")}</div>
+              </details>
+              <button class="btn btn-quiet" type="button" data-act="ss-new-site">New website</button>
+              <button class="btn btn-quiet" type="button" data-act="ss-remove-site" data-id="${esc(active.id)}">Delete</button>
+            </div>
+          </header>
 
-      <div class="ss-simple-sites" aria-label="Websites">
-        ${sites.map((site) => `
-          <button class="ss-simple-site ${site.id === active.id ? "is-active" : ""}" type="button" data-ss-site="${esc(site.id)}">
-            <b>${esc(site.title)}</b>
-            <span>${esc(siteDomain(site) || "No domain yet")}</span>
-          </button>`).join("")}
-      </div>
+          <div class="ss-simple-sites" aria-label="Websites">
+            ${sites.map((site) => `
+              <button class="ss-simple-site ${site.id === active.id ? "is-active" : ""}" type="button" data-ss-site="${esc(site.id)}">
+                <b>${esc(site.title)}</b>
+                <span>${esc(siteDomain(site) || "No domain yet")}</span>
+              </button>`).join("")}
+          </div>
 
-      <div class="ss-simple-domain">
-        <form data-ss-domain-form>
-          <label>
-            <span>Domain</span>
-            <input data-ss-domain value="${esc(domain)}" placeholder="yourdomain.com" />
-          </label>
-          <button class="btn btn-quiet" type="submit">Save domain</button>
-        </form>
-      </div>
+          <div class="ss-simple-domain">
+            <form data-ss-domain-form>
+              <label>
+                <span>Domain</span>
+                <input data-ss-domain value="${esc(domain)}" placeholder="yourdomain.com" />
+              </label>
+              <button class="btn btn-quiet" type="submit">Save domain</button>
+            </form>
+          </div>
+        </div>
+      </details>
 
       <div class="ss-editbar">
         <div class="ss-modebar" role="tablist" aria-label="Website tools">

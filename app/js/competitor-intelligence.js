@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, isLiveAdminHost, session } from "./store.js?v=phantom-live-20260728-70";
+import { currentTenantId, friendlyBackendError, isLiveAdminHost, session } from "./store.js?v=phantom-live-20260729-86";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [["radar", "Radar"], ["competitors", "Competitors"], ["sources", "Sources & settings"]];
@@ -13,7 +13,7 @@ const SIGNAL_LABELS = {
 };
 const GAP_TYPES = [["question", "Ignored question"], ["complaint", "Weakly handled complaint"], ["pricing", "Pricing confusion"], ["feature", "Desired feature"], ["trust", "Trust concern"], ["segment", "Underserved segment"], ["objection", "Purchase objection"]];
 const EVENT_TYPES = ["Price increase", "Product discontinuation", "Negative feedback spike", "New feature launch", "Rebrand", "Service outage", "Geographic expansion", "Audience shift", "Major campaign", "New subscription tier", "Policy change", "Public limitation"];
-const ui = { tab: "radar", radarWidget: "board", loading: true, error: "", notice: "", authRequired: false, snapshot: null, signalQuery: "", competitorFilter: "all", editingProfile: false, busy: "", selectedCompetitor: "" };
+const ui = { tab: "radar", radarWidget: "board", loading: true, error: "", notice: "", authRequired: false, snapshot: null, signalQuery: "", competitorFilter: "all", editingProfile: false, busy: "", selectedCompetitor: "", embedded: false };
 let root = null;
 
 function authHeaders(json = false) {
@@ -142,39 +142,76 @@ function metrics() {
   return `<section class="ci-metrics"><article><b>${Number(m.competitors || 0)}</b><span>Tracked competitors</span></article><article><b>${Number(m.signals || 0)}</b><span>Public signals</span></article><article><b>${Number(m.marketMovers || 0)}</b><span>Live movers</span></article><article class="${m.blockedRequests ? "is-alert" : ""}"><b>${Number(m.blockedRequests || 0)}</b><span>Blocked requests</span></article></section>`;
 }
 function marketMap() {
-  const board = (ui.snapshot.marketBoard || []).slice(0, 12);
+  const board = (ui.snapshot.marketBoard || []).slice(0, 30);
   if (!board.length) return "";
   const position = (item, index) => {
     const seed = hashValue(`${item.name}:${item.domain}`);
-    const angle = (index / Math.max(1, board.length)) * Math.PI * 2 - Math.PI / 2;
-    const ring = 28 + (index % 3) * 13 + (seed % 7);
+    const angle = index * 2.399963 - Math.PI / 2;
+    const ring = 19 + Math.sqrt(index + 1) * 9.2 + (seed % 6);
     return {
-      x: Math.max(9, Math.min(91, Math.round((50 + Math.cos(angle) * ring * 0.84) * 10) / 10)),
-      y: Math.max(11, Math.min(89, Math.round((50 + Math.sin(angle) * ring * 0.55) * 10) / 10)),
+      x: Math.max(7, Math.min(93, Math.round((50 + Math.cos(angle) * ring * 0.88) * 10) / 10)),
+      y: Math.max(8, Math.min(92, Math.round((50 + Math.sin(angle) * ring * 0.62) * 10) / 10)),
     };
   };
+  const positioned = board.map((item, index) => ({ item, ...position(item, index) }));
   const heatSpots = [
     { x: 50, y: 50, size: 34, tone: "phantom" },
-    ...board.map((item, index) => ({ ...position(item, index), size: Math.max(20, Math.min(42, Number(item.score || 50) * 0.46)), tone: threatClass(item) })),
+    ...positioned.map(({ item, x, y }) => ({ x, y, size: Math.max(16, Math.min(34, Number(item.score || 50) * 0.38)), tone: threatClass(item) })),
   ];
-  return `<section class="ci-market-map" aria-label="Competitor market map">
-    <div class="ci-map-copy">
-      <h4 class="ci-sub">Live market map</h4>
-      <p>Node size follows each competitor's score. Starter scores are modeled from category position — add public sources to turn the radar into live evidence.</p>
-      <div class="ci-map-legend"><span>Red = direct competitor</span><span>Amber = heat rising</span><span>Green = adjacent</span></div>
-    </div>
+  const links = positioned.flatMap((node, index) => {
+    const lines = [`<line x1="50" y1="50" x2="${node.x}" y2="${node.y}" class="is-${esc(threatClass(node.item))}"></line>`];
+    const next = positioned[(index + 1) % positioned.length];
+    if (next && (node.item.category === next.item.category || index % 3 === 0)) {
+      lines.push(`<line x1="${node.x}" y1="${node.y}" x2="${next.x}" y2="${next.y}" class="is-peer"></line>`);
+    }
+    return lines;
+  }).join("");
+  return `<section class="ci-market-map" aria-label="Interactive competitor market map">
     <div class="ci-map-stage">
       <div class="ci-map-heat" aria-hidden="true">${heatSpots.map((spot) => `<i class="is-${esc(spot.tone)}" style="--hx:${spot.x}%;--hy:${spot.y}%;--hs:${spot.size}vmin"></i>`).join("")}</div>
       <div class="ci-map-rings" aria-hidden="true"></div>
+      <svg class="ci-map-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${links}</svg>
       <div class="ci-map-node is-phantom" style="--x:50%;--y:50%;--size:84px" title="Your position on the map — not a scored competitor"><strong>PF</strong><span>PhantomForce</span></div>
-      ${board.map((item, index) => {
-        const { x, y } = position(item, index);
-        return `<button class="ci-map-node is-${esc(nodeVector(item))} is-threat-${esc(threatClass(item))} ${directThreat(item) ? "is-direct" : ""} ${item.sourceState === "starter" ? "is-starter" : ""}" type="button" data-ci-focus-competitor="${esc(item.competitorId)}" style="--x:${x}%;--y:${y}%;--size:${Math.max(44, Math.min(72, Number(item.score || 50)))}px">
+      ${positioned.map(({ item, x, y }) => {
+        return `<button class="ci-map-node is-${esc(nodeVector(item))} is-threat-${esc(threatClass(item))} ${directThreat(item) ? "is-direct" : ""} ${item.sourceState === "starter" ? "is-starter" : ""} ${ui.selectedCompetitor === item.competitorId ? "is-selected" : ""}" type="button" data-ci-focus-competitor="${esc(item.competitorId)}" aria-label="${esc(item.name)}, score ${Number(item.score || 0)}" title="${esc(item.name)} · ${esc(item.category)} · ${Number(item.score || 0)}" style="--x:${x}%;--y:${y}%;--size:${Math.max(42, Math.min(70, Number(item.score || 50)))}px">
           <strong>${esc(item.symbol)}</strong><span>${esc(item.name)}</span><b>${Number(item.score || 0)}</b>
         </button>`;
       }).join("")}
+      <div class="ci-map-legend"><span class="is-direct">Direct</span><span class="is-hot">Rising</span><span class="is-adjacent">Adjacent</span></div>
     </div>
   </section>`;
+}
+
+function moverTicker() {
+  const movers = ui.snapshot.marketMovers || {};
+  const items = [
+    ...(movers.risers || []).slice(0, 4).map((item) => ({ ...item, lane: "Riser" })),
+    ...(movers.fallers || []).slice(0, 4).map((item) => ({ ...item, lane: "Faller" })),
+    ...(movers.watchlist || []).slice(0, 4).map((item) => ({ ...item, lane: "Watch" })),
+  ];
+  const fallback = (ui.snapshot.marketBoard || []).slice(0, 8).map((item) => ({ ...item, lane: "Watch" }));
+  const stream = items.length ? items : fallback;
+  if (!stream.length) return "";
+  return `<div class="ci-wire-ticker" aria-label="Market movers">
+    <span class="ci-wire-mark">PHANTOMWIRE</span>
+    <div>${stream.map((item) => `<button type="button" data-ci-focus-competitor="${esc(item.competitorId)}" class="is-${esc(movementTone(item))}" title="${esc(item.movementReason || item.tip || item.name)}"><small>${esc(item.lane)}</small><b>${esc(item.name)}</b><strong>${esc(deltaLabel(item.movementDelta))}</strong>${sparkline(item.sparkline, movementTone(item))}</button>`).join("")}</div>
+  </div>`;
+}
+
+function selectedMapDetail() {
+  const board = ui.snapshot.marketBoard || [];
+  const item = board.find((entry) => entry.competitorId === ui.selectedCompetitor);
+  if (!item) return `<aside class="ci-map-detail is-empty"><span>SELECT A NODE</span><b>Explore the market</b><small>Hover for a snapshot. Click for the full signal.</small></aside>`;
+  const starter = item.sourceState === "starter";
+  return `<aside class="ci-map-detail">
+    <header><span>${esc(momentumLabel(item.momentum))}</span><b>${esc(item.name)}</b><strong>${Number(item.score || 0)}</strong></header>
+    ${sparkline(item.sparkline, movementTone(item))}
+    <p>${esc(item.movementReason || item.whatItIs || item.tip)}</p>
+    <div>${(item.movementDrivers || []).slice(0, 3).map((driver) => `<i class="is-${esc(driver.tone)}">${esc(driver.label)}</i>`).join("")}</div>
+    ${starter
+      ? `<button class="ci-primary" data-ci-track-starter="${esc(item.competitorId)}">Track competitor</button>`
+      : `<button class="ci-primary" data-ci-open-details="${esc(item.competitorId)}">See more details</button>`}
+  </aside>`;
 }
 function clusterBars() {
   const charts = ui.snapshot.autoScout?.charts || [];
@@ -243,11 +280,16 @@ function radar() {
   const s = ui.snapshot;
   const auto = s.autoScout || {};
   const widget = RADAR_WIDGETS.some(([id]) => id === ui.radarWidget) ? ui.radarWidget : "board";
-  return `${viewHead("MARKET RADAR", auto.headline || "Where the market is moving")}
-    <div class="ci-context"><b>${esc(contextLine())}</b>${auto.sourceNote ? `<span>${esc(auto.sourceNote)}</span>` : ""}</div>
-    ${metrics()}${marketMovers()}${marketMap()}
-    <nav class="ci-radar-widgets" aria-label="Competitor views">${RADAR_WIDGETS.map(([id, label]) => `<button type="button" class="${widget === id ? "is-active" : ""}" data-ci-widget="${id}">${label}</button>`).join("")}</nav>
-    <section class="ci-radar-panel">${radarWidgetPanel()}</section>`;
+  return `<section class="ci-radar-hero">
+    <header class="ci-radar-head">
+      <div><p class="ci-kicker">MARKET RADAR</p><h3>${esc(auto.headline || "Live competitive field")}</h3></div>
+      <div class="ci-radar-stat">${metrics()}</div>
+    </header>
+    ${moverTicker()}
+    <div class="ci-map-frame">${marketMap()}${selectedMapDetail()}</div>
+    <nav class="ci-radar-widgets" aria-label="Competitor views">${RADAR_WIDGETS.map(([id, label]) => `<button type="button" class="${widget === id ? "is-active" : ""}" data-ci-widget="${id}" title="${esc(label)}" aria-label="${esc(label)}"><span>${id === "board" ? "⌖" : id === "movers" ? "↕" : id === "pressure" ? "◫" : id === "opportunities" ? "◇" : "∿"}</span><b>${esc(label)}</b></button>`).join("")}</nav>
+    ${widget === "board" ? "" : `<section class="ci-radar-panel">${radarWidgetPanel()}</section>`}
+  </section>`;
 }
 
 /* ---------------------------- Competitors view ---------------------------- */
@@ -392,7 +434,7 @@ function bindForm(selector, path, success, transform = (value) => value) {
   root.querySelector(selector)?.addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; const button = form.querySelector('button[type="submit"], button:not([type])'); if (button) button.disabled = true; const ok = await run(path, transform(formBody(form)), success); if (ok) form.reset(); if (button) button.disabled = false; });
 }
 function bind() {
-  root.querySelectorAll("[data-ci-tab]").forEach((button) => button.addEventListener("click", () => { ui.tab = button.dataset.ciTab; ui.notice = ""; ui.error = ""; render(); root.scrollIntoView({ behavior: "smooth", block: "start" }); }));
+  root.querySelectorAll("[data-ci-tab]").forEach((button) => button.addEventListener("click", () => { ui.tab = button.dataset.ciTab; ui.notice = ""; ui.error = ""; render(); if (!ui.embedded) root.scrollIntoView({ behavior: "smooth", block: "start" }); }));
   root.querySelectorAll("[data-ci-widget]").forEach((button) => button.addEventListener("click", () => { ui.radarWidget = button.dataset.ciWidget; render(); }));
   root.querySelector("[data-ci-retry]")?.addEventListener("click", () => refresh());
   root.querySelector("[data-ci-login]")?.addEventListener("click", () => { window.location.href = "/app/index.html"; });
@@ -400,11 +442,14 @@ function bind() {
   root.querySelectorAll("[data-ci-fuse]").forEach((button) => button.addEventListener("click", () => run("/api/competitor-intelligence/fuse", { competitorId: button.dataset.ciFuse }, "Public signals fused into labeled estimates.")));
   root.querySelectorAll("[data-ci-select]").forEach((button) => button.addEventListener("click", () => { ui.selectedCompetitor = button.dataset.ciSelect; render(); }));
   root.querySelectorAll("[data-ci-focus-competitor]").forEach((button) => button.addEventListener("click", () => {
-    const card = [...root.querySelectorAll("[data-ci-card]")].find((item) => item.dataset.ciCard === button.dataset.ciFocusCompetitor);
-    if (!card) return;
-    card.scrollIntoView({ behavior: "smooth", block: "center" });
-    card.classList.add("is-pulsing");
-    window.setTimeout(() => card.classList.remove("is-pulsing"), 1200);
+    ui.selectedCompetitor = button.dataset.ciFocusCompetitor;
+    ui.radarWidget = "board";
+    render();
+  }));
+  root.querySelectorAll("[data-ci-open-details]").forEach((button) => button.addEventListener("click", () => {
+    ui.selectedCompetitor = button.dataset.ciOpenDetails;
+    ui.tab = "competitors";
+    render();
   }));
   root.querySelectorAll("[data-ci-track-starter]").forEach((button) => button.addEventListener("click", () => {
     const item = starterCompetitor(button.dataset.ciTrackStarter);
@@ -445,5 +490,5 @@ function bind() {
 }
 
 export function renderCompetitorIntelligence(target, options = {}) {
-  root = target; ui.tab = "radar"; ui.editingProfile = false; ui.busy = ""; ui.selectedCompetitor = ""; refresh();
+  root = target; ui.tab = "radar"; ui.radarWidget = "board"; ui.editingProfile = false; ui.busy = ""; ui.selectedCompetitor = ""; ui.embedded = !!options.embedded; refresh();
 }

@@ -1,4 +1,4 @@
-import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260728-70";
+import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260729-86";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -6,6 +6,12 @@ let activeVersions = [];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const CANONICAL_MODULES = {
+  phantomplay: {
+    label: "PhantomPlay",
+    roles: ["owner", "admin", "manager", "member", "client"],
+    forceEnabled: true,
+    accessMode: "entire_organization",
+  },
   intelligence: {
     label: "Competitor Intel",
     roles: ["owner", "admin", "manager", "member", "client"],
@@ -21,6 +27,7 @@ function normalizedModuleState(module, moduleId) {
     label: canonical.label,
     enabled: canonical.forceEnabled ? true : module?.enabled !== false,
     roles,
+    accessMode: canonical.accessMode || module?.accessMode || "entire_organization",
   };
 }
 
@@ -136,6 +143,7 @@ function roleForCustomization(role = "owner") {
 
 export function canAccessConfiguredModule(moduleId, role = "owner") {
   if (!activeConfiguration) return true;
+  if (moduleId === "phantomplay") return true;
   const module = normalizedModuleState(activeConfiguration.modules.find((item) => item.id === moduleId), moduleId);
   if (!module) return true;
   if (!module.enabled) return false;
@@ -175,7 +183,10 @@ export function applyOrganizationCustomization(configuration = activeConfigurati
 
 export function customizeNavigation(baseItems, role = "owner") {
   if (internalAdminSurface()) return baseItems;
-  if (!activeConfiguration) return baseItems.filter((item) => item.optionalModule !== true);
+  // Keep built-in modules visible until an organization configuration arrives.
+  // Hiding optional modules here made PhantomPlay disappear whenever auth or
+  // customization loading was delayed, even though its route was available.
+  if (!activeConfiguration) return baseItems;
   const states = new Map(activeConfiguration.modules.map((module) => [module.id, module]));
   return baseItems
     .filter((item) => {
@@ -271,7 +282,7 @@ function renderStudio(el, state, opts) {
       <div><p class="cust-kicker">WORKSPACE STUDIO</p><h2>Make PhantomForce fit this business.</h2><p>Change the workspace above the security boundary. Preview first, publish when it looks right, and restore any earlier version.</p></div>
       <div class="cust-scope"><span>Editing</span><b>${esc(draft.brand.organizationName)}</b><i>Version ${draft.version} · Powered by PhantomForce</i></div>
     </section>
-    ${draft.localFallback ? `<div class="cust-message">Workspace Studio is using local defaults while the backend reconnects. Modules are available now; publishing waits for the server.</div>` : ""}
+    ${draft.localFallback ? `<div class="cust-message">Workspace Studio is using local defaults while the workspace reconnects. Modules remain available; publishing will resume automatically.</div>` : ""}
     ${message ? `<div class="cust-message">${esc(message)}</div>` : ""}
     <section class="cust-ai">
       <div><p class="cust-kicker">ASK PHANTOM</p><h3>Describe the workspace you want.</h3><p>Try “Change Leads to Athletes,” “Use #4422ee,” or “Make the assistant more professional.”</p></div>

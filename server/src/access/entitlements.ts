@@ -60,11 +60,9 @@ export type PlanDefinition = {
   limits: PlanLimits;
 };
 
-/* Internal development plans. Names are placeholders — final pricing and
-   packaging are a business decision, not invented here.
-
-   Customer-facing tiers are Free / Pro / Elite (the `name` field). The
-   `key` values (starter/professional/elite) stay as-is on purpose — they're
+/* Stable plan records. Customer-facing tiers are Basic / Pro / Elite. Legacy
+   records remain resolvable for existing organizations but are not offered in
+   customer plan selection. The `key` values stay as-is on purpose — they're
    the stable DB identifier synced into the Plan table and referenced by
    OrgPlan.planKey, so renaming a key would orphan the old row and silently
    re-point any already-assigned org onto whatever PLAN_DEFINITIONS[0]
@@ -73,9 +71,9 @@ export type PlanDefinition = {
 export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     key: "free",
-    name: "Free Preview",
-    description: "Try the workspace with small limits before choosing a paid plan.",
-    isInternal: false,
+    name: "Legacy Preview",
+    description: "Compatibility record for workspaces created before Basic replaced the preview tier.",
+    isInternal: true,
     trialDays: 0,
     graceDays: 0,
     features: {
@@ -89,8 +87,8 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   },
   {
     key: "starter",
-    name: "Starter",
-    description: "Entry plan for a single small business.",
+    name: "Basic",
+    description: "The complete starting workspace for one organization.",
     isInternal: false,
     trialDays: 14,
     graceDays: 7,
@@ -106,7 +104,7 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   {
     key: "professional",
     name: "Pro",
-    description: "Growing business: publishing, vacation coverage, more seats.",
+    description: "More capacity, publishing, intelligence, and team operations.",
     isInternal: false,
     trialDays: 14,
     graceDays: 7,
@@ -121,9 +119,9 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   },
   {
     key: "developer",
-    name: "Developer",
-    description: "Builder-focused workspace for product/game/plugin development without Elite business-ops limits.",
-    isInternal: false,
+    name: "Legacy Developer",
+    description: "Compatibility record for the former developer payment tier. Workspace type now controls developer layout.",
+    isInternal: true,
     trialDays: 14,
     graceDays: 7,
     features: {
@@ -153,9 +151,9 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   },
   {
     key: "developer_elite",
-    name: "Developer + Elite",
-    description: "Full Elite operator access plus the expanded developer/game submission envelope for builders.",
-    isInternal: false,
+    name: "Legacy Developer + Elite",
+    description: "Compatibility record for the former combined developer payment tier.",
+    isInternal: true,
     trialDays: 14,
     graceDays: 14,
     features: {
@@ -169,9 +167,9 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
   },
   {
     key: "enterprise",
-    name: "Enterprise",
-    description: "Custom limits negotiated per contract; manual overrides expected.",
-    isInternal: false,
+    name: "Legacy Enterprise",
+    description: "Compatibility record for contract workspaces; not offered in self-service billing.",
+    isInternal: true,
     trialDays: 30,
     graceDays: 30,
     features: {
@@ -202,8 +200,8 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
 ];
 
 const DEFAULT_PLAN_KEY = "starter";
-const CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set(["free", "professional", "developer", "elite", "developer_elite"]);
-const FREE_VIEW_ONLY_PLAN_KEYS = new Set(["free", "starter"]);
+const CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set(["starter", "professional", "elite"]);
+const FREE_VIEW_ONLY_PLAN_KEYS = new Set(["free"]);
 const FULL_ACCESS_PLAN_KEYS = new Set(["elite", "developer_elite", "enterprise", "internal"]);
 
 function forceFullAccessFeatures(features: PlanFeatures): PlanFeatures {

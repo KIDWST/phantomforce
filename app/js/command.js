@@ -12,10 +12,10 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260728-70";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260728-70";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260728-70";
-import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260728-70";
+} from "./store.js?v=phantom-live-20260729-86";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260729-86";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260729-86";
+import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260729-86";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -87,13 +87,31 @@ function loadRuntimeAiSettings() {
   }
 }
 
+const KIMI_OLLAMA_MODEL_IS_OPT_IN = true;
+const KIMI_OLLAMA_MODEL_IDS = new Set(["kimi-k3-hf", "kimi-k3-hf:latest"]);
 const PROVIDER_TO_BACKEND = {
   claude: "claude_cli",
   private: "co" + "dex_cli",
   chatgpt: "chatgpt_bridge",
+  kimi: "local_ollama",
   openrouter: "openrouter_glm",
   local: "local_ollama",
 };
+
+function selectedLocalModel(settings) {
+  const configured = String(settings?.models?.local || "").trim();
+  return configured || "local-auto";
+}
+
+function localSelectionUsesKimi(settings, providerId = "local") {
+  return providerId === "local"
+    && settings?.providerMode !== "smart"
+    && KIMI_OLLAMA_MODEL_IDS.has(selectedLocalModel(settings));
+}
+
+function effectiveProviderId(settings, providerId) {
+  return localSelectionUsesKimi(settings, providerId) ? "kimi" : providerId;
+}
 
 const PRIVATE_BACKEND_MODEL_BY_ALIAS = Object.freeze({
   "private-fast": "gpt-5.5-instant",
@@ -162,7 +180,15 @@ function isAdvisoryChatRequest(raw, intent) {
 }
 
 function isActionFreeModelRequest(raw, intent) {
-  return isInstantChatRequest(raw, intent) || isReasoningChatRequest(raw, intent) || isAdvisoryChatRequest(raw, intent);
+  return isInstantChatRequest(raw, intent) || isReasoningChatRequest(raw, intent) || isAdvisoryChatRequest(raw, intent) || isLiveDataChatRequest(raw, intent);
+}
+
+function isLiveDataChatRequest(raw, intent) {
+  const text = String(raw || "").trim();
+  if (!text || intent.primaryIntent !== "question" || !intent.needsLiveData) return false;
+  if (intent.requiresAdminApproval || intent.shouldCreateTask || intent.shouldCreateAutomation) return false;
+  if (text.length > 1200 || countWords(text) > 180) return false;
+  return true;
 }
 
 function shouldUseDeepReasoning(raw, intent) {
@@ -172,6 +198,7 @@ function shouldUseDeepReasoning(raw, intent) {
 function providerIdForRequest(settings, intent, deepReasoning = false) {
   const selected = selectedProviderIds(settings);
   if (settings.providerMode !== "smart") return selected.includes(settings.provider) ? settings.provider : selected[0];
+  if ((deepReasoning || ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent)) && selected.includes("chatgpt")) return "chatgpt";
   if ((deepReasoning || ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent)) && selected.includes("claude")) return "claude";
   if (selected.includes("private")) return "private";
   return selected[0];
@@ -180,6 +207,7 @@ function providerIdForRequest(settings, intent, deepReasoning = false) {
 function modelLaneForProvider(providerId) {
   if (providerId === "claude") return "claude_cli";
   if (providerId === "chatgpt") return "chatgpt_bridge";
+  if (providerId === "kimi") return "local_ollama";
   if (providerId === "openrouter") return "glm_5_2";
   if (providerId === "local") return "local_ollama";
   return "private";
@@ -188,17 +216,36 @@ function modelLaneForProvider(providerId) {
 function providerForRequest(providerId) {
   if (providerId === "openrouter") return "openrouter_glm";
   if (providerId === "chatgpt") return "chatgpt_bridge";
+  if (providerId === "kimi") return "local_ollama";
   return "phantom";
 }
 
 function selectedModelForProvider(settings, providerId, routeProfile = null) {
+  if (providerId === "kimi") return selectedLocalModel(settings);
+  if (providerId === "local" && localSelectionUsesKimi(settings, providerId)) return selectedLocalModel(settings);
   if (providerId === "local" && ["instant", "reasoning", "advisory"].includes(routeProfile?.tier)) return INSTANT_CHAT_MODEL;
+  if (providerId === "chatgpt") {
+    if (routeProfile?.tier === "instant") return "chatgpt-instant";
+    if (routeProfile?.tier === "deep" || routeProfile?.tier === "mission") return "chatgpt-deep";
+    if (["reasoning", "advisory", "standard"].includes(routeProfile?.tier)) return "chatgpt-standard";
+  }
   const configured = settings.models?.[providerId];
   if (configured) return providerId === "private" ? (PRIVATE_BACKEND_MODEL_BY_ALIAS[configured] || configured) : configured;
   const cfg = loadPhantomLaneConfig();
   const lane = cfg.lanes?.[providerId];
   const model = lane?.model || getPhantomLaneTarget(providerId).models?.[0] || "";
   return providerId === "private" ? (PRIVATE_BACKEND_MODEL_BY_ALIAS[model] || model || "gpt-5.5") : model;
+}
+
+function thoughtProviderIdForRequest(settings, normalProviderId) {
+  const selected = selectedProviderIds(settings);
+  if (normalProviderId === "kimi") return "kimi";
+  if (normalProviderId === "chatgpt" || (settings.providerMode === "smart" && selected.includes("chatgpt"))) return "chatgpt";
+  return "local";
+}
+
+function maxProviderMsForThoughtProvider(providerId) {
+  return providerId === "local" ? REASONING_CHAT_MAX_PROVIDER_MS : null;
 }
 
 function allowedProvidersForSettings(settings, routeProfile = null) {
@@ -213,7 +260,24 @@ function allowedProvidersForSettings(settings, routeProfile = null) {
 
 function chatRouteProfileForRequest(raw, intent, settings) {
   const deepReasoning = shouldUseDeepReasoning(raw, intent);
-  const normalProviderId = providerIdForRequest(settings, intent, deepReasoning);
+  const selectedProviderId = providerIdForRequest(settings, intent, deepReasoning);
+  const normalProviderId = effectiveProviderId(settings, selectedProviderId);
+  if (isLiveDataChatRequest(raw, intent)) {
+    const selected = selectedProviderIds(settings);
+    const providerId = settings.brainMode !== "local" && settings.providerMode === "smart"
+      ? "chatgpt"
+      : selected.includes("chatgpt")
+        ? "chatgpt"
+        : normalProviderId;
+    return {
+      tier: "instant",
+      providerId,
+      requestedModel: selectedModelForProvider(settings, providerId, { tier: "instant" }),
+      allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
+      allowFallback: false,
+      maxProviderMs: providerId === "chatgpt" ? null : INSTANT_CHAT_MAX_PROVIDER_MS,
+    };
+  }
   if (isInstantChatRequest(raw, intent)) {
     const providerId = settings.providerMode === "smart" ? "local" : normalProviderId;
     /* One fast attempt, then the server's deterministic local responder.
@@ -229,23 +293,29 @@ function chatRouteProfileForRequest(raw, intent, settings) {
     };
   }
   if (isReasoningChatRequest(raw, intent)) {
+    const providerId = thoughtProviderIdForRequest(settings, normalProviderId);
     return {
       tier: "reasoning",
-      providerId: "local",
-      requestedModel: INSTANT_CHAT_MODEL,
-      allowedProviders: [PROVIDER_TO_BACKEND.local],
+      providerId,
+      requestedModel: providerId === "local"
+        ? INSTANT_CHAT_MODEL
+        : selectedModelForProvider(settings, providerId, { tier: "reasoning" }),
+      allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
       allowFallback: false,
-      maxProviderMs: REASONING_CHAT_MAX_PROVIDER_MS,
+      maxProviderMs: maxProviderMsForThoughtProvider(providerId),
     };
   }
   if (isAdvisoryChatRequest(raw, intent)) {
+    const providerId = thoughtProviderIdForRequest(settings, normalProviderId);
     return {
       tier: "advisory",
-      providerId: "local",
-      requestedModel: INSTANT_CHAT_MODEL,
-      allowedProviders: [PROVIDER_TO_BACKEND.local],
+      providerId,
+      requestedModel: providerId === "local"
+        ? INSTANT_CHAT_MODEL
+        : selectedModelForProvider(settings, providerId, { tier: "advisory" }),
+      allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
       allowFallback: false,
-      maxProviderMs: REASONING_CHAT_MAX_PROVIDER_MS,
+      maxProviderMs: maxProviderMsForThoughtProvider(providerId),
     };
   }
   return {
@@ -368,16 +438,112 @@ function buildContextModules(settings, raw, intent, recentConversation = recentC
   return modules;
 }
 
+function assistMode(routeTier) {
+  if (routeTier === "deep" || routeTier === "reasoning" || routeTier === "advisory") return "strategy";
+  return "instant";
+}
+
+function assistEffort(routeTier) {
+  if (routeTier === "deep" || routeTier === "reasoning" || routeTier === "advisory") return "deep";
+  if (routeTier === "standard") return "standard";
+  return "instant";
+}
+
+function requestedEffort(value) {
+  const effort = String(value || "").trim().toLowerCase();
+  if (effort === "deep") return "deep";
+  if (effort === "thinking" || effort === "standard") return "standard";
+  return effort === "instant" ? "instant" : "";
+}
+
+function routeProfileForEffort(raw, intent, settings, effortOverride = "") {
+  const routeProfile = chatRouteProfileForRequest(raw, intent, settings);
+  const effort = requestedEffort(effortOverride);
+  if (!effort) return routeProfile;
+  const tier = effort === "deep" ? "deep" : effort;
+  return {
+    ...routeProfile,
+    tier,
+    providerId: "chatgpt",
+    requestedModel: selectedModelForProvider(settings, "chatgpt", { tier }),
+    allowedProviders: [PROVIDER_TO_BACKEND.chatgpt],
+    allowFallback: false,
+    maxProviderMs: null,
+  };
+}
+
+async function askPhantomAssist(raw, intent, settings, routeProfile, signal, recentConversation, headers) {
+  const includeBusinessContext = needsBusinessContext(raw, intent);
+  const boundedConversation = Array.isArray(recentConversation) ? recentConversation.slice(-10) : [];
+  const contextModules = buildContextModules(settings, raw, intent, boundedConversation);
+  const context = [
+    `Workspace: ${wsName(currentWs())}`,
+    `Task type: ${intent.primaryIntent}`,
+    `Route tier: ${routeProfile.tier}`,
+    includeBusinessContext
+      ? "Use the bounded workspace context below when it is relevant."
+      : "This is general conversation; do not invent private workspace facts.",
+    ...contextModules.map((module) => [
+      `${module.module}: ${module.summary || ""}`,
+      ...(module.items || []).map((item) => `${item.title || ""}${item.status ? ` (${item.status})` : ""}${item.detail ? `: ${item.detail}` : ""}`),
+    ].join("\n")),
+  ].join("\n\n").slice(0, 5200);
+  const constraints = [
+    "Answer the user's request directly.",
+    "Do not claim tools or external actions ran unless a real receipt is present.",
+    "Do not expose hidden reasoning, tokens, credentials, cookies, or secrets.",
+    "Return only the answer that PhantomBot should display.",
+  ];
+  try {
+    const response = await fetch("/phantom-ai/respond", {
+      method: "POST",
+      headers,
+      signal,
+      body: JSON.stringify({
+        caller: "phantombot",
+        mode: assistMode(routeProfile.tier),
+        effort: assistEffort(routeProfile.tier),
+        task: String(raw || "").slice(0, 2200),
+        context,
+        constraints,
+        desired_output: "Return the complete answer PhantomBot should display to the user.",
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    const output = String(payload?.answer || "").trim();
+    if (!response.ok || payload?.ok !== true || !output) return null;
+    return {
+      say: output,
+      cards: [],
+      open: null,
+      intent,
+      hermes: {
+        route_tier: routeProfile.tier,
+        status: "complete",
+      },
+      skills: [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 /* Standard/deep backend chat can walk multiple providers before giving up.
    Instant chat is intentionally narrow: one fast model, short timeout, then
    fall back to the local responder instead of making the user wait. */
-async function askHermesBrain(raw, intent, settings) {
+async function askHermesBrain(raw, intent, settings, effortOverride = "") {
   if (typeof fetch !== "function" || typeof AbortController === "undefined") return null;
-  const routeProfile = chatRouteProfileForRequest(raw, intent, settings);
+  const routeProfile = routeProfileForEffort(raw, intent, settings, effortOverride);
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
-    routeProfile.tier === "instant" ? 6500 : ["reasoning", "advisory"].includes(routeProfile.tier) ? 16000 : 140000,
+    routeProfile.providerId === "chatgpt"
+      ? 240000
+      : routeProfile.tier === "instant"
+        ? 6500
+        : ["reasoning", "advisory"].includes(routeProfile.tier)
+          ? 16000
+          : 140000,
   );
   const token = typeof session?.token === "function" ? session.token() : "";
   const headers = { "Content-Type": "application/json" };
@@ -387,6 +553,9 @@ async function askHermesBrain(raw, intent, settings) {
   const recentConversation = recentChatTurns(10, raw);
   const includeBusinessContext = needsBusinessContext(raw, intent);
   try {
+    if (requestedProviderId === "chatgpt") {
+      return await askPhantomAssist(raw, intent, settings, routeProfile, controller.signal, recentConversation, headers);
+    }
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
       headers,
@@ -1682,7 +1851,7 @@ export async function handleInvoiceRequest(text, extraDraft = null) {
   }
 }
 
-export async function handleSmartCommand(raw) {
+export async function handleSmartCommand(raw, options = {}) {
   const text = (raw || "").trim();
   const intent = classifyPhantomIntent(text);
   const settings = loadRuntimeAiSettings();
@@ -1701,7 +1870,7 @@ export async function handleSmartCommand(raw) {
 
   const actionFreeConversation = isActionFreeModelRequest(text, intent);
   if (canAskHermes(text, intent, settings)) {
-    const backend = await askHermesBrain(text, intent, settings);
+    const backend = await askHermesBrain(text, intent, settings, options?.effort);
     if (backend) return backend;
   }
 

@@ -1,9 +1,9 @@
 {
   "name": "@phantomforce/phantombot-desktop",
-  "productName": "PhantomBot",
+  "productName": "PhantomForce OS",
   "version": "0.4.0",
   "private": true,
-  "description": "Native desktop shell for the existing Phantom AI operating intelligence.",
+  "description": "Native PhantomForce workspace integrating PhantomBot, Media Lab, PhantomPlay, and local execution.",
   "author": "PhantomForce",
   "license": "UNLICENSED",
   "main": "src/main.cjs",
@@ -17,8 +17,8 @@
   "config": {
     "forge": {
       "packagerConfig": {
-        "name": "PhantomBot",
-        "executableName": "PhantomBot",
+        "name": "PhantomForceOS",
+        "executableName": "PhantomForceOS",
         "asar": true,
         "overwrite": true,
         "ignore": [
@@ -29,9 +29,9 @@
         {
           "name": "@electron-forge/maker-squirrel",
           "config": {
-            "name": "phantombot_desktop",
+            "name": "phantomforce_os",
             "authors": "PhantomForce",
-            "description": "PhantomBot desktop operating intelligence"
+            "description": "PhantomForce OS desktop workspace"
           }
         }
       ]

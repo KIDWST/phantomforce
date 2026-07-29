@@ -24,13 +24,12 @@ type StripeBillingConfig = {
   prices: Record<string, Partial<Record<StripeBillingInterval, string>>>;
 };
 
-const CHECKOUT_PLAN_KEYS = ["professional", "developer", "elite", "developer_elite"] as const;
+const CHECKOUT_PLAN_KEYS = ["starter", "professional", "elite"] as const;
 
 const PRICE_ENV: Record<(typeof CHECKOUT_PLAN_KEYS)[number], Record<StripeBillingInterval, string>> = {
+  starter: { month: "STRIPE_PRICE_BASIC_MONTHLY", year: "STRIPE_PRICE_BASIC_YEARLY" },
   professional: { month: "STRIPE_PRICE_PRO_MONTHLY", year: "STRIPE_PRICE_PRO_YEARLY" },
-  developer: { month: "STRIPE_PRICE_DEVELOPER_MONTHLY", year: "STRIPE_PRICE_DEVELOPER_YEARLY" },
   elite: { month: "STRIPE_PRICE_ELITE_MONTHLY", year: "STRIPE_PRICE_ELITE_YEARLY" },
-  developer_elite: { month: "STRIPE_PRICE_DEVELOPER_ELITE_MONTHLY", year: "STRIPE_PRICE_DEVELOPER_ELITE_YEARLY" },
 };
 
 function enabled(value: string | undefined) {

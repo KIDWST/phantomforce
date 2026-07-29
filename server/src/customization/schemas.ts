@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PLATFORM_MODULES } from "./module-registry.js";
 
 export const BrandModeSchema = z.enum(["standard", "co_branded", "white_label", "internal_phantomforce"]);
-export const WorkspaceProfileSchema = z.enum(["business", "creator", "developer"]);
+export const WorkspaceProfileSchema = z.enum(["business", "athlete", "coach", "sports_management", "creator", "developer", "agency", "education"]);
 export const BrainStorageModeSchema = z.enum(["web_only", "optional_local", "external_provider"]);
 export const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color such as #41ffa1.");
 export const ApprovedFontSchema = z.enum(["Space Grotesk", "Inter", "DM Sans", "IBM Plex Sans", "Source Sans 3"]);

@@ -511,11 +511,13 @@ export async function createSelfServeAccount(input: {
   password: string;
   name?: string;
   organizationName?: string;
+  workspaceProfile?: WorkspaceProfileId;
 }) {
   const db = requirePrisma();
   await syncPlanCatalog();
   const email = normalizeEmail(input.email);
   const username = normalizeUsername(input.username);
+  const profile = workspaceProfileFor(input.workspaceProfile);
   if (input.username && !username) return { ok: false as const, error: "invalid_username" };
   const existing = await db.user.findFirst({
     where: { OR: [{ email }, ...(username ? [{ username }] : [])] },
@@ -523,7 +525,7 @@ export async function createSelfServeAccount(input: {
   });
   if (existing?.email === email) return { ok: false as const, error: "email_already_registered" };
   if (username && existing?.username === username) return { ok: false as const, error: "username_already_registered" };
-  const orgName = (input.organizationName || `${input.name || username || email.split("@")[0]}'s workspace`).trim().slice(0, 120);
+  const orgName = (input.organizationName || input.name || username || email.split("@")[0] || profile.workspaceName).trim().slice(0, 120);
   const passwordHash = await hashPassword(input.password);
   const result = await db.$transaction(async (tx) => {
     const org = await tx.org.create({ data: { name: orgName } });
@@ -543,7 +545,21 @@ export async function createSelfServeAccount(input: {
     orgId: result.org.id,
     planKey: "starter",
     status: "trial",
-    note: "Self-serve signup starter trial",
+    note: `Self-serve ${profile.id} workspace on Basic`,
+  });
+  const profileConfiguration = defaultOrganizationConfiguration(result.org.id, email, profile.id);
+  await persistConfiguration({
+    configuration: {
+      ...profileConfiguration,
+      brand: {
+        ...profileConfiguration.brand,
+        organizationName: result.org.name,
+        workspaceName: profile.workspaceName,
+      },
+    },
+    summary: `Created ${profile.label} workspace defaults`,
+    actor: email,
+    eventType: "created",
   });
   await recordOrgAuditEvent({
     orgId: result.org.id,
@@ -553,7 +569,7 @@ export async function createSelfServeAccount(input: {
     targetId: result.user.id,
     payload: { email: result.user.email, username: result.user.username, orgId: result.org.id },
   });
-  return { ok: true as const, userId: result.user.id, orgId: result.org.id };
+  return { ok: true as const, userId: result.user.id, orgId: result.org.id, profile };
 }
 
 export async function requestUsernameReminder(emailRaw: string) {
@@ -792,9 +808,9 @@ export async function registerWorkspaceAccount(input: {
 
   await assignOrgPlan({
     orgId: created.org.id,
-    planKey: "free",
+    planKey: "starter",
     status: "active",
-    note: `Self-serve ${profile.id} workspace signup`,
+    note: `Self-serve ${profile.id} workspace on Basic`,
   });
 
   const profileConfiguration = defaultOrganizationConfiguration(created.org.id, email, profile.id);

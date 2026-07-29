@@ -14,19 +14,22 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260728-70";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260728-70";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260728-70";
-import { esc } from "./workspaces.js?v=phantom-live-20260728-70";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260728-70";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260728-70";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260728-70";
+} from "./store.js?v=phantom-live-20260729-86";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260729-86";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260729-86";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260729-86";
+import { esc } from "./workspaces.js?v=phantom-live-20260729-86";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260729-86";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260729-86";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260729-86-creatorrestore1";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260729-86";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260729-86";
 
-const TABS = ["chat", "automations", "memory", "activity"];
+const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
 const MAX_TASKS = 30;
 const MAX_MESSAGES = 80;
-const NEW_TASK_TITLE = "New task";
+const NEW_TASK_TITLE = "New session";
 const INTERRUPTED_REPLY = "This response was interrupted before it finished. Retry the message when you are ready.";
 const ACP_TERMINAL_STATES = new Set(["completed", "denied", "failed", "cancelled", "blocked"]);
 
@@ -35,6 +38,11 @@ let taskState = { workspace: "", activeId: "", tasks: [] };
 let chatBindings = null;
 let runningRequest = null;
 let keyboardBound = false;
+let detailTab = "context";
+let sessionStartedAt = Date.now();
+let sessionClockTimer = 0;
+let readRepliesAloud = false;
+let dictationRecognition = null;
 
 /* Dropped/attached files staged for the next message, plus lookup maps for the
    invoice-card actions (drafts extracted from documents, and created invoices
@@ -115,7 +123,7 @@ function operatorStatusText(operator) {
   const state = String(operator?.state || "connecting").replaceAll("_", " ");
   const summary = cleanText(operator?.summary || "", 280);
   if (operator?.state === "awaiting_approval") {
-    return summary || "Hermes prepared a bounded plan. Review the exact scope before execution.";
+    return summary || "PhantomBot prepared a bounded plan. Review the exact scope before execution.";
   }
   if (operator?.state === "completed") {
     return summary || "The governed task passed verification and has a durable receipt.";
@@ -129,8 +137,8 @@ function operatorStatusText(operator) {
 
 function operatorEventLabel(event) {
   const labels = {
-    connecting: "Connecting to Hermes",
-    connected: "ACP session connected",
+    connecting: "Starting the workspace",
+    connected: "Workspace connected",
     analyzing: "Analyzing request",
     context_inspection: "Inspecting workspace context",
     plan_created: "Plan created",
@@ -153,7 +161,7 @@ function operatorEventSummary(event) {
   const summary = cleanText(event?.summary || "", 500);
   if (event?.type !== "message_delta") return summary;
   const publicText = summary.split(/<phantom_(?:tool_intent|engineering_plan)>/iu, 1)[0].trim();
-  return publicText || "Hermes prepared a governed operation proposal.";
+  return publicText || "PhantomBot prepared a governed operation proposal.";
 }
 
 function operatorPlanHtml(plan) {
@@ -195,7 +203,7 @@ function operatorTimelineHtml(operator) {
     ? `<p class="phantombot-operator-receipt">${operator.receiptVerified === false ? "Failure" : "Verified"} receipt <code>${esc(operator.receiptId)}</code>${operator.memoryId ? " · memory saved" : ""}</p>`
     : "";
   return `<section class="phantombot-operator" data-operator-session="${esc(operator.id || "")}">
-    <header><b>Hermes ACP</b><span data-state="${esc(operator.state || "connecting")}">${esc(String(operator.state || "connecting").replaceAll("_", " "))}</span></header>
+    <header><b>Execution</b><span data-state="${esc(operator.state || "connecting")}">${esc(String(operator.state || "connecting").replaceAll("_", " "))}</span></header>
     <ol>${events.map((event) => {
       const summary = operatorEventSummary(event);
       return `<li><i></i><span><b>${esc(operatorEventLabel(event))}</b>${summary ? `<small>${esc(summary)}</small>` : ""}</span></li>`;
@@ -208,11 +216,15 @@ function normalizedTask(task = {}) {
   const messages = Array.isArray(task.messages)
     ? task.messages.map(normalizedMessage).filter((message) => message.q).slice(-MAX_MESSAGES)
     : [];
+  const savedTitle = cleanText(task.title || NEW_TASK_TITLE, 72);
   return {
     id: cleanText(task.id || uid("pbtask"), 80),
-    title: cleanText(task.title || NEW_TASK_TITLE, 72),
+    title: savedTitle === "New task" ? NEW_TASK_TITLE : savedTitle,
     createdAt: cleanText(task.createdAt || new Date().toISOString(), 60),
     updatedAt: cleanText(task.updatedAt || task.createdAt || new Date().toISOString(), 60),
+    pinned: !!task.pinned,
+    archived: !!task.archived,
+    effort: ["instant", "thinking", "deep"].includes(task.effort) ? task.effort : "instant",
     messages,
   };
 }
@@ -304,20 +316,140 @@ function pane(tab) {
   return rootEl?.querySelector(`[data-phantomai-pane="${tab}"]`) || null;
 }
 
+function taskRowHtml(task) {
+  return `<div class="phantombot-task-row ${task.id === taskState.activeId ? "is-active" : ""}">
+    <button type="button" class="phantombot-task" data-phantombot-task="${esc(task.id)}">
+      <span>${esc(task.title || NEW_TASK_TITLE)}</span>
+      <small>${esc(relativeTaskTime(task.updatedAt))}</small>
+    </button>
+    <button type="button" class="phantombot-task-pin" data-phantombot-pin="${esc(task.id)}" aria-pressed="${task.pinned ? "true" : "false"}" aria-label="${task.pinned ? "Unpin" : "Pin"} ${esc(task.title || NEW_TASK_TITLE)}" title="${task.pinned ? "Unpin" : "Pin"}">${task.pinned ? "◆" : "◇"}</button>
+  </div>`;
+}
+
 function paintTaskRail() {
   if (!rootEl) return;
+  const search = cleanText(rootEl.querySelector("[data-phantombot-session-search]")?.value || "", 120).toLowerCase().trim();
+  const visibleTasks = taskState.tasks.filter((task) => !task.archived && (!search || task.title.toLowerCase().includes(search)));
+  const pinned = visibleTasks.filter((task) => task.pinned);
+  const recent = visibleTasks.filter((task) => !task.pinned);
+  const pinnedList = rootEl.querySelector("[data-phantombot-pinned-list]");
+  if (pinnedList) pinnedList.innerHTML = pinned.map(taskRowHtml).join("");
   const list = rootEl.querySelector("[data-phantombot-task-list]");
-  if (list) {
-    list.innerHTML = taskState.tasks.slice(0, 14).map((task) => `
-      <button type="button" class="phantombot-task ${task.id === taskState.activeId ? "is-active" : ""}" data-phantombot-task="${esc(task.id)}">
-        <span>${esc(task.title || NEW_TASK_TITLE)}</span>
-        <small>${esc(relativeTaskTime(task.updatedAt))}</small>
-      </button>`).join("");
-  }
+  if (list) list.innerHTML = recent.slice(0, 30).map(taskRowHtml).join("");
+  const pinHint = rootEl.querySelector("[data-phantombot-pin-hint]");
+  if (pinHint) pinHint.hidden = pinned.length > 0 || !!search;
+  const pinnedCount = rootEl.querySelector("[data-phantombot-pinned-count]");
+  if (pinnedCount) pinnedCount.textContent = String(pinned.length);
+  const sessionCount = rootEl.querySelector("[data-phantombot-session-count]");
+  if (sessionCount) sessionCount.textContent = String(visibleTasks.length);
   const title = activeTask().title || NEW_TASK_TITLE;
   rootEl.querySelectorAll("[data-phantombot-current-title]").forEach((node) => {
     node.textContent = title;
   });
+  const contextTitle = rootEl.querySelector("[data-phantombot-context-title]");
+  if (contextTitle) contextTitle.textContent = title;
+  const effort = rootEl.querySelector("[data-phantombot-effort]");
+  if (effort) effort.value = activeTask().effort || "instant";
+  paintDetailDrawer();
+}
+
+function taskArtifacts(task) {
+  const artifacts = [];
+  task.messages.forEach((message, messageIndex) => {
+    (message.media || []).forEach((item) => artifacts.push({
+      kind: item.type === "video" ? "Video" : "Image",
+      title: item.title || "Generated media",
+      detail: item.status || "saved",
+      messageIndex,
+    }));
+    (message.cards || []).forEach((item) => artifacts.push({
+      kind: item.kicker || "Artifact",
+      title: item.title || "Workspace item",
+      detail: item.meta || item.body || "",
+      messageIndex,
+    }));
+    (message.attachments || []).forEach((item) => artifacts.push({
+      kind: item.kind || "File",
+      title: item.name || "Attachment",
+      detail: item.summary || "",
+      messageIndex,
+    }));
+  });
+  return artifacts.slice(-24).reverse();
+}
+
+function latestOperator(task) {
+  return [...task.messages].reverse().find((message) => message.operator)?.operator || null;
+}
+
+function detailEmpty(title, copy) {
+  return `<div class="phantombot-detail-empty"><span>◇</span><b>${esc(title)}</b><p>${esc(copy)}</p></div>`;
+}
+
+function paintDetailDrawer() {
+  if (!rootEl) return;
+  const body = rootEl.querySelector("[data-phantombot-detail-body]");
+  if (!body) return;
+  const task = activeTask();
+  const operator = latestOperator(task);
+  const artifacts = taskArtifacts(task);
+  rootEl.querySelectorAll("[data-phantombot-detail-tab]").forEach((button) => {
+    const active = button.dataset.phantombotDetailTab === detailTab;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+
+  if (detailTab === "timeline") {
+    const entries = task.messages.map((message, index) => ({ message, index })).reverse();
+    body.innerHTML = entries.length ? `<ol class="phantombot-detail-timeline">${entries.map(({ message, index }) => `
+      <li><button type="button" data-phantombot-timeline-index="${index}">
+        <i></i><span><b>${esc(titleFromPrompt(message.q))}</b><small>${esc(relativeTaskTime(message.createdAt))}</small></span>
+      </button></li>`).join("")}</ol>` : detailEmpty("No turns yet", "Conversation turns will appear here.");
+    return;
+  }
+  if (detailTab === "steps") {
+    const events = Array.isArray(operator?.events) ? operator.events : [];
+    body.innerHTML = events.length ? `<ol class="phantombot-detail-steps">${events.map((event) => `
+      <li data-state="${esc(event.type || "update")}"><i></i><span><b>${esc(operatorEventLabel(event))}</b><small>${esc(operatorEventSummary(event))}</small></span></li>`).join("")}</ol>` : detailEmpty("No active plan", "Real execution steps appear here when PhantomBot uses tools.");
+    return;
+  }
+  if (detailTab === "artifacts") {
+    body.innerHTML = artifacts.length ? `<div class="phantombot-detail-artifacts">${artifacts.map((artifact) => `
+      <button type="button" data-phantombot-timeline-index="${artifact.messageIndex}">
+        <span>${esc(String(artifact.kind).slice(0, 1).toUpperCase())}</span>
+        <b>${esc(artifact.title)}</b><small>${esc(artifact.detail)}</small>
+      </button>`).join("")}</div>` : detailEmpty("No outputs yet", "Files, images, reports, and workspace items stay attached to this session.");
+    return;
+  }
+
+  const attachmentCount = task.messages.reduce((total, message) => total + (message.attachments?.length || 0), 0);
+  const approval = operator?.state === "awaiting_approval";
+  body.innerHTML = `<dl class="phantombot-context-list">
+    <div><dt>Workspace</dt><dd>${esc(wsName(currentWs()) || "PhantomForce")}</dd></div>
+    <div><dt>Session</dt><dd>${esc(task.title || NEW_TASK_TITLE)}</dd></div>
+    <div><dt>Model</dt><dd>Phantom V1:Latest</dd></div>
+    <div><dt>Effort</dt><dd>${esc((task.effort || "instant").replace(/^./, (c) => c.toUpperCase()))}</dd></div>
+    <div><dt>Attachments</dt><dd>${attachmentCount}</dd></div>
+    <div><dt>Artifacts</dt><dd>${artifacts.length}</dd></div>
+    <div><dt>Memory</dt><dd>Workspace scoped</dd></div>
+    <div><dt>Approval</dt><dd class="${approval ? "is-waiting" : ""}">${approval ? "Waiting for you" : "No decision pending"}</dd></div>
+  </dl>`;
+}
+
+function openDetailDrawer(tab = "context") {
+  if (!rootEl) return;
+  detailTab = ["context", "timeline", "steps", "artifacts"].includes(tab) ? tab : "context";
+  const drawer = rootEl.querySelector("[data-phantombot-context-drawer]");
+  if (drawer) drawer.hidden = false;
+  rootEl.classList.add("is-context-open");
+  paintDetailDrawer();
+}
+
+function closeDetailDrawer() {
+  if (!rootEl) return;
+  const drawer = rootEl.querySelector("[data-phantombot-context-drawer]");
+  if (drawer) drawer.hidden = true;
+  rootEl.classList.remove("is-context-open");
 }
 
 function startNewTask() {
@@ -325,6 +457,7 @@ function startNewTask() {
   taskState.tasks.unshift(task);
   taskState.tasks = taskState.tasks.slice(0, MAX_TASKS);
   taskState.activeId = task.id;
+  sessionStartedAt = Date.now();
   persistTaskState();
   activatePhantomAiTab("chat");
   paintTaskRail();
@@ -343,8 +476,56 @@ function activateTask(id) {
   activatePhantomAiTab("chat");
   paintTaskRail();
   chatBindings?.paint(true);
+  sessionStartedAt = Date.now();
   rootEl?.classList.remove("is-rail-open");
   rootEl?.querySelector("[data-phantombot-rail-toggle]")?.setAttribute("aria-expanded", "false");
+}
+
+function toggleTaskPin(id) {
+  const task = taskState.tasks.find((item) => item.id === id);
+  if (!task) return;
+  task.pinned = !task.pinned;
+  task.updatedAt = new Date().toISOString();
+  persistTaskState();
+  paintTaskRail();
+}
+
+function branchTaskAt(messageIndex) {
+  const source = activeTask();
+  const index = Math.max(0, Math.min(source.messages.length - 1, Number(messageIndex)));
+  const now = new Date().toISOString();
+  const branched = normalizedTask({
+    ...source,
+    id: uid("pbtask"),
+    title: `${source.title} · branch`,
+    pinned: false,
+    createdAt: now,
+    updatedAt: now,
+    messages: source.messages.slice(0, index + 1),
+  });
+  taskState.tasks.unshift(branched);
+  taskState.tasks = taskState.tasks.slice(0, MAX_TASKS);
+  taskState.activeId = branched.id;
+  sessionStartedAt = Date.now();
+  persistTaskState();
+  paintTaskRail();
+  chatBindings?.paint(true);
+}
+
+function restoreTaskAt(messageIndex) {
+  const task = activeTask();
+  const index = Math.max(0, Math.min(task.messages.length - 1, Number(messageIndex)));
+  const prompt = task.messages[index]?.q || "";
+  task.messages = task.messages.slice(0, index);
+  task.updatedAt = new Date().toISOString();
+  persistTaskState();
+  paintTaskRail();
+  chatBindings?.paint(true);
+  if (chatBindings?.input) {
+    chatBindings.input.value = prompt;
+    chatBindings.resize();
+    chatBindings.input.focus();
+  }
 }
 
 function cardActionHtml(action) {
@@ -392,34 +573,89 @@ function chatMediaHtml(media = {}) {
   if (!safeUrl) return "";
   const title = esc(String(media.title || "Generated media"));
   const status = esc(String(media.status || "saved"));
+  const assetId = esc(String(media.assetId || media.id || ""));
   const type = media.type === "video" ? "video" : "image";
   const preview = type === "video"
     ? `<video src="${esc(safeUrl)}" controls playsinline preload="metadata" aria-label="${title}"></video>`
     : `<img src="${esc(safeUrl)}" alt="${title}" loading="lazy"/>`;
   return `<figure class="chat-media chat-media-${type}" data-chat-media-status="${status}">
     <div class="chat-media-frame">${preview}</div>
-    <figcaption><span>${title}</span><b>${status === "saved" ? "Saved to Media Pool" : status === "queued" ? "Queued preview" : "Preview — not saved"}</b></figcaption>
+    <figcaption>
+      <span>${title}</span>
+      <b>${status === "saved" ? "Saved to Media Pool" : status === "queued" ? "Queued preview" : "Preview - not saved"}</b>
+      <button type="button" data-phantombot-edit-media="${assetId}">Edit in PhantomCut</button>
+    </figcaption>
   </figure>`;
 }
 
 function emptyStateHtml() {
   const suggestions = [
-    "Set up API keys and model routing",
-    "Connect ChatGPT, Claude, or Gemini",
-    "Plan the Higgsfield media lane",
-    "Show PhantomBot skills and automations",
+    "Research my market and show the opportunity",
+    "Build and publish a website",
+    "Create a campaign image",
+    "Review today’s numbers and act on them",
   ];
   return `
     <section class="phantombot-empty">
-      <div class="phantombot-empty-mark" aria-hidden="true">
-        <img src="/app/assets/brand-phantom-favicon.png" alt="" />
+      <div class="phantombot-presence" data-phantombot-presence>
+        <span class="phantombot-presence-live"><i aria-hidden="true"></i>Live</span>
+        <canvas class="phantombot-presence-canvas" data-phantombot-presence-canvas role="img"
+          aria-label="PhantomBot animated character"></canvas>
+        <span class="phantombot-presence-ring" aria-hidden="true"></span>
       </div>
-      <h1>PHANTOMBOT</h1>
-      <span>Drop a file path, a traceback, a rough idea, or a provider key setup task. I'll investigate, route the right brain lane, and keep things reversible.</span>
+      <h1>What are we working on?</h1>
       <div class="phantombot-starters">
         ${suggestions.map((prompt) => `<button type="button" data-phantombot-prompt="${esc(prompt)}">${esc(prompt)}<i>↗</i></button>`).join("")}
       </div>
     </section>`;
+}
+
+function inlineRichText(value) {
+  return esc(String(value || ""))
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+function richTextHtml(value) {
+  const source = String(value || "").replace(/\r\n?/g, "\n");
+  const blocks = [];
+  const fenced = source.split(/```/);
+  fenced.forEach((chunk, index) => {
+    if (index % 2 === 1) {
+      const firstBreak = chunk.indexOf("\n");
+      const language = firstBreak >= 0 ? chunk.slice(0, firstBreak).trim() : "";
+      const code = firstBreak >= 0 ? chunk.slice(firstBreak + 1) : chunk;
+      blocks.push(`<div class="phantombot-code"><header><span>${esc(language || "code")}</span><button type="button" data-copy-code="${esc(code)}">Copy</button></header><pre><code>${esc(code)}</code></pre></div>`);
+      return;
+    }
+    let listOpen = false;
+    const lines = chunk.split("\n");
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      const listMatch = /^[-*]\s+(.+)/.exec(trimmed);
+      if (listMatch) {
+        if (!listOpen) {
+          blocks.push("<ul>");
+          listOpen = true;
+        }
+        blocks.push(`<li>${inlineRichText(listMatch[1])}</li>`);
+        return;
+      }
+      if (listOpen) {
+        blocks.push("</ul>");
+        listOpen = false;
+      }
+      const heading = /^(#{1,3})\s+(.+)/.exec(trimmed);
+      if (heading) {
+        const level = Math.min(4, heading[1].length + 1);
+        blocks.push(`<h${level}>${inlineRichText(heading[2])}</h${level}>`);
+      } else if (trimmed) {
+        blocks.push(`<p>${inlineRichText(trimmed)}</p>`);
+      }
+    });
+    if (listOpen) blocks.push("</ul>");
+  });
+  return blocks.join("");
 }
 
 function assistantTurnHtml(message, messageIndex) {
@@ -428,7 +664,7 @@ function assistantTurnHtml(message, messageIndex) {
       <article class="phantombot-turn is-assistant is-thinking" aria-label="PhantomBot is thinking">
         <div class="phantombot-avatar"><img src="/app/assets/brand-phantom-favicon.png" alt="" /></div>
         <div class="phantombot-turn-content">
-          <header><b>PhantomBot</b><span>${message.operator ? "Hermes ACP" : "Thinking"}</span></header>
+          <header><b>PhantomBot</b><span>${message.operator ? "Working" : "Thinking"}</span></header>
           ${message.operator ? operatorTimelineHtml(message.operator) : `<div class="phantombot-thinking"><i></i><i></i><i></i></div>`}
         </div>
       </article>`;
@@ -439,15 +675,18 @@ function assistantTurnHtml(message, messageIndex) {
       <div class="phantombot-avatar"><img src="/app/assets/brand-phantom-favicon.png" alt="" /></div>
       <div class="phantombot-turn-content">
         <header><b>PhantomBot</b>${message.background ? "<span>Working in background</span>" : ""}</header>
-        <p class="phantomai-chat-reply">${esc(message.say)}</p>
+        <div class="phantomai-chat-reply phantomai-rich-text">${richTextHtml(message.say)}</div>
         ${operatorTimelineHtml(message.operator)}
         ${message.background ? `<p class="phantomai-chat-status">The task is still running. Results will stay attached to this workspace.</p>` : ""}
         ${accountLimit ? `<div class="record-actions"><button class="btn" type="button" data-phantombot-chatgpt-account data-open-ws="settings">Switch ChatGPT account</button></div>` : ""}
         ${(message.media || []).map(chatMediaHtml).join("")}
         ${(message.cards || []).map((card, cardIndex) => chatCardHtml(card, cardIndex, messageIndex)).join("")}
         <footer class="phantombot-turn-actions">
-          <button type="button" data-phantombot-copy="${messageIndex}">Copy</button>
-          <button type="button" data-phantombot-retry="${messageIndex}">Retry</button>
+          <span>${esc(relativeTaskTime(message.createdAt))}</span>
+          <button type="button" data-phantombot-branch="${messageIndex}" aria-label="Branch in new session" title="Branch in new session">⑂</button>
+          <button type="button" data-phantombot-copy="${messageIndex}" aria-label="Copy response" title="Copy">□</button>
+          <button type="button" data-phantombot-read="${messageIndex}" aria-label="Read response aloud" title="Read aloud">◒</button>
+          <button type="button" data-phantombot-retry="${messageIndex}" aria-label="Retry response" title="Retry">↻</button>
         </footer>
       </div>
     </article>`;
@@ -599,9 +838,13 @@ function exchangeHtml(message, messageIndex) {
     <section class="phantombot-exchange" data-message-id="${esc(message.id)}">
       <article class="phantombot-turn is-user">
         <div class="phantombot-turn-content">
-          <header><b>You</b></header>
-          <p class="phantomai-chat-user">${esc(message.q)}</p>
+          <header><b>You</b><span>${esc(relativeTaskTime(message.createdAt))}</span></header>
+          <div class="phantomai-chat-user">${richTextHtml(message.q)}</div>
           ${(message.attachments || []).map(attachmentHtml).join("")}
+          <footer class="phantombot-turn-actions is-user-actions">
+            <button type="button" data-phantombot-restore="${messageIndex}" aria-label="Restore checkpoint" title="Restore checkpoint">↶</button>
+            <button type="button" data-phantombot-branch="${messageIndex}" aria-label="Branch in new session" title="Branch in new session">⑂</button>
+          </footer>
         </div>
       </article>
       ${assistantTurnHtml(message, messageIndex)}
@@ -610,6 +853,7 @@ function exchangeHtml(message, messageIndex) {
 
 function setBusy(busy) {
   if (!rootEl) return;
+  setCompanionState(busy ? "thinking" : "idle");
   rootEl.toggleAttribute("data-busy", busy);
   const send = rootEl.querySelector(".phantombot-send");
   if (send) {
@@ -618,15 +862,98 @@ function setBusy(busy) {
     send.setAttribute("aria-label", busy ? "Stop response" : "Send message");
     send.querySelector("span").textContent = busy ? "■" : "↑";
   }
-  const ready = rootEl.querySelector(".phantombot-ready");
-  if (ready) {
-    const label = ready.querySelector("span") || document.createElement("span");
-    label.textContent = busy ? "Thinking" : "Ready";
-    if (!label.parentElement) ready.append(label);
-    Array.from(ready.childNodes).forEach((node) => {
-      if (node.nodeType === Node.TEXT_NODE) node.remove();
-    });
+  const runtime = rootEl.querySelector("[data-phantombot-runtime]");
+  if (runtime) runtime.querySelector("span").textContent = busy ? "Working" : "Ready";
+  const companion = rootEl.querySelector("[data-phantombot-companion] span");
+  if (companion) companion.textContent = busy ? "PhantomBot working" : "PhantomBot connected";
+  const status = rootEl.querySelector("[data-phantombot-composer-status]");
+  if (status) {
+    status.hidden = !busy;
+    status.textContent = busy ? "PhantomBot is working…" : "";
   }
+}
+
+function setComposerStatus(message, tone = "info", timeoutMs = 2400) {
+  const status = rootEl?.querySelector("[data-phantombot-composer-status]");
+  if (!status) return;
+  status.hidden = !message;
+  status.dataset.tone = tone;
+  status.textContent = cleanText(message, 180);
+  clearTimeout(Number(status.dataset.timer || 0));
+  if (message && timeoutMs > 0) {
+    status.dataset.timer = String(setTimeout(() => {
+      if (!runningRequest && status.isConnected) {
+        status.hidden = true;
+        status.textContent = "";
+      }
+    }, timeoutMs));
+  }
+}
+
+function speakText(value) {
+  const text = cleanText(value, 6000).replace(/[`*_#]/g, "").trim();
+  if (!text || !("speechSynthesis" in window)) return false;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  window.speechSynthesis.speak(utterance);
+  return true;
+}
+
+function toggleReadReplies(button) {
+  readRepliesAloud = !readRepliesAloud;
+  button?.setAttribute("aria-pressed", readRepliesAloud ? "true" : "false");
+  button?.classList.toggle("is-active", readRepliesAloud);
+  if (!readRepliesAloud && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  setComposerStatus(readRepliesAloud ? "Reply audio is on" : "Reply audio is off");
+}
+
+function startDictation(button) {
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Recognition) {
+    setComposerStatus("Voice dictation is unavailable in this browser", "error", 3200);
+    return;
+  }
+  if (dictationRecognition) {
+    dictationRecognition.stop();
+    return;
+  }
+  const recognition = new Recognition();
+  dictationRecognition = recognition;
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = navigator.language || "en-US";
+  const original = chatBindings?.input?.value || "";
+  button?.setAttribute("aria-pressed", "true");
+  button?.classList.add("is-active");
+  setComposerStatus("Listening…", "live", 0);
+  recognition.addEventListener("result", (event) => {
+    const transcript = Array.from(event.results).map((result) => result[0]?.transcript || "").join(" ").trim();
+    if (!chatBindings?.input) return;
+    chatBindings.input.value = `${original}${original && transcript ? " " : ""}${transcript}`;
+    chatBindings.resize();
+  });
+  recognition.addEventListener("error", () => {
+    setComposerStatus("Dictation stopped", "error");
+  });
+  recognition.addEventListener("end", () => {
+    dictationRecognition = null;
+    button?.setAttribute("aria-pressed", "false");
+    button?.classList.remove("is-active");
+    if (!runningRequest) setComposerStatus("", "info", 0);
+    chatBindings?.input?.focus();
+  });
+  recognition.start();
+}
+
+function updateSessionClock() {
+  const target = rootEl?.querySelector("[data-phantombot-session-clock]");
+  if (!target) return;
+  const elapsed = Math.max(0, Math.floor((Date.now() - sessionStartedAt) / 1000));
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = String(elapsed % 60).padStart(2, "0");
+  target.textContent = `Session ${minutes}:${seconds}`;
 }
 
 function stopRunningRequest() {
@@ -677,6 +1004,10 @@ function mountChatTab() {
     log.innerHTML = task.messages.length
       ? task.messages.map(exchangeHtml).join("")
       : emptyStateHtml();
+    mountPhantomPresence(log.querySelector("[data-phantombot-presence-canvas]"), {
+      small: false,
+      state: runningRequest ? "thinking" : "idle",
+    });
     paintTaskRail();
     if (shouldScroll) {
       requestAnimationFrame(() => {
@@ -739,15 +1070,20 @@ function mountChatTab() {
           mode: "phantombot-hermes-acp",
           route: `/phantom-ai/hermes-acp/sessions/${message.operator.id}`,
         });
+        if (readRepliesAloud && !message.error) speakText(message.say);
         return;
       }
-      const result = await handleSmartCommand(outbound).catch(() => handleCommand(outbound));
+      const result = await handleSmartCommand(outbound, { effort: task.effort || "instant" })
+        .catch(() => handleCommand(outbound));
       const targetTask = taskState.tasks.find((item) => item.id === task.id);
       const targetMessage = targetTask?.messages.find((item) => item.id === message.id);
       if (!targetMessage || runningRequest?.id !== requestId) return;
       targetMessage.say = cleanText(result?.say || "I could not return a usable answer. Try that again.", 12000);
       targetMessage.cards = Array.isArray(result?.cards) ? [...result.cards] : [];
-      targetMessage.media = Array.isArray(result?.media) ? result.media : [];
+      targetMessage.media = (Array.isArray(result?.media) ? result.media : []).map((item) => {
+        const registered = registerContentAsset({ ...item, source: item.source || "PhantomBot" });
+        return { ...item, assetId: registered?.asset?.id || item.assetId || item.id || "" };
+      });
       // A dropped document that parsed into an invoice draft gets a one-tap card.
       for (const a of attachments) {
         if (a.invoiceDraft && (a.invoiceDraft.lineItems || []).length) {
@@ -767,17 +1103,22 @@ function mountChatTab() {
       targetMessage.error = !result?.say;
       targetTask.updatedAt = new Date().toISOString();
       rememberConversation({ prompt: displayQ, reply: targetMessage.say, mode: "phantombot-task", route: result?.open || "" });
-    } catch (error) {
+      if (readRepliesAloud && !targetMessage.error) speakText(targetMessage.say);
+    } catch {
       const targetTask = taskState.tasks.find((item) => item.id === task.id);
       const targetMessage = targetTask?.messages.find((item) => item.id === message.id);
       if (targetMessage) {
-        targetMessage.say = `PhantomBot could not complete that request: ${cleanText(error?.message || "the AI service did not respond", 260)}`;
+        targetMessage.say = "PhantomBot could not complete that request. Nothing was sent or changed. Try again in a moment.";
         targetMessage.pending = false;
         targetMessage.error = true;
       }
     } finally {
       if (runningRequest?.id === requestId) runningRequest = null;
       setBusy(false);
+      const finished = taskState.tasks
+        .find((item) => item.id === task.id)?.messages
+        .find((item) => item.id === message.id);
+      setCompanionState(finished?.error ? "error" : "success");
       persistTaskState();
       if (taskState.activeId === task.id) paint(true);
     }
@@ -886,7 +1227,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260728-70")
+  import("./brain.js?v=phantom-live-20260729-86")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }
@@ -901,9 +1242,53 @@ function mountActivityTab() {
 
 function mountAutomationsTab() {
   const mount = pane("automations")?.querySelector("[data-phantombot-automations-mount]");
-  if (!mount || mount.dataset.mounted) return;
-  mount.dataset.mounted = "1";
+  if (!mount) return;
   renderAutomation(mount);
+}
+
+function mountMediaTab() {
+  const mount = pane("media")?.querySelector("[data-phantombot-media-mount]");
+  if (!mount) return;
+  const assets = loadContentAssets();
+  mount.innerHTML = `<header class="phantombot-panel-head"><div><span>Library</span><h2>Media</h2></div><button type="button" data-phantombot-open-media>Open Media Lab</button></header><p class="ws-note">Generated images and videos stay on this PC and expire according to your retention setting.</p><label class="settings-field"><span>Keep generated media</span><select data-phantombot-retention>${MEDIA_RETENTION_OPTIONS.map((option) => `<option value="${option.days}" ${option.days === getMediaRetentionDays() ? "selected" : ""}>${option.label}</option>`).join("")}</select></label><div class="ml-pool-grid">${assets.slice(0, 12).map((asset) => { const url = contentAssetDisplayUrl(asset); const preview = asset.type === "video" ? `<video src="${esc(url)}" muted playsinline preload="metadata"></video>` : (url ? `<img src="${esc(url)}" alt="${esc(asset.title)}" loading="lazy">` : `<span>${esc(asset.type.toUpperCase())}</span>`); return `<article class="ml-pool-thumb">${preview}<b>${esc(asset.title)}</b><i>${esc(asset.provider || asset.source || "Media")}</i><div class="phantombot-media-actions"><button type="button" data-phantombot-edit-media="${esc(asset.id)}">Edit in PhantomCut</button><button type="button" data-phantombot-publish-media="${esc(asset.id)}">Publish</button></div></article>`; }).join("") || `<div class="ml-idle"><h3>No generated media yet.</h3><p>Ask PhantomBot to create an image or video and it will appear here.</p></div>`}</div>`;
+  mount.querySelector("[data-phantombot-retention]")?.addEventListener("change", (event) => { setMediaRetentionDays(event.target.value); mountMediaTab(); });
+}
+
+function openPhantomCutAsset(assetId, mediaElement = null) {
+  const assets = loadContentAssets();
+  let asset = assets.find((item) => item.id === assetId);
+  if (!asset && mediaElement) {
+    const preview = mediaElement.querySelector("img,video");
+    const url = preview?.getAttribute("src") || "";
+    if (url) {
+      asset = registerContentAsset({
+        type: preview.tagName === "VIDEO" ? "video" : "image",
+        title: mediaElement.querySelector("figcaption > span")?.textContent || "PhantomBot media",
+        url,
+        source: "PhantomBot",
+        saved: true,
+      })?.asset;
+    }
+  }
+  const url = asset && contentAssetDisplayUrl(asset);
+  if (!asset || !url) return;
+  workspaceStorageSetItem("pf.medialab.editIntent.v1", JSON.stringify({
+    id: asset.id,
+    type: asset.type === "video" ? "video" : "image",
+    title: asset.title || "PhantomBot media",
+    url,
+    source: "PhantomBot",
+  }));
+  window.location.hash = "#page/media";
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
+}
+
+function openContentHubAsset(assetId) {
+  if (!assetId) return;
+  workspaceStorageSetItem("pf.contenthub.openTab.v1", "publish");
+  workspaceStorageSetItem("pf.contenthub.openAsset.v1", assetId);
+  window.location.hash = "#page/content";
+  window.dispatchEvent(new HashChangeEvent("hashchange"));
 }
 
 export function activatePhantomAiTab(tab) {
@@ -921,6 +1306,7 @@ export function activatePhantomAiTab(tab) {
   });
   if (tab === "chat") mountChatTab();
   if (tab === "automations") mountAutomationsTab();
+  if (tab === "media") mountMediaTab();
   if (tab === "memory") mountMemoryTab();
   if (tab === "activity") mountActivityTab();
 }
@@ -934,12 +1320,32 @@ function bindRootActions(root) {
       startNewTask();
       return;
     }
+    if (button.dataset.phantombotPin) {
+      toggleTaskPin(button.dataset.phantombotPin);
+      return;
+    }
     if (button.matches("[data-phantombot-stop]")) {
       stopRunningRequest();
       return;
     }
     if (button.matches("[data-phantombot-chatgpt-account]")) {
       try { localStorage.setItem("pf.settings.tab.v1", "bridge"); } catch {}
+      window.location.hash = "#page/settings";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      return;
+    }
+    if (button.matches("[data-phantombot-open-media]")) {
+      window.location.hash = "#page/media";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      return;
+    }
+    if (button.matches("[data-phantombot-edit-media]")) {
+      openPhantomCutAsset(button.dataset.phantombotEditMedia, button.closest(".chat-media"));
+      return;
+    }
+    if (button.matches("[data-phantombot-publish-media]")) {
+      openContentHubAsset(button.dataset.phantombotPublishMedia);
+      return;
     }
     if (button.dataset.phantombotTask) {
       activateTask(button.dataset.phantombotTask);
@@ -964,6 +1370,29 @@ function bindRootActions(root) {
       } catch {
         button.textContent = "Copy failed";
       }
+      return;
+    }
+    if (button.dataset.copyCode !== undefined) {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copyCode);
+        button.textContent = "Copied";
+        setTimeout(() => { if (button.isConnected) button.textContent = "Copy"; }, 1200);
+      } catch {
+        setComposerStatus("Code could not be copied", "error");
+      }
+      return;
+    }
+    if (button.dataset.phantombotRead !== undefined) {
+      const message = activeTask().messages[Number(button.dataset.phantombotRead)];
+      if (message?.say && !speakText(message.say)) setComposerStatus("Reply audio is unavailable", "error");
+      return;
+    }
+    if (button.dataset.phantombotBranch !== undefined) {
+      branchTaskAt(button.dataset.phantombotBranch);
+      return;
+    }
+    if (button.dataset.phantombotRestore !== undefined) {
+      restoreTaskAt(button.dataset.phantombotRestore);
       return;
     }
     if (button.dataset.phantombotRetry !== undefined) {
@@ -994,7 +1423,7 @@ function bindRootActions(root) {
       } catch (error) {
         message.pending = false;
         message.error = true;
-        message.say = cleanText(error?.message || "The approval decision could not be recorded.", 400);
+        message.say = "The approval decision could not be recorded. No operation was executed.";
       } finally {
         setBusy(false);
         persistTaskState();
@@ -1038,12 +1467,83 @@ function bindRootActions(root) {
       return;
     }
     if (button.matches("[data-phantombot-rail-toggle]")) {
-      const open = !root.classList.contains("is-rail-open");
-      root.classList.toggle("is-rail-open", open);
+      const compact = window.matchMedia("(max-width: 1100px)").matches;
+      if (compact) {
+        const open = !root.classList.contains("is-rail-open");
+        root.classList.toggle("is-rail-open", open);
+        button.setAttribute("aria-expanded", open ? "true" : "false");
+      } else {
+        root.classList.toggle("is-rail-collapsed");
+      }
+      return;
+    }
+    if (button.matches("[data-phantombot-swap-rail]")) {
+      root.classList.toggle("is-rail-right");
+      return;
+    }
+    if (button.matches("[data-phantombot-open-context], [data-phantombot-runtime], [data-phantombot-companion]")) {
+      openDetailDrawer("context");
+      return;
+    }
+    if (button.matches("[data-phantombot-open-timeline]")) {
+      openDetailDrawer("timeline");
+      return;
+    }
+    if (button.matches("[data-phantombot-close-context]")) {
+      closeDetailDrawer();
+      return;
+    }
+    if (button.dataset.phantombotDetailTab) {
+      detailTab = button.dataset.phantombotDetailTab;
+      paintDetailDrawer();
+      return;
+    }
+    if (button.dataset.phantombotTimelineIndex !== undefined) {
+      const exchange = root.querySelectorAll(".phantombot-exchange")[Number(button.dataset.phantombotTimelineIndex)];
+      closeDetailDrawer();
+      exchange?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (button.matches("[data-phantombot-model]")) {
+      const menu = root.querySelector("[data-phantombot-model-menu]");
+      if (!menu) return;
+      const open = menu.hidden;
+      menu.hidden = !open;
       button.setAttribute("aria-expanded", open ? "true" : "false");
       return;
     }
+    if (button.matches("[data-phantombot-dictation]")) {
+      startDictation(button);
+      return;
+    }
+    if (button.matches("[data-phantombot-read-aloud]")) {
+      toggleReadReplies(button);
+      return;
+    }
+    if (button.matches("[data-phantombot-section='messaging']")) {
+      activatePhantomAiTab("chat");
+      if (chatBindings?.input) {
+        chatBindings.input.value = "Show my messaging connections and anything that needs attention";
+        chatBindings.resize();
+        chatBindings.input.focus();
+      }
+      return;
+    }
     if (button.dataset.phantomaiTab) activatePhantomAiTab(button.dataset.phantomaiTab);
+  });
+
+  root.addEventListener("input", (event) => {
+    if (event.target.matches("[data-phantombot-session-search]")) paintTaskRail();
+  });
+  root.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-phantombot-effort]")) return;
+    const effort = ["instant", "thinking", "deep"].includes(event.target.value) ? event.target.value : "instant";
+    const task = activeTask();
+    task.effort = effort;
+    task.updatedAt = new Date().toISOString();
+    persistTaskState();
+    paintDetailDrawer();
+    setComposerStatus(`${effort.replace(/^./, (value) => value.toUpperCase())} effort selected`);
   });
 }
 
@@ -1056,9 +1556,13 @@ function bindKeyboardShortcuts() {
       event.preventDefault();
       startNewTask();
     }
-    if (event.key === "Escape" && rootEl.classList.contains("is-rail-open")) {
+    if (event.key === "Escape") {
+      closeDetailDrawer();
       rootEl.classList.remove("is-rail-open");
-      rootEl.querySelector("[data-phantombot-rail-toggle]")?.setAttribute("aria-expanded", "false");
+      rootEl.querySelectorAll("[data-phantombot-rail-toggle]").forEach((button) => button.setAttribute("aria-expanded", "false"));
+      const menu = rootEl.querySelector("[data-phantombot-model-menu]");
+      if (menu) menu.hidden = true;
+      rootEl.querySelector("[data-phantombot-model]")?.setAttribute("aria-expanded", "false");
     }
   });
 }
@@ -1079,6 +1583,9 @@ export function mountPhantomAI(root) {
   bindKeyboardShortcuts();
   paintTaskRail();
   activatePhantomAiTab("chat");
+  updateSessionClock();
+  clearInterval(sessionClockTimer);
+  sessionClockTimer = window.setInterval(updateSessionClock, 1000);
 
   const ticker = document.querySelector("[data-phantomwire]");
   if (ticker && !ticker.dataset.phantomaiWired) {

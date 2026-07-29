@@ -9,8 +9,8 @@
  * to a local mock.
  */
 
-import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260728-70";
-import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260728-70";
+import { currentTenantId, session, isAdmin, isOwnerOperator } from "./store.js?v=phantom-live-20260729-86";
+import { canManageActiveOrg } from "./orgs.js?v=phantom-live-20260729-86";
 
 /* Owner/admin only — legacy local-admin sessions (isAdmin/isOwnerOperator)
    and real database org sessions (canManageActiveOrg) both count. */
@@ -48,6 +48,7 @@ const orgState = {
   message: "",
   busy: false,
 };
+let organizationLoadPromise = null;
 
 const ORG_TYPES = [
   { id: "dev_only", label: "Dev Only", blurb: "Sandbox for building and testing — every module unlocked, safe to break." },
@@ -201,7 +202,12 @@ export function renderOrganizationPanel(el, opts = {}) {
   const esc = opts.esc || ((value) => String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])));
   const canManage = canManageOrganization();
   if (!orgState.loaded && !orgState.loading) {
-    loadOrganization().then(() => renderOrganizationPanel(el, opts));
+    organizationLoadPromise = loadOrganization();
+  }
+  if (!orgState.loaded && organizationLoadPromise) {
+    organizationLoadPromise.then(() => {
+      if (el.isConnected) renderOrganizationPanel(el, opts);
+    });
   }
   if (orgState.loading || (!orgState.loaded && !orgState.error)) {
     el.innerHTML = `<div class="set-section"><p class="set-note">Loading your organization…</p></div>`;
@@ -349,6 +355,7 @@ export function renderOrganizationPanel(el, opts = {}) {
 
 /* Test hook: lets harnesses reset the module-level cache between scenarios. */
 export function __resetOrganizationPanel() {
+  organizationLoadPromise = null;
   orgState.loaded = false;
   orgState.loading = false;
   orgState.error = "";

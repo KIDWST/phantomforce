@@ -9,24 +9,24 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260728-70";
+} from "./store.js?v=phantom-live-20260729-86";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260728-70";
+} from "./orgs.js?v=phantom-live-20260729-86";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260728-70";
+} from "./proposalpipeline.js?v=phantom-live-20260729-86";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260728-70";
+} from "./approvalpipeline.js?v=phantom-live-20260729-86";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -34,8 +34,8 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260728-70";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260728-70";
+} from "./financeledger.js?v=phantom-live-20260729-86";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260729-86";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1271,8 +1271,8 @@ function parseFinanceCsv(text, ws) {
 function connectorLabel(connector) {
   if (connector.status === "ready") return "Ready";
   if (connector.status === "connected") return "Connected";
-  if (connector.status === "requested") return "Setup requested";
-  return "Not connected";
+  if (connector.status === "setup-ready") return "Setup available";
+  return "Ready to set up";
 }
 
 function applyServerFinanceDocument(document, ws) {
@@ -1403,7 +1403,7 @@ function renderMoney(el, rerender) {
                   <i>${esc(connectorLabel(connector))}</i>
                   ${connector.id === "manual"
                     ? `<label class="btn btn-quiet finance-import ${readOnly ? "is-disabled" : ""}">Import CSV<input type="file" accept=".csv,text/csv" data-finance-import hidden ${readOnly ? "disabled" : ""} /></label>`
-                    : `<button class="btn btn-quiet" data-act="connector" data-id="${esc(connector.id)}" type="button">${connector.status === "requested" ? "Setup requested" : "Prepare setup"}</button>`}
+                    : `<button class="btn btn-quiet" data-act="connector" data-id="${esc(connector.id)}" type="button">${connector.status === "connected" ? "Manage connection" : "Set up now"}</button>`}
                 </div>
               </article>`).join("")}
           </div>
@@ -1596,10 +1596,17 @@ function renderMoney(el, rerender) {
         connector = { ...definition, ws };
         finance.connectors.push(connector);
       }
-      connector.status = "requested";
-      connector.requestedAt = new Date().toISOString();
-      pushActivity("Accounting Ledger", `${connector.name} setup requested. Sync will stay off until the secure connector backend is configured.`, ws);
-      store.save(); rerender();
+      connector.status = "setup-ready";
+      connector.setupAt = new Date().toISOString();
+      financeUi.notice = connector.id === "bank" || connector.id === "card"
+        ? `${connector.name} setup is available now. Choose your verified CSV export to import transactions immediately.`
+        : `${connector.name} is ready.`;
+      pushActivity("Accounting Ledger", `${connector.name} setup opened.`, ws);
+      store.save();
+      rerender();
+      if ((connector.id === "bank" || connector.id === "card") && !readOnly) {
+        window.setTimeout(() => el.querySelector("[data-finance-import]")?.click(), 0);
+      }
     },
     export: (id, btn) => {
       const header = "date,description,amount,category,account,source";
@@ -1799,7 +1806,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260728-70")
+      import("./brain.js?v=phantom-live-20260729-86")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

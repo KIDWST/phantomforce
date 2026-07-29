@@ -7,7 +7,7 @@ const {
 
 const desktopApi = Object.freeze({
   isDesktop: true,
-  shell: "phantombot",
+  shell: "phantomforce-os",
   platform: process.platform,
   versions: Object.freeze({
     electron: process.versions.electron,
@@ -30,5 +30,9 @@ const desktopApi = Object.freeze({
 
 contextBridge.exposeInMainWorld(
   "PhantomBotDesktop",
+  desktopApi
+);
+contextBridge.exposeInMainWorld(
+  "PhantomForceOS",
   desktopApi
 );

@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260728-70";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260729-86";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -55,6 +55,9 @@ export function setCompanionState(state, caption) {
     }
   }
   current = nextKey;
+  window.dispatchEvent(new CustomEvent("phantom:presence-state", {
+    detail: { state: current, mood: def.mood, emotion: def.emotion, caption: caption || def.caption },
+  }));
   if (!el) return;
   el.dot.className = `pc-dot pc-dot-${def.dot}`;
   el.label.textContent = def.label;

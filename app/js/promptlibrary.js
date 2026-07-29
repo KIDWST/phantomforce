@@ -5,7 +5,7 @@
    the PhantomForce team, and prompts are copy-only — the library never runs
    anything on its own. */
 
-import { workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260728-70";
+import { workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260729-86";
 
 const LIB_KEY = "pf.promptlibrary.v1";
 

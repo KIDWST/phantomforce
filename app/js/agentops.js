@@ -5,10 +5,42 @@
    (store.js) — no fabricated business records. Self-contained: owns its own
    timers, guards against double-mount, and respects reduced-motion. */
 
-import { session, store, TOOL_SPINE } from "./store.js?v=phantom-live-20260728-70";
+import { session, store, TOOL_SPINE } from "./store.js?v=phantom-live-20260729-86";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function curtainText(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/phantomcut.+(?:unreachable|offline|failed)/i.test(text)) {
+    return "Media creation is reconnecting.";
+  }
+  if (/breach watch needs setup|leaked data.+needs attention/i.test(text)) {
+    return "Security watch is ready for setup.";
+  }
+  return text
+    .replace(/\b(?:https?|wss?):\/\/(?:127\.0\.0\.1|localhost|\[?::1\]?)(?::\d+)?(?:\/[^\s),;]*)?/gi, "the local service")
+    .replace(/\b(?:127\.0\.0\.1|localhost)(?::\d+)\b/gi, "the local service")
+    .replace(/\bautomation:[a-z0-9:_-]+\b/gi, "a workspace workflow")
+    .replace(/\s*[·|]\s*\d+\s+tokens?\b/gi, "")
+    .replace(/\bOAuth\b/gi, "account connection")
+    .replace(/\bbackend\b/gi, "workspace service")
+    .replace(/\bprovider routing\b/gi, "smart routing")
+    .replace(/\bprovider\b/gi, "service")
+    .replace(/\bOllama\b/gi, "local intelligence")
+    .replace(/\bHermes\b/gi, "PhantomBot")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function curtainWorkerLabel(value) {
+  const label = String(value || "").trim();
+  if (/phantomcut|cutlab|media.+health/i.test(label)) return "Media Studio";
+  if (/leaked data|password watch|breach watch/i.test(label)) return "Security Watch";
+  if (/lane health check/i.test(label)) return "System Watch";
+  return curtainText(label) || "Workspace";
+}
 
 /* mode → visual tone + short label (drives the status LED colour) */
 const MODE_META = {
@@ -67,9 +99,9 @@ function wireItems(limit = 14) {
   const ticker = Array.isArray(workforceCache?.ticker) ? workforceCache.ticker : [];
   if (ticker.length) {
     return ticker.slice(0, limit).map((item) => ({
-      worker: item.label || "Worker",
+      worker: curtainWorkerLabel(item.label || "Worker"),
       internal: item.tone === "activity" ? "Agent receipt" : "Worker attention",
-      activity: item.text || "Status recorded.",
+      activity: curtainText(item.text || "Status recorded."),
       mode: modeForTicker(item),
       at: formatWireTimestamp(item.timestamp),
     }));
@@ -88,7 +120,7 @@ function wireItems(limit = 14) {
   return TOOL_SPINE.map((t) => ({
     worker: t.worker,
     internal: t.internal,
-    activity: `${t.activity} (${t.mode}; no live worker receipt yet)`,
+    activity: curtainText(`${t.activity} (${t.mode}; no live worker receipt yet)`),
     mode: t.mode,
     at: formatWireTimestamp(),
   })).slice(0, limit);
@@ -190,7 +222,7 @@ function rosterRow(t) {
       <b>${esc(t.worker)}</b>
       <span class="aops-agent-tool">${esc(t.internal)}</span>
     </span>
-    <span class="aops-agent-act">${esc(t.activity)}</span>
+    <span class="aops-agent-act">${esc(curtainText(t.activity))}</span>
     <span class="aops-agent-mode aops-m-${m.tone}">${m.tag}</span>
   </div>`;
 }
@@ -199,7 +231,7 @@ function logLineHtml(entry) {
   return `<div class="aops-log-line aops-lvl-${entry.tone}">
     <span class="aops-log-t">${entry.at}</span>
     <span class="aops-log-code">${entry.code}</span>
-    <span class="aops-log-msg">${esc(entry.msg)}</span>
+    <span class="aops-log-msg">${esc(curtainText(entry.msg))}</span>
   </div>`;
 }
 

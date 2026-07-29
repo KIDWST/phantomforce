@@ -244,3 +244,216 @@ html[data-command-os="2040"] .ci-shell .ci-radar-widgets button{
   background:rgba(10,16,28,.84);
   color:#dce8f0;
 }
+
+/* Radar-first intelligence: the network is the product. Text-heavy reports
+   remain behind deliberate tabs and controls instead of preceding the map. */
+.ci-radar-hero { position: relative; min-width: 0; }
+.ci-radar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 44px;
+  padding: 4px 2px 7px;
+}
+.ci-radar-head h3 { margin: 0; font-size: 15px; letter-spacing: 0; }
+.ci-radar-head .ci-kicker { margin: 0 0 2px; font-size: 8px; }
+.ci-radar-stat .ci-metrics {
+  display: flex;
+  gap: 4px;
+  margin: 0 !important;
+}
+.ci-radar-stat .ci-metrics article {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 72px;
+  padding: 5px 7px !important;
+  border-radius: 5px;
+  box-shadow: none !important;
+}
+.ci-radar-stat .ci-metrics b { font-size: 13px; }
+.ci-radar-stat .ci-metrics span {
+  max-width: 72px;
+  overflow: hidden;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ci-wire-ticker {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr);
+  align-items: stretch;
+  min-width: 0;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid rgba(129,98,255,.23);
+  border-radius: 6px 6px 0 0;
+  background: rgba(4,8,15,.94);
+}
+.ci-wire-mark {
+  display: grid;
+  place-items: center;
+  padding: 0 12px;
+  border-right: 1px solid rgba(129,98,255,.23);
+  color: #55e7a7;
+  font: 800 8px "Spline Sans Mono",monospace;
+  letter-spacing: .14em;
+}
+.ci-wire-ticker > div {
+  display: flex;
+  min-width: max-content;
+  animation: ci-wire-drift 28s linear infinite alternate;
+}
+.ci-wire-ticker button {
+  display: grid;
+  grid-template-columns: auto auto 62px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0 8px;
+  min-width: 210px;
+  padding: 6px 10px;
+  border: 0;
+  border-right: 1px solid rgba(129,98,255,.16);
+  background: transparent;
+  color: #eef4f7;
+  text-align: left;
+  cursor: pointer;
+}
+.ci-wire-ticker button:hover { background: rgba(129,98,255,.08); }
+.ci-wire-ticker small { color: #98a6b5; font: 700 7px "Spline Sans Mono",monospace; text-transform: uppercase; }
+.ci-wire-ticker b { max-width: 110px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.ci-wire-ticker strong { grid-column: 2; grid-row: 1 / 3; color: #55e7a7; font: 900 12px "Spline Sans Mono",monospace; }
+.ci-wire-ticker button.is-down strong { color: #ff687d; }
+.ci-wire-ticker .ci-sparkline { grid-column: 3; grid-row: 1 / 3; width: 62px; height: 27px; }
+@keyframes ci-wire-drift { to { transform: translateX(-18%); } }
+.ci-map-frame { position: relative; min-width: 0; }
+.ci-map-frame .ci-market-map {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border-radius: 0 0 6px 6px;
+}
+.ci-map-frame .ci-map-stage {
+  min-height: clamp(560px, 68vh, 790px);
+  border: 0;
+  border-radius: 0 0 6px 6px;
+  background-size: 44px 44px,44px 44px,auto;
+}
+.ci-map-links {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.ci-map-links line {
+  vector-effect: non-scaling-stroke;
+  stroke: rgba(129,98,255,.17);
+  stroke-width: .11;
+  stroke-dasharray: .45 .7;
+}
+.ci-map-links line.is-direct { stroke: rgba(255,84,95,.32); }
+.ci-map-links line.is-hot { stroke: rgba(255,197,80,.27); }
+.ci-map-links line.is-peer { stroke: rgba(85,231,167,.12); stroke-dasharray: .25 .9; }
+.ci-map-frame .ci-map-node { z-index: 3; }
+.ci-map-frame .ci-map-node.is-selected {
+  z-index: 6;
+  border-width: 2px;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 5px rgba(85,231,167,.12),0 0 42px rgba(85,231,167,.48);
+  transform: translate(-50%,-50%) scale(1.13);
+}
+.ci-map-frame .ci-map-legend {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 7;
+  margin: 0;
+}
+.ci-map-frame .ci-map-legend span {
+  position: relative;
+  padding: 5px 8px 5px 18px;
+  border-radius: 4px;
+  background: rgba(4,8,15,.82);
+  color: #b9c7cf;
+  font-size: 7px;
+}
+.ci-map-frame .ci-map-legend span::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #55e7a7;
+  transform: translateY(-50%);
+}
+.ci-map-frame .ci-map-legend span.is-direct::before { background: #ff687d; }
+.ci-map-frame .ci-map-legend span.is-hot::before { background: #f4c95d; }
+.ci-map-detail {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 8;
+  display: grid;
+  gap: 8px;
+  width: min(310px, calc(100% - 24px));
+  padding: 12px;
+  border: 1px solid rgba(129,98,255,.35);
+  border-radius: 6px;
+  background: rgba(4,8,15,.9);
+  color: #eef4f7;
+  box-shadow: 0 18px 60px rgba(0,0,0,.34);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.ci-map-detail.is-empty { width: 210px; opacity: .68; }
+.ci-map-detail header { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
+.ci-map-detail header span { color: #55e7a7; font: 800 8px "Spline Sans Mono",monospace; }
+.ci-map-detail header b { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.ci-map-detail header strong { grid-column: 2; grid-row: 1 / 3; align-self: center; font: 900 26px "Spline Sans Mono",monospace; }
+.ci-map-detail > p { margin: 0; color: #b9c7cf; font-size: 11px; line-height: 1.4; }
+.ci-map-detail > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.ci-map-detail > div i { padding: 3px 5px; border: 1px solid rgba(129,98,255,.22); border-radius: 3px; color: #98a6b5; font: 700 7px "Spline Sans Mono",monospace; font-style: normal; text-transform: uppercase; }
+.ci-map-detail .ci-primary { min-height: 32px; padding: 6px 9px; border-radius: 5px; font-size: 10px; }
+.ci-map-detail.is-empty > span { color: #55e7a7; font: 800 8px "Spline Sans Mono",monospace; }
+.ci-map-detail.is-empty small { color: #98a6b5; font-size: 10px; }
+.ci-radar-widgets {
+  position: absolute;
+  left: 10px;
+  top: 116px;
+  z-index: 10;
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+.ci-radar-widgets button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 5px;
+}
+.ci-radar-widgets button span { font-size: 14px; }
+.ci-radar-widgets button b { display: none; }
+.ci-radar-panel { margin-top: 8px; }
+
+@media(max-width:800px) {
+  .ci-radar-head { align-items: flex-start; }
+  .ci-radar-stat .ci-metrics article:nth-child(n+3) { display: none; }
+  .ci-wire-mark { display: none; }
+  .ci-wire-ticker { grid-template-columns: 1fr; }
+  .ci-map-frame .ci-map-stage { min-height: 570px; }
+  .ci-map-frame .ci-map-node span { display: none; }
+  .ci-map-detail { top: auto; bottom: 42px; }
+  .ci-radar-widgets { top: 106px; }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .ci-wire-ticker > div { animation: none; }
+}

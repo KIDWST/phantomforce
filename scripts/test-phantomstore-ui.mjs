@@ -34,12 +34,12 @@ assert.match(storeSource, /\["discover", "Discover"\][\s\S]*\["sellers", "Seller
 assert.match(storeSource, /ps-storefront/u, "PhantomStore discover must start with a storefront hero, not a plain admin list.");
 assert.match(storeSource, /const PRODUCT_ART_FALLBACKS/u, "PhantomStore must provide product artwork fallbacks when listings are missing images.");
 assert.match(storeSource, /beatforge-cover\.svg/u, "PhantomStore must have BeatForge product art instead of reusing PhantomForce OS art.");
-assert.match(storeSource + backendSource, /phantombot-cover\.svg/u, "PhantomStore must give Phantombot products real cover art instead of blank cards.");
+assert.match(storeSource + backendSource, /phantomforce-os-cover-ai\.webp/u, "PhantomStore must give PhantomForce OS real desktop product art instead of a generic card.");
 assert.match(storeSource + backendSource, /phantombot-unleashed-cover\.svg/u, "Phantombot Unleashed must have distinct self-hosted product art instead of duplicating Phantombot.");
 assert.match(storeSource, /unleashed\|self-hosted\|local-only\|fully local[\s\S]*phantombot-unleashed-cover\.svg/u, "Fallback product art must route local/self-hosted listings to the Unleashed cover first.");
-assert.match(storeSource, /id:\s*"product-phantombot"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantombot-cover\.svg/u, "Offline Phantombot listing must use the regular Phantombot cover.");
+assert.match(storeSource, /id:\s*"product-phantombot"[\s\S]*name:\s*"PhantomForce OS"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantomforce-os-cover-ai\.webp/u, "Offline PhantomForce OS listing must use the real desktop product art.");
 assert.match(storeSource, /id:\s*"product-phantombot-unleashed"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantombot-unleashed-cover\.svg/u, "Offline Unleashed listing must use the distinct Unleashed cover.");
-assert.match(backendSource, /id:\s*"product-phantombot"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantombot-cover\.svg/u, "Backend Phantombot listing must use the regular Phantombot cover.");
+assert.match(backendSource, /id:\s*"product-phantombot"[\s\S]*name:\s*"PhantomForce OS"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantomforce-os-cover-ai\.webp/u, "Backend PhantomForce OS listing must use the real desktop product art.");
 assert.match(backendSource, /id:\s*"product-phantombot-unleashed"[\s\S]*imageUrl:\s*"\/app\/assets\/phantomstore\/phantombot-unleashed-cover\.svg/u, "Backend Unleashed listing must use the distinct Unleashed cover.");
 assert.ok(statSync(new URL("../app/assets/phantomstore/phantombot-unleashed-cover.svg", import.meta.url)).size > 3500, "Unleashed cover must stay scene-rich instead of reverting to a tiny placeholder.");
 assert.match(storeSource, /function localFallbackSnapshot\(\)/u, "PhantomStore must render a read-only local product catalog when live sync is offline.");
@@ -111,7 +111,9 @@ assert.match(storeCss, /\.ps-fallback-note/u, "PhantomStore must style the local
 assert.match(customizationSource, /\["phantomstore", "PhantomStore", false/u, "Workspace customization fallback must know PhantomStore is a protected platform tab.");
 assert.match(registrySource, /id:\s*"phantomstore"[\s\S]*displayName:\s*"PhantomStore"[\s\S]*route:\s*"phantomstore"[\s\S]*required:\s*true[\s\S]*customerConfigurable:\s*false/u, "Server module registry must expose PhantomStore as a required, non-hideable marketplace tab.");
 assert.match(profilesSource, /business:[\s\S]*enabledModules:[\s\S]*"phantomstore"/u, "Business workspaces should include PhantomStore by default.");
-assert.match(profilesSource, /creator:[\s\S]*enabledModules:[\s\S]*"phantomstore"/u, "Creator workspaces should include PhantomStore by default.");
+assert.match(profilesSource, /athlete:[\s\S]*enabledModules:[\s\S]*"phantomstore"/u, "Sports workspaces should include PhantomStore by default.");
 assert.match(profilesSource, /developer:[\s\S]*enabledModules:[\s\S]*"phantomstore"/u, "Developer workspaces should include PhantomStore by default.");
+assert.match(storeSource, /spotlightTimer = window\.setTimeout\([\s\S]*5000/u, "Featured products must rotate every five seconds.");
+assert.match(storeSource, /ps-workflow-match/u, "Featured products must show a visual workspace match.");
 
 console.log("PhantomStore UI and module wiring checks passed.");

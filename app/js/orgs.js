@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260728-70";
+import { ctx, session } from "./store.js?v=phantom-live-20260729-86";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -63,6 +63,7 @@ function localSessionFromServer(payload) {
     username: s.username || "",
     orgId: s.orgId || null,
     orgRole: s.orgRole || null,
+    workspaceProfile: s.workspaceProfile || null,
     memberships: s.memberships || [],
     isSuperAdmin: !!s.isSuperAdmin,
     token: payload.token,
@@ -97,7 +98,7 @@ export async function databaseSignup(payload) {
   const localCustomer = !config?.databaseAuthEnabled && config?.customerRegisterEndpoint;
   const endpoint = localCustomer || "/auth/signup";
   const body = localCustomer
-    ? { email: payload.email, password: payload.password, name: payload.name, businessName: payload.organizationName }
+    ? { email: payload.email, password: payload.password, name: payload.name, businessName: payload.organizationName, workspaceProfile: payload.workspaceProfile }
     : payload;
   const { ok, status, json } = await api(endpoint, { method: "POST", body });
   if (!ok) throw new Error(String(json?.error || `Signup failed (${status}).`));

@@ -392,6 +392,126 @@ code { font: 500 0.92em "Spline Sans Mono", monospace; color: var(--neon); }
 }
 .auth-links button:hover, .auth-links button:focus-visible { color: var(--neon); text-decoration: underline; }
 .gate-error { margin: 0; border: 1px solid rgba(255, 80, 80, 0.28); border-radius: 16px; background: rgba(255, 60, 60, 0.08); color: #ffb7b7; padding: 12px 14px; }
+.workspace-choice-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.workspace-choice-field legend {
+  margin-bottom: 10px;
+  color: var(--ink);
+  font: 800 13px/1.25 var(--font);
+  text-transform: none;
+}
+.workspace-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.workspace-choice {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: 28px minmax(0, 1fr) 14px;
+  grid-template-rows: auto auto;
+  gap: 3px 8px !important;
+  min-width: 0;
+  min-height: 76px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.018);
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.workspace-choice:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.workspace-choice.is-selected {
+  border-color: color-mix(in srgb, var(--neon) 70%, white);
+  background: color-mix(in srgb, var(--neon) 9%, transparent);
+}
+.workspace-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.workspace-choice-icon {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--neon);
+}
+.workspace-choice-icon svg { width: 15px; height: 15px; }
+.workspace-choice b {
+  align-self: end;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font: 800 12px/1.15 var(--font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-choice small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dim);
+  font: 600 9px/1.2 var(--font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-choice > i {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+}
+.workspace-choice.is-selected > i {
+  border: 3px solid color-mix(in srgb, var(--neon) 70%, white);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--neon) 45%, transparent);
+}
+.workspace-profile-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(2, 8, 12, .78);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.workspace-profile-dialog {
+  width: min(680px, 100%);
+  padding: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 94%, black);
+  box-shadow: 0 24px 80px rgba(0,0,0,.45);
+}
+.workspace-profile-dialog > p {
+  margin: 0 0 5px;
+  color: var(--neon);
+  font: 800 9px "Spline Sans Mono", monospace;
+  letter-spacing: .16em;
+}
+.workspace-profile-dialog h2 { margin: 0 0 18px; font-size: 22px; letter-spacing: 0; }
+.workspace-profile-continue {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 14px;
+  border: 1px solid var(--neon);
+  border-radius: 7px;
+  background: var(--neon);
+  color: #04110c;
+  font-weight: 900;
+  cursor: pointer;
+}
+@media (max-width: 620px) {
+  .workspace-choice-grid { grid-template-columns: 1fr; }
+  .workspace-profile-dialog { padding: 18px; }
+}
 
 /* ---------------- phantom shell ---------------- */
 .phantom { min-height: 100vh; display: flex; flex-direction: column; transition: filter 0.4s ease, transform 0.4s ease; }
@@ -1426,12 +1546,53 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 
 .ss-simple {
   flex: 1 1 auto; min-height: 100%; height: auto;
-  /* rows: switcher · site cards · domain · editbar · PREVIEW (content-driven,
-     grows to the taller of the website preview and the editor panel) ·
-     section toolbar/hint · prompt · status */
-  display: grid; grid-template-rows: auto auto auto auto minmax(560px, auto) auto auto auto;
+  /* Optional notices and readiness controls can appear before the canvas, so
+     the preview owns its minimum height instead of relying on row position. */
+  display: grid; grid-template-rows: auto;
   gap: 10px;
 }
+.ss-project-settings {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.018);
+}
+.ss-project-settings > summary {
+  display: grid;
+  grid-template-columns: 20px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 7px 11px;
+  list-style: none;
+  cursor: pointer;
+}
+.ss-project-settings > summary::-webkit-details-marker { display: none; }
+.ss-project-settings > summary > span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: var(--neon);
+  font-size: 12px;
+}
+.ss-project-settings > summary > div { min-width: 0; }
+.ss-project-settings > summary b,
+.ss-project-settings > summary i {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ss-project-settings > summary b { color: var(--ink); font-size: 12px; }
+.ss-project-settings > summary i { color: var(--dim); font-size: 10px; font-style: normal; }
+.ss-project-settings > summary em {
+  color: var(--dim);
+  font: 700 9px "Spline Sans Mono",monospace;
+  font-style: normal;
+  text-transform: uppercase;
+}
+.ss-project-settings > summary:hover { background: rgba(255,255,255,.03); }
+.ss-project-settings-body { display: grid; gap: 8px; padding: 0 8px 8px; }
 .ss-simple-top, .ss-simple-domain form, .ss-simple-prompt {
   border: 1px solid var(--line); border-radius: 14px;
   background: var(--glass);
@@ -1475,7 +1636,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .ss-simple-domain input { padding: 10px 11px; }
 .ss-simple-domain input:focus, .ss-simple-prompt textarea:focus { border-color: var(--neon); box-shadow: 0 0 0 3px rgba(91, 76, 255,0.1); }
-.ss-simple-main { min-height: 0; overflow: visible; }
+.ss-simple-main { min-height: 560px; overflow: visible; }
 .ss-simple-preview { height: auto; min-height: 0; overflow: visible; border-radius: 18px; }
 .ss-simple-preview .site-live-preview { min-height: 100%; }
 .ss-public-source {
@@ -7419,7 +7580,7 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260728-70") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260729-86") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -10485,6 +10646,52 @@ body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy-canvas {
 .ss-readiness p small { color: var(--dim); }
 .ss-readiness p.is-blocked { background: rgba(199,126,0,.08); }
 .ss-readiness p.is-blocked b { color: var(--warn); }
+.ss-readiness {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 2px 0 7px;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.ss-readiness > summary {
+  display: inline-grid;
+  grid-template-columns: 18px auto auto;
+  min-height: 26px;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 5px;
+  opacity: .68;
+}
+.ss-readiness > summary:hover { background: rgba(255,255,255,.035); opacity: 1; }
+.ss-readiness:not([open]) > div { display: none; }
+.ss-readiness summary > span {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: var(--warn);
+  font: 900 10px/1 "Spline Sans Mono",monospace;
+}
+.ss-readiness.is-ready summary > span { color: var(--neon); }
+.ss-readiness summary > i {
+  color: var(--dim);
+  font: 700 9px "Spline Sans Mono",monospace;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.ss-readiness summary > b { color: var(--dim); font-size: 9px; }
+.ss-readiness[open] {
+  width: min(620px,100%);
+  padding: 6px;
+  border: 1px solid var(--line);
+  background: rgba(4,9,16,.86);
+}
 
 .ss-release-receipt code, .ss-domain-evidence code {
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim);

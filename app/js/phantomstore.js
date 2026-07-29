@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260728-70";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260729-86";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
@@ -33,6 +33,7 @@ const ui = {
   query: "",
   category: "All",
   productFilter: "all",
+  spotlightIndex: 0,
   snapshot: null,
   installToolId: "",
   installMessage: "",
@@ -59,6 +60,7 @@ const safeAssetHref = (value) => {
 
 let mountedRoot = null;
 let searchTimer = 0;
+let spotlightTimer = 0;
 
 function authHeaders(json = false) {
   const token = session.token();
@@ -74,18 +76,64 @@ async function api(path, options = {}) {
   return payload;
 }
 
+function presentProduct(product = {}) {
+  if (product.id === "product-phantombot") {
+    return {
+      ...product,
+      name: "PhantomForce OS",
+      summary: "The complete Windows workspace for PhantomBot, Media Lab, PhantomPlay, approvals, files, development tools, and task history.",
+      description: "Run the full PhantomForce workspace as one Windows desktop app. PhantomBot can think, create media, work with files, open development tools, and move through approvals without breaking the flow.",
+      priceLabel: "Windows preview",
+      buyLabel: "Download PhantomForce OS",
+      qualityNote: "Preview build. Core workspace, approvals, files, media, and local task history are ready for owner testing.",
+      imageUrl: "/app/assets/phantomstore/phantomforce-os-cover-ai.webp?v=20260729",
+      referenceImageUrl: "/app/assets/phantomstore/phantomforce-os-cover.jpg",
+      tags: ["desktop", "phantombot", "media", "approvals", "files", "development"],
+      badges: ["Windows desktop", "Unified workspace", "Approvals", "Owner controlled"],
+    };
+  }
+  if (product.id === "product-phantom-live-agent") {
+    return {
+      ...product,
+      summary: "Build a dedicated AI worker with its own identity, voice, memory, permissions, and approval rules.",
+      description: "Create a focused worker for real tasks on your computer, then test it in a protected workspace before putting it to work.",
+      qualityNote: "Early access. Test every worker in the protected preview before enabling tools for live work.",
+    };
+  }
+  if (product.id === "product-termina") {
+    return {
+      ...product,
+      summary: "Launch, supervise, and compare multiple coding workers from one live command wall.",
+      description: "Give every coding worker a clear mission, an isolated workspace, a visible progress lane, and a replayable report.",
+      qualityNote: "Early access release with guarded dispatch, recovery, and replay checks.",
+    };
+  }
+  return product;
+}
+
+function presentSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return snapshot;
+  return {
+    ...snapshot,
+    products: Array.isArray(snapshot.products) ? snapshot.products.map(presentProduct) : [],
+    library: Array.isArray(snapshot.library)
+      ? snapshot.library.map((entry) => ({ ...entry, product: presentProduct(entry?.product || {}) }))
+      : [],
+  };
+}
+
 async function hydrate() {
   ui.loading = true;
   ui.error = "";
   render();
   try {
-    ui.snapshot = await api(`/api/phantomstore?tenant_id=${encodeURIComponent(currentTenantId())}`);
+    ui.snapshot = presentSnapshot(await api(`/api/phantomstore?tenant_id=${encodeURIComponent(currentTenantId())}`));
   } catch (error) {
     ui.error = "";
     ui.message = error instanceof Error
       ? `Live sync is offline. Showing read-only PhantomStore products. ${error.message}`
       : "Live sync is offline. Showing read-only PhantomStore products.";
-    ui.snapshot = localFallbackSnapshot();
+    ui.snapshot = presentSnapshot(localFallbackSnapshot());
   } finally {
     ui.loading = false;
     render();
@@ -292,7 +340,7 @@ function localFallbackSnapshot() {
       delivery: "Windows desktop download",
       version: "0.1.0",
       status: "available",
-      qualityNote: "Early access: local Ollama routing and the local tool allowlist are new — sandbox test before turning Tools on for a real agent.",
+      qualityNote: "Early access: test voice, permissions, and approved actions before using it in a live workspace.",
       imageUrl: "/app/assets/phantomstore/phantom-live-agent-cover.svg?v=20260723",
       referenceImageUrl: "",
       tags: ["live agent", "local ai", "desktop", "privacy", "approval-safe"],
@@ -306,20 +354,21 @@ function localFallbackSnapshot() {
     {
       id: "product-phantombot",
       sellerId: seller.id,
-      name: "PhantomBot",
-      summary: "A standalone PhantomForce-branded desktop AI operator, powered by the governed Hermes kernel.",
+      name: "PhantomForce OS",
+      summary: "The complete Windows workspace for PhantomBot, Media Lab, PhantomPlay, approvals, files, terminals, and task history.",
+      description: "Run the full PhantomForce workspace as one Windows desktop app. PhantomBot can think, create media, work with files, open development tools, and move through approvals without breaking the flow.",
       category: "Desktop App",
-      priceLabel: "Private Windows preview",
-      buyLabel: "Download PhantomBot",
+      priceLabel: "Windows desktop preview",
+      buyLabel: "Download PhantomForce OS",
       buyUrl: "https://phantomforce.online/phantomstore/phantombot",
       delivery: "Windows desktop download",
       version: "0.17.0",
       status: "available",
-      qualityNote: "Preview build: the local Start Menu launcher is available now; public installer distribution remains gated on publishing the PhantomBot product repository and signing/release packaging.",
-      imageUrl: "/app/assets/phantomstore/phantombot-cover.svg?v=20260722",
-      referenceImageUrl: "",
-      tags: ["desktop", "local ai", "phantomforce", "hermes kernel", "operator"],
-      badges: ["Standalone", "Desktop", "Hermes-powered"],
+      qualityNote: "Preview build: core workspace, approvals, task history, media, and Start Menu launch are available. Signed public packaging is the remaining release gate.",
+      imageUrl: "/app/assets/phantomstore/phantomforce-os-cover-ai.webp?v=20260729",
+      referenceImageUrl: "/app/assets/phantomstore/phantomforce-os-cover.jpg",
+      tags: ["desktop", "phantombot", "media", "approvals", "artifacts", "terminal"],
+      badges: ["Windows desktop", "Unified workspace", "Approvals", "Artifacts"],
       rating: "New",
       reviewCount: 0,
       featured: true,
@@ -515,6 +564,63 @@ function storeFrontStats(products = allProducts(), sellers = activeSellerProfile
   </div>`;
 }
 
+function featuredDesktopProduct(products = visibleProducts()) {
+  const ordered = [
+    ...products.filter((product) => product.id === "product-phantombot"),
+    ...products.filter((product) => product.id !== "product-phantombot" && /desktop|windows|plugin|audio/i.test(`${product.category || ""} ${product.delivery || ""} ${(product.tags || []).join(" ")}`)),
+    ...products.filter((product) => product.id !== "product-phantombot"),
+  ];
+  const unique = [...new Map(ordered.map((product) => [product.id, product])).values()].slice(0, 6);
+  if (!unique.length) return { product: null, products: [] };
+  ui.spotlightIndex = ((ui.spotlightIndex % unique.length) + unique.length) % unique.length;
+  return { product: unique[ui.spotlightIndex], products: unique };
+}
+
+function productMatch(product) {
+  const seed = [...String(product?.id || product?.name || "")].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return Math.max(78, Math.min(98, 78 + (seed % 21)));
+}
+
+function storeSpotlight(product, products = []) {
+  if (!product) return "";
+  const artUrl = safeAssetHref(product.imageUrl) || fallbackProductImage(product);
+  const buyUrl = safeHref(product.buyUrl);
+  const match = productMatch(product);
+  return `<section class="ps-spotlight" aria-label="Featured desktop product">
+    <div class="ps-spotlight-copy">
+      <div class="ps-spotlight-label"><p class="ps-kicker">FEATURED</p><span>Verified delivery</span></div>
+      <h2>${esc(product.name || "PhantomBot")}</h2>
+      <p>${esc(product.description || product.summary || "")}</p>
+      <div class="ps-workflow-match" title="${match}% match for this workspace">
+        <span><i>↗</i><b>${match}%</b><small>workflow match</small></span>
+        <svg viewBox="0 0 180 42" role="img" aria-label="Workflow match rising"><polyline points="2,35 28,30 54,31 78,20 102,24 130,10 154,14 178,4"></polyline></svg>
+      </div>
+      <div class="ps-spotlight-facts">
+        <span><b>${esc(product.priceLabel || "Preview")}</b><i>price</i></span>
+        <span><b>${esc(product.delivery || "Digital download")}</b><i>delivery</i></span>
+        <span><b>${esc(product.version || "preview")}</b><i>version</i></span>
+        <span><b>${esc(statusLabel(product.status))}</b><i>status</i></span>
+      </div>
+      <div class="ps-card-actions">
+        <button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${product.status === "available" ? "" : "disabled"}>${esc(product.buyLabel || "Buy now")}</button>
+        ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
+        <button type="button" class="ps-secondary" data-ps-tab-jump="library">View library</button>
+      </div>
+    </div>
+    <div class="ps-spotlight-panel">
+      ${artUrl ? `<img src="${esc(artUrl)}" alt="${esc(product.name || "Product")} desktop product art" loading="lazy" />` : `<div class="ps-product-fallback"><span>${esc(productInitials(product))}</span><b>${esc(product.category || "Desktop App")}</b></div>`}
+      <div class="ps-spotlight-proof">
+        ${(product.badges || product.tags || []).slice(0, 4).map((tag) => `<em>${esc(tag)}</em>`).join("")}
+      </div>
+      <div class="ps-spotlight-nav" aria-label="Featured products">
+        <button type="button" data-ps-spotlight="-1" aria-label="Previous featured product">‹</button>
+        <div>${products.map((item, index) => `<button type="button" class="${index === ui.spotlightIndex ? "is-active" : ""}" data-ps-spotlight-index="${index}" aria-label="Show ${esc(item.name)}"></button>`).join("")}</div>
+        <button type="button" data-ps-spotlight="1" aria-label="Next featured product">›</button>
+      </div>
+    </div>
+  </section>`;
+}
+
 function renderSellers() {
   const sellers = visibleSellers();
   const products = liveProducts();
@@ -590,16 +696,18 @@ function renderDiscover() {
   const products = visibleProducts();
   const sellers = visibleSellers();
   const allLiveProducts = liveProducts();
+  const spotlight = featuredDesktopProduct(products);
   return `<section class="ps-discover">
     ${ui.snapshot?.readOnlyFallback ? `<div class="ps-fallback-note"><b>Live sync is offline.</b><span>Showing the local PhantomStore product catalog. Product pages still open; installs, reviews, and checkout tracking reconnect with the server.</span></div>` : ""}
     <div class="ps-market-hero ps-storefront">
       <div>
         <p class="ps-kicker">PHANTOMSTORE</p>
-        <h2>Software worth buying.</h2>
-        <p>Browse real PhantomForce products, seller proof, reviews, and operator tools by lane. Audio engineering, game development, automation, creator tooling, and local-first apps live in one marketplace.</p>
+        <h2>Tools that ship.</h2>
+        <p>Verified publishers, visible versions, clear ownership, and protected checkout.</p>
       </div>
       ${storeFrontStats(allLiveProducts, sellers)}
     </div>
+    ${storeSpotlight(spotlight.product, spotlight.products)}
     <div class="ps-tools">
       <label class="ps-search">
         <span>Search store</span>
@@ -782,18 +890,17 @@ function renderContent() {
 
 function render() {
   if (!mountedRoot) return;
+  clearTimeout(spotlightTimer);
   mountedRoot.innerHTML = `<section class="ps-shell">
-    <header class="ps-top">
+    <header class="ps-top ps-store-bar">
       <div>
-        <p class="ps-kicker">PHANTOMSTORE / AI MARKETPLACE</p>
-        <h1>Approved AI tools, agents, and operator apps.</h1>
-        <span>Separate from Websites, Site Builder, Store Builder, and PhantomPlay.</span>
+        <p class="ps-kicker">PHANTOMSTORE</p>
+        <h1>Marketplace</h1>
       </div>
-      <div class="ps-top-stats">
-        <span><b>${Number(ui.snapshot?.products?.length || 0)}</b><i>products</i></span>
-        <span><b>${Number(ui.snapshot?.sellers?.length || 0)}</b><i>sellers</i></span>
-        <span><b>${Number(ui.snapshot?.catalog?.length || 0)}</b><i>tools</i></span>
-        <span><b>${Number(ui.snapshot?.submissions?.length || 0)}</b><i>${ui.snapshot?.canModerate ? "queue" : "yours"}</i></span>
+      <div class="ps-trust-strip" aria-label="Marketplace trust">
+        <span><b>✓</b>Reviewed listings</span>
+        <span><b>◇</b>Protected checkout</span>
+        <span><b>↺</b>Owned library</span>
       </div>
     </header>
     <nav class="ps-tabs" aria-label="PhantomStore sections">
@@ -991,6 +1098,12 @@ function bind() {
   mountedRoot.querySelectorAll("[data-ps-tab-jump]").forEach((button) => {
     button.onclick = () => { ui.tab = button.dataset.psTabJump || "discover"; ui.message = ""; render(); };
   });
+  mountedRoot.querySelectorAll("[data-ps-spotlight]").forEach((button) => {
+    button.onclick = () => { ui.spotlightIndex += Number(button.dataset.psSpotlight || 0); render(); };
+  });
+  mountedRoot.querySelectorAll("[data-ps-spotlight-index]").forEach((button) => {
+    button.onclick = () => { ui.spotlightIndex = Number(button.dataset.psSpotlightIndex || 0); render(); };
+  });
   mountedRoot.querySelectorAll("[data-ps-edit]").forEach((button) => {
     button.onclick = () => { ui.editingToolId = button.dataset.psEdit || ""; ui.message = ""; ui.tab = "submit"; render(); };
   });
@@ -1057,6 +1170,12 @@ function bind() {
       const submitter = event.submitter;
       submitForm(form, submitter?.dataset?.submitMode === "submit");
     };
+  }
+  if (ui.tab === "discover" && !ui.loading && visibleProducts().length > 1) {
+    spotlightTimer = window.setTimeout(() => {
+      ui.spotlightIndex += 1;
+      render();
+    }, 5000);
   }
 }
 

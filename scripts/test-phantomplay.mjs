@@ -66,7 +66,7 @@ const kidsOnlyGameIds = [
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
 assert.match(main, /renderPhantomPlay/u, "The workspace must use the PhantomPlay renderer.");
-assert.match(read("../app/js/customization.js"), /canAccessConfiguredModule[\s\S]*module\.id !== "phantomplay"[\s\S]*selected_members/u, "PhantomPlay nav access must be controlled by the workspace module configuration.");
+assert.match(read("../app/js/customization.js"), /phantomplay[\s\S]*forceEnabled: true[\s\S]*accessMode: "entire_organization"[\s\S]*if \(moduleId === "phantomplay"\) return true;/u, "PhantomPlay nav access must stay organization-wide instead of preserving selected-member locks.");
 assert.match(main, /sessionId:\s*kind === "admin" \? "admin-jordan" : "client-sports-demo"/u, "Local UI tests must obtain a real protected demo session when the local backend is available.");
 assert.match(index, /phantomplay\.css\?v=phantom-live-/u, "The dedicated PhantomPlay stylesheet must be loaded.");
 assert.match(index, /phantomplay-v2\.css\?v=phantom-live-/u, "The PhantomPlay V2 stylesheet must be loaded.");
@@ -133,7 +133,7 @@ assert.match(module, /sandbox="allow-scripts allow-pointer-lock"/u, "Games must 
 assert.doesNotMatch(module, /allow-same-origin|allow-forms|allow-popups/u, "The player must not grant origin, form, or popup powers.");
 assert.match(module, /event\.source !== frame\.contentWindow/u, "Game messages must be bound to the active frame.");
 assert.match(module, /data\.source !== "phantomplay-game"/u, "Game messages must use the PhantomPlay protocol marker.");
-assert.doesNotMatch(module + v2Module, /Sign in to play|Backend session required|backend_session_required/u, "PhantomPlay must not show a sign-in/session gate inside an already signed-in workspace.");
+assert.doesNotMatch(module + v2Module, /Plan locked|Plan restricted|not included in this test tier|Disabled for this plan/u, "PhantomPlay must not show a plan gate inside a signed-in workspace.");
 assert.match(module + v2Module, /local_play_fallback/u, "PhantomPlay fallback snapshots must allow signed-in workspace users to launch built-in games locally while sync is offline.");
 assert.match(module + v2Module, /function canLaunchGames[\s\S]*hasWorkspaceSession/u, "PhantomPlay launch gating must treat an existing workspace session as enough for local built-in play.");
 assert.match(module + v2Module, /Local Play mode/u, "PhantomPlay offline copy must present backend loss as sync degradation, not a sign-in failure.");

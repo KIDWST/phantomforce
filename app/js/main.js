@@ -6,58 +6,157 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260728-70";
+} from "./store.js?v=phantom-live-20260729-86";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems, cachedOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260728-70";
+} from "./organizationpulse.js?v=phantom-live-20260729-86";
 import {
   loadSecurityMonitorStatus, cachedSecurityMonitorStatus, securityMonitorIsAdmin, runSecurityMonitorScan, securityMonitorRunning,
-} from "./securitystatus.js?v=phantom-live-20260728-70";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260728-70";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260728-70";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260728-70";
-import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260728-70";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260728-70";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260728-70";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260728-70";
-import { activatePhantomAiTab, mountPhantomAI } from "./phantomai.js?v=phantom-live-20260728-70";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260728-70";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260728-70";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260728-70";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260728-70";
-import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260728-70";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260728-70";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260728-70";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260728-70";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260728-70";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260728-70";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260728-70";
+} from "./securitystatus.js?v=phantom-live-20260729-86";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260729-86";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260729-86";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260729-86";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260729-86";
+import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260729-86-creatorrestore1";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260729-86-creatorrestore1";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260729-86";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260729-86";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260729-86";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260729-86";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260729-86";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260729-86";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260729-86";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260729-86";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260729-86";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260729-86";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260729-86";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260729-86";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260729-86";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260729-86";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260729-86";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260729-86";
+import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260729-86-creatorrestore1";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260728-70";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260728-70";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260728-70";
+} from "./orgs.js?v=phantom-live-20260729-86";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260729-86";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260729-86";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260728-70";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260729-86";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260728-70";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260729-86";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260728-70";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260728-70";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260728-70";
-import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260728-70";
+} from "./customization.js?v=phantom-live-20260729-86";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260729-86";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260729-86";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260729-86";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
+const WORKSPACE_PROFILE_STORAGE_KEY = "pf.workspace.profile.v2";
+const WORKSPACE_PROFILE_OPTIONS = {
+  business: {
+    id: "business",
+    label: "Business",
+    short: "Clients, sales, operations",
+    icon: "chart",
+  },
+  athlete: {
+    id: "athlete",
+    label: "Athlete",
+    short: "Training, recruiting, personal brand",
+    icon: "users",
+  },
+  coach: {
+    id: "coach",
+    label: "Coach",
+    short: "Roster, practice, team follow-up",
+    icon: "users",
+  },
+  sports_management: {
+    id: "sports_management",
+    label: "Sports management",
+    short: "Athletes, sponsors, events",
+    icon: "chart",
+  },
+  creator: {
+    id: "creator",
+    label: "Creator",
+    short: "Media, publishing, offers",
+    icon: "media",
+  },
+  developer: {
+    id: "developer",
+    label: "Developer",
+    short: "Products, code, releases",
+    icon: "dev",
+  },
+  agency: {
+    id: "agency",
+    label: "Agency",
+    short: "Clients, campaigns, delivery",
+    icon: "site",
+  },
+  education: {
+    id: "education",
+    label: "Education",
+    short: "Students, courses, communication",
+    icon: "users",
+  },
+};
+
+function normalizeWorkspaceProfile(value) {
+  return Object.prototype.hasOwnProperty.call(WORKSPACE_PROFILE_OPTIONS, value) ? value : "business";
+}
+
+function workspaceProfileStorageKey() {
+  return `${WORKSPACE_PROFILE_STORAGE_KEY}:${ctx.session?.orgId || "default"}`;
+}
+
+function storedWorkspaceProfile() {
+  try {
+    const scoped = localStorage.getItem(workspaceProfileStorageKey());
+    const fallback = localStorage.getItem(WORKSPACE_PROFILE_STORAGE_KEY);
+    const value = scoped || fallback || ctx.session?.workspaceProfile || "";
+    return value ? normalizeWorkspaceProfile(value) : "";
+  } catch {
+    return normalizeWorkspaceProfile(ctx.session?.workspaceProfile || "business");
+  }
+}
+
+function activeWorkspaceProfileId() {
+  return storedWorkspaceProfile() || "business";
+}
+
+function saveWorkspaceProfile(value) {
+  const profile = normalizeWorkspaceProfile(value);
+  try {
+    localStorage.setItem(WORKSPACE_PROFILE_STORAGE_KEY, profile);
+    localStorage.setItem(workspaceProfileStorageKey(), profile);
+  } catch {}
+  if (ctx.session) ctx.session.workspaceProfile = profile;
+  return profile;
+}
+
+function workspaceProfileChoices(selected = "business") {
+  return Object.values(WORKSPACE_PROFILE_OPTIONS).map((profile) => `
+    <label class="workspace-choice ${selected === profile.id ? "is-selected" : ""}">
+      <input type="radio" name="workspaceProfile" value="${profile.id}" ${selected === profile.id ? "checked" : ""} />
+      <span class="workspace-choice-icon">${svg(profile.icon)}</span>
+      <b>${esc(profile.label)}</b>
+      <small>${esc(profile.short)}</small>
+      <i aria-hidden="true"></i>
+    </label>`).join("");
+}
 
 const gate = $("[data-gate]");
 const phantom = $("[data-phantom]");
@@ -292,7 +391,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       ? "Owners/admins open Business Manager. Employees open Team Workspace. Permissions come from the business workspace."
       : internalAdmin
       ? "Internal PhantomForce operator access only."
-      : "Your account, businesses, roles, recovery, and 2FA are managed on the PhantomForce server.";
+      : "Your account, businesses, roles, recovery, and 2FA are managed securely by PhantomForce.";
     const note = customerApp
       ? "Use the email or username tied to your business workspace."
       : internalAdmin
@@ -325,12 +424,16 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
           <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">+</span><b>Join workspace</b><i>This invitation can only be accepted once.</i></button>
         </form>` : state.mode === "signup" && !internalAdmin ? `
         <form class="owner-login" data-auth-form="signup">
+          <fieldset class="workspace-choice-field">
+            <legend>What workspace do you want?</legend>
+            <div class="workspace-choice-grid">${workspaceProfileChoices("business")}</div>
+          </fieldset>
           <label><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@business.com" required /></label>
           <label><span>Username</span><input name="username" autocomplete="username" placeholder="yourname" minlength="3" maxlength="32" /></label>
           <label><span>Name</span><input name="name" autocomplete="name" placeholder="Your name" /></label>
-          <label><span>Business / workspace</span><input name="organizationName" placeholder="Business name" /></label>
+          <label><span>Workspace name</span><input name="organizationName" placeholder="Optional" /></label>
           <label><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
-          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">＋</span><b>Create account</b><i>Creates your user, starter workspace, and owner role.</i></button>
+          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">＋</span><b>Create account</b><i>Starts your workspace on Basic.</i></button>
         </form>` : state.mode === "forgot-user" && !internalAdmin ? `
         <form class="owner-login" data-auth-form="forgot-user">
           <label><span>Account email</span><input type="email" name="email" autocomplete="email" required /></label>
@@ -367,6 +470,13 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
       card.querySelectorAll("[data-auth-mode]").forEach((btn) => {
         btn.onclick = () => { state.mode = btn.dataset.authMode; state.message = ""; render(); };
       });
+      card.querySelectorAll('input[name="workspaceProfile"]').forEach((input) => {
+        input.onchange = () => {
+          card.querySelectorAll(".workspace-choice").forEach((choice) => {
+            choice.classList.toggle("is-selected", choice.contains(input));
+          });
+        };
+      });
       const form = card.querySelector("[data-auth-form]");
       if (!form) return;
       form.onsubmit = async (event) => {
@@ -392,13 +502,16 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
         } else if (state.mode === "2fa") {
           await doEnter(await databaseVerify2fa(state.challenge, String(data.get("code") || "")));
         } else if (state.mode === "signup") {
-          await databaseSignup({
+          const workspaceProfile = normalizeWorkspaceProfile(String(data.get("workspaceProfile") || "business"));
+          const signup = await databaseSignup({
             email: String(data.get("email") || "").trim(),
             username: String(data.get("username") || "").trim() || undefined,
             name: String(data.get("name") || "").trim() || undefined,
             organizationName: String(data.get("organizationName") || "").trim() || undefined,
             password: String(data.get("password") || ""),
+            workspaceProfile,
           });
+          saveWorkspaceProfile(signup?.workspaceProfile || workspaceProfile);
           state.mode = "signin"; state.message = "Account created. Sign in with your new credentials."; render();
         } else if (state.mode === "forgot-user") {
           const result = await databaseForgotUsername(String(data.get("email") || "").trim());
@@ -464,14 +577,18 @@ const BASE_NAV = [
   { id: "phantomai",  label: "PhantomBot",   icon: "chat",  ws: "phantomai" },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
+  { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
+  { id: "content",    label: "Content Hub",  icon: "spark", ws: "content" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
+  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
+  { id: "planner",    label: "Planner",      icon: "clock", ws: "planner" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, dashboardWidget: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", dashboardWidget: true },
   { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence", dashboardWidget: true },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics", dashboardWidget: true },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
-  { id: "adminos",    label: "Admin",        icon: "dev",   ws: "adminos", ownerOnly: true, navZone: "bottom", internalOnly: true },
+  { id: "adminos",    label: "Admin",        icon: "users", ws: "adminos", adminOnly: true, navZone: "bottom" },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
   { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
   { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true, optionalModule: true },
@@ -481,6 +598,7 @@ let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 let navEntitlements = { loaded: false, features: null, limits: null, entitlements: null };
 const FEATURE_BY_NAV_ID = {
   sites: "websites",
+  media: "mediaLab",
   automation: "advancedWorkflows",
   workers: "agentRuns",
   intelligence: "competitorIntelligence",
@@ -488,12 +606,10 @@ const FEATURE_BY_NAV_ID = {
   phantomplay: "phantomPlay",
 };
 const PLAN_NAV_WORKFLOWS = {
-  free: new Set(["dashboard", "phantomai", "sites", "phantomplay", "settings"]),
-  starter: new Set(["dashboard", "phantomai", "crm", "sites", "phantomplay", "settings"]),
-  professional: new Set(["dashboard", "phantomai", "crm", "sites", "money", "intelligence", "analytics", "approvals", "phantomplay", "settings", "vacation"]),
-  developer: new Set(["dashboard", "phantomai", "sites", "automation", "developer", "phantomplay", "phantomstore", "settings"]),
-  elite: new Set(["dashboard", "phantomai", "crm", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "phantomplay", "phantomstore", "settings", "vacation"]),
-  developer_elite: new Set(["dashboard", "phantomai", "crm", "sites", "money", "automation", "approvals", "workers", "intelligence", "analytics", "developer", "phantomplay", "phantomstore", "settings", "vacation"]),
+  free: null,
+  starter: null,
+  professional: null,
+  elite: null,
   enterprise: null,
   internal: null,
   phantom: null,
@@ -503,20 +619,35 @@ function ownerHasPhantomAccess() {
 }
 function selectedPlanWorkflowKey() {
   if (ownerHasPhantomAccess()) return "phantom";
-  return String(navEntitlements.entitlements?.planKey || "free").toLowerCase();
+  const key = String(navEntitlements.entitlements?.planKey || "starter").toLowerCase();
+  if (key === "developer") return "professional";
+  if (key === "developer_elite") return "elite";
+  return key;
 }
 function isDeveloperTier() {
-  return /developer/.test(selectedPlanWorkflowKey());
+  return false;
 }
 function planAllowsNavItem(item) {
   if (!item) return false;
   if (ownerHasPhantomAccess()) return true;
   if (item.internalOnly) return false;
-  const allowed = PLAN_NAV_WORKFLOWS[selectedPlanWorkflowKey()] ?? PLAN_NAV_WORKFLOWS.free;
+  const allowed = PLAN_NAV_WORKFLOWS[selectedPlanWorkflowKey()] ?? PLAN_NAV_WORKFLOWS.starter;
   return !allowed || allowed.has(item.id);
 }
+const PROFILE_NAV_WORKFLOWS = {
+  business: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "money", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "adminos", "vacation", "phantomplay", "phantomstore"]),
+  athlete: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
+  developer: new Set(["dashboard", "phantomai", "sites", "media", "content", "automation", "workers", "intelligence", "analytics", "memory", "settings", "adminos", "developer", "phantomplay", "phantomstore"]),
+  coach: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
+  sports_management: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "money", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
+  agency: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "money", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
+  education: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
+};
+function profileAllowsNavItem(item) {
+  return true;
+}
 function canUseNavItem(item) {
-  return canAccessSurface(item) && planAllowsNavItem(item);
+  return canAccessSurface(item) && planAllowsNavItem(item) && profileAllowsNavItem(item);
 }
 /* MOBILE_NAV remains a complete mirror of the desktop registry so access,
    entitlements, and routing have one source of truth. The phone dock renders
@@ -552,19 +683,7 @@ let MOBILE_NAV = NAV.map((n) => ({
 }));
 
 function navFeatureDisabled(item) {
-  if (isLiveAdminHost() || (isLocalDevHost() && isAdmin())) return false;
-  if ((!ctx.session?.database && !ctx.session?.localCustomer) || !navEntitlements.loaded) return false;
-  const featureKey = FEATURE_BY_NAV_ID[item?.id];
-  if (!featureKey) return false;
-  if (navEntitlements.features?.[featureKey] === false) return true;
-  const limitKey = {
-    media: "mediaCreditsPerMonth",
-    sites: "sitesPerOrg",
-    workers: "agentRunsPerDay",
-    intelligence: "competitorProfiles",
-    phantomplay: "phantomPlayMinutesPerDay",
-  }[item.id];
-  return limitKey ? Number(navEntitlements.limits?.[limitKey] ?? 1) <= 0 : false;
+  return false;
 }
 
 function orderedNavItems() {
@@ -599,7 +718,13 @@ function mobileItemsFromNav(items = orderedNavItems()) {
 }
 
 function refreshCustomizedNavigation() {
-  NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
+  const profile = activeWorkspaceProfileId();
+  NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client").map((item) => {
+    if (profile === "athlete" && item.id === "crm") return { ...item, label: "Athletes" };
+    if (profile === "athlete" && item.id === "content") return { ...item, label: "Highlights" };
+    if (profile === "developer" && item.id === "sites") return { ...item, label: "Projects" };
+    return item;
+  });
   MOBILE_NAV = mobileItemsFromNav();
 }
 
@@ -630,7 +755,7 @@ let activeNav = "dashboard";
 let activePageId = null;
 /* The right-hand deck is the launcher. The left-hand rail is a working set:
    destinations only become tabs after somebody opens them. */
-const openNavTabs = new Set(["dashboard", "phantomai"]);
+const openNavTabs = new Set(["dashboard", "phantomai", "media", "sites", "analytics", "automation", "planner", "phantomplay", "phantomstore"]);
 function markNavTabOpen(id) {
   if (NAV.some((item) => item.id === id && canUseNavItem(item))) openNavTabs.add(id);
 }
@@ -660,20 +785,24 @@ const NAV_PARENT_BY_WORKSPACE = {
   bookings: "crm",
   clientsetup: "settings",
   protect: "settings",
-  adminos: "developer",
   account: "settings",
   promptlibrary: "phantomai",
   activity: "workers",
+  intelligence: "analytics",
 };
 
 function workspaceId(id) {
   return ROUTE_REGISTRY.canonicalId(id);
 }
 
+function canManageWorkspace() {
+  return isAdmin() || isOwnerOperator() || Boolean(ctx.session?.canManageAccess);
+}
+
 function canAccessSurface(surface) {
   if (surface?.internalOnly && !(isLiveAdminHost() || (isLocalDevHost() && isAdmin()))) return false;
   if (surface?.ownerOnly && !isOwnerOperator() && !(surface.id === "developer" && isDeveloperTier())) return false;
-  if (surface?.adminOnly && !isAdmin()) return false;
+  if (surface?.adminOnly && !canManageWorkspace()) return false;
   return true;
 }
 
@@ -689,6 +818,9 @@ function navStatusPill(n) {
 function renderNav() {
   const nav = $("[data-nav]");
   const bottomNav = $("[data-nav-bottom]");
+  const shell = $("[data-phantom]");
+  if (shell) shell.dataset.activeNav = activeNav;
+  document.documentElement.dataset.activeNav = activeNav;
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const items = orderedNavItems();
   const mainItems = items.filter((n) => openNavTabs.has(n.id));
@@ -725,7 +857,7 @@ function renderMobileBottomNav() {
   nav.innerHTML = dockItems.map((item) => `
     <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""} ${item.navDisabled ? "is-disabled" : ""}" data-mobile-nav="${esc(item.id)}" type="button" ${mobileNavActive(item) ? 'aria-current="page"' : ""} ${item.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
       ${svg(item.icon)}
-      <span>${esc(item.label)}</span>
+      <span>${esc(item.id === "phantomai" ? "Bot" : item.label)}</span>
       ${item.badge && pending ? `<em class="mobile-bottom-badge">${pending}</em>` : ""}
     </button>`).join("") + `
     <button class="mobile-bottom-item mobile-bottom-more ${mobileNavOpen || hiddenRouteActive ? "is-active" : ""}" data-mobile-more type="button" aria-haspopup="true" aria-expanded="${mobileNavOpen}" aria-label="${mobileNavOpen ? "Close all sections" : "Open all sections"}">
@@ -1098,7 +1230,7 @@ function renderOsMenu() {
   }
   menu.hidden = !osMenuOpen;
   if (!osMenuOpen) return;
-  const primaryIds = ["dashboard", "clients", "sites", "phantomplay", "phantomstore", "analytics", "intelligence", "money", "approvals"];
+  const primaryIds = ["dashboard", "crm", "sites", "phantomplay", "phantomstore", "analytics", "money", "approvals", "intelligence", "settings", "adminos", "developer"];
   const items = orderedNavItems()
     .filter((item) => primaryIds.includes(item.id))
     .sort((a, b) => primaryIds.indexOf(a.id) - primaryIds.indexOf(b.id));
@@ -1116,6 +1248,8 @@ function renderOsMenu() {
         </button>`).join("")}
     </div>
     <div class="os-menu-actions">
+      <button data-user-menu-action="settings" type="button">Settings</button>
+      ${canManageWorkspace() ? `<button data-user-menu-action="organization" type="button">Organization &amp; employees</button>` : ""}
       <button data-user-menu-action="account" type="button">Account and access</button>
       <button class="is-danger" data-user-menu-action="signout" type="button">Sign out</button>
     </div>`;
@@ -1151,12 +1285,12 @@ const ACCOUNT_PLAN = {
 };
 const ACCOUNT_TIERS = [
   {
-    id: "free",
-    name: "Free Preview",
-    price: "$0",
-    badge: "Preview",
-    copy: "Small limits for trying the workspace before picking a paid operating tier.",
-    features: ["Command center preview", "Small media allowance", "One business workspace"],
+    id: "starter",
+    name: "Basic",
+    price: "Core",
+    badge: "Start",
+    copy: "The complete foundation for one focused workspace.",
+    features: ["PhantomBot", "Media and sites", "Core analytics"],
   },
   {
     id: "professional",
@@ -1167,28 +1301,12 @@ const ACCOUNT_TIERS = [
     features: ["Phantom AI operator", "Native creative workflow", "Accounting-aware ops"],
   },
   {
-    id: "developer",
-    name: "Developer",
-    price: "Builder",
-    badge: "Dev",
-    copy: "Developer-focused access for building products, games, plugins, and test releases.",
-    features: ["Developer workflows", "PhantomPlay submissions", "Advanced model lane"],
-  },
-  {
     id: "elite",
     name: "Elite Plan",
     price: "Custom",
     badge: "Current",
     copy: "The full business operating suite: deeper loop routing, multi-workspace control, automations, and launch support.",
     features: ["Advanced loop routing", "Multi-workspace command", "Business automation planning", "Launch support"],
-  },
-  {
-    id: "developer_elite",
-    name: "Developer + Elite",
-    price: "Full stack",
-    badge: "Dev+Elite",
-    copy: "Elite business operations plus expanded developer/game submission limits.",
-    features: ["Elite operations", "Developer envelope", "Advanced workflows"],
   },
 ];
 let accountNotice = "";
@@ -1208,7 +1326,7 @@ function accountIdentityLine() {
 }
 function currentPlanKey() {
   if (ownerHasPhantomAccess()) return "phantom";
-  return navEntitlements.entitlements?.planKey || (isAdmin() ? "internal" : "free");
+  return navEntitlements.entitlements?.planKey || (isAdmin() ? "internal" : "starter");
 }
 function currentPlanName() {
   return accessVersionCopy().label || ACCOUNT_PLAN.name;
@@ -1230,7 +1348,7 @@ function loadConsoleSettingsSnapshot() {
 function renderConsoleCoreStatus(activeCompanionMode = companionMode()) {
   const settings = loadConsoleSettingsSnapshot();
   const loop = loadPhantomLoop();
-  const providerNames = { claude: "Claude", private: "Private Operator", chatgpt: "ChatGPT", openrouter: "OpenRouter", local: "Local Ollama" };
+  const providerNames = { claude: "Claude", private: "Private Operator", chatgpt: "ChatGPT", openrouter: "OpenRouter", local: "Local / Ollama" };
   const selected = Array.isArray(settings.selectedProviders) && settings.selectedProviders.length ? settings.selectedProviders : ["claude", "private", "chatgpt", "openrouter", "local"];
   const brainMode = settings.brainMode === "local"
     ? "Ghost/local"
@@ -1305,6 +1423,9 @@ function renderAccountMenu() {
       <span aria-hidden="true"></span>
       <b>${esc(status.label)}</b>
     </div>
+    <button class="user-menu-link" data-user-menu-action="settings" type="button">Settings</button>
+    ${canManageWorkspace() ? `<button class="user-menu-link" data-user-menu-action="organization" type="button">Organization &amp; employees</button>` : ""}
+    ${isOwnerOperator() ? `<button class="user-menu-link" data-user-menu-action="developer" type="button">Developer panel</button>` : ""}
     <button class="user-menu-link" data-user-menu-action="signout" type="button">Sign out</button>`;
   menu.querySelectorAll("[data-user-menu-org]").forEach((btn) => {
     btn.onclick = async () => {
@@ -1335,7 +1456,7 @@ async function hydrateLivePlan(body) {
           <span><b>guardrail</b>approval for risky actions</span>
           <span><b>scope</b>admin + app</span>
         </div>
-        <p class="set-note">Phantom is hidden from customer plan catalogs. Customers only see Free, Pro, Developer, Elite, and Developer + Elite.</p>
+        <p class="set-note">Phantom is hidden from customer plan catalogs. Customers choose Basic, Pro, or Elite; workspace type is configured separately.</p>
       </article>`;
     return;
   }
@@ -1570,7 +1691,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260728-70";
+const POSE_VERSION = "phantom-live-20260729-86";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1798,6 +1919,7 @@ function renderModePose(id = activeMode) {
 
 function renderChips() {
   const wrap = $("[data-cmd-chips]");
+  if (!wrap) return;
   wrap.innerHTML = Object.entries(MODES).map(([id, m]) => `
     <button class="cmd-chip ${activeMode === id ? "is-active" : ""}" data-mode="${id}" aria-pressed="${activeMode === id ? "true" : "false"}" title="${esc(m.label)} mode">
       ${svg(m.icon)}<span>${m.label}</span>
@@ -1818,13 +1940,17 @@ function setMode(id) {
   }
   if (m.open) { routeWorkspace(m.open); return; }
   const input = $("[data-command-input]");
-  input.placeholder = m.placeholder;
-  focusWithoutScroll(input);
+  if (input) {
+    input.placeholder = m.placeholder;
+    focusWithoutScroll(input);
+  }
 }
 
 function renderHero() {
-  const name = (ctx.session?.name || "there").split(/\s+/)[0];
-  $("[data-hero-name]").textContent = name === "there" ? "handling?" : `handling, ${name}?`;
+  const rawName = (ctx.session?.name || "Operator").split(/\s+/)[0];
+  const name = /^customer$/i.test(rawName) || /^there$/i.test(rawName) ? "Operator" : rawName;
+  const heroName = $("[data-hero-name]");
+  if (heroName) heroName.textContent = name === "there" ? "handling?" : `handling, ${name}?`;
 }
 
 function renderDashboardBrief() {
@@ -1832,7 +1958,8 @@ function renderDashboardBrief() {
   const status = $("[data-dashboard-brief-status]");
   const metrics = $("[data-dashboard-brief-metrics]");
   if (!title || !status || !metrics) return;
-  const name = (ctx.session?.name || "there").split(/\s+/)[0];
+  const rawName = (ctx.session?.name || "Operator").split(/\s+/)[0];
+  const name = /^customer$/i.test(rawName) || /^there$/i.test(rawName) ? "Operator" : rawName;
   const plan = todaysPlan();
   const leads = visible(store.state.leads || []);
   const approvals = visible(store.state.approvals || []).filter((item) => item.status === "pending");
@@ -1866,12 +1993,13 @@ function accessVersionCopy() {
   const ent = navEntitlements.entitlements;
   if (ent) {
     const key = String(ent.planKey || "").toLowerCase();
-    const dev = key.includes("developer");
-    const label = dev && key.includes("elite")
-      ? "Developer + Elite"
-      : dev
-        ? "Developer"
-        : ent.planName || ent.planKey || "Selected tier";
+    const label = key === "developer_elite"
+      ? "Elite"
+      : key === "developer"
+        ? "Pro"
+        : key === "free"
+          ? "Basic"
+          : ent.planName || ent.planKey || "Selected tier";
     const included = [
       ent.canWrite === false ? "view-only" : "write access",
       ent.features?.modelTier === "advanced" ? "advanced model" : "standard model",
@@ -2043,6 +2171,20 @@ const DECISION_DEPT_ICON = {
   Finance: "dollar", Intelligence: "shield", Technology: "bolt",
 };
 
+function curtainDecisionText(value, fallback = "") {
+  const text = String(value || fallback).trim();
+  if (/platform automation failing|automation failing/i.test(text)) return "Workflow needs attention";
+  if (/^open automations?$/i.test(text)) return "Review workflow";
+  if (/^open clientsetup$/i.test(text)) return "Finish setup";
+  return text
+    .replace(/\b(?:https?|wss?):\/\/(?:127\.0\.0\.1|localhost|\[?::1\]?)(?::\d+)?(?:\/[^\s),;]*)?/gi, "the local service")
+    .replace(/\bbackend\b/gi, "workspace service")
+    .replace(/\bprovider\b/gi, "service")
+    .replace(/\bOAuth\b/gi, "account connection")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function renderDecisions() {
   const deck = $("[data-decisions]");
   if (!deck) return;
@@ -2052,27 +2194,25 @@ function renderDecisions() {
   deck.hidden = false;
   deck.innerHTML = `
     <div class="decision-head">
-      <h2>Decisions</h2>
+      <h2>Decision queue</h2>
       <span class="decision-count">${open.length}</span>
-      <i>Signals packaged for one motion — approve, adjust, or dismiss.</i>
-      <button class="decision-review-all" type="button" data-open-ws="approvals">Review all ${open.length}</button>
+      <i>Approve, adjust, or dismiss. Full context lives in Approvals.</i>
+      <button class="decision-review-all" type="button" data-open-ws="approvals">Open approvals</button>
     </div>
     <div class="decision-list">
-      ${open.slice(0, 4).map((d) => {
+      ${open.slice(0, 3).map((d) => {
         const busy = decisionBusyId === d.id;
         return `
         <article class="decision-card dc-${esc(d.impact)}" data-decision-id="${esc(d.id)}">
           <header class="decision-meta">
             <span class="decision-dept">${svg(DECISION_DEPT_ICON[d.department] || "bolt")} ${esc(d.department)}</span>
             <span class="decision-impact di-${esc(d.impact)}">${esc(d.impact)} impact</span>
-            <span class="decision-conf">confidence: ${esc(d.confidence)}</span>
           </header>
-          <h3>${esc(d.title)}</h3>
-          <p>${esc(d.whatHappened)}</p>
-          <p class="decision-evidence">Evidence: ${esc(d.evidence?.source || "server records")}</p>
+          <h3>${esc(curtainDecisionText(d.title, "Business decision"))}</h3>
+          <p>${esc(curtainDecisionText(d.recommendation?.label || d.whatHappened, "Review details"))}</p>
           <footer class="decision-actions">
             <button class="btn btn-primary" type="button" data-decision-act="approve" ${busy ? "disabled" : ""}>
-              ${d.recommendation ? `Approve · ${esc(d.recommendation.label)}` : "Acknowledge"}
+              ${d.recommendation ? "Approve" : "Acknowledge"}
             </button>
             <button class="btn" type="button" data-decision-act="modify" ${busy ? "disabled" : ""}>Adjust</button>
             <button class="btn btn-quiet" type="button" data-decision-act="dismiss" ${busy ? "disabled" : ""}>Dismiss</button>
@@ -2317,7 +2457,7 @@ function serverAttentionItems() {
   const running = pulse?.agentRuns?.available ? pulse.agentRuns.running || 0 : 0;
   if (running > 0) items.push({ icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", open: "automation" });
   const failing = pulse?.automations?.available ? pulse.automations.failing || [] : [];
-  if (failing.length > 0) items.push({ icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, open: "automation" });
+  if (failing.length > 0) items.push({ icon: "bolt", tone: "warn", title: "Workflow needs attention", sub: curtainDecisionText(failing[0].lastSummary || `${failing.length} workflow(s) need review`), open: "automation" });
   const opp = serverOpportunity && serverOpportunityTenant === currentTenantId() ? serverOpportunity : null;
   if (opp) items.push({ icon: "bolt", tone: "ok", title: `Opportunity: ${opp.title}`, sub: `${opp.action.label || "Open"} — from live graph analysis`, open: opp.action.route });
   return items;
@@ -2491,6 +2631,7 @@ function renderConsole() {
     return;
   }
   ensureDashboardShell();
+  mountPhantomPresence($("[data-phantompet-canvas]"), { compact: true, small: true, state: "idle" });
   // Workspace pages replace the dashboard DOM. Rebind the restored command
   // form before optional widgets render so a secondary panel failure can
   // never leave the primary chat composer visible but inert.
@@ -2711,6 +2852,11 @@ function chatAttachCards(cards) {
 }
 function chatAttachMedia(media) {
   if (!media?.length) return;
+  media.slice(0, 8).forEach((item) => registerContentAsset({
+    ...item,
+    source: item.source || "PhantomBot",
+    title: item.title || (item.type === "video" ? "Generated video" : "Generated image"),
+  }));
   for (let i = chatHistory.length - 1; i >= 0; i--) {
     if (chatHistory[i].who === "phantom") {
       chatHistory[i].media = media;
@@ -2978,6 +3124,12 @@ function wireDeck() {
       renderAccountMenu();
       renderOsMenu();
       if (action === "account") routeWorkspace("account");
+      if (action === "settings") routeWorkspace("settings");
+      if (action === "organization") {
+        try { localStorage.setItem("pf.settings.tab.v1", "organization"); } catch {}
+        routeWorkspace("adminos");
+      }
+      if (action === "developer") routeWorkspace("developer");
       if (action === "signout") signOut();
       return;
     }
@@ -3037,7 +3189,14 @@ function wireDeck() {
       return;
     }
     const opener = e.target.closest("[data-open-ws]");
-    if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
+    if (opener) {
+      if (notifOpen) { notifOpen = false; renderNotifs(); }
+      if (opener.dataset.settingsTarget) {
+        try { localStorage.setItem("pf.settings.tab.v1", opener.dataset.settingsTarget); } catch {}
+      }
+      routeWorkspace(opener.dataset.openWs);
+      return;
+    }
     if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
     if (accountMenuOpen && !e.target.closest(".user-menu-wrap")) { accountMenuOpen = false; renderAccountMenu(); }
     if (osMenuOpen && !e.target.closest(".os-menu-wrap")) { osMenuOpen = false; renderOsMenu(); }
@@ -3704,7 +3863,28 @@ function renderDeveloperPage(body) {
   }, 30000);
 }
 
+function renderMediaLabSuite(body) {
+  const opts = mediaOpts();
+  body.innerHTML = `
+    <section class="media-suite" data-media-suite>
+      <header class="media-suite-head">
+        <div>
+          <p class="media-suite-kicker">Creation workspace</p>
+          <h2>Media Lab</h2>
+          <p>Create and edit here. Finished work moves to Content Hub for planning, publishing, and analytics.</p>
+        </div>
+        <button class="media-suite-link" data-open-ws="content" type="button">${svg("doc")} Open Content Hub</button>
+      </header>
+      <div class="media-suite-body" data-media-suite-body></div>
+    </section>`;
+  const target = $("[data-media-suite-body]", body);
+  renderMediaStudio(target, opts);
+  $("[data-open-ws='content']", body)?.addEventListener("click", () => opts.openWorkspace?.("content"));
+}
+
 const CUSTOM = {
+  media: { title: "Media Lab", kicker: "Create and edit", custom: true, wide: true, render: (body) => renderMediaLabSuite(body) },
+  content: { title: "Content Hub", kicker: "Library, ideas, drafts, publishing, and performance", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   phantomstore: { title: "PhantomStore", kicker: "AI marketplace", custom: true, wide: true, render: (body) => renderPhantomStore(body, mediaOpts()) },
@@ -3712,9 +3892,21 @@ const CUSTOM = {
   analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderUnifiedAnalytics(body) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   clientsetup: { title: "Business Manager Settings", kicker: "Workspace and organization setup", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "clientsetup", onWorkspaceApplied: () => { refreshCustomizedNavigation(); void refreshNavEntitlements(); renderMobileBottomNav(); } }) },
+  adminos: {
+    title: "Admin",
+    kicker: "Employees, organization, roles, and workspace access",
+    custom: true,
+    wide: true,
+    adminOnly: true,
+    render: (body) => {
+      try { localStorage.setItem("pf.settings.tab.v1", "organization"); } catch {}
+      renderOperatorSettings(body, { ...mediaOpts(), onWorkspaceApplied: () => { refreshCustomizedNavigation(); void refreshNavEntitlements(); renderMobileBottomNav(); } });
+    },
+  },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), onWorkspaceApplied: () => { refreshCustomizedNavigation(); void refreshNavEntitlements(); renderMobileBottomNav(); } }) },
   automation: { title: "Automations", kicker: "Business workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
+  planner: { title: "Planner", kicker: "AI planning, calendar blocks, and automation prep", custom: true, wide: true, render: (body) => renderPlanner(body, mediaOpts()) },
   vacation: { title: "Away Mode", kicker: "Your business stays covered while you are away", custom: true, wide: true, render: (body) => renderVacationMode(body, mediaOpts()) },
   promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
   customize: { title: "Workspace Studio", kicker: "Make this organization feel purpose-built", custom: true, wide: true, adminOnly: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "workspace", onWorkspaceApplied: () => { refreshCustomizedNavigation(); void refreshNavEntitlements(); renderMobileBottomNav(); } }) },
@@ -3735,50 +3927,52 @@ const CUSTOM = {
       body.innerHTML = `
         <div class="phantomai phantombot-os" data-phantombot-os>
           <aside class="phantombot-taskrail" data-phantombot-taskrail aria-label="PhantomBot tasks">
-            <header class="phantombot-brand">
-              <span class="phantombot-brand-mark" aria-hidden="true">
-                <img src="/app/assets/brand-phantom-favicon.png" alt="" />
-              </span>
-              <span>
-                <b>PhantomBot</b>
-                <small>AI operating system</small>
-              </span>
-            </header>
-            <button class="phantombot-new-task" data-phantombot-new-task type="button">
-              <span aria-hidden="true">＋</span>
-              <b>New task</b>
-              <kbd>Ctrl N</kbd>
-            </button>
-            <div class="phantombot-task-section">
-              <p>Tasks</p>
-              <nav class="phantombot-task-list" data-phantombot-task-list aria-label="Recent PhantomBot tasks"></nav>
+            <div class="phantombot-window-tools" aria-label="Workspace controls">
+              <button type="button" data-phantombot-rail-toggle aria-label="Hide sidebar" title="Hide sidebar">◧</button>
+              <button type="button" data-phantombot-swap-rail aria-label="Swap sidebar sides" title="Swap sidebar sides">⇄</button>
             </div>
-            <div class="phantomai-tabs phantombot-rail-tabs" role="tablist" aria-label="PhantomBot workspace">
-              <button type="button" class="phantomai-tab" data-phantomai-tab="chat" role="tab" aria-selected="true">
-                <span aria-hidden="true">◌</span><b>Chat</b>
-              </button>
-              <button type="button" class="phantomai-tab" data-phantomai-tab="automations" role="tab" aria-selected="false">
-                <span aria-hidden="true">⚙</span><b>Automations</b>
-              </button>
-              <button type="button" class="phantomai-tab" data-phantomai-tab="memory" role="tab" aria-selected="false">
-                <span aria-hidden="true">◇</span><b>Memory</b>
-              </button>
-              <button type="button" class="phantomai-tab" data-phantomai-tab="activity" role="tab" aria-selected="false">
-                <span aria-hidden="true">⌁</span><b>Activity</b>
-              </button>
+            <nav class="phantombot-desktop-nav" aria-label="PhantomBot">
+              <button class="is-primary" data-phantombot-new-task type="button"><span>＋</span><b>New session</b><kbd>Ctrl N</kbd></button>
+              <button type="button" data-phantomai-tab="memory"><span>◇</span><b>Skills</b></button>
+              <button type="button" data-phantombot-section="messaging"><span>□</span><b>Messaging</b></button>
+              <button type="button" data-phantomai-tab="automations"><span>▦</span><b>Automations</b></button>
+              <button type="button" data-phantomai-tab="media"><span>▱</span><b>Outputs</b></button>
+              <button type="button" data-open-ws="settings"><span>⌁</span><b>API keys</b></button>
+            </nav>
+            <div class="phantombot-brand">
+              <span class="phantombot-brand-mark" aria-hidden="true"><img src="/app/assets/brand-phantom-favicon.png" alt="" /></span>
+              <span><b>PhantomBot</b><small>Phantom V1</small></span>
             </div>
+            <label class="phantombot-session-search">
+              <span aria-hidden="true">⌕</span>
+              <input type="search" data-phantombot-session-search placeholder="Search sessions..." aria-label="Search sessions" />
+            </label>
+            <div class="phantombot-task-section is-pinned">
+              <p><span>PINNED</span><small data-phantombot-pinned-count>0</small></p>
+              <nav class="phantombot-task-list" data-phantombot-pinned-list aria-label="Pinned PhantomBot sessions"></nav>
+              <div class="phantombot-pin-hint" data-phantombot-pin-hint>Pin important sessions for quick access</div>
+            </div>
+            <div class="phantombot-task-section is-sessions">
+              <p><span>SESSIONS</span><small data-phantombot-session-count>0</small></p>
+              <nav class="phantombot-task-list" data-phantombot-task-list aria-label="Recent PhantomBot sessions"></nav>
+            </div>
+            <footer class="phantombot-profile-row">
+              <span class="phantombot-profile-avatar">P</span>
+              <span><b>default</b><small>Phantom V1 workspace</small></span>
+              <button type="button" data-open-ws="settings" aria-label="Profile settings">•••</button>
+            </footer>
           </aside>
 
           <section class="phantombot-stage">
-            <header class="phantombot-titlebar">
+            <header class="phantombot-titlebar phantombot-work-tabs">
               <button class="phantombot-rail-toggle" data-phantombot-rail-toggle type="button" aria-label="Toggle task list" aria-expanded="false">☰</button>
-              <div class="phantombot-title">
-                <span>PhantomBot</span>
-                <b data-phantombot-current-title>New task</b>
-              </div>
+              <button class="phantombot-work-tab is-active" type="button" data-phantomai-tab="chat"><i></i><b data-phantombot-current-title>New session</b></button>
+              <button class="phantombot-work-tab" type="button" data-phantomai-tab="automations"><i></i><b>Automations</b></button>
+              <button class="phantombot-work-tab" type="button" data-phantomai-tab="activity"><i></i><b>Activity</b></button>
+              <button class="phantombot-tab-add" data-phantombot-new-task type="button" aria-label="New session tab" title="New session">＋</button>
               <div class="phantombot-title-actions">
-                <span class="phantombot-ready"><i></i><span>Ready</span></span>
-                <button data-phantombot-new-task type="button" aria-label="Start a new task">New task</button>
+                <button type="button" data-phantombot-open-context aria-label="Show context panel" title="Context">◫</button>
+                <button type="button" data-phantombot-open-timeline aria-label="Show conversation timeline" title="Timeline">⌁</button>
               </div>
             </header>
 
@@ -3786,15 +3980,33 @@ const CUSTOM = {
               <div class="phantomai-chat" data-phantomai-chat-mount>
                 <div class="phantomai-chat-log" data-phantomai-chat-log role="log" aria-live="polite" aria-relevant="additions"></div>
                 <button class="phantombot-jump" data-phantombot-jump type="button" hidden>Jump to latest ↓</button>
+                <div class="phantombot-composer-status" data-phantombot-composer-status hidden></div>
                 <form class="phantomai-chat-form" data-phantomai-chat-form>
                   <textarea class="phantomai-chat-input" data-phantomai-chat-input rows="1" autocomplete="off" placeholder="Message PhantomBot" aria-label="Message PhantomBot"></textarea>
                   <div class="phantombot-composer-foot">
-                    <span>Private to this workspace · Enter sends · Shift + Enter adds a line</span>
+                    <div class="phantombot-composer-controls">
+                      <button type="button" data-phantombot-model aria-haspopup="listbox" aria-expanded="false"><span>Phantom V1:Latest</span><i>⌄</i></button>
+                      <label title="Response effort">
+                        <span class="sr-only">Response effort</span>
+                        <select data-phantombot-effort aria-label="Response effort">
+                          <option value="instant">Instant</option>
+                          <option value="thinking">Thinking</option>
+                          <option value="deep">Deep</option>
+                        </select>
+                      </label>
+                      <button type="button" data-phantombot-dictation aria-pressed="false" title="Voice dictation">♩</button>
+                      <button type="button" data-phantombot-read-aloud aria-pressed="false" title="Read replies aloud">◒</button>
+                    </div>
                     <button class="phantombot-send" type="submit" aria-label="Send message">
                       <span aria-hidden="true">↑</span>
                     </button>
                   </div>
                 </form>
+                <div class="phantombot-model-menu" data-phantombot-model-menu hidden role="listbox" aria-label="Model">
+                  <button type="button" class="is-active" role="option" aria-selected="true">
+                    <span><b>Phantom V1:Latest</b><small>Automatic tools, media, and coding</small></span><i>✓</i>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -3813,6 +4025,9 @@ const CUSTOM = {
               </header>
               <div class="phantomai-memory-mount" data-phantomai-memory-mount></div>
             </div>
+            <div class="phantomai-pane phantombot-panel-pane" data-phantomai-pane="media" hidden>
+              <div class="phantombot-media-mount" data-phantombot-media-mount></div>
+            </div>
             <div class="phantomai-pane phantombot-panel-pane" data-phantomai-pane="activity" hidden>
               <header class="phantombot-panel-head">
                 <div><span>Execution</span><h2>Activity</h2></div>
@@ -3820,6 +4035,31 @@ const CUSTOM = {
               </header>
               <div class="phantomai-activity-mount" data-phantomai-activity-mount></div>
             </div>
+
+            <aside class="phantombot-context-drawer" data-phantombot-context-drawer hidden aria-label="Session details">
+              <header>
+                <div><span>SESSION</span><h2 data-phantombot-context-title>New session</h2></div>
+                <button type="button" data-phantombot-close-context aria-label="Close details">×</button>
+              </header>
+              <nav role="tablist" aria-label="Session details">
+                <button type="button" class="is-active" data-phantombot-detail-tab="context">Context</button>
+                <button type="button" data-phantombot-detail-tab="timeline">Timeline</button>
+                <button type="button" data-phantombot-detail-tab="steps">Steps</button>
+                <button type="button" data-phantombot-detail-tab="artifacts">Artifacts</button>
+              </nav>
+              <div data-phantombot-detail-body></div>
+            </aside>
+
+            <footer class="phantombot-runtime-bar" aria-label="PhantomBot runtime">
+              <button type="button" data-phantombot-runtime><i></i><span>Ready</span></button>
+              <button type="button" data-phantomai-tab="activity"><span>Activity</span></button>
+              <button type="button" data-phantomai-tab="automations"><span>Automations</span></button>
+              <button type="button" data-phantomai-tab="memory"><span>Memory</span></button>
+              <button type="button" data-phantomai-tab="media"><span>Outputs</span></button>
+              <span class="phantombot-session-clock" data-phantombot-session-clock>Session 0:00</span>
+              <button type="button" data-phantombot-companion><i></i><span>PhantomBot connected</span></button>
+              <span>Phantom V1</span>
+            </footer>
           </section>
         </div>`;
       mountPhantomAI(body.firstElementChild);
@@ -4039,13 +4279,22 @@ function syncNavToView() {
   if (hit) { activeNav = hit.id; renderNav(); }
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });
-window.addEventListener("popstate", () => {
+let lastHandledRouteHash = "";
+function routeFromLocationHash() {
+  lastHandledRouteHash = location.hash || "";
   const page = location.hash.match(/^#page\/([a-z-]+)/);
   const ws = location.hash.match(/^#ws\/([a-z-]+)/);
   if (page) routeWorkspace(page[1], false);
   else if (ws) routeWorkspace(ws[1], false);
   else renderDashboardPage(false);
-});
+}
+window.addEventListener("popstate", routeFromLocationHash);
+window.addEventListener("hashchange", routeFromLocationHash);
+window.setInterval(() => {
+  const hash = location.hash || "";
+  if (hash === lastHandledRouteHash || !/^#(?:page|ws)\//.test(hash)) return;
+  routeFromLocationHash();
+}, 200);
 
 /* ============================ phantom console (chat overlay) ============================ */
 const phantomHistory = [];
@@ -4164,6 +4413,39 @@ function initGhost() {
 
 /* ============================ boot ============================ */
 let ghostStarted = false;
+function showWorkspaceProfilePrompt() {
+  if (ownerHasPhantomAccess() || storedWorkspaceProfile() || document.querySelector("[data-workspace-profile-prompt]")) return;
+  const prompt = document.createElement("section");
+  prompt.className = "workspace-profile-prompt";
+  prompt.dataset.workspaceProfilePrompt = "";
+  prompt.setAttribute("role", "dialog");
+  prompt.setAttribute("aria-modal", "true");
+  prompt.setAttribute("aria-labelledby", "workspace-profile-title");
+  prompt.innerHTML = `
+    <div class="workspace-profile-dialog">
+      <p>SET UP</p>
+      <h2 id="workspace-profile-title">What workspace do you want?</h2>
+      <div class="workspace-choice-grid">${workspaceProfileChoices("business")}</div>
+      <button class="workspace-profile-continue" type="button">Continue</button>
+    </div>`;
+  document.body.appendChild(prompt);
+  prompt.querySelectorAll('input[name="workspaceProfile"]').forEach((input) => {
+    input.onchange = () => {
+      prompt.querySelectorAll(".workspace-choice").forEach((choice) => {
+        choice.classList.toggle("is-selected", choice.contains(input));
+      });
+    };
+  });
+  prompt.querySelector(".workspace-profile-continue").onclick = () => {
+    const selected = prompt.querySelector('input[name="workspaceProfile"]:checked')?.value || "business";
+    saveWorkspaceProfile(selected);
+    refreshCustomizedNavigation();
+    renderNav();
+    renderMobileBottomNav();
+    prompt.remove();
+  };
+}
+
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
@@ -4186,6 +4468,7 @@ function enterPhantom() {
     },
   });
   void refreshNavEntitlements();
+  requestAnimationFrame(showWorkspaceProfilePrompt);
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();

@@ -6,9 +6,9 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260728-70";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260728-70";
-import { getOperatorInfrastructureStatus, renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260728-70";
+} from "./store.js?v=phantom-live-20260729-86";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260729-86-creatorrestore1";
+import { getOperatorInfrastructureStatus, renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260729-86";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -337,7 +337,10 @@ function liveBridgeState() {
 }
 
 function syncActiveNavigation() {
-  const active = $(".side-nav [data-nav-id].is-active")?.dataset.navId || "dashboard";
+  const active = $("[data-phantom]")?.dataset.activeNav
+    || document.documentElement.dataset.activeNav
+    || $(".side-nav [data-nav-id].is-active")?.dataset.navId
+    || "dashboard";
   $$(".os-command-rail [data-nav-id], .os-division-strip [data-nav-id]").forEach((button) => {
     const current = button.dataset.navId === active;
     button.classList.toggle("is-active", current);
@@ -561,19 +564,6 @@ function bindCommandOS() {
         return;
       }
     }
-    const focusChat = event.target.closest("[data-os-focus-chat]");
-    if (focusChat) {
-      const chatbox = $("[data-chatbox]");
-      const input = $("[data-command-input]");
-      if (chatbox) {
-        chatbox.classList.remove("os-chat-charged");
-        void chatbox.offsetWidth;
-        chatbox.classList.add("os-chat-charged");
-      }
-      try { input?.scrollIntoView({ behavior: "smooth", block: "center" }); } catch {}
-      try { input?.focus({ preventScroll: true }); } catch { try { input?.focus(); } catch {} }
-      return;
-    }
     const execution = event.target.closest("[data-os-execution]");
     if (execution) {
       setExecutionMode(execution.dataset.osExecution);
@@ -621,7 +611,7 @@ function maybePowerOn() {
   const lines = [
     ["MEMORY SPINE", `${memoryStats().total} records indexed`],
     ["WORKFORCE", `${liveWorkerCount()} agents online`],
-    ["LOCAL BRIDGE", bridge === "Connected" ? "handshake complete" : "standing by"],
+    ["DESKTOP APP", bridge === "Connected" ? "ready" : "standby"],
     ["POLICY GUARD", "external actions reviewed"],
     ["PHANTOM CORE", "operating intelligence online"],
   ];
@@ -908,13 +898,15 @@ function mountSoundToggle() {
   const btn = document.createElement("button");
   btn.className = `os-sound${soundOn ? " is-on" : ""}`;
   btn.type = "button";
-  btn.setAttribute("aria-label", "Toggle interface sound");
-  btn.innerHTML = `<span aria-hidden="true"></span><i>SOUND ${soundOn ? "ON" : "OFF"}</i>`;
+  btn.setAttribute("aria-label", `Interface sound ${soundOn ? "on" : "off"} - toggle`);
+  btn.title = `Interface sound ${soundOn ? "on" : "off"} - toggle`;
+  btn.innerHTML = `<span aria-hidden="true"></span>`;
   btn.addEventListener("click", () => {
     soundOn = !soundOn;
     try { localStorage.setItem("pf.os.sound.v1", soundOn ? "1" : "0"); } catch {}
     btn.classList.toggle("is-on", soundOn);
-    btn.querySelector("i").textContent = `SOUND ${soundOn ? "ON" : "OFF"}`;
+    btn.setAttribute("aria-label", `Interface sound ${soundOn ? "on" : "off"} - toggle`);
+    btn.title = `Interface sound ${soundOn ? "on" : "off"} - toggle`;
     if (soundOn) { ensureAudio(); osSound("nav"); }
   });
   line.insertBefore(btn, line.querySelector(".os-system-time"));

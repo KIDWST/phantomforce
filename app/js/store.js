@@ -1,4 +1,4 @@
-import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260728-70";
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260729-86";
 
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
@@ -68,8 +68,8 @@ export const FINANCE_CATEGORIES = [
   "Uncategorized",
 ];
 export const FINANCE_CONNECTORS = [
-  { id: "bank", type: "bank", name: "Bank account", provider: "Plaid", status: "not-connected" },
-  { id: "card", type: "credit-card", name: "Credit card", provider: "Plaid", status: "not-connected" },
+  { id: "bank", type: "bank", name: "Bank account", provider: "Plaid", status: "setup-ready" },
+  { id: "card", type: "credit-card", name: "Credit card", provider: "Plaid", status: "setup-ready" },
   { id: "manual", type: "manual", name: "Manual ledger", provider: "Local entry / CSV", status: "ready" },
 ];
 
@@ -289,8 +289,8 @@ export const TOOL_SPINE = [
     status: "watching",
     role: "Keeps Business Manager Phantom reachable through the private route while hiding raw local ports.",
     ownerControl: "Owner access is live through the private route. Raw local ports stay hidden from everybody else.",
-    activity: "watching the Business Manager route and keeping backend ports private.",
-    path: "Private backend",
+    activity: "watching Business Manager and keeping the workspace protected.",
+    path: "Protected system",
     visibleToClients: false,
   },
   {
@@ -303,7 +303,7 @@ export const TOOL_SPINE = [
     role: "Compiles context, receipts, redaction notes, and useful memory for Phantom AI.",
     ownerControl: "Business Manager memory is on. Organization workspaces keep their own separate memory unless you connect them.",
     activity: "compiled owner context, redacted receipts, and memory hints for Phantom AI.",
-    path: "Private backend",
+    path: "Protected system",
     visibleToClients: false,
   },
   {
@@ -316,7 +316,7 @@ export const TOOL_SPINE = [
     role: "Stores sanitized decisions, process notes, verification logs, and operating memory.",
     ownerControl: "Owner process memory is indexed. Secrets stay out of the vault.",
     activity: "indexed the PhantomForce Command Center vault for process memory.",
-    path: "Private backend",
+    path: "Protected system",
     visibleToClients: false,
   },
   {
@@ -329,7 +329,7 @@ export const TOOL_SPINE = [
     role: "Builds repeat workflows for follow-ups, content, reviews, and handoffs.",
     ownerControl: "Ready for owner setup. Turn on each workflow when the connector and rules are correct.",
     activity: "automation desk is ready for owner-configured workflows.",
-    path: "Private backend",
+    path: "Protected system",
     visibleToClients: false,
   },
   {
@@ -368,7 +368,7 @@ export const TOOL_SPINE = [
     role: "Turns big requests into scoped proposals, tasks, and implementation guardrails.",
     ownerControl: "Available for planning real builds, client packages, and sprint scopes.",
     activity: "standing by to turn the next feature request into a scoped build plan.",
-    path: "Private backend",
+    path: "Protected system",
     visibleToClients: false,
   },
   {
@@ -381,7 +381,7 @@ export const TOOL_SPINE = [
     role: "Keeps agent work structured around standards, handoffs, and owner-safe execution.",
     ownerControl: "Keeps the team organized without exposing tool names to clients.",
     activity: "enforcing PhantomOps standards across command routing and worker handoffs.",
-    path: "Private backend",
+    path: "Protected system",
     visibleToClients: false,
   },
   {
@@ -394,7 +394,7 @@ export const TOOL_SPINE = [
     role: "Helps Phantom understand codebases, routes, files, and repo structure.",
     ownerControl: "Available for owner diagnostics and build planning. Write actions stay routed through owner mode.",
     activity: "code intelligence is indexed and ready for owner diagnostics.",
-    path: "Private backend",
+    path: "Protected system",
     visibleToClients: false,
   },
   {
@@ -407,7 +407,7 @@ export const TOOL_SPINE = [
     role: "Plans multi-step agent work, handoffs, and team-style workflows.",
     ownerControl: "Ready for owner planning. It becomes real work only when you send the command.",
     activity: "squad planning is ready for owner-directed work.",
-    path: "Private backend",
+    path: "Protected system",
     visibleToClients: false,
   },
   {
@@ -420,7 +420,7 @@ export const TOOL_SPINE = [
     role: "Creates images, videos, edits, and approval-gated generated outputs.",
     ownerControl: "Ready in Media Lab. Paid credits and external runs stay owner-controlled.",
     activity: "Media Lab is ready for owner-controlled creative work.",
-    path: "Private backend",
+    path: "Protected system",
     visibleToClients: false,
   },
   {
@@ -431,9 +431,9 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "routed",
     role: "Routes admin-only thinking, review, coding, and worker model lanes behind Phantom AI.",
-    ownerControl: "Owner routing is active. Clients only see Phantom, not the backend model names.",
+    ownerControl: "Owner routing is active. Clients only see Phantom.",
     activity: "routing requests through the correct model lane while keeping tool names hidden.",
-    path: "Private backend",
+    path: "Protected system",
     visibleToClients: false,
   },
 ];
@@ -460,6 +460,7 @@ function normalizeFinance(finance) {
     .map((item) => ({
       ...FINANCE_CONNECTORS.find((definition) => definition.id === item.id),
       ...item,
+      status: item.status === "requested" || item.status === "not-connected" ? "setup-ready" : item.status,
       ws: item.ws || "phantomforce",
     })) : [];
   const accounts = Array.isArray(input.accounts) ? input.accounts.map((account) => ({
@@ -655,7 +656,7 @@ export function friendlyBackendError(status, error, options = {}) {
   if (status === 404) return `${fallbackPrefix}: that record was not found.`;
   if (status === 409) return `${fallbackPrefix}: this changed somewhere else. Refresh and try again.`;
   if (status === 429) return `${fallbackPrefix}: too many requests. Wait a moment and try again.`;
-  if (status >= 500 || status === 0) return `${fallbackPrefix}: the backend is unavailable right now.`;
+  if (status >= 500 || status === 0) return `${fallbackPrefix}: the service is unavailable right now.`;
   return `${fallbackPrefix}${status ? ` (${status})` : ""}${code ? `: ${code}` : "."}`;
 }
 
@@ -804,7 +805,7 @@ async function databaseOwnerLogin(email, password) {
       body: JSON.stringify({ email, password }),
     });
   } catch {
-    throw new Error("Your password is probably fine — the PhantomForce backend is recovering automatically. Wait about a minute, then sign in again.");
+    throw new Error("Your password is probably fine. PhantomForce is recovering automatically; wait about a minute, then sign in again.");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -850,14 +851,14 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error("Your password is probably fine — the PhantomForce backend is recovering automatically. Wait about a minute, then sign in again.");
+    throw new Error("Your password is probably fine. PhantomForce is recovering automatically; wait about a minute, then sign in again.");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.token || !payload?.session) {
     const raw = String(payload?.error || "");
     // a down backend must never read as "wrong password"
     if (response.status === 502 || /unavailable|ECONNREFUSED|fetch failed/i.test(raw)) {
-      throw new Error("Your password is probably fine — the PhantomForce backend is recovering automatically. Wait about a minute, then sign in again.");
+      throw new Error("Your password is probably fine. PhantomForce is recovering automatically; wait about a minute, then sign in again.");
     }
     if (response.status === 401 || response.status === 403) {
       // auto-diagnose: is the backend even holding an owner key right now?
@@ -871,12 +872,12 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
         if (typeof auth?.ownerLoginKeyConfigured === "boolean") keyLoaded = auth.ownerLoginKeyConfigured;
       } catch {}
       if (keyLoaded === false) {
-        throw new Error("Owner login is not fully loaded on this backend. Restart Hermes/backend so server\\.env is loaded, then sign in again.");
+        throw new Error("Owner sign-in is still starting. Restart PhantomForce, then sign in again.");
       }
       if (auth?.ownerProductionAuthEnabled && auth?.productionReady) {
-        throw new Error("That email or password was rejected. The backend is running and owner auth is configured.");
+        throw new Error("That email or password was rejected.");
       }
-      throw new Error("Owner login was rejected because this backend is not in ready owner-auth mode. Restart the PhantomForce server and check /sessions before trying again.");
+      throw new Error("Owner sign-in is not ready. Restart PhantomForce before trying again.");
     }
     throw new Error(raw || "Owner login failed.");
   }
@@ -1348,7 +1349,7 @@ const MODEL_DISPLAY_LABELS = {
   "glm-5": "Standard", "openrouter-auto": "Auto-routed",
   "claude-cli": "Claude default", "claude-sonnet": "Sonnet", "claude-opus": "Opus",
   "private-default": "Private default", "private-high": "High reasoning", "private-fast": "Fast",
-  "z-ai/glm-5.2": "GLM 5.2", "local-auto": "Auto-detect Ollama", "local-ollama": "Ollama auto", "local-glm": "Local GLM",
+  "z-ai/glm-5.2": "GLM 5.2", "kimi-k3-hf": "Kimi K3 — Hugging Face Direct", "kimi-k3-hf:latest": "Kimi K3 — Hugging Face Direct", "local-auto": "Auto-detect Ollama", "local-ollama": "Ollama auto", "local-glm": "Local GLM",
   "llama3": "Fast", "mistral": "Balanced", "custom-local": "Custom",
   "custom": "Custom",
 };

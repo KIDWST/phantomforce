@@ -7,8 +7,9 @@
  * and its OAuth/Hermes bridge machinery — no media generation.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260728-70";
-import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260728-70";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260729-86";
+import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260729-86-creatorrestore1";
+import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260729-86";
 
 const SOCIAL_LOGIN_URLS = {
   instagram: "https://www.instagram.com/accounts/login/",
@@ -128,14 +129,7 @@ async function beginSocialAccountConnection(account, popup = null) {
     startSocialOAuthAuthorizationPolling(account.id);
     return { mode: "oauth", opened };
   }
-  const opened = routeSocialAuthWindow(popup, socialLoginTarget(account));
-  account.connectMode = "pending";
-  account.lastConnectAt = new Date().toISOString();
-  startSocialBridgePolling(account.id);
-  socialNotice = opened
-    ? `${account.name} login opened. Save the public handle here after sign-in; live analytics and posting unlock only after the provider OAuth app is ready.`
-    : `${account.name} login was blocked by the browser. Allow popups for PhantomForce and click again.`;
-  return { mode: "public-login", opened };
+  throw new Error(`${account.name} OAuth is not available in this deployment.`);
 }
 async function refreshSocialOAuthStatus({ force = false } = {}) {
   if (socialOAuthState.loading || (socialOAuthState.loaded && !force)) return socialOAuthState;
@@ -146,12 +140,13 @@ async function refreshSocialOAuthStatus({ force = false } = {}) {
     });
     const json = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(String(json?.error || `OAuth status failed (${response.status}).`));
+    const connectors = socialConnectorsFromResponse(json);
     socialOAuthState = {
       loaded: true,
       loading: false,
       error: "",
-      connectors: Array.isArray(json?.social_analytics?.connectors) ? json.social_analytics.connectors : [],
-      preflight: json?.social_analytics?.oauthPreflight || null,
+      connectors,
+      preflight: socialPreflightFromResponse(json, connectors),
     };
   } catch (error) {
     socialOAuthState = {
@@ -497,7 +492,7 @@ export function renderSocialSettings(el, opts = {}) {
         <div class="set-sec-head">
           <div>
             <h3>Connect accounts</h3>
-            <p class="set-note">Pick a channel and sign in. If a provider app is ready, PhantomForce can connect with official OAuth. If it is not ready yet, you can still open the platform login and save the public handle without pretending it is live.</p>
+            <p class="set-note">Pick a channel and sign in. PhantomForce opens the platform's official authorization flow and marks the account connected only after the provider callback succeeds. Saved public handles remain profile references, not authorization.</p>
           </div>
           <span class="set-safe-pill">${authorizedCount}/${socialAccounts.length} live · ${oauthReadyCount}/${socialAccounts.length} ready</span>
         </div>
@@ -593,9 +588,9 @@ export function renderSocialSettings(el, opts = {}) {
       try {
         await beginSocialAccountConnection(account, popup);
       } catch (error) {
-        routeSocialAuthWindow(popup, socialLoginTarget(account));
-        account.connectMode = "pending";
-        socialNotice = `${account.name} login opened. OAuth did not start yet, so this will only save the public handle until provider setup is ready.`;
+        try { popup?.close(); } catch {}
+        account.connectMode = account.handle ? "manual-confirmed" : "manual";
+        socialNotice = `${account.name} sign-in is temporarily unavailable. No connection was claimed and your saved public handle was left unchanged.`;
       }
       saveAndRender();
     };
@@ -668,7 +663,7 @@ function socialOAuthManagedPanel(esc) {
   const authorizedCount = socialOAuthState.connectors.filter((connector) => connector.configured).length;
   const totalCount = socialOAuthState.connectors.length || PLATFORMS.length;
   const preflight = socialOAuthState.preflight || {};
-  const nextLabel = preflight.nextGlobalLabel || (authorizedCount ? "Sync live feed" : readyCount ? "Connect accounts" : "Provider setup waiting");
+  const nextLabel = preflight.nextGlobalLabel || (authorizedCount ? "Sync live feed" : readyCount ? "Connect accounts" : "Connections temporarily unavailable");
   const nextDetail = preflight.nextGlobalAction === "sync_live_feed"
     ? "Authorized accounts can now pull official metrics."
     : preflight.nextGlobalAction === "connect_signed_in_account"

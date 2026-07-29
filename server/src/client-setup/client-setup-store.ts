@@ -7,6 +7,9 @@ export type ClientSetupSlotId = "active-1" | "active-2" | "pending-1";
 export type ClientSetupSlotKind = "active" | "pending";
 export type ClientSetupSlotStatus = "active" | "pending" | "empty";
 export type BusinessTemplateKey =
+  | "athlete"
+  | "coach"
+  | "sports_management"
   | "local_service"
   | "media_content"
   | "contractor_home_service"
@@ -132,6 +135,54 @@ export const CLIENT_SETUP_MODULES: ClientSetupModule[] = [
 ];
 
 export const CLIENT_SETUP_BUSINESS_TEMPLATES: ClientSetupBusinessTemplate[] = [
+  {
+    key: "athlete",
+    label: "Athlete",
+    description: "Training updates, personal brand, coach communication, recruiting, sponsors, and recovery-time PhantomPlay.",
+    recommendedModules: ["content_calendar", "media_assets", "follow_up_queue", "approval_queue", "reports", "packages_offers"],
+    starterPackages: [
+      { name: "Athlete command setup", price: "", cadence: "one-time", notes: "Build training, recruiting, media, sponsor, and communication workflows." },
+      { name: "Athlete brand ops", price: "", cadence: "monthly", notes: "Run highlights, coach follow-ups, recruiting updates, and sponsor deliverables." },
+    ],
+    starterLeadSources: [
+      { label: "Coach referrals", type: "relationship", notes: "Trusted performance and recruiting network." },
+      { label: "Recruiting forms", type: "owned", notes: "Owned intake for schools, teams, or scouts." },
+      { label: "Sponsor inquiries", type: "owned", notes: "Local and brand partner opportunities." },
+    ],
+    reportingMetrics: ["training_updates", "content_ready", "sponsor_outreach", "coach_follow_ups"],
+  },
+  {
+    key: "coach",
+    label: "Coach",
+    description: "Roster notes, practice tasks, athlete follow-ups, parent/player communication, media, and approvals.",
+    recommendedModules: ["client_requests", "employee_tasks", "content_calendar", "media_assets", "approval_queue", "reports"],
+    starterPackages: [
+      { name: "Coach workspace setup", price: "", cadence: "seasonal", notes: "Organize roster, practices, media, communication, and approvals." },
+      { name: "Team ops support", price: "", cadence: "monthly", notes: "Keep athlete updates, practice tasks, media, and request queues moving." },
+    ],
+    starterLeadSources: [
+      { label: "Athlete check-ins", type: "owned", notes: "Requests and updates from players." },
+      { label: "Parent/player messages", type: "relationship", notes: "Manual intake until connectors are enabled." },
+      { label: "Team events", type: "event", notes: "Clinics, practices, games, and camps." },
+    ],
+    reportingMetrics: ["athlete_check_ins", "practice_items", "content_ready", "team_requests"],
+  },
+  {
+    key: "sports_management",
+    label: "Sports management",
+    description: "Athlete pipeline, sponsors, events, media deliverables, offers, follow-ups, and accounting visibility.",
+    recommendedModules: ["lead_queue", "follow_up_queue", "content_calendar", "media_assets", "approval_queue", "reports", "packages_offers"],
+    starterPackages: [
+      { name: "Sports management setup", price: "", cadence: "one-time", notes: "Build athlete records, sponsor pipeline, event workflow, and reporting." },
+      { name: "Management growth ops", price: "", cadence: "monthly", notes: "Run sponsor follow-ups, media deliverables, athlete updates, and owner briefs." },
+    ],
+    starterLeadSources: [
+      { label: "Athlete pipeline", type: "relationship", notes: "Prospects, clients, families, scouts, and teams." },
+      { label: "Sponsor leads", type: "relationship", notes: "Brand and local partnership opportunities." },
+      { label: "Event intake", type: "event", notes: "Showcases, camps, tournaments, and activations." },
+    ],
+    reportingMetrics: ["athlete_pipeline", "sponsor_leads", "event_tasks", "deliverables_due"],
+  },
   {
     key: "local_service",
     label: "Local service business",

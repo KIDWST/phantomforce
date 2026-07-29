@@ -33,7 +33,7 @@ assert.match(contentHubSource, /Social media analytics/, "Analytics must be fram
 assert.match(contentHubSource, /Connect your social accounts to start the live feed/, "Empty state must tell the user to connect social accounts for a live feed.");
 assert.match(contentHubSource, /Local uploads are not counted here/, "Local media must not be treated as social analytics.");
 assert.match(contentHubSource, /Sync live feed/);
-assert.match(contentHubSource, /OAuth apps ready/);
+assert.match(contentHubSource, /connections available/);
 assert.doesNotMatch(contentHubSource, /Import platform report/);
 assert.doesNotMatch(contentHubSource, /Manual fallback · CSV · TSV · JSON/);
 assert.match(contentHubSource, /an-channel-line/);

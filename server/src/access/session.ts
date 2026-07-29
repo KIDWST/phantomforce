@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { isSubscriptionActive } from "./subscription-store.js";
 import { canUseSessionOnPublicHost, filterSessionsForPublicHost, publicHostFromHeaders } from "./public-hosts.js";
+import type { WorkspaceProfileId } from "../customization/workspace-profiles.js";
 
 export const SESSION_HEADER = "x-phantomforce-session";
 export const AUTHORIZATION_HEADER = "Authorization";
@@ -30,6 +31,7 @@ export type AccessSession = {
   isSuperAdmin?: boolean;
   orgId?: string | null;
   orgRole?: "owner" | "admin" | "member" | "client" | null;
+  workspaceProfile?: WorkspaceProfileId;
   memberships?: Array<{ orgId: string; orgName: string; role: "owner" | "admin" | "member" | "client" }>;
 };
 

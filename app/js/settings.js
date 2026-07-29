@@ -1,13 +1,13 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260728-70";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260728-70";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260728-70";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260728-70";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260728-70";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260728-70";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260728-70";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260729-86";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260729-86";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260729-86";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260729-86";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260729-86";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260729-86";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260729-86";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -46,6 +46,9 @@ function saveSettingsTab(id) {
   try { localStorage.setItem(SETTINGS_TAB_KEY, id); } catch {}
 }
 
+const KIMI_OLLAMA_MODEL = "kimi-k3-hf:latest";
+const KIMI_OLLAMA_ALIASES = new Set(["kimi-k3-hf", KIMI_OLLAMA_MODEL]);
+
 const PROVIDERS = [
   {
     id: "claude",
@@ -79,8 +82,8 @@ const PROVIDERS = [
     id: "local",
     name: "Local / Ollama",
     short: "PC",
-    role: "Ollama models installed on this computer",
-    models: ["local-auto"],
+    role: "Installed Ollama models plus the direct Kimi K3 Hugging Face bridge",
+    models: ["local-auto", KIMI_OLLAMA_MODEL],
     allowCustomModel: true,
   },
 ];
@@ -126,16 +129,21 @@ async function openChatGptAccountPage(action = "switch") {
   }
 }
 
+const KIMI_OLLAMA_MODEL_IS_OPT_IN = true;
+
 const PROVIDER_MODES = [
   { id: "smart", name: "Phantom Hybrid", note: "Phantom routes across the allowed brain lanes and falls back when a lane is unavailable." },
-  { id: "single", name: "One provider", note: "Use only the provider you choose." },
+  { id: "single", name: "Selected provider only", note: "Use only the provider you explicitly select." },
   { id: "multiple", name: "Multiple", note: "Choose the providers Phantom is allowed to use." },
 ];
 
 function providerModels(provider) {
   if (provider.id !== "local") return provider.models;
-  const installed = localModelStatus.models.map((model) => model.model).filter(Boolean);
-  return [...new Set(["local-auto", ...installed])];
+  const installed = localModelStatus.models
+    .map((model) => model.model || model.name)
+    .filter(Boolean)
+    .filter((model) => !KIMI_OLLAMA_ALIASES.has(model));
+  return [...new Set(["local-auto", KIMI_OLLAMA_MODEL, ...installed])];
 }
 
 const DEFAULT_SETTINGS = {
@@ -210,16 +218,19 @@ function cleanLocalProviderMessage(value) {
 
 function normalizeSettings(value) {
   const input = value && typeof value === "object" ? value : {};
-  const provider = PROVIDERS.some((item) => item.id === input.provider) ? input.provider : DEFAULT_SETTINGS.provider;
+  const migratedInputProvider = input.provider === "kimi" ? "local" : input.provider;
+  const provider = PROVIDERS.some((item) => item.id === migratedInputProvider) ? migratedInputProvider : DEFAULT_SETTINGS.provider;
   const providerMode = PROVIDER_MODES.some((item) => item.id === input.providerMode) ? input.providerMode : DEFAULT_SETTINGS.providerMode;
   const brainMode = ["local", "api", "subscription"].includes(input.brainMode) ? input.brainMode : DEFAULT_SETTINGS.brainMode;
   const models = { ...DEFAULT_SETTINGS.models, ...(input.models || {}) };
+  if (input.provider === "kimi" || KIMI_OLLAMA_ALIASES.has(models.kimi)) models.local = KIMI_OLLAMA_MODEL;
+  delete models.kimi;
   for (const option of PROVIDERS) {
     if (!providerModels(option).includes(models[option.id]) && !(option.allowCustomModel && typeof models[option.id] === "string" && models[option.id].trim())) {
       models[option.id] = option.models[0];
     }
   }
-  const requestedProviders = Array.isArray(input.selectedProviders) ? input.selectedProviders : DEFAULT_SETTINGS.selectedProviders;
+  const requestedProviders = Array.isArray(input.selectedProviders) ? input.selectedProviders.map((id) => id === "kimi" ? "local" : id) : DEFAULT_SETTINGS.selectedProviders;
   let selectedProviders = [...new Set(requestedProviders.filter((id) => PROVIDERS.some((providerOption) => providerOption.id === id)))];
   if (providerMode === "smart") selectedProviders = PROVIDERS.map((item) => item.id);
   if (providerMode === "single") selectedProviders = [provider];
@@ -361,11 +372,13 @@ function renderProviderCards(settings) {
 }
 
 function localProviderStatusText() {
-  if (localModelStatus.loading) return "Checking Ollama on this PC...";
-  if (localModelStatus.loaded && localModelStatus.models.length) return `${localModelStatus.models.length} Ollama model${localModelStatus.models.length === 1 ? "" : "s"} installed`;
-  if (localModelStatus.loaded) return "Ollama reachable, no local models found";
-  if (localModelStatus.error) return cleanLocalProviderMessage(localModelStatus.error);
-  return "Reads installed Ollama models from this computer";
+  if (localModelStatus.loading) return "Checking Ollama and Kimi bridge...";
+  if (localModelStatus.loaded && localModelStatus.models.length) {
+    return `${localModelStatus.models.length} local Ollama model${localModelStatus.models.length === 1 ? "" : "s"} + Kimi K3 direct`;
+  }
+  if (localModelStatus.loaded) return "Kimi K3 direct is available; no local Ollama models found";
+  if (localModelStatus.error) return `Kimi K3 direct available · ${cleanLocalProviderMessage(localModelStatus.error)}`;
+  return "Local Ollama models plus Kimi K3 through Hugging Face Direct";
 }
 
 function renderProviderModeCards(settings) {
@@ -391,6 +404,7 @@ function renderSelectedModelControls(settings) {
 
 function localModelLabel(modelId) {
   if (modelId === "local-auto") return localModelStatus.models.length ? "Auto - best installed Ollama model" : "Auto - read Ollama";
+  if (KIMI_OLLAMA_ALIASES.has(modelId)) return "Kimi K3 — Hugging Face Direct (remote; no OpenRouter)";
   const model = localModelStatus.models.find((item) => item.model === modelId || item.name === modelId);
   const suffix = [model?.parameter_size, model?.quantization_level].filter(Boolean).join(" ");
   return `${model?.display_name || modelId}${suffix ? ` (${suffix})` : ""}`;
@@ -729,7 +743,7 @@ function renderModelTab(settings, activeProvider, activeModel) {
         <div class="set-sec-head">
           <div>
             <h3>AI models</h3>
-            <p class="set-note">Choose Ghost/local behavior, one provider, several providers, or Phantom Hybrid routing across the allowed lanes.</p>
+            <p class="set-note">Choose Ghost/local behavior, one explicitly selected provider, several selected providers, or Phantom Hybrid routing. Kimi K3 appears inside Local / Ollama and is used only when that model is explicitly selected.</p>
           </div>
         </div>
         <p class="set-label">How Phantom chooses</p>
@@ -748,7 +762,7 @@ function renderModelTab(settings, activeProvider, activeModel) {
         <div class="set-control-grid set-provider-models">${renderSelectedModelControls(settings)}</div>
         ${settings.selectedProviders.includes("local") ? `
           <div class="set-rule-list">
-            <span>Local means Ollama on this PC: ${esc(localModelStatus.baseUrl)}</span>
+            <span>Local includes Ollama on this PC (${esc(localModelStatus.baseUrl)}) plus Kimi K3 via the direct Hugging Face bridge</span>
             <span>${esc(localProviderStatusText())}</span>
             <button class="btn btn-quiet" type="button" data-local-model-refresh>Re-read Ollama models</button>
           </div>` : ""}
@@ -769,7 +783,7 @@ function renderModelTab(settings, activeProvider, activeModel) {
             ], settings.responseLength)}</select>
           </label>
         </div>
-        <p class="set-footnote">If a selected provider is unavailable, Smart Mix and Multiple can try another enabled provider. One provider never switches silently.</p>
+        <p class="set-footnote">If a selected provider is unavailable, Smart Mix and Multiple can try another enabled provider. Selected-provider-only mode never switches silently.</p>
       </div>`;
 }
 
@@ -1028,7 +1042,7 @@ function renderPlanCard(plan, currentKey, options = {}) {
 async function renderPlanAccessTab(el, opts = {}) {
   const localCustomer = Boolean(ctx.session?.localCustomer);
   const billingInterval = opts.billingInterval === "year" ? "year" : "month";
-  el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Loading plan access...</b><span>Reading the backend entitlement truth for this workspace.</span></div></div>`;
+  el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Loading plan access...</b><span>Checking this workspace.</span></div></div>`;
   try {
     const [summary, billing] = await Promise.all([
       localCustomer ? fetchCustomerPlanPreview() : fetchEntitlementsSummary(),
@@ -1036,7 +1050,7 @@ async function renderPlanAccessTab(el, opts = {}) {
     ]);
     const entitlements = summary?.entitlements || null;
     if (!entitlements) {
-      el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Plan access is unavailable.</b><span>Reconnect the customer backend, then reopen this tab.</span></div></div>`;
+      el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Plan access is unavailable.</b><span>Reconnect the workspace, then reopen this tab.</span></div></div>`;
       return;
     }
     const entitlementPlans = Array.isArray(summary.plans) && summary.plans.length
@@ -1058,7 +1072,7 @@ async function renderPlanAccessTab(el, opts = {}) {
         ? "Stripe verified"
         : "Setup required";
     const planDescription = localCustomer
-      ? "Switch Free, Pro, Developer, Elite, and Developer + Elite instantly. This local simulator never charges a payment method."
+      ? "Switch Basic, Pro, and Elite instantly. Workspace type is configured separately, and this local simulator never charges a payment method."
       : !canManagePlan
         ? "This workspace plan and billing are managed by an owner or admin."
         : billing?.productionReady
@@ -1075,7 +1089,7 @@ async function renderPlanAccessTab(el, opts = {}) {
       ${!localCustomer ? `
         <div class="set-section">
           <div class="set-card-head"><span>Secure billing</span><b>${esc(billingModeLabel)}</b></div>
-          <p class="set-note">${esc(billing?.reason || "Billing state is unavailable. Reconnect the backend and try again.")}</p>
+          <p class="set-note">${esc(billing?.reason || "Billing state is unavailable. Reconnect the workspace and try again.")}</p>
           <div class="set-chip-row">${(billing?.paymentMethods?.supported || ["Card", "Apple Pay when eligible", "PayPal when eligible"]).map((method) => `<span class="set-chip is-on">${esc(method)}</span>`).join("")}</div>
           ${canManagePlan && billing?.customerOnFile ? `<button type="button" class="btn btn-quiet" data-billing-portal>Manage payment method, invoices & subscription</button>` : ""}
           ${canManagePlan && billing?.customerOnFile && billing?.portalUsesDashboardDefault ? `<p class="set-note">Billing uses Stripe’s Dashboard-managed customer portal configuration.</p>` : ""}
@@ -1134,7 +1148,7 @@ async function renderPlanAccessTab(el, opts = {}) {
       };
     }
   } catch (error) {
-    el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Plan access could not load.</b><span>${esc(error instanceof Error ? error.message : "Check the backend connection and try again.")}</span></div></div>`;
+    el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Plan access could not load.</b><span>${esc(error instanceof Error ? error.message : "Check the workspace connection and try again.")}</span></div></div>`;
   }
 }
 
@@ -1252,7 +1266,7 @@ async function renderWorkspaceModulesTab(el, opts = {}) {
     el.querySelector("[data-module-save]")?.addEventListener("click", () => saveDraft(readDraft()).catch((error) => { if (message) message.textContent = error.message; }));
     el.querySelector("[data-module-disable]")?.addEventListener("click", () => saveDraft({ ...readDraft(), enabled: false }).catch((error) => { if (message) message.textContent = error.message; }));
   } catch (error) {
-    el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Workspace modules could not load.</b><span>${esc(error instanceof Error ? error.message : "Check the private backend connection and try again.")}</span></div></div>`;
+    el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Workspace modules could not load.</b><span>${esc(error instanceof Error ? error.message : "Check the workspace connection and try again.")}</span></div></div>`;
   }
 }
 

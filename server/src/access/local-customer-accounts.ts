@@ -8,6 +8,7 @@ import type { PlanStatus } from "@prisma/client";
 
 import { listCustomerPlanDefinitions, type PlanDefinition, type ResolvedEntitlements } from "./entitlements.js";
 import type { AccessSession } from "./session.js";
+import type { WorkspaceProfileId } from "../customization/workspace-profiles.js";
 
 export const LOCAL_CUSTOMER_SESSION_PREFIX = "local:";
 
@@ -27,6 +28,7 @@ type LocalCustomerUser = {
   passwordHash: string;
   activeOrgId: string;
   memberships: LocalCustomerMembership[];
+  workspaceProfile?: WorkspaceProfileId;
   planKey?: string;
   planStatus?: PlanStatus;
   planUpdatedAt?: string;
@@ -65,6 +67,7 @@ type LocalCustomerRegisterInput = {
   password: string;
   name?: string;
   businessName?: string;
+  workspaceProfile?: WorkspaceProfileId;
 };
 
 const pbkdf2Async = promisify(pbkdf2);
@@ -80,7 +83,7 @@ const exposeResetTokens = process.env.PHANTOMFORCE_LOCAL_CUSTOMER_RESET_EXPOSE_T
 const passwordIterations = 210_000;
 const passwordKeyLength = 32;
 const passwordDigest = "sha256";
-const DEFAULT_LOCAL_CUSTOMER_PLAN_KEY = "free";
+const DEFAULT_LOCAL_CUSTOMER_PLAN_KEY = "starter";
 const PLAN_STATUSES = new Set(["trial", "active", "grace", "suspended"]);
 
 let loaded = false;
@@ -131,7 +134,7 @@ function normalizePlanStatus(value: unknown): PlanStatus {
 function resolveLocalCustomerEntitlements(user: LocalCustomerUser): ResolvedEntitlements {
   const definition = publicPlanDefinition(user.planKey);
   const status = normalizePlanStatus(user.planStatus);
-  const freeViewOnly = definition.key === "free" || definition.key === "starter";
+  const freeViewOnly = definition.key === "free";
   const canWrite = localCustomerWriteAccess && status !== "suspended" && !freeViewOnly;
   return {
     orgId: user.activeOrgId,
@@ -210,6 +213,7 @@ function buildUser(input: LocalCustomerRegisterInput, passwordHash: string): Loc
     passwordHash,
     activeOrgId: orgId,
     memberships: [{ orgId, orgName: businessName, role: "owner" }],
+    workspaceProfile: input.workspaceProfile || "business",
     planKey: DEFAULT_LOCAL_CUSTOMER_PLAN_KEY,
     planStatus: "active",
     planUpdatedAt: stamp,
@@ -293,6 +297,11 @@ function buildSession(user: LocalCustomerUser, sessionRecord: LocalCustomerSessi
     isSuperAdmin: false,
     orgId: activeMembership?.orgId ?? activeOrgId,
     orgRole: activeMembership?.role ?? "owner",
+    workspaceProfile: user.workspaceProfile === "developer"
+      ? "developer"
+      : ["athlete", "coach", "sports_management"].includes(user.workspaceProfile || "")
+        ? "athlete"
+        : "business",
     memberships,
   };
 }

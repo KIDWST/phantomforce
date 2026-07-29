@@ -10,6 +10,161 @@ const { promisify } = require("node:util");
 const execFileAsync = promisify(execFile);
 const DEFAULT_TIMEOUT_MS = 2500;
 const DEFAULT_STARTUP_TIMEOUT_MS = 30000;
+const KIMI_PROVIDER_ID = "kimi-k3-direct";
+const KIMI_ENDPOINT = "http://127.0.0.1:11435";
+const KIMI_MODEL = "kimi-k3-hf:latest";
+const KIMI_CONTEXT_LENGTH = 65536;
+const PHANTOM_V1_PROVIDER_ID = "qwen3-coder-local";
+const PHANTOM_V1_MODEL = "phantom-v1:latest";
+const PHANTOM_V1_CONTEXT_LENGTH = 262144;
+const LOCAL_OLLAMA_ENDPOINT = "http://127.0.0.1:11434";
+
+function isKimiModel(value) {
+  const model = String(value || "").trim().toLowerCase();
+  return (
+    model === "kimi-k3-hf" ||
+    model === "kimi-k3-hf:latest" ||
+    model.startsWith("kimi-k3-hf:") ||
+    model === "moonshotai/kimi-k3" ||
+    model.startsWith("moonshotai/kimi-k3:")
+  );
+}
+
+function isKimiProviderRecord(value) {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const providerId = String(value.id || value.provider_id || value.provider || "").trim();
+  const endpoint = String(value.endpoint || value.base_url || value.baseUrl || value.api || "").replace(/\/(?:v1)?\/?$/, "");
+  const model = String(value.model || value.default_model || value.name || "").trim();
+  return providerId === KIMI_PROVIDER_ID || endpoint === KIMI_ENDPOINT || isKimiModel(model);
+}
+
+function isPhantomV1Model(value) {
+  const model = String(value || "").trim().toLowerCase();
+  return model === "phantom-v1" || model === PHANTOM_V1_MODEL || model.startsWith("phantom-v1:");
+}
+
+function applyPhantomV1ComposerStorageDefaults(storage) {
+  let changed = false;
+  const updates = {
+    "hermes.desktop.composer.model": PHANTOM_V1_MODEL,
+    "hermes.desktop.composer.provider": PHANTOM_V1_PROVIDER_ID,
+    "hermes.desktop.composer.model-source": "default",
+    "hermes.desktop.composer.reasoning_effort": "none",
+    "hermes.desktop.composer.reasoning": "none",
+    "hermes.desktop.composer.thinking": "false",
+    "hermes.desktop.composer.thinking.enabled": "false",
+    "hermes.desktop.composer.reasoning.enabled": "false"
+  };
+  for (const [key, value] of Object.entries(updates)) {
+    if (storage.getItem(key) !== value) {
+      storage.setItem(key, value);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function resolveKimiProviderConfig(input = {}) {
+  const explicitContext = Number(input.context_length ?? input.contextLength);
+  const metadataContext = Number(
+    input.details?.context_length ??
+    input.model_info?.["general.context_length"] ??
+    input.model_info?.["kimi_k3.context_length"] ??
+    input.model_info?.["llama.context_length"]
+  );
+  const contextLength = Number.isFinite(explicitContext) && explicitContext >= KIMI_CONTEXT_LENGTH
+    ? explicitContext
+    : Number.isFinite(metadataContext) && metadataContext >= KIMI_CONTEXT_LENGTH
+      ? metadataContext
+      : KIMI_CONTEXT_LENGTH;
+  return {
+    provider_id: KIMI_PROVIDER_ID,
+    endpoint: KIMI_ENDPOINT,
+    model: KIMI_MODEL,
+    context_length: contextLength,
+    metadata_source: contextLength === explicitContext
+      ? "explicit_persisted_context"
+      : contextLength === metadataContext
+        ? "gateway_model_metadata"
+        : "kimi_provider_default",
+    openrouter_used: false
+  };
+}
+
+function migrateKimiProviderRecord(record) {
+  if (!isKimiProviderRecord(record)) {
+    return { changed: false, record };
+  }
+  const migrated = {
+    ...record,
+    id: KIMI_PROVIDER_ID,
+    provider_id: KIMI_PROVIDER_ID,
+    name: record.name || "Kimi K3 Direct",
+    endpoint: KIMI_ENDPOINT,
+    base_url: KIMI_ENDPOINT,
+    model: KIMI_MODEL,
+    context_length: KIMI_CONTEXT_LENGTH,
+    contextLength: KIMI_CONTEXT_LENGTH,
+    openrouter_used: false
+  };
+  return {
+    changed: JSON.stringify(migrated) !== JSON.stringify(record),
+    record: migrated
+  };
+}
+
+function migrateHermesComposerStorage(storage) {
+  if (!storage || typeof storage.getItem !== "function" || typeof storage.setItem !== "function") {
+    return { changed: false, reason: "storage_unavailable" };
+  }
+  const model = String(storage.getItem("hermes.desktop.composer.model") || "").trim();
+  const provider = String(storage.getItem("hermes.desktop.composer.provider") || "").trim();
+  if (isPhantomV1Model(model) || provider === PHANTOM_V1_PROVIDER_ID) {
+    const changed = applyPhantomV1ComposerStorageDefaults(storage);
+    return {
+      changed,
+      provider_id: PHANTOM_V1_PROVIDER_ID,
+      endpoint: LOCAL_OLLAMA_ENDPOINT,
+      model: PHANTOM_V1_MODEL,
+      context_length: PHANTOM_V1_CONTEXT_LENGTH,
+      reasoning_effort: "none",
+      metadata_source: "phantombot_desktop_phantom_v1_storage_migration"
+    };
+  }
+  if (!isKimiModel(model) && provider !== KIMI_PROVIDER_ID) {
+    return { changed: false, reason: "not_kimi" };
+  }
+  let changed = false;
+  const updates = {
+    "hermes.desktop.composer.model": KIMI_MODEL,
+    "hermes.desktop.composer.provider": KIMI_PROVIDER_ID,
+    "hermes.desktop.composer.model-source": "default"
+  };
+  for (const [key, value] of Object.entries(updates)) {
+    if (storage.getItem(key) !== value) {
+      storage.setItem(key, value);
+      changed = true;
+    }
+  }
+  return {
+    changed,
+    provider_id: KIMI_PROVIDER_ID,
+    endpoint: KIMI_ENDPOINT,
+    model: KIMI_MODEL,
+    context_length: KIMI_CONTEXT_LENGTH,
+    metadata_source: "phantombot_desktop_storage_migration"
+  };
+}
+
+function assertKimiDoesNotUseOpenRouter(config) {
+  if (!isKimiProviderRecord(config)) {
+    return true;
+  }
+  const endpoint = String(config.endpoint || config.base_url || config.baseUrl || config.api || "");
+  return !/openrouter\.ai/i.test(endpoint) && config.provider !== "openrouter" && config.provider_id !== "openrouter";
+}
 
 function isHttpUrl(value) {
   try {
@@ -429,13 +584,28 @@ class RuntimeSupervisor {
 }
 
 module.exports = {
+  KIMI_CONTEXT_LENGTH,
+  KIMI_ENDPOINT,
+  KIMI_MODEL,
+  KIMI_PROVIDER_ID,
+  PHANTOM_V1_CONTEXT_LENGTH,
+  PHANTOM_V1_MODEL,
+  PHANTOM_V1_PROVIDER_ID,
   RuntimeSupervisor,
+  LOCAL_OLLAMA_ENDPOINT,
+  assertKimiDoesNotUseOpenRouter,
   findHermesExecutable,
   findPhantomForceRoot,
   inspectHermes,
   isHttpUrl,
+  isKimiModel,
+  isKimiProviderRecord,
+  isPhantomV1Model,
+  migrateHermesComposerStorage,
+  migrateKimiProviderRecord,
   phantomForceLaunchCommand,
   probeUrl,
+  resolveKimiProviderConfig,
   safeRuntimeSummary,
   waitForUrl
 };

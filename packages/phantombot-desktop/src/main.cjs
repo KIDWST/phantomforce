@@ -15,6 +15,14 @@ const path = require("node:path");
 const {
   RuntimeSupervisor,
   isHttpUrl,
+  KIMI_CONTEXT_LENGTH,
+  KIMI_ENDPOINT,
+  KIMI_MODEL,
+  KIMI_PROVIDER_ID,
+  PHANTOM_V1_CONTEXT_LENGTH,
+  PHANTOM_V1_MODEL,
+  PHANTOM_V1_PROVIDER_ID,
+  LOCAL_OLLAMA_ENDPOINT,
   probeUrl
 } = require("./runtime.cjs");
 
@@ -29,24 +37,28 @@ const REMOTE_APP_URL =
 
 const APP_URL =
   String(
+    process.env.PHANTOMFORCE_OS_APP_URL ||
     process.env.PHANTOMBOT_APP_URL ||
     DEFAULT_APP_URL
   ).trim();
 
 const HEALTH_URL =
   String(
+    process.env.PHANTOMFORCE_OS_HEALTH_URL ||
     process.env.PHANTOMBOT_HEALTH_URL ||
     DEFAULT_HEALTH_URL
   ).trim();
 
 const ALLOW_REMOTE_FALLBACK =
   String(
+    process.env.PHANTOMFORCE_OS_ALLOW_REMOTE_FALLBACK ||
     process.env.PHANTOMBOT_ALLOW_REMOTE_FALLBACK ||
     ""
   ).trim().toLowerCase() === "true";
 
 const ENABLE_DEVTOOLS =
   String(
+    process.env.PHANTOMFORCE_OS_DEVTOOLS ||
     process.env.PHANTOMBOT_DEVTOOLS ||
     ""
   ).trim().toLowerCase() === "true";
@@ -64,11 +76,11 @@ let lastConnectionStatus = {
   runtime: null
 };
 
-app.setName("PhantomBot");
+app.setName("PhantomForce OS");
 
 if (process.platform === "win32") {
   app.setAppUserModelId(
-    "online.phantomforce.phantombot"
+    "online.phantomforce.os"
   );
 }
 
@@ -105,7 +117,7 @@ function buildDesktopUrl(value) {
 
   url.searchParams.set(
     "desktop_shell",
-    "phantombot"
+    "phantomforce-os"
   );
 
   url.searchParams.set(
@@ -260,9 +272,9 @@ function installPermissionPolicy() {
 
       dialog.showMessageBox({
         type: "question",
-        title: "PhantomBot permission",
+        title: "PhantomForce OS permission",
         message:
-          "Allow PhantomBot to use the microphone or camera?",
+          "Allow PhantomForce OS to use the microphone or camera?",
         detail:
           "This permission applies only to the current desktop session.",
         buttons: [
@@ -300,7 +312,7 @@ function installPermissionPolicy() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    title: "PhantomBot",
+    title: "PhantomForce OS",
     width: 1440,
     height: 930,
     minWidth: 980,
@@ -394,14 +406,39 @@ function createWindow() {
         .executeJavaScript(
           `
             document.documentElement.dataset.phantombotDesktop = "true";
-            document.documentElement.dataset.desktopShell = "phantombot";
+            document.documentElement.dataset.phantomforceOs = "true";
+            document.documentElement.dataset.desktopShell = "phantomforce-os";
 
             if (
               document.title &&
               document.title.toLowerCase().includes("phantomforce")
             ) {
-              document.title = "PhantomBot";
+              document.title = "PhantomForce OS";
             }
+
+            try {
+              const model = String(localStorage.getItem("hermes.desktop.composer.model") || "").trim().toLowerCase();
+              const provider = String(localStorage.getItem("hermes.desktop.composer.provider") || "").trim();
+              const isPhantomV1 = model === "phantom-v1" || model === ${JSON.stringify(PHANTOM_V1_MODEL)} || model.startsWith("phantom-v1:") || provider === ${JSON.stringify(PHANTOM_V1_PROVIDER_ID)};
+              if (isPhantomV1) {
+                localStorage.setItem("hermes.desktop.composer.model", ${JSON.stringify(PHANTOM_V1_MODEL)});
+                localStorage.setItem("hermes.desktop.composer.provider", ${JSON.stringify(PHANTOM_V1_PROVIDER_ID)});
+                localStorage.setItem("hermes.desktop.composer.model-source", "default");
+                localStorage.setItem("hermes.desktop.composer.reasoning_effort", "none");
+                localStorage.setItem("hermes.desktop.composer.reasoning", "none");
+                localStorage.setItem("hermes.desktop.composer.thinking", "false");
+                localStorage.setItem("hermes.desktop.composer.thinking.enabled", "false");
+                localStorage.setItem("hermes.desktop.composer.reasoning.enabled", "false");
+                console.info("[PhantomBot Phantom V1] provider_id=${PHANTOM_V1_PROVIDER_ID} endpoint=${LOCAL_OLLAMA_ENDPOINT} model=${PHANTOM_V1_MODEL} context_length=${PHANTOM_V1_CONTEXT_LENGTH} reasoning_effort=none metadata_source=phantombot_desktop_storage_migration");
+              }
+              const isKimi = model === "kimi-k3-hf" || model === "kimi-k3-hf:latest" || model.startsWith("kimi-k3-hf:") || provider === ${JSON.stringify(KIMI_PROVIDER_ID)};
+              if (isKimi) {
+                localStorage.setItem("hermes.desktop.composer.model", ${JSON.stringify(KIMI_MODEL)});
+                localStorage.setItem("hermes.desktop.composer.provider", ${JSON.stringify(KIMI_PROVIDER_ID)});
+                localStorage.setItem("hermes.desktop.composer.model-source", "default");
+                console.info("[PhantomBot Kimi] provider_id=${KIMI_PROVIDER_ID} endpoint=${KIMI_ENDPOINT} model=${KIMI_MODEL} context_length=${KIMI_CONTEXT_LENGTH} metadata_source=phantombot_desktop_storage_migration");
+              }
+            } catch {}
           `,
           true
         )
@@ -512,9 +549,9 @@ app.whenReady().then(async () => {
 
     await dialog.showMessageBox({
       type: "error",
-      title: "PhantomBot",
+      title: "PhantomForce OS",
       message:
-        "PhantomBot could not open its existing application.",
+        "PhantomForce OS could not open the workspace.",
       detail: message
     });
   }

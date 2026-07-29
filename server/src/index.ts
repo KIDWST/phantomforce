@@ -14,6 +14,7 @@ import {
 } from "@phantomforce/contracts";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
+import { WorkspaceProfileSchema } from "./customization/schemas.js";
 
 import {
   AccessApprovalDecisionSchema,
@@ -206,6 +207,7 @@ import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-rec
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import {
+  checkAgentAssistBridgeHealth,
   getAgentAssistBridgeStatus,
   requestAgentAssist,
 } from "./phantom-ai/agent-assist-bridge.js";
@@ -580,6 +582,7 @@ import {
   retryMediaGenerationJob,
   transitionMediaGenerationJob,
 } from "./media/media-generation-store.js";
+import { defaultMediaRoute } from "./media/media-defaults.js";
 import {
   approveContentPublication,
   cancelContentPublication,
@@ -1971,11 +1974,14 @@ const DatabaseLoginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 
+const CustomerWorkspaceProfileSchema = WorkspaceProfileSchema;
+
 const CustomerRegisterSchema = z.object({
   email: z.string().email().max(200),
   password: z.string().min(8).max(200),
   name: z.string().trim().max(120).optional(),
   businessName: z.string().trim().max(120).optional(),
+  workspaceProfile: CustomerWorkspaceProfileSchema.default("business"),
 });
 const CustomerPasswordResetRequestSchema = z.object({ email: z.string().email().max(200) });
 const CustomerPasswordResetCompleteSchema = z.object({
@@ -1990,6 +1996,7 @@ const SignupSchema = z.object({
   password: z.string().min(8).max(200),
   name: z.string().max(120).optional(),
   organizationName: z.string().max(120).optional(),
+  workspaceProfile: CustomerWorkspaceProfileSchema.default("business"),
 });
 
 const ForgotUsernameSchema = z.object({ email: z.string().email().max(200) });
@@ -2128,7 +2135,7 @@ app.post("/auth/signup", async (request, reply) => {
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   const result = await createSelfServeAccount(parsed.data);
   if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
-  return { ok: true, userId: result.userId, orgId: result.orgId, next: "Sign in at /auth/login." };
+  return { ok: true, userId: result.userId, orgId: result.orgId, workspaceProfile: result.profile.id, next: "Sign in at /auth/login." };
 });
 
 app.post("/auth/forgot-username", async (request, reply) => {
@@ -4245,7 +4252,7 @@ type AdminPhantomAiRouteTier = "instant" | "reasoning" | "advisory" | "standard"
 
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
-  if (value === "local_ollama" || value === "ollama" || value === "local") return "local_ollama";
+  if (value === "local_ollama" || value === "ollama" || value === "local" || value === "kimi" || value === "kimi_k3_hf") return "local_ollama";
   if (value === "claude_cli" || value === "claude") return "claude_cli";
   if (value === "chatgpt_bridge" || value === "chatgpt" || value === "chatgpt_plus") return "chatgpt_bridge";
   return "codex";
@@ -4266,7 +4273,7 @@ function parseRequestedAdminModel(value: unknown) {
 function parseAdminMaxProviderMs(value: unknown) {
   const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   if (!Number.isFinite(numeric)) return null;
-  return Math.min(Math.max(Math.round(numeric), 3000), 60000);
+  return Math.min(Math.max(Math.round(numeric), 3000), 600000);
 }
 
 function parseAllowProviderFallback(value: unknown, routeTier: AdminPhantomAiRouteTier) {
@@ -4282,7 +4289,7 @@ function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
   if (lane === "glm_5_2") return "Local GLM";
   if (lane === "local_ollama") return "Local Ollama";
   if (lane === "claude_cli") return "Claude CLI";
-  if (lane === "chatgpt_bridge") return "ChatGPT Assist";
+  if (lane === "chatgpt_bridge") return "ChatGPT Bridge";
   return "Private Brain";
 }
 
@@ -4331,7 +4338,7 @@ function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): 
 function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
   if (providerId === "codex_cli") return "Private Brain (Codex)";
   if (providerId === "claude_cli") return "Claude CLI";
-  if (providerId === "chatgpt_bridge") return "ChatGPT Assist";
+  if (providerId === "chatgpt_bridge") return "ChatGPT Bridge";
   if (providerId === "openrouter_glm") return "OpenRouter GLM 5.2";
   return "Phantom Instant";
 }
@@ -4359,7 +4366,7 @@ type AdminPhantomAiChatContext = {
 const ADMIN_CHAT_FALLBACK_TIMEOUT_MS = {
   codex_cli: 30000,
   claude_cli: 30000,
-  chatgpt_bridge: 30000,
+  chatgpt_bridge: 120000,
   openrouter_glm: 20000,
   local_ollama: 25000,
 } as const;
@@ -4367,7 +4374,7 @@ const ADMIN_CHAT_FALLBACK_TIMEOUT_MS = {
 const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
   codex_cli: 5000,
   claude_cli: 7000,
-  chatgpt_bridge: 8000,
+  chatgpt_bridge: 90000,
   openrouter_glm: 5000,
   /* Keep PhantomBot's local lane bounded. Heavy models can still be selected
      explicitly, but the default qwen3:4b path should fail fast to the local
@@ -4379,7 +4386,7 @@ const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
 const ADMIN_CHAT_REASONING_TIMEOUT_MS = {
   codex_cli: 12000,
   claude_cli: 12000,
-  chatgpt_bridge: 12000,
+  chatgpt_bridge: 120000,
   openrouter_glm: 12000,
   local_ollama: 12000,
 } as const;
@@ -4482,7 +4489,7 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
     });
     return {
       provider_id: "chatgpt_bridge" as const,
-      model_id: ctx.requestedModelId || ctx.requestedModel || `chatgpt-${effort}`,
+      model_id: ctx.requestedModelId || ctx.requestedModel || "chatgpt-standard",
       status: "called" as const,
       output_text: assist.output_text,
       provider_called: assist.provider_called,
@@ -4598,7 +4605,20 @@ async function runAdminPhantomAiChatWithFallback(
   return { providerId, result: result ?? { status: "error", output_text: "", model_id: "phantom" }, attempts, primaryProviderId, fallbackUsed: true, allFailed: true };
 }
 
-function buildAdminPhantomAiAllProvidersFailedMessage() {
+function buildAdminPhantomAiAllProvidersFailedMessage(
+  primaryProviderId?: AdminPhantomAiProviderId,
+  attempts: AdminPhantomAiChatAttempt[] = [],
+) {
+  if (primaryProviderId === "chatgpt_bridge") {
+    const detail = attempts.find((attempt) => attempt.provider_id === "chatgpt_bridge")?.error_message || "";
+    if (/429|rate limit|too many requests/i.test(detail)) {
+      return "ChatGPT bridge is temporarily rate-limited or unavailable. Wait a moment, then send the message again.";
+    }
+    if (detail) {
+      return `ChatGPT bridge could not answer: ${detail}`.slice(0, 700);
+    }
+    return "ChatGPT bridge could not answer. Check Settings -> ChatGPT Bridge, then retry.";
+  }
   return "I couldn't complete that just now. Your request is still here — try again in a moment.";
 }
 
@@ -5318,12 +5338,17 @@ app.get("/phantom-ai/agent-assist/status", async (request, reply) => {
   }
 
   const status = getAgentAssistBridgeStatus();
+  const health = await checkAgentAssistBridgeHealth(5000);
+  const executable = status.executable && health.executable && session.canManageAccess;
   return {
     ok: true,
     session,
     status: {
       ...status,
-      executable: status.executable && session.canManageAccess,
+      executable,
+      setup_required: !executable,
+      setup_options: status.setup_options.map((item) => item.id === "chatgpt_session_adapter" ? { ...item, ready: health.executable } : item),
+      health,
     },
     live_provider_called: false,
     network_call_performed: false,
@@ -5357,8 +5382,53 @@ app.post("/phantom-ai/agent-assist", async (request, reply) => {
     ...result,
     session,
     execution_denied_reason: parsed.data.execute_bridge === true && !session.canManageAccess
-      ? "Only admin sessions may execute a configured ChatGPT assist adapter. Relay packet returned instead."
+      ? "Only admin sessions may execute the configured ChatGPT bridge. Relay packet returned instead."
       : null,
+  };
+});
+
+app.post("/phantom-ai/respond", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = AgentAssistBridgeBodySchema.omit({ execute_bridge: true }).safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: "invalid_assistant_request",
+    });
+  }
+
+  if (session.subscriptionActive === false) {
+    return reply.code(403).send({
+      ok: false,
+      error: "assistant_unavailable",
+    });
+  }
+
+  const result = await requestAgentAssist({
+    ...parsed.data,
+    execute_bridge: true,
+  });
+
+  if (!result.provider_called || !result.output_text.trim()) {
+    return reply.code(503).send({
+      ok: false,
+      error: "assistant_unavailable",
+    });
+  }
+
+  return {
+    ok: true,
+    answer: result.output_text,
+    effort: result.effort,
+    receipt: {
+      external_action_executed: false,
+      database_written: false,
+    },
   };
 });
 
@@ -9611,6 +9681,7 @@ app.post("/api/media-generation/jobs", async (request, reply) => {
   const parsed = MediaGenerationCreateSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const defaults = defaultMediaRoute(parsed.data.modality);
   const result = await createMediaGenerationJob({
     tenantId,
     actor: session.id,
@@ -9618,8 +9689,8 @@ app.post("/api/media-generation/jobs", async (request, reply) => {
     input: {
       modality: parsed.data.modality,
       prompt: parsed.data.prompt,
-      provider: parsed.data.provider,
-      model: parsed.data.model,
+      provider: parsed.data.provider === "unassigned" ? defaults.provider : parsed.data.provider,
+      model: parsed.data.model || defaults.model,
       parameters: parsed.data.parameters,
       referenceAssetIds: parsed.data.reference_asset_ids,
     },
@@ -11045,7 +11116,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       approval_status: approvalRequired ? "pending" : "not_required",
       risks: preview.decision.risks.map((risk) => redactSensitiveText(risk)).slice(0, 8),
       next_action: allProvidersFailed
-        ? "Check Codex usage limits, Claude CLI auth, OpenRouter key/flags, and Ollama status, then retry."
+        ? "Check Kimi bridge/Hugging Face limits, Codex usage, Claude CLI auth, OpenRouter configuration, and Ollama status, then retry."
         : toolExecuted
           ? "Review the operator receipt in Phantom AI."
           : `Continue in Phantom AI with ${respondingLabel} or switch admin model lanes.`,
@@ -11087,7 +11158,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       message: {
         role: "assistant",
         content: allProvidersFailed
-          ? buildAdminPhantomAiAllProvidersFailedMessage()
+          ? buildAdminPhantomAiAllProvidersFailedMessage(fallbackChat.primaryProviderId, fallbackChat.attempts)
           : resultOutput,
       },
       operator:

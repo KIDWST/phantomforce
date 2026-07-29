@@ -11,20 +11,20 @@ const settings = read("app/js/settings.js");
 const main = read("app/js/main.js");
 const packageJson = read("package.json");
 
-assert.match(entitlements, /key: "free"[\s\S]*name: "Free Preview"[\s\S]*websitePublishing: false[\s\S]*customDomains: false/u,
-  "Free Preview must clearly restrict publishing and custom domains.");
+assert.match(entitlements, /key: "free"[\s\S]*name: "Legacy Preview"[\s\S]*isInternal: true/u,
+  "The removed free tier must remain compatibility-only.");
+assert.match(entitlements, /key: "starter"[\s\S]*name: "Basic"[\s\S]*isInternal: false/u,
+  "Basic must be the public starting plan.");
 assert.match(entitlements, /name: "Pro"[\s\S]*competitorIntelligence: true[\s\S]*aggressiveIntelligence: false/u,
   "Pro must expose useful business intelligence without aggressive intelligence.");
-assert.match(entitlements, /name: "Developer"[\s\S]*gameSubmissions: 25/u,
-  "Developer must expose a builder-focused tier for product, game, and plugin testing.");
 assert.match(entitlements, /name: "Elite"[\s\S]*customDomains: true[\s\S]*advancedWorkflows: true/u,
   "Elite must unlock the advanced operator tier.");
-assert.match(entitlements, /name: "Developer \+ Elite"[\s\S]*gameSubmissions: 50/u,
-  "Developer + Elite must combine Elite operations with the expanded developer envelope.");
-assert.match(entitlements, /name: "Enterprise"[\s\S]*businesses: 25/u,
-  "Enterprise must stay available for full-access customer testing.");
-assert.match(entitlements, /CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\(\["free", "professional", "developer", "elite", "developer_elite"\]\)/u,
-  "Customer tier switching must expose Free, Pro, Developer, Elite, and Developer + Elite.");
+assert.match(entitlements, /key: "developer"[\s\S]*isInternal: true/u,
+  "Developer must be a workspace identity, not a public payment tier.");
+assert.match(entitlements, /key: "enterprise"[\s\S]*isInternal: true/u,
+  "Enterprise compatibility must not add a fourth public payment plan.");
+assert.match(entitlements, /CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\(\["starter", "professional", "elite"\]\)/u,
+  "Customer tier switching must expose only Basic, Pro, and Elite.");
 
 assert.match(localCustomers, /listCustomerPlanDefinitions\(\)/u,
   "Customer tier switching must expose public plans only.");
@@ -59,27 +59,25 @@ assert.match(settings, /id: "plan", label: "Plan & access", category: "Workspace
   "Settings must own plan and entitlement testing.");
 assert.match(settings, /data-plan-switch="\$\{esc\(plan\.key\)\}"/u,
   "Settings must render public tier switch controls.");
-assert.match(settings, /Switch Free, Pro, Developer, Elite, and Developer \+ Elite instantly/u,
-  "Settings must make clear this is a safe customer tier simulator.");
+assert.match(settings, /Switch Basic, Pro, and Elite instantly\. Workspace type is configured separately/u,
+  "Settings must separate workspace identity from billing.");
 
 assert.match(main, /const FEATURE_BY_NAV_ID = \{/u,
   "Navigation must know which workspace features are plan-gated.");
 assert.match(main, /const PLAN_NAV_WORKFLOWS = \{/u,
   "Navigation must define tier-specific workspace workflows.");
-assert.match(main, /free: new Set\(\["dashboard", "phantomai", "sites", "phantomplay", "settings"\]\)/u,
-  "Free users must get a smaller, focused workflow instead of the whole business command sidebar.");
-assert.match(main, /developer: new Set\([\s\S]*"developer"[\s\S]*"phantomstore"[\s\S]*\)/u,
-  "Developer users must get builder and PhantomPlay/Store workflows.");
-assert.match(main, /developer_elite: new Set\([\s\S]*"developer"[\s\S]*"intelligence"[\s\S]*\)/u,
-  "Developer + Elite must combine builder and business workflows.");
+assert.match(main, /starter: null/u,
+  "Basic users must see the whole ecosystem; tier differences are enforced by limits, not hidden tabs.");
+assert.match(main, /const PROFILE_NAV_WORKFLOWS = \{[\s\S]*developer: new Set\([\s\S]*"developer"[\s\S]*"phantomstore"/u,
+  "Developer workspace identity must control builder navigation.");
 assert.match(main, /return \{ label: "Phantom", detail: "Owner mode · all modules · safe self-editing", tone: "active" \};/u,
   "Owner/admin access must display the hidden Phantom tier, not a customer plan.");
-assert.match(main, /surface\.id === "developer" && isDeveloperTier\(\)/u,
-  "Developer-tier customers must be able to see the Developer workflow without owner status.");
-assert.match(main, /!ctx\.session\?\.database && !ctx\.session\?\.localCustomer/u,
-  "Plan gating must include local customer sessions.");
-assert.match(main, /localStorage\.setItem\("pf\.settings\.tab\.v1", "plan"\)/u,
-  "Clicking a locked nav item must open Plan & access.");
+assert.match(main, /function isDeveloperTier\(\) \{\s*return false;\s*\}/u,
+  "Developer Mode must stay owner-only instead of following a customer workspace identity.");
+assert.match(main, /workspaceProfileChoices\("business"\)/u,
+  "Signup must ask which workspace the user wants.");
+assert.match(main, /function navFeatureDisabled\(item\) \{\s*return false;\s*\}/u,
+  "Customer tabs must stay clickable; usage restrictions belong inside the workspace, not the nav.");
 assert.match(main, /data-open-ws="settings"[\s\S]*No real work loaded yet\./u,
   "Empty setup must route to Settings instead of Clients.");
 assert.doesNotMatch(main, /data-open-ws="leads"[\s\S]*No real work loaded yet\./u,

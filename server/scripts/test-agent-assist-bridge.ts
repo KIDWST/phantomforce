@@ -39,10 +39,10 @@ async function adapterReady() {
 }
 
 for (let attempt = 0; attempt < 60 && !(await adapterReady()); attempt += 1) {
-  assert.equal(adapterChild.exitCode, null, "Disposable ChatGPT adapter exited during startup");
+  assert.equal(adapterChild.exitCode, null, "Disposable bridge adapter exited during startup");
   await new Promise((resolve) => setTimeout(resolve, 100));
 }
-assert.equal(await adapterReady(), true, "Disposable ChatGPT adapter did not become ready");
+assert.equal(await adapterReady(), true, "Disposable bridge adapter did not become ready");
 
 const child = spawn(process.execPath, ["--import", pathToFileURL(tsxLoader).href, "src/index.ts"], {
   cwd: serverRoot,
@@ -85,13 +85,14 @@ try {
   assert.equal(statusPayload.status.universal, true);
   assert.equal(statusPayload.status.session_scoped, false);
   assert.equal(statusPayload.status.transport, "http");
-  assert.equal(statusPayload.status.setup_required, false);
+  assert.equal(statusPayload.status.executable, false);
+  assert.equal(statusPayload.status.setup_required, true);
+  assert.equal(statusPayload.status.health.reachable, true);
+  assert.equal(statusPayload.status.health.executable, false);
   assert.deepEqual(statusPayload.status.effort_levels, ["instant", "standard", "deep"]);
-  assert.match(statusPayload.status.subscription_billing_note, /user-owned local ChatGPT adapter/u);
-  assert.equal(statusPayload.status.env.openai_api_key, "OPENAI_API_KEY");
+  assert.match(statusPayload.status.subscription_billing_note, /ChatGPT/u);
   assert.equal(statusPayload.status.setup_options.some((item: Record<string, any>) => item.id === "relay_packet" && item.ready === true), true);
-  assert.equal(statusPayload.status.setup_options.some((item: Record<string, any>) => item.id === "local_chatgpt_adapter" && item.ready === true), true);
-  assert.equal(statusPayload.status.setup_options.some((item: Record<string, any>) => item.id === "openai_api_key"), true);
+  assert.equal(statusPayload.status.setup_options.some((item: Record<string, any>) => item.id === "chatgpt_session_adapter" && item.ready === false), true);
   assert.equal(statusPayload.live_provider_called, false);
   assert.equal(statusPayload.database_written, false);
   assert.doesNotMatch(JSON.stringify(statusPayload), /sk-[A-Za-z0-9]/u);
@@ -122,7 +123,7 @@ try {
   assert.equal(assist.external_action_executed, false);
   assert.equal(assist.database_written, false);
   assert.match(assist.relay_packet.prompt, /Caller: phantombot/u);
-  assert.match(assist.relay_packet.prompt, /ChatGPT Plus/u);
+  assert.match(assist.relay_packet.prompt, /ChatGPT/u);
   assert.doesNotMatch(assist.relay_packet.prompt, /secret-token|api-key/u);
 
   const blockedExecute = await fetch(`${baseUrl}/phantom-ai/agent-assist`, {

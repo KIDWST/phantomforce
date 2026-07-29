@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260728-70";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260729-86";
 
 const SLOT_IDS = ["active-1", "active-2", "pending-1"];
 const SLOT_META = {
@@ -19,6 +19,9 @@ const MODULES = [
   { id: "business_cleanup", label: "Business Cleanup Checklist", description: "Spot missing basics before growth work." },
 ];
 const TEMPLATES = [
+  { key: "athlete", label: "Athlete", recommendedModules: ["content_calendar", "media_assets", "follow_up_queue", "approval_queue", "reports", "packages_offers"], reportingMetrics: ["training_updates", "content_ready", "sponsor_outreach", "coach_follow_ups"] },
+  { key: "coach", label: "Coach", recommendedModules: ["client_requests", "employee_tasks", "content_calendar", "media_assets", "approval_queue", "reports"], reportingMetrics: ["athlete_check_ins", "practice_items", "content_ready", "team_requests"] },
+  { key: "sports_management", label: "Sports management", recommendedModules: ["lead_queue", "follow_up_queue", "content_calendar", "media_assets", "approval_queue", "reports", "packages_offers"], reportingMetrics: ["athlete_pipeline", "sponsor_leads", "event_tasks", "deliverables_due"] },
   { key: "local_service", label: "Local service business", recommendedModules: ["lead_queue", "follow_up_queue", "approval_queue", "reports", "packages_offers", "business_cleanup"], reportingMetrics: ["new_leads", "follow_ups_due", "reviews", "appointments"] },
   { key: "media_content", label: "Media/content business", recommendedModules: ["content_calendar", "media_assets", "approval_queue", "client_requests", "employee_tasks", "reports"], reportingMetrics: ["assets_created", "posts_approved", "drafts_ready", "client_requests"] },
   { key: "contractor_home_service", label: "Contractor/home service", recommendedModules: ["lead_queue", "follow_up_queue", "content_calendar", "approval_queue", "reports", "packages_offers"], reportingMetrics: ["quote_requests", "follow_ups_due", "jobs_won", "reviews"] },
@@ -563,7 +566,7 @@ async function save(state) {
     if (!state.serverBacked) {
       saveLocalDocument(state.document);
       state.saveNote = "Saved as a local setup draft.";
-      state.message = "Local setup draft only. Connect the backend to save server-backed setup.";
+      state.message = "Draft saved on this PC. Connect the workspace to sync it.";
       return;
     }
     const payload = await api(`/api/client-setup/slots/${encodeURIComponent(slot.slotId)}`, {
