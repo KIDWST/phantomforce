@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260729-88";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260729-98";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];

@@ -8,7 +8,7 @@ export type InstantChatToolTurn = {
 
 export type InstantChatToolReply = {
   output_text: string;
-  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-context-recall" | "phantom-clarifier" | "phantom-identity" | "phantom-personality" | "phantom-stable-fact";
+  tool_id: "phantom-calculator" | "phantom-reference-resolver" | "phantom-context-recall" | "phantom-clarifier" | "phantom-identity" | "phantom-personality" | "phantom-stable-fact" | "phantom-capability-contract";
 };
 
 export function instantResponseTokenBudget(userRequest: string) {

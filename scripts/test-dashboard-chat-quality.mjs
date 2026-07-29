@@ -103,9 +103,20 @@ const capturedBodies = [];
 const originalFetch = globalThis.fetch;
 
 globalThis.fetch = async (url, init) => {
-  assert.match(String(url), /\/phantom-ai\/chat$/, "casual prompts should use the chat backend");
+  const target = String(url);
   const body = JSON.parse(init.body);
   capturedBodies.push(body);
+  if (/\/phantom-ai\/respond$/.test(target)) {
+    return {
+      ok: true,
+      json: async () => ({
+        ok: true,
+        answer: `Direct answer ${capturedBodies.length}: ${body.task}`,
+        effort: body.effort,
+      }),
+    };
+  }
+  assert.match(target, /\/phantom-ai\/chat$/, "casual prompts should use the chat backend");
   const followUp = /^why tacos/i.test(body.message);
   return {
     ok: true,
@@ -135,7 +146,7 @@ for (const prompt of casualPrompts) {
 assert.equal(capturedBodies.length, casualPrompts.length, "all casual prompts must exercise the backend route");
 for (const body of capturedBodies) {
   assert.equal(body.route_tier, "instant");
-  assert.equal(body.requested_model, "qwen3:4b");
+  assert.equal(body.requested_model, "phantom-v1:latest");
   assert.equal(body.admin_model, "local_ollama");
   assert.deepEqual(body.allowed_providers, ["local_ollama"]);
   assert.equal(body.allow_provider_fallback, false);
@@ -210,14 +221,14 @@ for (const prompt of customerReasoningPrompts) {
   const result = await handleSmartCommand(prompt);
   const body = capturedBodies.at(-1);
   assert.equal(result.hermes?.route_tier, "reasoning", `${prompt} must reach the reasoning model lane`);
-  assert.equal(body.route_tier, "reasoning");
-  assert.equal(body.requested_model, "qwen3:4b");
-  assert.equal(body.admin_model, "local_ollama");
-  assert.deepEqual(body.allowed_providers, ["local_ollama"]);
-  assert.equal(body.allow_provider_fallback, false);
-  assert.equal(body.max_provider_ms, 12000);
-  assert.doesNotMatch(body.business_summary, /Business Manager workspace/i);
-  assert.ok(body.module_data.every((entry) => entry.module === "recent_conversation"));
+  assert.equal(body.caller, "phantombot");
+  assert.equal(body.mode, "strategy");
+  assert.equal(body.effort, "deep");
+  assert.equal(body.task, prompt);
+  assert.match(body.context, /general conversation; do not invent private workspace facts/i);
+  assert.equal("provider" in body, false);
+  assert.equal("requested_model" in body, false);
+  assert.equal("allowed_providers" in body, false);
   assert.deepEqual(result.cards || [], []);
   assert.equal(result.open || null, null);
 }
@@ -234,12 +245,14 @@ for (const prompt of customerCreativePrompts) {
   const result = await handleSmartCommand(prompt);
   const body = capturedBodies.at(-1);
   assert.equal(result.hermes?.route_tier, "reasoning", `${prompt} must use a real model instead of canned intent copy`);
-  assert.equal(body.route_tier, "reasoning");
-  assert.equal(body.requested_model, "qwen3:4b");
-  assert.deepEqual(body.allowed_providers, ["local_ollama"]);
-  assert.equal(body.allow_provider_fallback, false);
-  assert.doesNotMatch(body.business_summary, /Business Manager workspace/i);
-  assert.ok(body.module_data.every((entry) => entry.module === "recent_conversation"));
+  assert.equal(body.caller, "phantombot");
+  assert.equal(body.mode, "strategy");
+  assert.equal(body.effort, "deep");
+  assert.equal(body.task, prompt);
+  assert.match(body.context, /general conversation; do not invent private workspace facts/i);
+  assert.equal("provider" in body, false);
+  assert.equal("requested_model" in body, false);
+  assert.equal("allowed_providers" in body, false);
   assert.deepEqual(result.cards || [], []);
   assert.equal(result.open || null, null);
 }
@@ -254,12 +267,15 @@ for (const prompt of customerAdvisoryPrompts) {
   const result = await handleSmartCommand(prompt);
   const body = capturedBodies.at(-1);
   assert.equal(result.hermes?.route_tier, "advisory", `${prompt} must use scoped business advice`);
-  assert.equal(body.route_tier, "advisory");
-  assert.equal(body.requested_model, "qwen3:4b");
-  assert.deepEqual(body.allowed_providers, ["local_ollama"]);
-  assert.equal(body.allow_provider_fallback, false);
-  assert.match(body.business_summary, /Business Manager workspace/i);
-  assert.deepEqual(body.module_data.map((entry) => entry.module), ["active_business"]);
+  assert.equal(body.caller, "phantombot");
+  assert.equal(body.mode, "strategy");
+  assert.equal(body.effort, "deep");
+  assert.equal(body.task, prompt);
+  assert.match(body.context, /Use the bounded workspace context below/i);
+  assert.match(body.context, /active_business: Workspace: customer-one/i);
+  assert.equal("provider" in body, false);
+  assert.equal("requested_model" in body, false);
+  assert.equal("allowed_providers" in body, false);
   assert.deepEqual(result.cards || [], []);
   assert.equal(result.open || null, null);
 }

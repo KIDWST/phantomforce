@@ -481,12 +481,12 @@
         },
         {
           "file": "server/src/access/entitlements.ts",
-          "pattern": "CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\\(\\[\"free\", \"professional\", \"developer\", \"elite\", \"developer_elite\"\\]\\)",
-          "description": "Customer test mode exposes every public Free, Pro, Developer, Elite, and Developer + Elite tier, never the legacy Starter or internal key."
+          "pattern": "CUSTOMER_SWITCHABLE_PLAN_KEYS = new Set\\(\\[\"starter\", \"professional\", \"elite\"\\]\\)",
+          "description": "Customer test mode exposes only the public Basic, Pro, and Elite payment tiers."
         },
         {
           "file": "server/scripts/test-local-customer-plan-preview.ts",
-          "pattern": "seed starts on Free Preview[\\s\\S]*customer1 can switch to Pro[\\s\\S]*customer1 can switch to Elite[\\s\\S]*switch back to Free Preview",
+          "pattern": "seed starts on Basic[\\s\\S]*customer1 can switch to Pro[\\s\\S]*customer1 can switch to Elite[\\s\\S]*switch back to Basic",
           "description": "The executable local-customer test proves restrictions change immediately across all three public tiers."
         }
       ],
@@ -506,8 +506,8 @@
     {
       "id": "dashboard-chat-context-and-fast-routing",
       "status": "active",
-      "title": "Dashboard chat keeps the thread and uses the lightest capable brain",
-      "ownerDecision": "Normal questions and short follow-ups use the instant route; action-free comparisons, critiques, creative planning, and feedback use bounded local reasoning; scoped business advice uses a local advisory route with only relevant organization context. All three stay action-free, never trust a browser-supplied private provider, and never degrade into an unrelated status dump.",
+      "title": "Dashboard chat keeps the thread behind Phantom V1",
+      "ownerDecision": "Phantom V1 is the visible operating model. Selected effort and live-data requests use the protected ChatGPT Plus response lane; local Phantom handles fast local work and code execution. Provider details remain server-side and failures never degrade into an unrelated status dump.",
       "requiredPatterns": [
         {
           "file": "app/js/store.js",
@@ -536,8 +536,8 @@
         },
         {
           "file": "app/js/command.js",
-          "pattern": "const INSTANT_CHAT_MODEL = \"qwen3:4b\";",
-          "description": "Smart casual chat uses the current latency-capped local Qwen 3 lane, with deterministic tools protecting arithmetic and exact-output work."
+          "pattern": "const INSTANT_CHAT_MODEL = PHANTOM_V1_MODEL;",
+          "description": "Smart casual chat uses Phantom V1 while deterministic tools protect arithmetic and exact-output work."
         },
         {
           "file": "app/js/command.js",
@@ -586,7 +586,7 @@
         },
         {
           "file": "server/src/phantom-ai/instant-chat-tools.ts",
-          "pattern": "tool_id: \"phantom-identity\"[\\s\\S]*Phantom's fast conversation lane is currently \\${safeModel}",
+          "pattern": "tool_id: \"phantom-identity\"[\\s\\S]*You're using Phantom V1:Latest\\. Its fast lane is \\${safeModel}",
           "description": "Phantom identity and active fast-lane model disclosure come from route truth rather than model improvisation."
         },
         {
@@ -1235,7 +1235,7 @@
         },
         {
           "file": "app/js/phantomai.js",
-          "pattern": "const TABS = \\[\"chat\", \"automations\", \"memory\", \"activity\"\\][\\s\\S]*renderAutomation\\(mount\\)",
+          "pattern": "const TABS = \\[\"chat\", \"automations\", \"media\", \"memory\", \"activity\"\\][\\s\\S]*renderAutomation\\(mount\\)",
           "description": "PhantomBot routes to and mounts the real automation workspace."
         },
         {
@@ -1254,6 +1254,11 @@
           "file": "app/js/main.js",
           "pattern": "\\{ id: \"automation\",\\s+label: \"Automations\"",
           "description": "Automations cannot regress into a separate top-level application."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "data-nav-id=\"automation\"[^>]*>Automations",
+          "description": "Automations cannot regress into the global command rail."
         }
       ]
     }

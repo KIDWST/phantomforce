@@ -7,6 +7,7 @@ const checks = [
   "test:change-memory",
   "test:dashboard-chat",
   "test:command-surface",
+  "test:automation-workspace",
   "test:auth-boundaries",
   "test:customer-plan-switching",
   "test:competitor-intelligence",

@@ -1,7 +1,7 @@
 /*
  * Proves the customer-app tier simulator uses real plan keys and real
- * restrictions: Free is view-only, Pro and Elite unlock writes, and switching
- * back to Free immediately blocks writes again. No server or Docker required.
+ * restrictions: Basic, Pro, and Elite are the only public payment tiers.
+ * Workspace profile is independent from payment tier. No server required.
  */
 
 import { mkdtempSync } from "node:fs";
@@ -28,11 +28,11 @@ const session = await accounts.loginLocalCustomer("customer1@phantomforce.test",
 assert(session, "customer1 can log in");
 
 let summary = await accounts.getLocalCustomerPlanSummary(session!);
-assert(summary?.entitlements.planKey === "free", "seed starts on Free Preview");
-assert(summary?.entitlements.canWrite === false, "Free Preview is view-only");
+assert(summary?.entitlements.planKey === "starter", "seed starts on Basic");
+assert(summary?.entitlements.canWrite === true, "Basic allows workspace writes");
 assert(
-  summary?.plans.map((plan) => plan.key).join(",") === "free,professional,developer,elite,developer_elite",
-  "customer can inspect Free, Pro, Developer, Elite, and Developer + Elite",
+  summary?.plans.map((plan) => plan.key).join(",") === "starter,professional,elite",
+  "customer can inspect only Basic, Pro, and Elite",
 );
 
 const pro = await accounts.assignLocalCustomerPlan(session!, "professional");
@@ -41,13 +41,6 @@ assert(pro.ok && pro.entitlements.planKey === "professional", "Pro is current af
 assert(pro.ok && pro.entitlements.canWrite === true, "Pro allows writes");
 assert(pro.ok && pro.entitlements.features.competitorIntelligence === true, "Pro unlocks competitor intelligence");
 assert(pro.ok && pro.entitlements.features.customDomains === false, "Pro keeps custom domains restricted");
-
-const developer = await accounts.assignLocalCustomerPlan(session!, "developer");
-assert(developer.ok === true, "customer1 can switch to Developer");
-assert(developer.ok && developer.entitlements.planKey === "developer", "Developer is current after switch");
-assert(developer.ok && developer.entitlements.canWrite === true, "Developer allows writes");
-assert(developer.ok && developer.entitlements.features.advancedWorkflows === true, "Developer unlocks advanced workflows");
-assert(developer.ok && developer.entitlements.features.competitorIntelligence === false, "Developer stays separate from Elite customer intelligence");
 
 const elite = await accounts.assignLocalCustomerPlan(session!, "elite");
 assert(elite.ok === true, "customer1 can switch to Elite");
@@ -61,35 +54,22 @@ assert(
   "Elite has no locked feature flags",
 );
 
-const developerElite = await accounts.assignLocalCustomerPlan(session!, "developer_elite");
-assert(developerElite.ok === true, "customer1 can switch to Developer + Elite");
-assert(developerElite.ok && developerElite.entitlements.planKey === "developer_elite", "Developer + Elite is current after switch");
-assert(developerElite.ok && developerElite.entitlements.canWrite === true, "Developer + Elite allows writes");
-assert(
-  developerElite.ok &&
-    Object.entries(developerElite.entitlements.features).every(([key, value]) =>
-      key === "modelTier" ? value === "advanced" : value === true,
-    ),
-  "Developer + Elite has no locked feature flags",
-);
-
-const free = await accounts.assignLocalCustomerPlan(session!, "free");
-assert(free.ok === true, "customer1 can switch back to Free Preview");
-assert(free.ok && free.entitlements.planKey === "free", "Free Preview is current after switch back");
-assert(free.ok && free.entitlements.canWrite === false, "Free Preview blocks writes after switch back");
+const basic = await accounts.assignLocalCustomerPlan(session!, "starter");
+assert(basic.ok === true, "customer1 can switch back to Basic");
+assert(basic.ok && basic.entitlements.planKey === "starter", "Basic is current after switch back");
+assert(basic.ok && basic.entitlements.features.competitorIntelligence === false, "Basic keeps competitor intelligence restricted");
+assert(basic.ok && basic.entitlements.features.customDomains === false, "Basic keeps custom domains restricted");
 
 console.log(
   JSON.stringify(
     {
       ok: true,
       customer1Login: true,
-      freeViewOnly: true,
+      basicAvailable: true,
       proUnlocksWrites: true,
-      developerUnlocksWrites: true,
       eliteUnlocksWrites: true,
-      developerEliteUnlocksWrites: true,
       eliteHasNoLockedFeatures: true,
-      switchBackRestricts: true,
+      switchBackToBasic: true,
       store: process.env.PHANTOMFORCE_LOCAL_CUSTOMER_STORE,
     },
     null,

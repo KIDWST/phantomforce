@@ -43,12 +43,12 @@
 
   /* biome palettes: [groundA, groundB, groundEdge] */
   const BIOMES = {
-    village: { ga: [58, 74, 48], gb: [52, 68, 44], amb: "rgba(38,26,66,0.16)", warm: true },
-    vale: { ga: [56, 78, 46], gb: [50, 70, 42], amb: "rgba(34,24,62,0.14)", warm: true },
-    lake: { ga: [54, 70, 50], gb: [48, 64, 46], amb: "rgba(28,26,70,0.18)", warm: true },
-    interior: { ga: [64, 52, 44], gb: [58, 47, 40], amb: "rgba(20,14,34,0.10)", warm: true },
-    dungeon: { ga: [30, 30, 44], gb: [26, 27, 40], amb: "rgba(10,8,26,0.22)", warm: false },
-    ossuary: { ga: [44, 46, 58], gb: [40, 42, 54], amb: "rgba(20,24,48,0.20)", warm: false },
+    village: { ga: [42, 56, 48], gb: [34, 45, 46], amb: "rgba(31,21,58,0.24)", warm: true },
+    vale: { ga: [38, 56, 48], gb: [31, 45, 50], amb: "rgba(28,20,60,0.22)", warm: true },
+    lake: { ga: [38, 50, 54], gb: [31, 42, 54], amb: "rgba(25,24,70,0.25)", warm: true },
+    interior: { ga: [58, 49, 45], gb: [45, 39, 46], amb: "rgba(28,15,38,0.20)", warm: true },
+    dungeon: { ga: [31, 36, 50], gb: [25, 28, 43], amb: "rgba(14,9,32,0.32)", warm: false },
+    ossuary: { ga: [42, 45, 60], gb: [34, 38, 55], amb: "rgba(20,20,56,0.28)", warm: false },
   };
 
   class Room {
@@ -131,23 +131,46 @@
       const h = this._hash(gx, gy), v = h % 14;
       if (m === MAT.WATER) return; // water paints itself fully in _tile
       if (this.biome === "dungeon" || this.biome === "ossuary" || this.biome === "interior") {
-        // stone / plank floor
-        ctx.fillStyle = `rgb(${B.ga[0] + v},${B.ga[1] + v},${B.ga[2] + v})`;
+        // Painterly stone/plank floor: slab seams, copper scratches, and
+        // faint etched leaves so the whole board shares the reference style.
+        const tint = ((gx * 5 + gy * 3) % 4) - 1;
+        ctx.fillStyle = `rgb(${B.ga[0] + v + tint},${B.ga[1] + v + tint},${B.ga[2] + v + tint})`;
         ctx.fillRect(x, y, T, T);
-        ctx.fillStyle = "rgba(0,0,0,0.12)";
+        ctx.fillStyle = "rgba(5,4,14,0.16)";
         if ((gx + gy) % 2) ctx.fillRect(x, y, T, T);
-        if (this.biome === "interior") { ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.fillRect(x, y + T - 1, T, 1); }
+        ctx.strokeStyle = this.biome === "interior" ? "rgba(116,75,46,0.36)" : "rgba(180,102,54,0.28)";
+        ctx.lineWidth = 0.65;
+        ctx.strokeRect(x + 0.5, y + 0.5, T - 1, T - 1);
+        ctx.fillStyle = "rgba(244,174,92,0.10)";
+        if (h % 3 === 0) ctx.fillRect(x + 3, y + ((h >> 3) % 11) + 2, 7, 1);
+        if (h % 5 === 1) ctx.fillRect(x + ((h >> 5) % 9) + 2, y + 4, 1, 6);
+        if (h % 7 === 2) {
+          ctx.strokeStyle = "rgba(206,136,82,0.16)";
+          ctx.beginPath();
+          ctx.moveTo(x + 4, y + 11);
+          ctx.quadraticCurveTo(x + 8, y + 6, x + 12, y + 10);
+          ctx.stroke();
+        }
+        if (this.biome === "interior") { ctx.fillStyle = "rgba(255,184,95,0.06)"; ctx.fillRect(x, y, T, 1); }
         return;
       }
       // grass with two-tone dapple + mown texture
       const g = ((gx * 7 + gy * 13 + ((h >> 4) & 3)) % 2) ? B.ga : B.gb;
       ctx.fillStyle = `rgb(${g[0] + v},${g[1] + v},${g[2] + v})`;
       ctx.fillRect(x, y, T, T);
-      if (h % 11 === 0) { ctx.fillStyle = "rgba(255,240,180,0.05)"; ctx.fillRect(x + (h % 12), y + ((h >> 3) % 12), 2, 1); }
+      ctx.fillStyle = "rgba(6,7,18,0.09)";
+      if ((gx + gy) % 2) ctx.fillRect(x, y, T, T);
+      if (h % 11 === 0) { ctx.fillStyle = "rgba(255,203,118,0.08)"; ctx.fillRect(x + (h % 12), y + ((h >> 3) % 12), 2, 1); }
+      if (h % 13 === 4) {
+        ctx.strokeStyle = "rgba(255,169,91,0.12)";
+        ctx.beginPath(); ctx.moveTo(x + 3, y + 12); ctx.quadraticCurveTo(x + 8, y + 5, x + 13, y + 10); ctx.stroke();
+      }
       if (m === MAT.PATH) {
-        ctx.fillStyle = `rgb(${112 + v},${96 + v},${72 + v})`;
+        ctx.fillStyle = `rgb(${101 + v},${83 + v},${67 + v})`;
         ctx.fillRect(x, y, T, T);
-        ctx.fillStyle = "rgba(60,44,30,0.35)";
+        ctx.strokeStyle = "rgba(210,128,65,0.22)";
+        ctx.strokeRect(x + 0.5, y + 0.5, T - 1, T - 1);
+        ctx.fillStyle = "rgba(45,31,27,0.38)";
         ctx.fillRect(x + (h % 9), y + ((h >> 2) % 11), 3, 2);
         ctx.fillRect(x + ((h >> 5) % 10), y + ((h >> 7) % 9), 2, 2);
       } else if (m === MAT.SAND) {
@@ -272,20 +295,23 @@
           ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(fx, fy, 1, 1);
         }
       } else if (m === MAT.LIMINAL) {
-        ctx.fillStyle = `rgb(${34 + v},${36 + v},${54 + v})`; ctx.fillRect(x, y, T, T);
-        ctx.fillStyle = "rgba(130,160,230,0.12)"; ctx.fillRect(x + 1, y + 1, T - 2, 1);
-        ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fillRect(x, y + T - 2, T, 2);
-        if (h % 7 === 0) { ctx.strokeStyle = "rgba(150,180,240,0.16)"; ctx.beginPath(); ctx.arc(x + T / 2, y + T / 2, 4, 0, Math.PI * 2); ctx.stroke(); }
+        ctx.fillStyle = `rgb(${31 + v},${36 + v},${55 + v})`; ctx.fillRect(x, y, T, T);
+        ctx.strokeStyle = "rgba(216,122,70,0.34)"; ctx.lineWidth = 0.8; ctx.strokeRect(x + 0.5, y + 0.5, T - 1, T - 1);
+        ctx.fillStyle = "rgba(255,174,91,0.13)"; ctx.fillRect(x + 1, y + 1, T - 2, 1);
+        ctx.fillStyle = "rgba(0,0,0,0.30)"; ctx.fillRect(x, y + T - 2, T, 2);
+        if (h % 7 === 0) { ctx.strokeStyle = "rgba(255,166,86,0.18)"; ctx.beginPath(); ctx.arc(x + T / 2, y + T / 2, 4, 0, Math.PI * 2); ctx.stroke(); }
       } else if (m === MAT.BRASS) {
         const g = 96 + v;
         ctx.fillStyle = `rgb(${g + 34},${g},${34})`; ctx.fillRect(x, y, T, T);
-        ctx.fillStyle = "rgba(255,224,130,0.18)"; ctx.fillRect(x + 2, y + 2, T - 4, 2);
+        ctx.strokeStyle = "rgba(255,214,122,0.34)"; ctx.strokeRect(x + 0.5, y + 0.5, T - 1, T - 1);
+        ctx.fillStyle = "rgba(255,224,130,0.24)"; ctx.fillRect(x + 2, y + 2, T - 4, 2);
         ctx.fillStyle = "rgba(40,20,0,0.4)"; ctx.fillRect(x, y + T - 3, T, 3);
       } else if (m === MAT.NULL_IRON) {
         ctx.fillStyle = `rgb(${15 + (v >> 1)},${14 + (v >> 1)},${17 + (v >> 1)})`; ctx.fillRect(x, y, T, T);
-        ctx.strokeStyle = "rgba(96,64,96,0.28)"; ctx.strokeRect(x + 2.5, y + 2.5, T - 5, T - 5);
+        ctx.strokeStyle = "rgba(120,72,120,0.34)"; ctx.strokeRect(x + 2.5, y + 2.5, T - 5, T - 5);
       } else if (m === MAT.DEAD) {
-        ctx.fillStyle = `rgb(${32 + v},${30 + v},${32 + v})`; ctx.fillRect(x, y, T, T);
+        ctx.fillStyle = `rgb(${29 + v},${29 + v},${38 + v})`; ctx.fillRect(x, y, T, T);
+        ctx.strokeStyle = "rgba(95,65,80,0.22)"; ctx.strokeRect(x + 0.5, y + 0.5, T - 1, T - 1);
         ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(x, y + T - 2, T, 2);
       } else if (m === MAT.SPIKE) {
         ctx.fillStyle = "#c9d6e8";
@@ -299,6 +325,7 @@
       } else if (m === MAT.SAINTGLASS) {
         ctx.fillStyle = `rgba(${122 + v},${162 + v},${212 + v},0.55)`; ctx.fillRect(x, y, T, T);
         ctx.fillStyle = "rgba(200,230,255,0.25)"; ctx.fillRect(x + 3, y + 3, T - 6, T - 6);
+        ctx.strokeStyle = "rgba(255,196,118,0.24)"; ctx.strokeRect(x + 1.5, y + 1.5, T - 3, T - 3);
       }
     }
     /* warm ambient + lantern glow overlay; call AFTER entities, camera-space */

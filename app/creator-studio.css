@@ -1203,6 +1203,66 @@ html[data-org-color-mode="dark"] .ml-field-brief .ml-prompt::placeholder {
     margin-top: 0;
     padding: 6px 10px;
   }
+
+  /* Media Lab must always be scrollable from the page itself. The previous
+     fixed workbench layout depended on several nested overflow containers; a
+     wheel/touch event over the stage could land on a non-scrollable ancestor
+     and feel completely stuck. Keep dense editor/tool panes scrollable, but
+     let the workspace document own vertical movement. */
+  .app-main:has(.workspace-page[data-workspace-page="media"]) {
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-main:has(.workspace-page[data-workspace-page="media"]) .console-workspace,
+  .workspace-page[data-workspace-page="media"],
+  .workspace-page[data-workspace-page="media"] .workspace-page-body,
+  .workspace-page[data-workspace-page="media"] .media-suite,
+  .workspace-page[data-workspace-page="media"] .media-suite-body,
+  .workspace-page[data-workspace-page="media"] .ml,
+  .workspace-page[data-workspace-page="media"] .ml-body {
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: visible;
+    overscroll-behavior-y: auto;
+  }
+
+  .app-main:has(.workspace-page[data-workspace-page="media"]) .console-workspace,
+  .workspace-page[data-workspace-page="media"] .workspace-page-body,
+  .workspace-page[data-workspace-page="media"] .media-suite-body,
+  .workspace-page[data-workspace-page="media"] .ml-body {
+    padding-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-workspace {
+    height: auto;
+    min-height: min(820px, calc(100dvh - 140px));
+    align-items: stretch;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage,
+  .workspace-page[data-workspace-page="media"] .ml-stage-frame,
+  .workspace-page[data-workspace-page="media"] .ml-stage-view {
+    height: auto;
+    min-height: clamp(520px, calc(100dvh - 170px), 900px);
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-idle {
+    height: auto;
+    min-height: clamp(420px, calc(100dvh - 230px), 760px);
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-brief,
+  .workspace-page[data-workspace-page="media"] .ml-stage-grid,
+  .workspace-page[data-workspace-page="media"] .ml-tools {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
 }
 
 

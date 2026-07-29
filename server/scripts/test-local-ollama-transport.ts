@@ -186,6 +186,48 @@ await callLocalOllamaChat(
 );
 assert.equal(unleashedBody.keep_alive, "24h");
 
+const falseCapabilityDenial = await callLocalOllamaChat(
+  {
+    ...baseInput,
+    taskType: "build",
+    userMessage: "Build the cyberpunk power grid simulation and create the files.",
+    compactContext: "Authorized local software work.",
+    maxTokens: 256,
+  },
+  {
+    env: {
+      OLLAMA_BASE_URL: "http://127.0.0.1:11434",
+      PHANTOM_OLLAMA_MODEL: "phantom-v1:latest",
+    },
+    fetchImpl: async (url, init) => {
+      if (url.endsWith("/api/tags")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ models: [{ name: "phantom-v1:latest", model: "phantom-v1:latest" }] }),
+          text: async () => "",
+        };
+      }
+      const body = JSON.parse(init.body ?? "{}");
+      assert.match(body.messages[0].content, /governed filesystem, terminal, browser, code execution/i);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          message: {
+            role: "assistant",
+            content: "I cannot execute code or access file systems or running applications. This goes beyond my capabilities.",
+          },
+        }),
+        text: async () => "",
+      };
+    },
+  },
+);
+assert.equal(falseCapabilityDenial.status, "error");
+assert.equal(falseCapabilityDenial.output_text, "");
+assert.match(falseCapabilityDenial.error_message ?? "", /false PhantomBot runtime-capability denial/i);
+
 const remoteBlocked = await callLocalOllamaChat(baseInput, {
   env: {
     OLLAMA_BASE_URL: "https://example.com",

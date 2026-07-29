@@ -1109,10 +1109,21 @@
     if (VG.fx.DARK_BIOMES.has(biome)) return;
     const dawn = state.dawn || 0;
     if (dawn >= 1) return;
-    const night = (1 - dawn) * 0.5;
-    const r = Math.round(8 + dawn * 60), g = Math.round(10 + dawn * 44), b = Math.round(26 + dawn * 30);
+    const indoors = biome === "interior";
+    const night = (1 - dawn) * (indoors ? 0.22 : 0.36);
+    const r = Math.round((indoors ? 20 : 8) + dawn * 60);
+    const g = Math.round((indoors ? 12 : 10) + dawn * 44);
+    const b = Math.round((indoors ? 24 : 26) + dawn * 30);
     ctx.fillStyle = `rgba(${r},${g},${b},${night.toFixed(3)})`;
     ctx.fillRect(VG.camera.x, VG.camera.y, VG.W, VG.H);
+    if (indoors) {
+      const warm = ctx.createRadialGradient(player.x, player.y - 34, 6, player.x, player.y - 34, 145);
+      warm.addColorStop(0, "rgba(255,175,88,0.13)");
+      warm.addColorStop(0.46, "rgba(255,132,72,0.055)");
+      warm.addColorStop(1, "rgba(255,132,72,0)");
+      ctx.fillStyle = warm;
+      ctx.fillRect(VG.camera.x, VG.camera.y, VG.W, VG.H);
+    }
   }
   function drawScene() {
     const flags = roomFlags();
@@ -1214,9 +1225,11 @@
   function drawAtmosphereGrade() {
     if (!state.room || VG.settings.reducedEffects) return;
     const vig = ctx.createRadialGradient(VG.W / 2, VG.H / 2, VG.H * 0.35, VG.W / 2, VG.H / 2, VG.H * 0.85);
-    vig.addColorStop(0, "rgba(4,3,10,0)"); vig.addColorStop(1, "rgba(3,2,9,0.4)");
+    vig.addColorStop(0, "rgba(4,3,10,0)"); vig.addColorStop(1, "rgba(2,1,8,0.40)");
     ctx.fillStyle = vig; ctx.fillRect(0, 0, VG.W, VG.H);
-    ctx.fillStyle = "rgba(70,60,140,0.035)";
+    ctx.fillStyle = "rgba(84,52,132,0.045)";
+    ctx.fillRect(0, 0, VG.W, VG.H);
+    ctx.fillStyle = "rgba(255,160,74,0.025)";
     ctx.fillRect(0, 0, VG.W, VG.H);
   }
   function drawScreenFx() {
@@ -1253,7 +1266,7 @@
     const p = player;
     if (p.iframe > 0 && Math.floor(state.t * 30) % 2) return;
     for (const tr of p._trail) drawTrailGhost(tr);
-    shadow(p.x, p.y, 6);
+    shadow(p.x, p.y, 8);
     const fa = Math.atan2(p.fy, p.fx);
     // strikeT counts down from 0.14 -> 0; strikeK is the inverse (1 at swing
     // start), driving a brief forward lunge + squash-stretch punch-through.
@@ -1268,45 +1281,73 @@
     const rollSquash = p.rollT > 0 ? 0.7 : 1;
     const punchStretch = 1 + strikeK * 0.18;
     const cloakCos = cosmeticOf("cloak");
-    const cloakOuter = cloakCos ? cloakCos.outer : "#241a38", cloakInner = cloakCos ? cloakCos.inner : "#3a2c50";
+    const cloakOuter = cloakCos ? cloakCos.outer : "#201432", cloakInner = cloakCos ? cloakCos.inner : "#4a2868";
+    const bob = Math.sin(state.t * 6) * 0.45;
+    const side = Math.max(-1, Math.min(1, p.fx));
 
-    // trailing shroud tendrils, echoing the boss's shroud language at hero scale
-    ctx.strokeStyle = "rgba(36,26,56,0.55)"; ctx.lineWidth = 1.4;
+    // trailing cloak tails, wide enough to read at fullscreen scale.
+    ctx.strokeStyle = "rgba(17,10,27,0.70)"; ctx.lineWidth = 2;
     for (let i = -1; i <= 1; i++) {
-      const sway = Math.sin(state.t * 5 + i * 1.7) * 1.6 - p.fx * 3;
+      const sway = Math.sin(state.t * 5 + i * 1.7) * 1.4 - p.fx * 3;
       ctx.beginPath();
-      ctx.moveTo(-p.fx * 2 + i * 2, 1);
-      ctx.quadraticCurveTo(-p.fx * 4 + sway + i * 2, 5, -p.fx * 6 + sway * 1.4 + i * 2, 9);
+      ctx.moveTo(-p.fx * 2 + i * 2.6, 2 + bob);
+      ctx.quadraticCurveTo(-p.fx * 5 + sway + i * 2, 7, -p.fx * 7 + sway * 1.4 + i * 2, 12);
       ctx.stroke();
     }
 
-    // cloak + body, rim-lit against the dark
+    // cloak + body: a clear pawn/hood silhouette instead of an indistinct blob.
     glow(rimColor, rimBlur, () => {
+      ctx.fillStyle = "rgba(255,196,104,0.16)";
+      ctx.beginPath(); ctx.ellipse(-3, -3, 12, 14, -0.1, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = cloakOuter;
-      ctx.beginPath(); ctx.ellipse(-p.fx * 2, -p.fy * 2 + 1, 6 * punchStretch, 7 * rollSquash, fa, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0, -15 + bob);
+      ctx.quadraticCurveTo(10 * punchStretch, -10, 9, 5 * rollSquash);
+      ctx.quadraticCurveTo(5, 15, 0, 15);
+      ctx.quadraticCurveTo(-5, 15, -9, 5 * rollSquash);
+      ctx.quadraticCurveTo(-10 * punchStretch, -10, 0, -15 + bob);
+      ctx.closePath(); ctx.fill();
       ctx.fillStyle = cloakInner;
-      ctx.beginPath(); ctx.ellipse(0, -1, 4.5 * punchStretch, 5.5 * rollSquash, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0, -9 + bob);
+      ctx.quadraticCurveTo(6, -5, 5.6, 7);
+      ctx.quadraticCurveTo(0, 12, -5.6, 7);
+      ctx.quadraticCurveTo(-6, -5, 0, -9 + bob);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(255,196,104,0.32)";
+      ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.moveTo(-5, -5); ctx.quadraticCurveTo(0, -1, 5, -5); ctx.stroke();
     });
 
-    // head + hood — chibi-scaled up against the body for readability
+    // hood + face: warm mask, visible eyes, directional cheek.
     glow(rimColor, rimBlur * 0.6, () => {
-      ctx.fillStyle = "#1a1226"; ctx.beginPath(); ctx.arc(p.fx * 1.7, -5.5 + p.fy * 1.3, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#efe0c4"; ctx.beginPath(); ctx.arc(side * 1.1, -8.5 + bob, 5.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(85,45,84,0.18)"; ctx.fillRect(side * 1.1 - 4, -5.8 + bob, 8, 1.2);
     });
-    ctx.fillStyle = "#d8c8d8"; ctx.beginPath(); ctx.arc(p.fx * 2.7, -5.5 + p.fy * 2, 2.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#191022";
+    ctx.beginPath(); ctx.arc(side * 1.1 - 1.8, -9 + bob, 0.85, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(side * 1.1 + 1.8, -9 + bob, 0.85, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(255,230,180,0.65)"; ctx.fillRect(side * 1.1 - 2.2, -11.8 + bob, 4.4, 1);
+    ctx.strokeStyle = "rgba(35,20,38,0.75)"; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.arc(side * 1.1, -8.5 + bob, 5.5, -0.1, Math.PI + 0.1); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,184,91,0.58)"; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(0, -1); ctx.lineTo(3, 2.5); ctx.lineTo(0, 6); ctx.lineTo(-3, 2.5); ctx.closePath(); ctx.stroke();
 
     // a bare blade sliver on the leading hand, always visible — the Hand's
     // gauntlet (below) replaces it once acquired rather than adding to it
     ctx.save(); ctx.rotate(fa);
-    ctx.fillStyle = "#c9d6e8";
-    ctx.beginPath(); ctx.moveTo(5, -0.6); ctx.lineTo(9 + strikeK * 3, 0); ctx.lineTo(5, 0.6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#f4e3be";
+    ctx.beginPath(); ctx.moveTo(5, -1); ctx.lineTo(12 + strikeK * 4, 0); ctx.lineTo(5, 1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(255,154,208,0.45)"; ctx.fillRect(4.2, -1.8, 2.4, 3.6);
     ctx.restore();
 
     // THE VESPER HAND — gauntlet on the leading arm, glowing when the beam is ready (full HP)
     if (state.flags.hasHand) {
       ctx.save(); ctx.rotate(fa);
-      ctx.fillStyle = "#0c0a12"; ctx.fillRect(3, -2, 7, 4);
+      ctx.fillStyle = "#0c0a12"; ctx.fillRect(3, -2.4, 8, 4.8);
       ctx.fillStyle = beamReady ? glowColor : "#565060";
-      ctx.fillRect(8, -1.5, 2.5, 3);
+      ctx.fillRect(8.5, -1.8, 3, 3.6);
+      ctx.strokeStyle = "rgba(255,220,150,0.45)"; ctx.strokeRect(3.4, -2, 7.4, 4);
       ctx.restore();
     }
     // accessory: small silhouette near the head
@@ -1534,14 +1575,32 @@
     ctx.moveTo(pts[0][0], pts[0][1]);
     for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
     ctx.closePath();
-    ctx.fillStyle = opts.fill || "rgba(5,4,13,0.72)";
+    ctx.fillStyle = opts.fill || "rgba(7,5,18,0.82)";
     ctx.fill();
-    const strokeColor = opts.stroke || "rgba(143,233,255,0.16)";
-    glow(strokeColor, 3.5, () => {
+    const strokeColor = opts.stroke || "rgba(236,148,76,0.36)";
+    glow(strokeColor, 4.5, () => {
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = opts.lineWidth || 1;
       ctx.stroke();
     });
+    ctx.strokeStyle = opts.innerStroke || "rgba(255,218,142,0.20)";
+    ctx.lineWidth = 0.65;
+    ctx.strokeRect(x + 3.5, y + 3.5, w - 7, h - 7);
+    if (opts.ornament !== false && w >= 46 && h >= 18) {
+      const gold = opts.gold || "rgba(255,202,116,0.58)";
+      ctx.strokeStyle = gold;
+      ctx.lineWidth = 0.8;
+      const c = 8;
+      ctx.beginPath();
+      ctx.moveTo(x + c, y + 5); ctx.quadraticCurveTo(x + 4, y + 4, x + 5, y + c);
+      ctx.moveTo(x + w - c, y + 5); ctx.quadraticCurveTo(x + w - 4, y + 4, x + w - 5, y + c);
+      ctx.moveTo(x + c, y + h - 5); ctx.quadraticCurveTo(x + 4, y + h - 4, x + 5, y + h - c);
+      ctx.moveTo(x + w - c, y + h - 5); ctx.quadraticCurveTo(x + w - 4, y + h - 4, x + w - 5, y + h - c);
+      ctx.stroke();
+      ctx.fillStyle = gold;
+      ctx.fillRect(x + 8, y + 4, 2, 2); ctx.fillRect(x + w - 10, y + 4, 2, 2);
+      ctx.fillRect(x + 8, y + h - 6, 2, 2); ctx.fillRect(x + w - 10, y + h - 6, 2, 2);
+    }
   }
   /* hearts render as guttering candles: a lit flame per point of health,
      a snuffed stub per point lost. Presence system: the flame gutters

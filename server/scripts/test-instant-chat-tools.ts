@@ -584,16 +584,20 @@ assert.equal(
   "capitalized words from separate topics must not create false ambiguity",
 );
 assert.deepEqual(
-  buildInstantChatToolReply("Who are you?", [], "qwen3:4b"),
-  { output_text: "I'm Phantom AI, the general-purpose assistant inside PhantomForce.", tool_id: "phantom-identity" },
+  buildInstantChatToolReply("Who are you?", [], "phantom-v1:latest"),
+  { output_text: "I'm Phantom V1, PhantomBot's AI and execution runtime inside PhantomForce.", tool_id: "phantom-identity" },
 );
 assert.deepEqual(
-  buildInstantChatToolReply("What model are you running for this conversation?", [], "qwen3:4b"),
-  { output_text: "Phantom's fast conversation lane is currently qwen3:4b.", tool_id: "phantom-identity" },
+  buildInstantChatToolReply("What model are you running for this conversation?", [], "phantom-v1:latest"),
+  { output_text: "You're using Phantom V1:Latest. Its fast lane is phantom-v1:latest; software work routes to Qwen3-Coder, deep reasoning routes to Kimi K3 when available, and ChatGPT supervises or takes fallback.", tool_id: "phantom-identity" },
 );
 assert.deepEqual(
-  buildInstantChatToolReply("Are you ChatGPT?", [], "qwen3:4b"),
-  { output_text: "No. I'm Phantom AI inside PhantomForce.", tool_id: "phantom-identity" },
+  buildInstantChatToolReply("Are you ChatGPT?", [], "phantom-v1:latest"),
+  { output_text: "I'm Phantom V1. ChatGPT is one supervisor/fallback lane in the stack, alongside local Phantom/Qwen, Qwen3-Coder, and Kimi K3.", tool_id: "phantom-identity" },
+);
+assert.deepEqual(
+  buildInstantChatToolReply("Can you access files and run tests?", [], "phantom-v1:latest"),
+  { output_text: "PhantomBot has governed filesystem, terminal, browser, code execution, storage, and test lanes. Phantom V1 uses them for authorized work and only claims a file change, command, deployment, or external action when the runtime returns evidence or a receipt.", tool_id: "phantom-capability-contract" },
 );
 assert.deepEqual(
   buildInstantChatToolReply("What is 12 times 7?", []),

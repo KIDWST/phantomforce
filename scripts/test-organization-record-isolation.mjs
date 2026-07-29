@@ -13,7 +13,7 @@ globalThis.CustomEvent = class CustomEvent {};
 
 const { ctx, store, moneyView } = await import("../app/js/store.js?v=organization-record-isolation");
 store.state.finance.connectors = [
-  { id: "bank", type: "bank", name: "Bank account", provider: "Plaid", status: "requested", ws: "org-a" },
+  { id: "bank", type: "bank", name: "Bank account", provider: "Plaid", status: "connected", ws: "org-a" },
 ];
 store.state.finance.transactions = [
   { id: "a", ws: "org-a", date: "2026-07-18", description: "Alpha", amount: 100, category: "Sales income", account: "A", source: "manual" },
@@ -23,12 +23,12 @@ store.state.finance.transactions = [
 ctx.session = { role: "admin", database: true, orgId: "org-a" };
 const alpha = moneyView();
 assert.deepEqual(alpha.transactions.map((item) => item.description), ["Alpha"]);
-assert.equal(alpha.connectors.find((item) => item.id === "bank")?.status, "requested");
+assert.equal(alpha.connectors.find((item) => item.id === "bank")?.status, "connected");
 
 ctx.session = { role: "admin", database: true, orgId: "org-b" };
 const beta = moneyView();
 assert.deepEqual(beta.transactions.map((item) => item.description), ["Beta"]);
-assert.equal(beta.connectors.find((item) => item.id === "bank")?.status, "not-connected");
+assert.equal(beta.connectors.find((item) => item.id === "bank")?.status, "setup-ready");
 
 const root = new URL("../", import.meta.url);
 for (const file of [
