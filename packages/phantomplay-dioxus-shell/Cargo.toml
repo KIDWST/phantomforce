@@ -1,9 +1,15 @@
 [package]
-name = "phantomplay_dioxus_shell"
-version = "0.1.0"
+name = "phantomplay"
+version = "0.2.0"
 edition = "2024"
+autobins = false
+
+[[bin]]
+name = "PhantomPlay"
+path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22"
 dioxus = { version = "0.7.9", features = ["desktop"] }
 notify = "6"
 serde = { version = "1", features = ["derive"] }

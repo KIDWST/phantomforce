@@ -1,6 +1,6 @@
-// PhantomPlay Dioxus shell — the native PhantomPlay client: play games,
-// edit their code, hot-reload while playing, ask AI to edit the open file,
-// invite other devs into a voice+chat dev room, and quick-toggle mods.
+// PhantomPlay is the native play-and-build client: games, source editing,
+// hot reload, AI-assisted changes, collaborative dev rooms, and mods live
+// together in one window.
 //
 // Why this shape, not a wrapper around the web app's existing 3-slot dev
 // workbench: the reported complaint was specifically that the existing
@@ -28,14 +28,46 @@
 // for Phantom Console, sized for full game files). Both are local-dev-only,
 // not exposed on the public site, same trust model as this editor already
 // writing straight to disk with no auth.
+use base64::Engine;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+mod studio;
 
 const PHANTOMPLAY_API_ORIGIN: &str = "http://127.0.0.1:5190";
+const PHANTOMPLAY_INDEX: &str = r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PhantomPlay</title>
+</head>
+<body>
+  <div id="main" aria-label="PhantomPlay"></div>
+</body>
+</html>"#;
+
+fn brand_data_uri() -> &'static str {
+    static BRAND_URI: OnceLock<String> = OnceLock::new();
+    BRAND_URI
+        .get_or_init(|| {
+            let encoded = base64::engine::general_purpose::STANDARD
+                .encode(include_bytes!("../assets/brand-phantom.png"));
+            format!("data:image/png;base64,{encoded}")
+        })
+        .as_str()
+}
+
+fn phantomplay_api_origin() -> String {
+    std::env::var("PHANTOMPLAY_API_ORIGIN")
+        .unwrap_or_else(|_| PHANTOMPLAY_API_ORIGIN.to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
 
 fn phantomplay_live_root() -> PathBuf {
     std::env::var("PHANTOMPLAY_LIVE_ROOT")
@@ -55,6 +87,7 @@ struct GameEntry {
     path: PathBuf,
     is_dir: bool,
     blurb: Option<GameBlurb>,
+    runtime: GameRuntimeProfile,
 }
 
 /// Real store-card copy, pulled from each game's own `phantomGameKernel`
@@ -66,6 +99,121 @@ struct GameBlurb {
     title: String,
     genre: String,
     fantasy: String,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct GameRuntimeProfile {
+    renderer: String,
+    engine: String,
+    file_count: usize,
+    total_bytes: u64,
+    network_hooks: bool,
+    host_bridge: bool,
+}
+
+impl GameRuntimeProfile {
+    fn size_label(&self) -> String {
+        format_bytes(self.total_bytes)
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+    const GIB: f64 = MIB * 1024.0;
+    let value = bytes as f64;
+    if value >= GIB {
+        format!("{:.1} GB", value / GIB)
+    } else if value >= MIB {
+        format!("{:.1} MB", value / MIB)
+    } else if value >= KIB {
+        format!("{:.0} KB", value / KIB)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
+fn detect_runtime(path: &Path, is_dir: bool) -> GameRuntimeProfile {
+    let mut paths = if is_dir {
+        let mut out = Vec::new();
+        walk_dir(path, 0, &mut out);
+        out
+    } else {
+        vec![path.to_path_buf()]
+    };
+    paths.sort();
+
+    let total_bytes = paths
+        .iter()
+        .filter_map(|file| fs::metadata(file).ok().map(|meta| meta.len()))
+        .sum();
+
+    let mut probe = String::new();
+    for file in &paths {
+        let extension = file
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or_default();
+        if !matches!(extension, "html" | "js" | "mjs" | "ts") || probe.len() >= 3_000_000 {
+            continue;
+        }
+        if let Ok(text) = fs::read_to_string(file) {
+            let remaining = 3_000_000usize.saturating_sub(probe.len());
+            let mut end = text.len().min(remaining);
+            while end > 0 && !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            probe.push_str(&text[..end]);
+            probe.push('\n');
+        }
+    }
+    let lower = probe.to_ascii_lowercase();
+
+    let renderer = if lower.contains("webgpurenderer") || lower.contains("navigator.gpu") {
+        "WebGPU"
+    } else if lower.contains("webglrenderer")
+        || lower.contains("getcontext(\"webgl")
+        || lower.contains("getcontext('webgl")
+    {
+        "WebGL"
+    } else if lower.contains("getcontext(\"2d") || lower.contains("getcontext('2d") {
+        "Canvas2D"
+    } else {
+        "DOM"
+    };
+
+    let engine = if lower.contains("phantomengine") {
+        "Phantom Engine"
+    } else if lower.contains("phantomgamekernel") {
+        "Phantom Game Kernel"
+    } else if paths.iter().any(|file| {
+        file.file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("engine.js"))
+    }) {
+        "Game-specific engine"
+    } else {
+        "Standalone runtime"
+    };
+
+    GameRuntimeProfile {
+        renderer: renderer.to_string(),
+        engine: engine.to_string(),
+        file_count: paths.len(),
+        total_bytes,
+        network_hooks: lower.contains("phantomplayroom")
+            || lower.contains("new websocket")
+            || lower.contains("rtcpeerconnection"),
+        host_bridge: lower.contains("postmessage"),
+    }
+}
+
+fn game_entry_name(game: &GameEntry) -> String {
+    if game.is_dir {
+        format!("{}/index.html", game.id)
+    } else {
+        format!("{}.html", game.id)
+    }
 }
 
 /// Hand-rolled instead of a JSON parse because the kernel config appears in
@@ -106,7 +254,11 @@ fn extract_game_blurb(entry_file: &Path) -> Option<GameBlurb> {
     let title = extract_quoted_field(&text, "title")?;
     let genre = extract_quoted_field(&text, "genre").unwrap_or_default();
     let fantasy = extract_quoted_field(&text, "fantasy").unwrap_or_default();
-    Some(GameBlurb { title, genre, fantasy })
+    Some(GameBlurb {
+        title,
+        genre,
+        fantasy,
+    })
 }
 
 fn list_games() -> Vec<GameEntry> {
@@ -123,11 +275,29 @@ fn list_games() -> Vec<GameEntry> {
         }
         if path.is_dir() {
             let blurb = extract_game_blurb(&path.join("index.html"));
-            games.push(GameEntry { id: name, path, is_dir: true, blurb });
+            let runtime = detect_runtime(&path, true);
+            games.push(GameEntry {
+                id: name,
+                path,
+                is_dir: true,
+                blurb,
+                runtime,
+            });
         } else if path.extension().and_then(|e| e.to_str()) == Some("html") {
-            let id = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+            let id = path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
             let blurb = extract_game_blurb(&path);
-            games.push(GameEntry { id, path, is_dir: false, blurb });
+            let runtime = detect_runtime(&path, false);
+            games.push(GameEntry {
+                id,
+                path,
+                is_dir: false,
+                blurb,
+                runtime,
+            });
         }
     }
     games.sort_by(|a, b| a.id.cmp(&b.id));
@@ -157,7 +327,9 @@ fn walk_dir(dir: &Path, depth: u8, out: &mut Vec<PathBuf>) {
     if depth > 5 {
         return;
     }
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -170,7 +342,11 @@ fn walk_dir(dir: &Path, depth: u8, out: &mut Vec<PathBuf>) {
 
 fn relative_label(game: &GameEntry, file: &Path) -> String {
     if !game.is_dir {
-        return file.file_name().unwrap_or_default().to_string_lossy().to_string();
+        return file
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
     }
     file.strip_prefix(&game.path)
         .map(|p| p.to_string_lossy().replace('\\', "/"))
@@ -186,9 +362,43 @@ fn mime_for(path: &Path) -> &'static str {
         "svg" => "image/svg+xml",
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "avif" => "image/avif",
+        "gif" => "image/gif",
+        "ico" => "image/x-icon",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "gltf" => "model/gltf+json",
+        "glb" => "model/gltf-binary",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
         "wasm" => "application/wasm",
         _ => "application/octet-stream",
     }
+}
+
+fn safe_game_asset(root: &Path, uri_path: &str) -> Option<PathBuf> {
+    let relative = uri_path.trim_start_matches('/');
+    if relative.is_empty()
+        || relative.contains('\\')
+        || relative.contains(':')
+        || relative.contains('\0')
+        || relative.contains('%')
+        || relative
+            .split('/')
+            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+    {
+        return None;
+    }
+
+    let canonical_root = root.canonicalize().ok()?;
+    let canonical_file = canonical_root.join(relative).canonicalize().ok()?;
+    canonical_file
+        .starts_with(&canonical_root)
+        .then_some(canonical_file)
 }
 
 // ---- mods: quick-load menu (separate from Dev Mode) ------------------------
@@ -314,7 +524,12 @@ struct AiEditResponseBody {
     error: Option<String>,
 }
 
-async fn request_ai_edit(game_id: String, file_path: String, file_content: String, instruction: String) -> Result<String, String> {
+async fn request_ai_edit(
+    game_id: String,
+    file_path: String,
+    file_content: String,
+    instruction: String,
+) -> Result<String, String> {
     let body = AiEditRequestBody {
         game_id,
         file_path,
@@ -324,34 +539,136 @@ async fn request_ai_edit(game_id: String, file_path: String, file_content: Strin
     };
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("{PHANTOMPLAY_API_ORIGIN}/api/phantomplay/ai-edit"))
+        .post(format!(
+            "{}/api/phantomplay/ai-edit",
+            phantomplay_api_origin()
+        ))
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Couldn't reach the PhantomForce API on :5190 ({e}). Is it running?"))?;
-    let parsed: AiEditResponseBody = resp.json().await.map_err(|e| format!("Bad response from AI edit endpoint: {e}"))?;
+        .map_err(|e| {
+            format!("Couldn't reach the PhantomForce API on :5190 ({e}). Is it running?")
+        })?;
+    let parsed: AiEditResponseBody = resp
+        .json()
+        .await
+        .map_err(|e| format!("Bad response from AI edit endpoint: {e}"))?;
     if parsed.ok {
-        parsed.new_content.ok_or_else(|| "AI edit endpoint said ok but returned no content.".to_string())
+        parsed
+            .new_content
+            .ok_or_else(|| "AI edit endpoint said ok but returned no content.".to_string())
     } else {
-        Err(parsed.error.unwrap_or_else(|| "AI edit failed for an unknown reason.".to_string()))
+        Err(parsed
+            .error
+            .unwrap_or_else(|| "AI edit failed for an unknown reason.".to_string()))
     }
 }
 
+async fn check_api_health() -> bool {
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+    {
+        Ok(client) => client,
+        Err(_) => return false,
+    };
+    client
+        .get(format!("{}/health", phantomplay_api_origin()))
+        .send()
+        .await
+        .is_ok_and(|response| response.status().is_success())
+}
+
 fn main() {
-    // Branding: this shell IS PhantomPlay to end users — no separate
-    // "Dioxus" name/logo shown anywhere in the product surface (credit for
-    // Dioxus and every other underlying technology belongs in posts/
-    // sponsorships/credits, not the app chrome). Uses the real brand-phantom
-    // ghost mark already shipped in the live web app's app/assets/, copied
-    // into this package's own assets/ so it's embedded at compile time via
-    // include_bytes! rather than depending on a sibling-directory path.
-    let icon = dioxus::desktop::icon_from_memory(include_bytes!("../assets/brand-phantom.png")).ok();
-    let window = dioxus::desktop::WindowBuilder::new().with_title("PhantomPlay");
-    let mut config = dioxus::desktop::Config::new().with_window(window);
+    let icon =
+        dioxus::desktop::icon_from_memory(include_bytes!("../assets/brand-phantom.png")).ok();
+    let game_root = games_dir();
+    let hot_reload_version = watch_for_hot_reload(game_root.clone());
+    let game_handler =
+        move |_id: dioxus::desktop::wry::WebViewId<'_>,
+              request: dioxus::desktop::wry::http::Request<Vec<u8>>| {
+            let uri_path = request.uri().path().trim_start_matches('/');
+            if uri_path == "__pm_version" {
+                let version = hot_reload_version.load(Ordering::SeqCst).to_string();
+                return dioxus::desktop::wry::http::Response::builder()
+                    .header("Content-Type", "text/plain; charset=utf-8")
+                    .header("Cache-Control", "no-store")
+                    .status(200)
+                    .body(std::borrow::Cow::Owned(version.into_bytes()))
+                    .unwrap();
+            }
+
+            let Some(file_path) = safe_game_asset(&game_root, uri_path) else {
+                return dioxus::desktop::wry::http::Response::builder()
+                    .status(404)
+                    .body(std::borrow::Cow::Borrowed(&b"not found"[..]))
+                    .unwrap();
+            };
+
+            match fs::read(&file_path) {
+                Ok(bytes) => {
+                    let content_type = mime_for(&file_path);
+                    let first_segment = uri_path.split('/').next().unwrap_or_default();
+                    let game_id = first_segment.strip_suffix(".html").unwrap_or(first_segment);
+                    let body = if content_type.starts_with("text/html") {
+                        inject_dev_scripts(bytes, game_id)
+                    } else {
+                        bytes
+                    };
+                    dioxus::desktop::wry::http::Response::builder()
+                        .header("Content-Type", content_type)
+                        .header("Cache-Control", "no-store")
+                        .header("X-Content-Type-Options", "nosniff")
+                        .status(200)
+                        .body(std::borrow::Cow::Owned(body))
+                        .unwrap()
+                }
+                Err(_) => dioxus::desktop::wry::http::Response::builder()
+                    .status(404)
+                    .body(std::borrow::Cow::Borrowed(&b"not found"[..]))
+                    .unwrap(),
+            }
+        };
+
+    let devroom_html =
+        DEVROOM_HTML.replace("__PHANTOMPLAY_API_ORIGIN__", &phantomplay_api_origin());
+    let devroom_handler =
+        move |_id: dioxus::desktop::wry::WebViewId<'_>,
+              _request: dioxus::desktop::wry::http::Request<Vec<u8>>| {
+            dioxus::desktop::wry::http::Response::builder()
+                .header("Content-Type", "text/html; charset=utf-8")
+                .header("Cache-Control", "no-store")
+                .status(200)
+                .body(std::borrow::Cow::Owned(devroom_html.as_bytes().to_vec()))
+                .unwrap()
+        };
+
+    let window = dioxus::desktop::WindowBuilder::new()
+        .with_title("PhantomPlay")
+        .with_inner_size(dioxus::desktop::LogicalSize::new(1440.0, 900.0))
+        .with_min_inner_size(dioxus::desktop::LogicalSize::new(1100.0, 700.0))
+        .with_maximized(true);
+    let data_dir = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("PhantomPlay")
+        .join("WebView");
+    let mut config = dioxus::desktop::Config::new()
+        .with_window(window)
+        .with_menu(None)
+        .with_data_directory(data_dir)
+        .with_custom_index(PHANTOMPLAY_INDEX.to_string())
+        .with_background_color((3, 10, 8, 255))
+        .with_disable_context_menu(true)
+        .with_disable_drag_drop_handler(true)
+        .with_custom_protocol("phantomplay-game", game_handler)
+        .with_custom_protocol("phantomplay-devroom", devroom_handler);
     if let Some(icon) = icon {
         config = config.with_icon(icon);
     }
-    dioxus::LaunchBuilder::desktop().with_cfg(config).launch(App);
+    dioxus::LaunchBuilder::desktop()
+        .with_cfg(config)
+        .launch(studio::Studio);
 }
 
 #[cfg(test)]
@@ -367,27 +684,45 @@ mod tests {
             games.len(),
             games_dir().display()
         );
-        assert!(games.iter().any(|g| g.id == "neon-drift" && !g.is_dir), "neon-drift.html should be a single-file game");
-        assert!(games.iter().any(|g| g.id == "phantom-pizzeria" && g.is_dir), "phantom-pizzeria should be a multi-file directory");
-        assert!(!games.iter().any(|g| g.id == "shared"), "the shared/ utility folder must not be listed as a game");
+        assert!(
+            games.iter().any(|g| g.id == "neon-drift" && !g.is_dir),
+            "neon-drift.html should be a single-file game"
+        );
+        assert!(
+            games.iter().any(|g| g.id == "phantom-pizzeria" && g.is_dir),
+            "phantom-pizzeria should be a multi-file directory"
+        );
+        assert!(
+            !games.iter().any(|g| g.id == "shared"),
+            "the shared/ utility folder must not be listed as a game"
+        );
     }
 
     #[test]
     fn multi_file_game_exposes_every_file_not_just_index() {
         let games = list_games();
-        let pizzeria = games.iter().find(|g| g.id == "phantom-pizzeria").expect("phantom-pizzeria must exist in the real catalog");
+        let pizzeria = games
+            .iter()
+            .find(|g| g.id == "phantom-pizzeria")
+            .expect("phantom-pizzeria must exist in the real catalog");
         let files = list_files(pizzeria);
         let labels: Vec<&str> = files.iter().map(|(_, label)| label.as_str()).collect();
         assert!(labels.contains(&"index.html"), "labels={labels:?}");
         assert!(labels.contains(&"style.css"), "labels={labels:?}");
         assert!(labels.contains(&"game.js"), "labels={labels:?}");
-        assert!(files.len() >= 3, "a multi-file game must expose all of its files, not a fixed 3-slot subset: {labels:?}");
+        assert!(
+            files.len() >= 3,
+            "a multi-file game must expose all of its files, not a fixed 3-slot subset: {labels:?}"
+        );
     }
 
     #[test]
     fn single_file_game_exposes_exactly_itself() {
         let games = list_games();
-        let neon_drift = games.iter().find(|g| g.id == "neon-drift").expect("neon-drift.html must exist");
+        let neon_drift = games
+            .iter()
+            .find(|g| g.id == "neon-drift")
+            .expect("neon-drift.html must exist");
         let files = list_files(neon_drift);
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].1, "neon-drift.html");
@@ -408,38 +743,75 @@ mod tests {
     #[test]
     fn save_and_reload_round_trips_through_the_real_file_on_disk() {
         let games = list_games();
-        let pizzeria = games.iter().find(|g| g.id == "phantom-pizzeria").expect("phantom-pizzeria must exist");
+        let pizzeria = games
+            .iter()
+            .find(|g| g.id == "phantom-pizzeria")
+            .expect("phantom-pizzeria must exist");
         let files = list_files(pizzeria);
-        let (game_js_path, _) = files.iter().find(|(_, label)| label == "game.js").expect("game.js must be listed");
-        let original = fs::read_to_string(game_js_path).expect("must be able to read the real game.js");
-        let _guard = RestoreOnDrop { path: game_js_path.clone(), original: original.clone() };
-        let probe = format!("{original}\n// dioxus-shell-round-trip-test-marker\n");
+        let (game_js_path, _) = files
+            .iter()
+            .find(|(_, label)| label == "game.js")
+            .expect("game.js must be listed");
+        let original =
+            fs::read_to_string(game_js_path).expect("must be able to read the real game.js");
+        let _guard = RestoreOnDrop {
+            path: game_js_path.clone(),
+            original: original.clone(),
+        };
+        let probe = format!("{original}\n// phantomplay-studio-round-trip-test-marker\n");
         fs::write(game_js_path, &probe).expect("must be able to write the real game.js");
-        let read_back = fs::read_to_string(game_js_path).expect("must be able to re-read after writing");
-        assert_eq!(read_back, probe, "what was written must be exactly what gets read back — no dev/normal-mode-style indirection");
+        let read_back =
+            fs::read_to_string(game_js_path).expect("must be able to re-read after writing");
+        assert_eq!(
+            read_back, probe,
+            "what was written must be exactly what gets read back — no dev/normal-mode-style indirection"
+        );
     }
 
     #[test]
     fn vespergate_mod_manifest_is_real_and_has_a_healthy_mod_count() {
         let mods = read_mod_manifest("vespergate");
-        assert!(mods.len() >= 10 && mods.len() <= 15, "expected 10-15 flagship mods, got {}", mods.len());
+        assert!(
+            mods.len() >= 10 && mods.len() <= 15,
+            "expected 10-15 flagship mods, got {}",
+            mods.len()
+        );
         for m in &mods {
             let mod_path = games_dir().join("vespergate").join("mods").join(&m.file);
-            assert!(mod_path.exists(), "manifest references {} but the file doesn't exist on disk", m.file);
+            assert!(
+                mod_path.exists(),
+                "manifest references {} but the file doesn't exist on disk",
+                m.file
+            );
         }
     }
 
     #[test]
     fn store_cards_pull_real_blurbs_from_kernel_upgraded_games() {
         let games = list_games();
-        let crown = games.iter().find(|g| g.id == "crown-circuit").expect("crown-circuit.html must exist");
+        let crown = games
+            .iter()
+            .find(|g| g.id == "crown-circuit")
+            .expect("crown-circuit.html must exist");
         let blurb = crown.blurb.as_ref().expect("crown-circuit has a phantomGameKernel config and should yield a real blurb, not a fallback");
         assert_eq!(blurb.title, "Crown Circuit");
-        assert!(!blurb.genre.is_empty(), "genre should be extracted from the kernel config");
-        assert!(!blurb.fantasy.is_empty(), "fantasy one-liner should be extracted from the kernel config");
+        assert!(
+            !blurb.genre.is_empty(),
+            "genre should be extracted from the kernel config"
+        );
+        assert!(
+            !blurb.fantasy.is_empty(),
+            "fantasy one-liner should be extracted from the kernel config"
+        );
 
-        let untouched = games.iter().find(|g| g.id == "neon-drift").expect("neon-drift.html must exist");
-        assert!(untouched.blurb.is_none(), "a game without the kernel upgrade must fall back to a plain title, not a fabricated blurb");
+        let untouched = games
+            .iter()
+            .find(|g| g.id == "neon-drift")
+            .expect("neon-drift.html must exist");
+        assert!(
+            untouched.blurb.is_none(),
+            "a game without the kernel upgrade must fall back to a plain title, not a fabricated blurb"
+        );
     }
 
     #[test]
@@ -450,6 +822,54 @@ mod tests {
         assert!(out.contains("/__pm_version"));
         assert!(out.contains("data-pm-game-id"));
     }
+
+    #[test]
+    fn runtime_detection_reports_real_renderer_and_host_contract() {
+        let games = list_games();
+        let strike = games
+            .iter()
+            .find(|game| game.id == "phantom-strike")
+            .expect("phantom-strike must exist");
+        assert_eq!(strike.runtime.renderer, "Canvas2D");
+        assert_eq!(strike.runtime.engine, "Phantom Game Kernel");
+        assert!(strike.runtime.file_count >= 1);
+        assert!(strike.runtime.total_bytes > 10_000);
+        assert!(strike.runtime.host_bridge);
+    }
+
+    #[test]
+    fn game_asset_resolver_blocks_escape_paths() {
+        let root = games_dir();
+        let safe =
+            safe_game_asset(&root, "phantom-strike.html").expect("known game entry should resolve");
+        assert!(safe.ends_with("phantom-strike.html"));
+        assert!(safe.starts_with(root.canonicalize().unwrap()));
+        assert!(safe_game_asset(&root, "../server/src/index.ts").is_none());
+        assert!(safe_game_asset(&root, "%2e%2e/server/src/index.ts").is_none());
+        assert!(safe_game_asset(&root, "C:/Windows/win.ini").is_none());
+        assert!(safe_game_asset(&root, "vespergate\\..\\phantom-strike.html").is_none());
+    }
+
+    #[test]
+    fn shipped_studio_is_single_window_and_product_branded() {
+        let studio_source = include_str!("studio.rs").to_ascii_lowercase();
+        assert_eq!(env!("CARGO_PKG_NAME"), "phantomplay");
+        assert!(!studio_source.contains("dioxus"));
+        assert!(!studio_source.contains("new_window"));
+        assert!(studio_source.contains("embedded viewport"));
+        assert!(studio_source.contains("phantomplay"));
+        assert!(!PHANTOMPLAY_INDEX.to_ascii_lowercase().contains("dioxus"));
+        assert!(PHANTOMPLAY_INDEX.contains("<title>PhantomPlay</title>"));
+        assert!(brand_data_uri().starts_with("data:image/png;base64,"));
+    }
+
+    #[test]
+    fn dev_room_code_generation_does_not_depend_on_cross_origin_fetch() {
+        assert!(DEVROOM_HTML.contains("crypto.getRandomValues"));
+        assert!(DEVROOM_HTML.contains("__PHANTOMPLAY_API_ORIGIN__"));
+        assert!(!DEVROOM_HTML.contains("NEW_CODE_URL"));
+        assert!(!DEVROOM_HTML.contains("/api/phantomplay/devroom/new-code"));
+    }
 }
 
 /// Standalone player window — this is what actually lets someone play a
@@ -459,7 +879,7 @@ mod tests {
 /// straight off `app/games/` — the same root the editor pane edits — and
 /// injects the shared mod loader + a hot-reload poll script into HTML
 /// responses so edits saved while playing show up live.
-const PLAYER_STYLE: &str = "html,body,iframe{margin:0;height:100%;width:100%;border:0;background:#03110c;}";
+const PLAYER_STYLE: &str = "html,body,#main,iframe{margin:0;height:100%;width:100%;border:0;background:#020907;overflow:hidden;}";
 
 #[component]
 fn Player(entry: String) -> Element {
@@ -493,6 +913,7 @@ fn DevRoomFrame() -> Element {
 
 const DEVROOM_HTML: &str = include_str!("../assets/devroom.html");
 
+#[cfg(any())]
 #[component]
 fn App() -> Element {
     let games = use_signal(list_games);
@@ -500,7 +921,13 @@ fn App() -> Element {
     let mut files = use_signal(Vec::<(PathBuf, String)>::new);
     let mut selected_file = use_signal(|| None::<usize>);
     let mut editor_content = use_signal(String::new);
-    let mut status = use_signal(|| format!("{} game(s) found in {}", games().len(), games_dir().display()));
+    let mut status = use_signal(|| {
+        format!(
+            "{} game(s) found in {}",
+            games().len(),
+            games_dir().display()
+        )
+    });
     let mut dirty = use_signal(|| false);
 
     // AI edit panel state.
@@ -528,9 +955,19 @@ fn App() -> Element {
     };
 
     let mut play_game = move |idx: usize| {
-        let Some(game) = games().get(idx).cloned() else { return };
-        let entry_name = if game.is_dir { format!("{}/index.html", game.id) } else { format!("{}.html", game.id) };
-        let entry_check = if game.is_dir { game.path.join("index.html") } else { game.path.clone() };
+        let Some(game) = games().get(idx).cloned() else {
+            return;
+        };
+        let entry_name = if game.is_dir {
+            format!("{}/index.html", game.id)
+        } else {
+            format!("{}.html", game.id)
+        };
+        let entry_check = if game.is_dir {
+            game.path.join("index.html")
+        } else {
+            game.path.clone()
+        };
         if !entry_check.exists() {
             status.set(format!("{} has no index.html to play.", game.id));
             return;
@@ -540,37 +977,39 @@ fn App() -> Element {
         let game_id_for_handler = game.id.clone();
         let hot_reload_version = watch_for_hot_reload(game.path.clone());
 
-        let handler = move |_id: dioxus::desktop::wry::WebViewId<'_>, request: dioxus::desktop::wry::http::Request<Vec<u8>>| {
-            let uri_path = request.uri().path().trim_start_matches('/');
-            if uri_path == "__pm_version" {
-                let v = hot_reload_version.load(Ordering::SeqCst).to_string();
-                return dioxus::desktop::wry::http::Response::builder()
-                    .header("Content-Type", "text/plain; charset=utf-8")
-                    .status(200)
-                    .body(std::borrow::Cow::Owned(v.into_bytes()))
-                    .unwrap();
-            }
-            let file_path = root.join(uri_path);
-            match fs::read(&file_path) {
-                Ok(bytes) => {
-                    let content_type = mime_for(&file_path);
-                    let body = if content_type.starts_with("text/html") {
-                        inject_dev_scripts(bytes, &game_id_for_handler)
-                    } else {
-                        bytes
-                    };
-                    dioxus::desktop::wry::http::Response::builder()
-                        .header("Content-Type", content_type)
+        let handler =
+            move |_id: dioxus::desktop::wry::WebViewId<'_>,
+                  request: dioxus::desktop::wry::http::Request<Vec<u8>>| {
+                let uri_path = request.uri().path().trim_start_matches('/');
+                if uri_path == "__pm_version" {
+                    let v = hot_reload_version.load(Ordering::SeqCst).to_string();
+                    return dioxus::desktop::wry::http::Response::builder()
+                        .header("Content-Type", "text/plain; charset=utf-8")
                         .status(200)
-                        .body(std::borrow::Cow::Owned(body))
-                        .unwrap()
+                        .body(std::borrow::Cow::Owned(v.into_bytes()))
+                        .unwrap();
                 }
-                Err(_) => dioxus::desktop::wry::http::Response::builder()
-                    .status(404)
-                    .body(std::borrow::Cow::Borrowed(&b"not found"[..]))
-                    .unwrap(),
-            }
-        };
+                let file_path = root.join(uri_path);
+                match fs::read(&file_path) {
+                    Ok(bytes) => {
+                        let content_type = mime_for(&file_path);
+                        let body = if content_type.starts_with("text/html") {
+                            inject_dev_scripts(bytes, &game_id_for_handler)
+                        } else {
+                            bytes
+                        };
+                        dioxus::desktop::wry::http::Response::builder()
+                            .header("Content-Type", content_type)
+                            .status(200)
+                            .body(std::borrow::Cow::Owned(body))
+                            .unwrap()
+                    }
+                    Err(_) => dioxus::desktop::wry::http::Response::builder()
+                        .status(404)
+                        .body(std::borrow::Cow::Borrowed(&b"not found"[..]))
+                        .unwrap(),
+                }
+            };
 
         let window_cfg = dioxus::desktop::Config::new()
             .with_window(
@@ -582,17 +1021,22 @@ fn App() -> Element {
 
         let dom = VirtualDom::new_with_props(Player, PlayerProps { entry: entry_name });
         dioxus::desktop::window().new_window(dom, window_cfg);
-        status.set(format!("Launched {} — hot reload + mods are live in this window.", game.id));
+        status.set(format!(
+            "Launched {} — hot reload + mods are live in this window.",
+            game.id
+        ));
     };
 
     let open_dev_room = move |_| {
-        let handler = move |_id: dioxus::desktop::wry::WebViewId<'_>, _request: dioxus::desktop::wry::http::Request<Vec<u8>>| {
-            dioxus::desktop::wry::http::Response::builder()
-                .header("Content-Type", "text/html; charset=utf-8")
-                .status(200)
-                .body(std::borrow::Cow::Borrowed(DEVROOM_HTML.as_bytes()))
-                .unwrap()
-        };
+        let handler =
+            move |_id: dioxus::desktop::wry::WebViewId<'_>,
+                  _request: dioxus::desktop::wry::http::Request<Vec<u8>>| {
+                dioxus::desktop::wry::http::Response::builder()
+                    .header("Content-Type", "text/html; charset=utf-8")
+                    .status(200)
+                    .body(std::borrow::Cow::Borrowed(DEVROOM_HTML.as_bytes()))
+                    .unwrap()
+            };
         let window_cfg = dioxus::desktop::Config::new()
             .with_window(
                 dioxus::desktop::WindowBuilder::new()
@@ -605,7 +1049,9 @@ fn App() -> Element {
     };
 
     let mut open_mods_panel = move |idx: usize| {
-        let Some(game) = games().get(idx).cloned() else { return };
+        let Some(game) = games().get(idx).cloned() else {
+            return;
+        };
         mods_game_id.set(game.id.clone());
         mods_list.set(read_mod_manifest(&game.id));
         mods_enabled.set(read_enabled_mods(&game.id));
@@ -649,7 +1095,10 @@ fn App() -> Element {
                 match fs::write(&path, editor_content()) {
                     Ok(()) => {
                         dirty.set(false);
-                        status.set(format!("Saved {} — any open player window hot-reloads within a second.", path.display()));
+                        status.set(format!(
+                            "Saved {} — any open player window hot-reloads within a second.",
+                            path.display()
+                        ));
                     }
                     Err(err) => status.set(format!("Save failed for {}: {err}", path.display())),
                 }
@@ -658,10 +1107,18 @@ fn App() -> Element {
     };
 
     let ask_ai = move |_| {
-        let Some(game_idx) = selected_game() else { return };
-        let Some(file_idx) = selected_file() else { return };
-        let Some(game) = games().get(game_idx).cloned() else { return };
-        let Some((_, file_label)) = files().get(file_idx).cloned() else { return };
+        let Some(game_idx) = selected_game() else {
+            return;
+        };
+        let Some(file_idx) = selected_file() else {
+            return;
+        };
+        let Some(game) = games().get(game_idx).cloned() else {
+            return;
+        };
+        let Some((_, file_label)) = files().get(file_idx).cloned() else {
+            return;
+        };
         let instruction = ai_instruction();
         if instruction.trim().is_empty() {
             status.set("Type an instruction for the AI first.".into());
@@ -684,9 +1141,14 @@ fn App() -> Element {
                             match fs::write(&path, &new_content) {
                                 Ok(()) => {
                                     dirty.set(false);
-                                    status.set(format!("AI updated {} and saved it — hot reload will pick it up.", path.display()));
+                                    status.set(format!(
+                                        "AI updated {} and saved it — hot reload will pick it up.",
+                                        path.display()
+                                    ));
                                 }
-                                Err(err) => status.set(format!("AI edit produced new content but saving failed: {err}")),
+                                Err(err) => status.set(format!(
+                                    "AI edit produced new content but saving failed: {err}"
+                                )),
                             }
                         }
                     }
@@ -698,140 +1160,141 @@ fn App() -> Element {
     };
 
     rsx! {
-        style { {STYLE} }
-        div { class: "shell",
-            header {
-                img { class: "brand-ghost", src: asset!("/assets/brand-phantom.png"), alt: "" }
-                div { class: "brand", "PhantomPlay" }
-                div { class: "badge", "NATIVE" }
-                div { class: "spacer" }
-                button { class: "header-btn", onclick: open_dev_room, "👥 Dev Room" }
+            style { {STYLE} }
+            div { class: "shell",
+                header {
+                    img { class: "brand-ghost", src: asset!("/assets/brand-phantom.png"), alt: "" }
+                    div { class: "brand", "PhantomPlay" }
+                    div { class: "badge", "NATIVE" }
+                    div { class: "spacer" }
+                    button { class: "header-btn", onclick: open_dev_room, "👥 Dev Room" }
+                }
+                div { class: "columns",
+    nav { class: "games-pane store-pane",
+                        h2 { "Store — {games().len()} games" }
+                        input {
+                            class: "store-search",
+                            placeholder: "Search the catalog…",
+                            value: "{store_query}",
+                            oninput: move |evt| store_query.set(evt.value()),
+                        }
+                        for (idx , game) in games().iter().cloned().enumerate() {
+                            if store_query().trim().is_empty()
+                                || game.id.to_lowercase().contains(&store_query().to_lowercase())
+                                || game.blurb.as_ref().is_some_and(|b| b.title.to_lowercase().contains(&store_query().to_lowercase()))
+                            {
+                                div {
+                                    class: if selected_game() == Some(idx) { "store-card is-active" } else { "store-card" },
+                                    onclick: move |_| open_game(idx),
+                                    div { class: "store-card-top",
+                                        span { class: "store-card-title", "{game.blurb.as_ref().map(|b| b.title.clone()).unwrap_or_else(|| game.id.clone())}" }
+                                        if game.is_dir { span { class: "tag", "dir" } }
+                                    }
+                                    if let Some(blurb) = game.blurb.as_ref() {
+                                        if !blurb.genre.is_empty() { span { class: "store-card-genre", "{blurb.genre}" } }
+                                        if !blurb.fantasy.is_empty() { p { class: "store-card-blurb", "{blurb.fantasy}" } }
+                                    }
+                                    div { class: "store-card-actions",
+                                        button { class: "mods-btn", onclick: move |evt| { evt.stop_propagation(); open_mods_panel(idx); }, title: "Quick-load mods", "🧩" }
+                                        button { class: "edit-btn", onclick: move |evt| { evt.stop_propagation(); open_game(idx); }, title: "Edit source", "✎" }
+                                        button { class: "play-btn", onclick: move |evt| { evt.stop_propagation(); play_game(idx); }, title: "Play standalone — no account, no server", "▶ Play" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    nav { class: "files-pane",
+                        h2 { "Files" }
+                        for (idx , entry) in files().iter().cloned().enumerate() {
+                            button {
+                                class: if selected_file() == Some(idx) { "row is-active" } else { "row" },
+                                onclick: move |_| open_file(idx),
+                                "{entry.1}"
+                            }
+                        }
+                    }
+                    main { class: "editor-pane",
+                        div { class: "editor-toolbar",
+                            span { class: "path",
+                                {selected_file().and_then(|i| files().get(i).map(|(p, _)| p.display().to_string())).unwrap_or_else(|| "No file open".into())}
+                            }
+                            div { class: "toolbar-actions",
+                                button {
+                                    class: "ai-btn",
+                                    disabled: selected_file().is_none(),
+                                    onclick: move |_| ai_panel_open.set(!ai_panel_open()),
+                                    "✨ AI Assist"
+                                }
+                                button {
+                                    class: "save-btn",
+                                    disabled: selected_file().is_none(),
+                                    onclick: save_file,
+                                    if dirty() { "Save*" } else { "Save" }
+                                }
+                            }
+                        }
+                        if ai_panel_open() {
+                            div { class: "ai-panel",
+                                textarea {
+                                    class: "ai-instruction",
+                                    placeholder: "Tell the AI what to change in this file…",
+                                    value: "{ai_instruction}",
+                                    oninput: move |evt| ai_instruction.set(evt.value()),
+                                }
+                                button {
+                                    class: "ai-go-btn",
+                                    disabled: ai_busy(),
+                                    onclick: ask_ai,
+                                    if ai_busy() { "Thinking…" } else { "Apply with AI" }
+                                }
+                            }
+                        }
+                        textarea {
+                            class: "editor",
+                            spellcheck: false,
+                            value: "{editor_content}",
+                            oninput: move |evt| {
+                                editor_content.set(evt.value());
+                                dirty.set(true);
+                            },
+                        }
+                    }
+                }
+                footer { "{status}" }
             }
-            div { class: "columns",
-nav { class: "games-pane store-pane",
-                    h2 { "Store — {games().len()} games" }
-                    input {
-                        class: "store-search",
-                        placeholder: "Search the catalog…",
-                        value: "{store_query}",
-                        oninput: move |evt| store_query.set(evt.value()),
-                    }
-                    for (idx , game) in games().iter().cloned().enumerate() {
-                        if store_query().trim().is_empty()
-                            || game.id.to_lowercase().contains(&store_query().to_lowercase())
-                            || game.blurb.as_ref().is_some_and(|b| b.title.to_lowercase().contains(&store_query().to_lowercase()))
-                        {
-                            div {
-                                class: if selected_game() == Some(idx) { "store-card is-active" } else { "store-card" },
-                                onclick: move |_| open_game(idx),
-                                div { class: "store-card-top",
-                                    span { class: "store-card-title", "{game.blurb.as_ref().map(|b| b.title.clone()).unwrap_or_else(|| game.id.clone())}" }
-                                    if game.is_dir { span { class: "tag", "dir" } }
+            if mods_panel_open() {
+                div { class: "mods-overlay", onclick: move |_| mods_panel_open.set(false),
+                    div { class: "mods-panel", onclick: move |evt| evt.stop_propagation(),
+                        div { class: "mods-panel-header",
+                            span { "Mods — {mods_game_id}" }
+                            button { class: "mods-close", onclick: move |_| mods_panel_open.set(false), "✕" }
+                        }
+                        if mods_list().is_empty() {
+                            div { class: "mods-empty",
+                                "No pre-built mods for this game yet. Universal mods (slow-mo, CRT filter, mute, zoom, big cursor) are always available in-game via the F10 overlay."
+                            }
+                        }
+                        for m in mods_list().iter().cloned() {
+                            label { class: "mod-row",
+                                input {
+                                    r#type: "checkbox",
+                                    checked: mods_enabled().contains(&m.id),
+                                    onchange: move |_| toggle_mod(m.id.clone()),
                                 }
-                                if let Some(blurb) = game.blurb.as_ref() {
-                                    if !blurb.genre.is_empty() { span { class: "store-card-genre", "{blurb.genre}" } }
-                                    if !blurb.fantasy.is_empty() { p { class: "store-card-blurb", "{blurb.fantasy}" } }
-                                }
-                                div { class: "store-card-actions",
-                                    button { class: "mods-btn", onclick: move |evt| { evt.stop_propagation(); open_mods_panel(idx); }, title: "Quick-load mods", "🧩" }
-                                    button { class: "edit-btn", onclick: move |evt| { evt.stop_propagation(); open_game(idx); }, title: "Edit source", "✎" }
-                                    button { class: "play-btn", onclick: move |evt| { evt.stop_propagation(); play_game(idx); }, title: "Play standalone — no account, no server", "▶ Play" }
+                                div { class: "mod-copy",
+                                    div { class: "mod-name", "{m.name}" }
+                                    div { class: "mod-desc", "{m.desc}" }
                                 }
                             }
                         }
-                    }
-                }
-                nav { class: "files-pane",
-                    h2 { "Files" }
-                    for (idx , entry) in files().iter().cloned().enumerate() {
-                        button {
-                            class: if selected_file() == Some(idx) { "row is-active" } else { "row" },
-                            onclick: move |_| open_file(idx),
-                            "{entry.1}"
-                        }
-                    }
-                }
-                main { class: "editor-pane",
-                    div { class: "editor-toolbar",
-                        span { class: "path",
-                            {selected_file().and_then(|i| files().get(i).map(|(p, _)| p.display().to_string())).unwrap_or_else(|| "No file open".into())}
-                        }
-                        div { class: "toolbar-actions",
-                            button {
-                                class: "ai-btn",
-                                disabled: selected_file().is_none(),
-                                onclick: move |_| ai_panel_open.set(!ai_panel_open()),
-                                "✨ AI Assist"
-                            }
-                            button {
-                                class: "save-btn",
-                                disabled: selected_file().is_none(),
-                                onclick: save_file,
-                                if dirty() { "Save*" } else { "Save" }
-                            }
-                        }
-                    }
-                    if ai_panel_open() {
-                        div { class: "ai-panel",
-                            textarea {
-                                class: "ai-instruction",
-                                placeholder: "Tell the AI what to change in this file…",
-                                value: "{ai_instruction}",
-                                oninput: move |evt| ai_instruction.set(evt.value()),
-                            }
-                            button {
-                                class: "ai-go-btn",
-                                disabled: ai_busy(),
-                                onclick: ask_ai,
-                                if ai_busy() { "Thinking…" } else { "Apply with AI" }
-                            }
-                        }
-                    }
-                    textarea {
-                        class: "editor",
-                        spellcheck: false,
-                        value: "{editor_content}",
-                        oninput: move |evt| {
-                            editor_content.set(evt.value());
-                            dirty.set(true);
-                        },
+                        div { class: "mods-hint", "Selections here seed the F10 in-game mod menu on next launch." }
                     }
                 }
             }
-            footer { "{status}" }
         }
-        if mods_panel_open() {
-            div { class: "mods-overlay", onclick: move |_| mods_panel_open.set(false),
-                div { class: "mods-panel", onclick: move |evt| evt.stop_propagation(),
-                    div { class: "mods-panel-header",
-                        span { "Mods — {mods_game_id}" }
-                        button { class: "mods-close", onclick: move |_| mods_panel_open.set(false), "✕" }
-                    }
-                    if mods_list().is_empty() {
-                        div { class: "mods-empty",
-                            "No pre-built mods for this game yet. Universal mods (slow-mo, CRT filter, mute, zoom, big cursor) are always available in-game via the F10 overlay."
-                        }
-                    }
-                    for m in mods_list().iter().cloned() {
-                        label { class: "mod-row",
-                            input {
-                                r#type: "checkbox",
-                                checked: mods_enabled().contains(&m.id),
-                                onchange: move |_| toggle_mod(m.id.clone()),
-                            }
-                            div { class: "mod-copy",
-                                div { class: "mod-name", "{m.name}" }
-                                div { class: "mod-desc", "{m.desc}" }
-                            }
-                        }
-                    }
-                    div { class: "mods-hint", "Selections here seed the F10 in-game mod menu on next launch." }
-                }
-            }
-        }
-    }
 }
 
+#[cfg(any())]
 const STYLE: &str = r#"
     html, body { margin: 0; height: 100%; }
     * { box-sizing: border-box; }

@@ -49,8 +49,9 @@
 <script>
 (function(){
   "use strict";
-  var WS_URL = "ws://127.0.0.1:5190/ws/phantomplay/devroom/";
-  var NEW_CODE_URL = "http://127.0.0.1:5190/api/phantomplay/devroom/new-code";
+  var API_ORIGIN = "__PHANTOMPLAY_API_ORIGIN__";
+  var WS_URL = API_ORIGIN.replace(/^http/i, "ws") + "/ws/phantomplay/devroom/";
+  var ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
   var els = {
     nameInput: document.getElementById("nameInput"),
@@ -73,6 +74,14 @@
   var peers = {}; // clientId -> { pc, audioEl }
   var micStream = null, micOn = false;
 
+  function createRoomCode() {
+    var bytes = new Uint8Array(6);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, function (value) {
+      return ROOM_ALPHABET[value % ROOM_ALPHABET.length];
+    }).join("");
+  }
+
   function logLine(html, cls) {
     var d = document.createElement("div");
     d.className = "msg" + (cls ? " " + cls : "");
@@ -82,9 +91,8 @@
   }
 
   els.newCodeBtn.addEventListener("click", function () {
-    fetch(NEW_CODE_URL, { method: "POST" }).then(function (r) { return r.json(); }).then(function (d) {
-      if (d && d.code) els.codeInput.value = d.code;
-    }).catch(function () { logLine("Couldn't reach the dev-room server — is the PhantomForce API running on :5190?", "sys"); });
+    els.codeInput.value = createRoomCode();
+    logLine("New private room code ready. Join when your name is set.", "sys");
   });
 
   els.joinBtn.addEventListener("click", function () {

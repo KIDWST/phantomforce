@@ -1,6 +1,28 @@
-# PhantomPlay engine scoping — what "AAA-scale, Age of Empires-class" actually requires
+# PhantomPlay engine program: the path to production-scale games
 
-## Why this doc exists instead of engine code
+## 2026-07-30 studio milestone
+
+The native PhantomPlay application is now a real single-window game studio rather than a launcher
+that opens a second game window. It has:
+
+- embedded play for every project under `app/games`;
+- direct multi-file source editing with save and hot reload;
+- Play, Code, and Split workspace modes;
+- a local Phantom AI edit surface connected to the existing PhantomPlay API route;
+- runtime inspection that reports what a project actually uses instead of repeating capability
+  claims;
+- manifest-backed mod controls;
+- an embedded Dev Room with room-code generation, WebSocket presence/chat, file-sync events, and
+  the existing WebRTC voice controls;
+- restricted local asset serving with traversal protection and support for game, media, font,
+  model, and WebAssembly MIME types; and
+- a PhantomPlay-branded executable, installer, Start Menu entry, desktop shortcut, window, icon,
+  and accessibility surface.
+
+This milestone establishes the authoring host and iteration loop needed by a larger engine. It
+does not turn the current bespoke game runtimes into a shared AAA renderer or simulation stack.
+
+## Why the rest is still an engine program
 
 The ask was: PhantomPlay's users should be able to download and play something on the order of
 a modern Age of Empires, with the same edge network and Dev Mode plugged in. That is not a
@@ -14,10 +36,10 @@ and lay out what real work it actually decomposes into, rather than write code t
 `PHANTOMPLAY_ENGINE` (`server/src/phantom-ai/phantomplay.ts`) is **capability metadata and a
 shared postMessage protocol, not a rendering or simulation engine.** Concretely, today:
 
-- Every one of the 34 built-in games is a **bespoke, single-file HTML document** with its own
-  hand-written Canvas2D rendering loop and game logic (`app/games/*.html` — see e.g.
-  `pixel-bloom.html`, read in full while building Dev Mode). There is no shared entity system,
-  renderer, or physics/pathfinding code between games.
+- The catalog now contains **39 games**. Most are bespoke HTML/JavaScript projects with their own
+  Canvas2D or DOM rendering and game logic. VesperGate has a game-specific Canvas2D engine, and
+  several larger projects are multi-file, but there is still no shared high-scale entity system,
+  renderer, physics stack, or pathfinding package across the catalog.
 - The shared contract between a game and the host page is nine message types
   (`ready, score, progress, complete, paused, exit, settings, save-state, load-state`) over
   `postMessage` — a thin scoring/lifecycle protocol, not an engine API.
@@ -84,7 +106,60 @@ timeline, and is a bigger lift than 1–3 combined. Item 5 is moderate once the 
 (it does) but needs real design work to connect chunk delivery to renderer demand. Item 6 scales
 with how much content you actually want to author, independent of the engine work.
 
-## A realistic incremental path, if this is pursued
+## Delivery phases
+
+### Phase 0: native studio and iteration loop
+
+Complete. The current application supplies embedded play, source editing, hot reload, truthful
+runtime inspection, mods, AI-assisted edits, and collaboration in one window.
+
+### Phase 1: renderer and frame pipeline
+
+Use a proven WebGL/WebGPU rendering library as the renderer foundation. Build one vertical slice
+with:
+
+- instanced and batched rendering;
+- a deterministic fixed-timestep simulation separate from presentation frames;
+- camera frustum and distance culling;
+- GPU and CPU frame-time instrumentation;
+- texture/mesh lifetime management; and
+- a load test that holds the agreed frame budget at a measured entity count.
+
+The studio Runtime panel should read those live counters rather than static project metadata.
+
+### Phase 2: simulation and world scale
+
+Adopt proven libraries for physics and navigation rather than creating both from scratch. Add:
+
+- an entity-component model validated by the vertical slice;
+- broad-phase spatial indexing;
+- hierarchical navigation or flow fields;
+- worker-thread simulation jobs;
+- deterministic serialization and replay; and
+- chunked world and asset manifests.
+
+The current custom protocol reads complete files. Production asset streaming needs byte-range
+delivery, cache budgets, request cancellation, integrity checks, and GPU-aware eviction.
+
+### Phase 3: multiplayer correctness
+
+Preserve Dev Rooms for collaboration, but treat game netcode as a separate subsystem. Prove:
+
+- two-player deterministic lockstep or an explicitly chosen authoritative model;
+- input buffering and prediction policy;
+- periodic state hashes and desync capture;
+- reconnect and spectator behavior;
+- adversarial packet-loss/latency tests; and
+- versioned replay fixtures in CI.
+
+### Phase 4: authoring and content pipeline
+
+Add importers, asset validation, level/world editing, prefab and behavior authoring, build
+profiles, packaging, crash telemetry, and performance budgets. PS3/PS4-sized games are mainly a
+content-production and optimization challenge after the core engine exists; the studio must make
+those workflows repeatable rather than merely accept large files.
+
+## First vertical slice
 
 Rather than "build an RTS engine," the tractable next step is: **pick one existing strategy-ish
 game already in the catalog (Kingdom Breakers or Crown Circuit are the closest starting points —
@@ -100,5 +175,6 @@ both already have lanes/towers/unit-ish mechanics) and scale that one game up**,
    design the shared package first, in the abstract, before one real game has proven the
    approach.
 
-This intentionally does not promise a timeline or claim any of it is started. It's the difference
-between "here's the real shape of the work" and pretending a docstring is an engine.
+The studio foundation is implemented. Renderer, simulation, asset-streaming, and production
+netcode phases remain real engineering work and must be accepted through measured performance,
+determinism, and recovery tests rather than labels.

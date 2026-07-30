@@ -1,5 +1,6 @@
 [application]
 name = "PhantomPlay"
+default_platform = "desktop"
 
 [bundle]
 identifier = "online.phantomforce.phantomplay"
