@@ -1,6 +1,6 @@
 {
   "name": "@phantomforce/phantomplay-studio",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Native PhantomPlay game studio with embedded play, source editing, hot reload, AI tools, mods, and dev rooms.",
   "scripts": {

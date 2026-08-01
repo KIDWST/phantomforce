@@ -5,3 +5,10 @@ default_platform = "desktop"
 [bundle]
 identifier = "online.phantomforce.phantomplay"
 publisher = "PhantomForce"
+icon = ["assets/phantomplay.ico", "assets/brand-phantom.png"]
+short_description = "PhantomPlay"
+long_description = "PhantomForce's native game library and creation studio."
+copyright = "Copyright © PhantomForce"
+version = "0.2.1"
+file_version = "0.2.1.0"
+original_file_name = "PhantomPlay.exe"

@@ -1261,6 +1261,36 @@
           "description": "Automations cannot regress into the global command rail."
         }
       ]
+    },
+    {
+      "id": "phantomplay-native-windows-branding",
+      "status": "active",
+      "title": "PhantomPlay Windows packages use PhantomForce branding",
+      "ownerDecision": "The native PhantomPlay executable, installer, Windows Search result, shortcut, and window chrome must show the Phantom hooded mark and the product name PhantomPlay. Framework fallback icons and Dioxus shell naming are never end-user branding.",
+      "requiredPatterns": [
+        {
+          "file": "packages/phantomplay-dioxus-shell/Dioxus.toml",
+          "pattern": "name = \"PhantomPlay\"[\\s\\S]*icon = \\[\"assets/phantomplay\\.ico\", \"assets/brand-phantom\\.png\"\\][\\s\\S]*original_file_name = \"PhantomPlay\\.exe\"",
+          "description": "The desktop bundle embeds Phantom branding and explicit PhantomPlay executable metadata."
+        },
+        {
+          "file": "packages/phantomplay-dioxus-shell/Cargo.toml",
+          "pattern": "name = \"phantomplay\"[\\s\\S]*\\[\\[bin\\]\\][\\s\\S]*name = \"PhantomPlay\"",
+          "description": "The native crate and Windows binary use product-facing PhantomPlay names."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "packages/phantomplay-dioxus-shell/Cargo.toml",
+          "pattern": "phantomplay_dioxus_shell|PhantomplayDioxusShell",
+          "description": "The obsolete framework shell name cannot leak back into executable packaging."
+        },
+        {
+          "file": "packages/phantomplay-dioxus-shell/Dioxus.toml",
+          "pattern": "icon = \\[\\]",
+          "description": "The Windows bundle cannot fall back to the framework icon."
+        }
+      ]
     }
   ]
 }
