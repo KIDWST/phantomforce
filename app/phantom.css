@@ -7580,7 +7580,7 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260729-98") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260801-141") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -13027,3 +13027,37 @@ body .phantom .workspace-page :where(
 .pf-state-action {
   margin-top: 0.35rem;
 }
+/* Accounting is one modern workspace: books, offers, and review queue. */
+.accounting-hub { display: grid; gap: 18px; }
+.accounting-tabs {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px;
+  gap: 4px;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .16);
+}
+.accounting-tabs button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 11px;
+  color: var(--dim);
+  background: transparent;
+  font: inherit;
+  font-weight: 760;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.accounting-tabs button:hover { color: var(--text); background: color-mix(in srgb, var(--panel-2) 82%, transparent); }
+.accounting-tabs button.is-active {
+  color: #07120c;
+  background: linear-gradient(135deg, var(--neon), color-mix(in srgb, var(--neon) 64%, white));
+  box-shadow: 0 7px 22px color-mix(in srgb, var(--neon) 24%, transparent);
+}
+.accounting-tab-body { min-width: 0; }
+.mission-map-body-clean { grid-template-columns: minmax(0, 1fr); }

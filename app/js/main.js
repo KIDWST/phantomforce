@@ -6,56 +6,56 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260729-98";
+} from "./store.js?v=phantom-live-20260801-141";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems, cachedOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260729-98";
+} from "./organizationpulse.js?v=phantom-live-20260801-141";
 import {
   loadSecurityMonitorStatus, cachedSecurityMonitorStatus, securityMonitorIsAdmin, runSecurityMonitorScan, securityMonitorRunning,
-} from "./securitystatus.js?v=phantom-live-20260729-98";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260729-98";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260729-98";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260729-98";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260729-98";
-import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260729-98";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260729-98";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260729-98";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260729-98";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260729-98";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260729-98";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260729-98";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260729-98";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260729-98";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260729-98";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260729-98";
-import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260729-98";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260729-98";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260729-98";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260729-98";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260729-98";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260729-98";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260729-98";
-import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260729-98";
+} from "./securitystatus.js?v=phantom-live-20260801-141";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260801-141";
+import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260801-141";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260801-141";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260801-141";
+import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260801-141";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260801-141";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260801-141";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260801-141";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260801-141";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260801-141";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260801-141";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260801-141";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260801-141";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260801-141";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260801-141";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260801-141";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260801-141";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260801-141";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260801-141";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260801-141";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260801-141";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260801-141";
+import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260801-141";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260729-98";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260729-98";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260729-98";
+} from "./orgs.js?v=phantom-live-20260801-141";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260801-141";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260801-141";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260729-98";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260801-141";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260729-98";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260801-141";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260729-98";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260729-98";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260729-98";
-import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260729-98";
+} from "./customization.js?v=phantom-live-20260801-141";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260801-141";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260801-141";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260801-141";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -63,9 +63,9 @@ const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").match
 const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 const WORKSPACE_STYLE_BUNDLES = Object.freeze({
-  phantomai: ["/app/creator-studio.css?v=phantom-live-20260729-98"],
-  media: ["/app/creator-studio.css?v=phantom-live-20260729-98"],
-  content: ["/app/creator-studio.css?v=phantom-live-20260729-98"],
+  phantomai: ["/app/creator-studio.css?v=phantom-live-20260801-141"],
+  media: ["/app/creator-studio.css?v=phantom-live-20260801-141"],
+  content: ["/app/creator-studio.css?v=phantom-live-20260801-141"],
 });
 
 function ensureWorkspaceStyles(workspaceId) {
@@ -603,12 +603,12 @@ const BASE_NAV = [
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, dashboardWidget: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", dashboardWidget: true },
   { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence", dashboardWidget: true },
-  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics", dashboardWidget: true },
+  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
   { id: "adminos",    label: "Admin",        icon: "users", ws: "adminos", adminOnly: true, navZone: "bottom" },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
-  { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
+  { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true },
   { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true, optionalModule: true },
   { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore" },
 ];
@@ -936,15 +936,6 @@ function goNav(id) {
 }
 window.PHANTOM_GO_NAV = goNav;
 
-function missionMapPrompts() {
-  return [
-    "Create a task to qualify school prospects for PhantomPlay classroom games",
-    "Create a task to build the PhantomForce CRM prospect map for creators, businesses, and schools",
-    "Create a task to set up the next client onboarding workflow",
-    "Create a task to prepare Managed Growth Ops follow-up for active leads",
-  ];
-}
-
 function openOperationsMap() {
   if (activePageId) renderDashboardPage(true);
   if (openId === "operations-map") {
@@ -952,7 +943,6 @@ function openOperationsMap() {
     return;
   }
   const summary = flowSummary();
-  const prompts = missionMapPrompts();
   clearOverlayOnly();
   openId = "operations-map";
   document.body.classList.add("overlay-open");
@@ -962,33 +952,13 @@ function openOperationsMap() {
       <section class="overlay-panel">
         <header class="overlay-head">
           <div>
-            <p class="overlay-kicker">Mission business map</p>
-            <h2>Task creation keeper</h2>
+            <p class="overlay-kicker">Live operations</p>
+            <h2>Operations map</h2>
             <p class="overlay-sub">${esc(summary.text)}</p>
           </div>
           <button class="overlay-x" data-map-close aria-label="Close operations map">✕</button>
         </header>
-        <div class="overlay-body mission-map-body">
-          <section class="mission-map-keeper" aria-label="Mission task creation keeper">
-            <div class="mission-map-copy">
-              <p class="mission-map-kicker">Tell Phantom to create a task</p>
-              <h3>I'll map the road to success.</h3>
-              <p>Describe the outcome in plain English. Phantom turns it into a mission path with leads, follow-up, approvals, owner work, and proof - without sending, publishing, charging, or exposing anything.</p>
-            </div>
-            <div class="mission-map-road" aria-label="Road to success">
-              ${["Capture outcome", "Find client lane", "Set follow-up", "Draft offer/content", "Queue approvals", "Report progress"].map((step, i) => `
-                <span><b>${i + 1}</b>${esc(step)}</span>
-              `).join("")}
-            </div>
-            <div class="mission-map-prompts" aria-label="Task prompt starters">
-              ${prompts.map((prompt) => `
-                <button class="mission-map-prompt" type="button" data-map-prompt="${esc(prompt)}">
-                  <span>${esc(prompt)}</span>
-                  <small>Load into chat</small>
-                </button>
-              `).join("")}
-            </div>
-          </section>
+        <div class="overlay-body mission-map-body mission-map-body-clean">
           <section class="flowmap flowmap-modal is-map-open" aria-label="Live operations map">
             <div class="flow-stage" data-flowmap tabindex="-1"></div>
           </section>
@@ -1709,7 +1679,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260729-98";
+const POSE_VERSION = "phantom-live-20260801-141";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2526,39 +2496,32 @@ function paletteSources(query) {
   NAV.filter(canAccessSurface).forEach((n) =>
     items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}` : "Console home", run: () => goNav(n.id) }));
   for (const id in WORKSPACE_DEFS) {
+    if (["phantom", "proposals", "reviews"].includes(id)) continue;
     const def = WORKSPACE_DEFS[id];
     if (!canAccessSurface(def)) continue;
     if (NAV.some((n) => n.ws === id)) continue;
     items.push({ group: "Go to", label: def.title, icon: "grid", sub: def.kicker, run: () => openWorkspace(id) });
   }
   QUICK.forEach((a) => items.push({ group: "Do", label: a.label, icon: a.icon, sub: a.run ? "Run command" : "Open", run: () => (a.run ? runCommand(a.run) : routeWorkspace(a.open)) }));
-  commandSuggestions().forEach((s) => items.push({ group: "Ask", label: s, icon: "chat", sub: "Run", run: () => runCommand(s) }));
   if (q.length >= 2) {
     const add = (label, sub, open, icon) => items.push({ group: "Records", label, icon, sub, run: () => routeWorkspace(open) });
     visible(store.state.leads).filter((l) => (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((l) => add(l.name, `Lead · ${l.company || l.status}`, "leads", "users"));
     visible(store.state.proposals).filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
-      .forEach((p) => add(p.client, `Proposal · ${fmtMoney(p.price)}`, "proposals", "dollar"));
+      .forEach((p) => items.push({ group: "Records", label: p.client, icon: "dollar", sub: `Offer · ${fmtMoney(p.price)}`, run: () => { selectAccountingTab("offers"); routeWorkspace("money"); } }));
     visible(store.state.sites).filter((s) => (s.title || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((s) => add(s.title, `${s.kind}`, "sites", "grid"));
   }
   const scored = items.map((it) => ({ it, s: fuzzy(q, (it.label + " " + (it.sub || "")).toLowerCase()) })).filter((x) => q === "" || x.s > 0);
   scored.sort((a, b) => b.s - a.s);
   const out = scored.map((x) => x.it);
-  // "Ask Phantom: <query>" is always available, but only jumps to the top when
-  // nothing else matches strongly — so typing a workspace name opens it directly.
-  if (q) {
-    const ask = { group: "Ask", label: `Ask Phantom: "${query.trim()}"`, icon: "chat", sub: "Run as a command", run: () => runCommand(query.trim()) };
-    const strong = scored[0] && scored[0].s >= 100;   // a direct substring hit
-    if (strong) out.push(ask); else out.unshift(ask);
-  }
   return out.slice(0, 40);
 }
 function renderPalette(query) {
   cmdkItems = paletteSources(query);
   cmdkIdx = Math.min(cmdkIdx, Math.max(0, cmdkItems.length - 1));
   const box = $("[data-cmdk-results]");
-  if (!cmdkItems.length) { box.innerHTML = `<div class="cmdk-empty">No matches. Press ↵ to ask Phantom.</div>`; return; }
+  if (!cmdkItems.length) { box.innerHTML = `<div class="cmdk-empty">No matching pages, records, or actions.</div>`; return; }
   let lastGroup = "";
   box.innerHTML = cmdkItems.map((it, i) => {
     const head = it.group !== lastGroup ? `<div class="cmdk-group">${esc(it.group)}</div>` : "";
@@ -4211,6 +4174,11 @@ function renderWorkspacePage(id, pushHash = true) {
 }
 function routeWorkspace(id, pushHash = true) {
   const key = workspaceId(id);
+  if (key === "phantom") return routeWorkspace("phantomai", pushHash);
+  if (key === "proposals" || key === "reviews") {
+    selectAccountingTab(key === "proposals" ? "offers" : "review");
+    return routeWorkspace("money", pushHash);
+  }
   if (key === "automation") {
     renderWorkspacePage("phantomai", pushHash);
     setTimeout(() => activatePhantomAiTab("automations"), 0);

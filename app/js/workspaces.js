@@ -9,24 +9,24 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260729-98";
+} from "./store.js?v=phantom-live-20260801-141";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260729-98";
+} from "./orgs.js?v=phantom-live-20260801-141";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260729-98";
+} from "./proposalpipeline.js?v=phantom-live-20260801-141";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260729-98";
+} from "./approvalpipeline.js?v=phantom-live-20260801-141";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -34,8 +34,8 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260729-98";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260729-98";
+} from "./financeledger.js?v=phantom-live-20260801-141";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260801-141";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -486,7 +486,7 @@ function renderLeads(el, rerender) {
     review: (id) => {
       const l = find(id);
       store.state.reviews.unshift({ id: uid("rev"), ws: l.ws, client: `${l.name} — ${l.company}`, status: "draft", channel: "Google", draft: `${l.name.split(" ")[0]} — glad this one landed. A short review helps the next owner find us; two sentences is plenty. Link below.`, link: "review-link-ready", received: null, quote: null });
-      pushActivity("Review Desk", `drafted a review request for ${l.company}.`, l.ws);
+      pushActivity("Offers to review", `drafted a review request for ${l.company}.`, l.ws);
       store.save(); rerender();
     },
   });
@@ -587,7 +587,7 @@ function renderProposals(el, rerender) {
       store.save(); rerender();
     },
     ready: (id) => { const p = find(id); p.status = "sent-ready"; p.updated = new Date().toISOString(); pushActivity("Proposal Forge", `moved ${p.client} to send-ready. Nothing was sent.`, p.ws); if (p.serverBacked && proposalServerAvailable()) updateServerProposal(id, { status: p.status }).catch((error) => { proposalUi.notice = error?.message || "Server proposal update failed."; }); store.save(); rerender(); },
-    won: (id) => { const p = find(id); p.status = "won"; pushActivity("Offer Desk", `${p.client} proposal marked won — ${fmtMoney(p.price)}.`, p.ws); if (p.serverBacked && proposalServerAvailable()) updateServerProposal(id, { status: p.status }).catch((error) => { proposalUi.notice = error?.message || "Server proposal update failed."; }); store.save(); rerender(); },
+    won: (id) => { const p = find(id); p.status = "won"; pushActivity("Offers", `${p.client} proposal marked won — ${fmtMoney(p.price)}.`, p.ws); if (p.serverBacked && proposalServerAvailable()) updateServerProposal(id, { status: p.status }).catch((error) => { proposalUi.notice = error?.message || "Server proposal update failed."; }); store.save(); rerender(); },
     lost: (id) => { const p = find(id); p.status = "lost"; if (p.serverBacked && proposalServerAvailable()) updateServerProposal(id, { status: p.status }).catch((error) => { proposalUi.notice = error?.message || "Server proposal update failed."; }); store.save(); rerender(); },
     invoice: (id) => { const p = find(id); p.status = "invoice-ready"; pushActivity("Accounting Ledger", `${p.client} marked invoice-ready.`, p.ws); if (p.serverBacked && proposalServerAvailable()) updateServerProposal(id, { status: p.status }).catch((error) => { proposalUi.notice = error?.message || "Server proposal update failed."; }); store.save(); rerender(); },
   });
@@ -624,30 +624,30 @@ function renderReviews(el, rerender) {
       const client = prompt("Who are we asking for a review?");
       if (!client) return;
       store.state.reviews.unshift({ id: uid("rev"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), client: client.trim(), status: "draft", channel: "Google", draft: `${client.trim().split(" ")[0]} — if the work moved the needle, a short review helps the next owner find us. Two sentences is plenty — link below.`, link: "review-link-ready", received: null, quote: null });
-      pushActivity("Review Desk", `drafted a review request for ${client.trim()}.`);
+      pushActivity("Offers to review", `drafted a review request for ${client.trim()}.`);
       store.save(); rerender();
     },
     copy: (id, btn) => { const r = find(id); copyText(btn, `${r.draft}\n\n${r.link || ""}`); },
     remove: (id) => {
       const r = find(id);
       store.state.reviews = store.state.reviews.filter((item) => item.id !== id);
-      if (r) pushActivity("Review Desk", `removed review request: ${r.client}.`, r.ws);
+      if (r) pushActivity("Offers to review", `removed review request: ${r.client}.`, r.ws);
       store.save(); rerender();
     },
     "approve-req": (id) => { const r = find(id); r.status = "approved"; store.save(); rerender(); },
-    sent: (id) => { const r = find(id); r.status = "sent"; pushActivity("Review Desk", `review request for ${r.client} marked sent (manual).`, r.ws); store.save(); rerender(); },
+    sent: (id) => { const r = find(id); r.status = "sent"; pushActivity("Offers to review", `review request for ${r.client} marked sent (manual).`, r.ws); store.save(); rerender(); },
     received: (id) => {
       const r = find(id);
       const quote = prompt("Paste the review text they left:");
       if (!quote) return;
       r.status = "received"; r.quote = quote.trim(); r.received = new Date().toISOString();
-      pushActivity("Review Desk", `logged a received review from ${r.client}.`, r.ws);
+      pushActivity("Offers to review", `logged a received review from ${r.client}.`, r.ws);
       store.save(); rerender();
     },
     "queue-publish": (id) => {
       const r = find(id);
-      queueWorkspaceApproval({ id: uid("app"), ws: r.ws, type: "publish-review", title: `Publish ${r.client} testimonial to site`, detail: "Publishing adds this quote to the site's reviews wall.", ref: r.id, status: "pending", requestedBy: "Review Desk", at: new Date().toISOString() });
-      pushActivity("Review Desk", `queued publish approval for ${r.client}'s testimonial.`, r.ws);
+      queueWorkspaceApproval({ id: uid("app"), ws: r.ws, type: "publish-review", title: `Publish ${r.client} testimonial to site`, detail: "Publishing adds this quote to the site's reviews wall.", ref: r.id, status: "pending", requestedBy: "Offers to review", at: new Date().toISOString() });
+      pushActivity("Offers to review", `queued publish approval for ${r.client}'s testimonial.`, r.ws);
       store.save(); rerender();
     },
   });
@@ -1618,6 +1618,31 @@ function renderMoney(el, rerender) {
   void loadAuthoritativeFinance(ws, rerender);
 }
 
+let accountingTab = "overview";
+export function selectAccountingTab(tab = "overview") {
+  accountingTab = ["overview", "offers", "review"].includes(tab) ? tab : "overview";
+}
+
+function renderAccounting(el, rerender) {
+  el.innerHTML = `
+    <section class="accounting-hub">
+      <nav class="accounting-tabs" aria-label="Accounting sections">
+        <button type="button" data-accounting-tab="overview" class="${accountingTab === "overview" ? "is-active" : ""}">Overview</button>
+        <button type="button" data-accounting-tab="offers" class="${accountingTab === "offers" ? "is-active" : ""}">Offers</button>
+        <button type="button" data-accounting-tab="review" class="${accountingTab === "review" ? "is-active" : ""}">Offers to review</button>
+      </nav>
+      <div class="accounting-tab-body" data-accounting-tab-body></div>
+    </section>`;
+  const body = el.querySelector("[data-accounting-tab-body]");
+  if (accountingTab === "offers") renderProposals(body, rerender);
+  else if (accountingTab === "review") renderReviews(body, rerender);
+  else renderMoney(body, rerender);
+  el.querySelectorAll("[data-accounting-tab]").forEach((button) => button.addEventListener("click", () => {
+    accountingTab = button.dataset.accountingTab || "overview";
+    rerender();
+  }));
+}
+
 /* ============================= MEMORY ============================= */
 function categoryLabel(category) {
   return MEMORY_CATEGORY_LABELS[category] || title(category).replace(/-/g, " ");
@@ -1806,7 +1831,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260729-98")
+      import("./brain.js?v=phantom-live-20260801-141")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -3570,11 +3595,11 @@ function renderPhantom(el) {
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
   leads: { title: "Client CRM", kicker: "Org-scoped client database and follow-up memory", render: renderLeads },
-  proposals: { title: "Offer Desk", kicker: "Quotes, scopes, and deal math", render: renderProposals },
-  reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
+  proposals: { title: "Offers", kicker: "Quotes, scopes, and deal math", render: renderProposals },
+  reviews: { title: "Offers to review", kicker: "Review requests and proof", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
-  money: { title: "Accounting", kicker: "Books, transaction reader, and cash truth", render: renderMoney },
+  money: { title: "Accounting", kicker: "Cash, offers, and review", render: renderAccounting },
   memory: { title: "Memory", kicker: "Context intelligence database", render: renderMemory },
   workforce: { title: "Workforce", kicker: "Business ops network", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on your call", render: renderApprovals },
@@ -3600,12 +3625,10 @@ export function missionWidgets() {
 
   const w = [
     { id: "leads", icon: "◉", title: "Client CRM", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "client memory current", alert: dueLeads.length > 0 },
-    { id: "proposals", icon: "◆", title: "Offer Desk", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
     { id: "sites", icon: "▦", title: "Site Portfolio", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },
-    { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Security Watch", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
-    { id: "money", icon: "◈", title: "Accounting", stat: m.transactions.length ? moneySigned(m.netCash) : "books", sub: m.transactions.length ? `${m.transactions.length} transaction${m.transactions.length === 1 ? "" : "s"}` : "add/import transactions", alert: false },
+    { id: "money", icon: "◈", title: "Accounting", stat: m.transactions.length ? moneySigned(m.netCash) : `${m.open.length} offer${m.open.length === 1 ? "" : "s"}`, sub: `${m.transactions.length} transactions · ${revs.length} to review`, alert: false },
     { id: "workforce", icon: "⬢", title: "Workforce", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];

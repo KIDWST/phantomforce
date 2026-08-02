@@ -4,10 +4,10 @@
 import {
   store, isAdmin, isOwnerOperator, session, currentTenantId, moneyView, fmtMoney,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260729-98";
-import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260729-98";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260729-98";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260729-98";
+} from "./store.js?v=phantom-live-20260801-141";
+import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260801-141";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260801-141";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260801-141";
 
 const LAST_DOMAIN_KEY = "pf.analytics.lastDomain.v1";
 const CUSTOM_SOURCES_KEY = "pf.analytics.customSources.v1";
@@ -49,7 +49,7 @@ async function fetchGamesAnalytics() {
 
 function availableDomains() {
   const domains = [
-    { id: "pulse", label: "Business" },
+    { id: "pulse", label: "Overview" },
     { id: "store", label: "Store" },
     { id: "games", label: "Play" },
     { id: "money", label: "Accounting" },
@@ -223,8 +223,8 @@ function renderPulseDomain(root, view = "overview") {
   });
   const chartHtml = view === "trend" ? noTrend : domainBarChart(rows, { emptyTitle: "No product activity yet", ariaLabel: "Product views ranking" });
   root.innerHTML = domainCardHtml({
-    eyebrow: "Business pulse",
-    title: "Business performance",
+    eyebrow: "Operations overview",
+    title: "Performance snapshot",
     status: "Aggregate coverage",
     coverage: "Real cumulative product counters. No daily history is inferred from totals.",
     chartHtml,

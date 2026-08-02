@@ -1291,6 +1291,51 @@
           "description": "The Windows bundle cannot fall back to the framework icon."
         }
       ]
+    },
+    {
+      "id": "primary-navigation-search-and-accounting-simplification",
+      "status": "active",
+      "title": "Primary navigation stays direct and Search stays non-AI",
+      "ownerDecision": "Analytics, Websites, Accounting, and Away Mode remain direct primary navigation destinations. Analytics cannot be renamed Business. Global Search only finds pages, records, and explicit actions; conversational prompting belongs in PhantomBot. Offers and review requests are Accounting sections, never separate Offer Desk or Review Desk products.",
+      "requiredPatterns": [
+        {
+          "file": "app/index.html",
+          "pattern": "data-nav-id=\"sites\"[^>]*>Websites<[\\s\\S]*data-nav-id=\"analytics\"[^>]*>Analytics<[\\s\\S]*data-nav-id=\"money\"[^>]*>Accounting<[\\s\\S]*data-nav-id=\"vacation\"[^>]*>Away Mode<",
+          "description": "The global rail directly exposes all four owner-approved primary destinations."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "if \\(\\[\"phantom\", \"proposals\", \"reviews\"\\]\\.includes\\(id\\)\\) continue[\\s\\S]*No matching pages, records, or actions",
+          "description": "Search omits unfinished Phantom AI and retired desk surfaces and has a non-conversational empty state."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "data-accounting-tab=\"overview\"[\\s\\S]*data-accounting-tab=\"offers\"[\\s\\S]*>Offers<[\\s\\S]*data-accounting-tab=\"review\"[\\s\\S]*>Offers to review<",
+          "description": "Accounting owns Overview, Offers, and Offers to review."
+        },
+        {
+          "file": "app/js/analytics-hub.js",
+          "pattern": "id: \"pulse\", label: \"Overview\"",
+          "description": "The Analytics landing domain is Overview, not Business."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/index.html",
+          "pattern": "ask anything",
+          "description": "Global Search cannot advertise Phantom-style freeform prompting."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "Ask Phantom:|Press ↵ to ask Phantom",
+          "description": "Global Search cannot execute arbitrary prompts."
+        },
+        {
+          "file": "app/js/analytics-hub.js",
+          "pattern": "id: \"pulse\", label: \"Business\"",
+          "description": "Analytics cannot regress to a Business label."
+        }
+      ]
     }
   ]
 }
