@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "game_id": "cubetown",
+  "title": "Cubetown: Echoes of the Maker",
+  "production_status": "Unreal Engine 5 native vertical slice",
+  "core_fantasy": "A colorful block world where every obstacle can become a building material and defeated creatures become reusable echoes.",
+  "design_pillars": [
+    "Voxel mining and placement must be immediate, readable, and useful in exploration or combat.",
+    "Creature echoes are learned abilities and visible companions, not passive inventory text.",
+    "Shrines create an authored adventure spine inside a freely rebuildable world.",
+    "Combat, traversal, building, and puzzle solving should combine rather than live in separate modes."
+  ],
+  "forbidden_crossovers": [
+    "Do not import Phantom Ages lane-battle controls or age progression.",
+    "Do not import Phantom Legends RTS selection or settlement economy.",
+    "Do not replace the existing multi-engine Cubetown web source; keep it as compatibility reference."
+  ],
+  "controls": {
+    "move": "WASD",
+    "mine_or_attack": "left mouse",
+    "place_block": "right mouse",
+    "cycle_block": "Q",
+    "cycle_echo": "R",
+    "summon_echo": "E",
+    "interact": "F",
+    "dash": "Space"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "engine": "Unreal Engine 5.8.1",
+  "project": "packages/phantom-games-unreal/PhantomGames.uproject",
+  "games": [
+    {
+      "id": "phantom-strike",
+      "title": "PhantomStrike: Operation Nightglass",
+      "genre": "modern first-person tactical shooter",
+      "camera": "first-person",
+      "core_loop": "move, aim, shoot, survive hostile encounters, and complete combat objectives",
+      "product_name": "PhantomStrike: Operation Nightglass",
+      "executable": "Builds/Windows/phantom-strike/PhantomStrike.exe",
+      "source": "Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
+      "key_art": "SourceArt/KeyArt/phantom-strike-keyart.png",
+      "save_namespace": "phantomstrike.",
+      "identity_invariants": [
+        "Player weapons can damage enemies.",
+        "Enemies, navigable combat spaces, objectives, and combat feedback are real gameplay systems.",
+        "No lane-battler or RTS controller may bootstrap into this executable."
+      ]
+    },
+    {
+      "id": "phantom-ages",
+      "title": "Phantom Ages",
+      "genre": "fixed-lane age-evolution strategy battler",
+      "camera": "fixed orthographic side view",
+      "core_loop": "deploy formations, protect ranged ranks, counter siege, research troops, destroy the opposing tower, and advance ages",
+      "product_name": "Phantom Ages",
+      "executable": "Builds/Windows/phantom-ages/PhantomAges.exe",
+      "source": "Source/PhantomGames/Private/Ages/PhantomAgesDirector.cpp",
+      "key_art": "SourceArt/KeyArt/phantom-ages-keyart.png",
+      "save_namespace": "phantomages.",
+      "identity_invariants": [
+        "The player never controls or rotates a 3D strategy camera.",
+        "Melee occupies the front rank, ranged units fire independently from behind it, and siege remains in the rear.",
+        "Catapults attack towers only; springalds attack enemy siege first and otherwise attack towers, never normal troops.",
+        "The bottom deck purchases literal troop and economy upgrade paths rather than displaying passive ownership summaries.",
+        "Stone Age units visibly read as cavepeople; age and research upgrades visibly alter units and towers.",
+        "No RTS selection, resource-node gathering, settlement placement, or free camera may bootstrap into this executable."
+      ]
+    },
+    {
+      "id": "phantom-legends",
+      "title": "Phantom Legends: Riftbound Dominion",
+      "genre": "fantasy real-time strategy and persistent base-building hybrid",
+      "camera": "controllable elevated strategy camera",
+      "core_loop": "gather resources, expand a settlement, train armies, command formations, raid rivals, defend a persistent base, and progress a fantasy campaign",
+      "product_name": "Phantom Legends: Riftbound Dominion",
+      "executable": "Builds/Windows/phantom-legends/PhantomLegends.exe",
+      "source": "Source/PhantomGames/Private/Legends/PhantomLegendsDirector.cpp",
+      "key_art": "SourceArt/KeyArt/phantom-legends-keyart.png",
+      "save_namespace": "phantomlegends.",
+      "identity_invariants": [
+        "This is the only one of the three games with RTS selection and a controllable strategy camera.",
+        "Economy, settlement growth, army command, and persistent progression are first-class systems.",
+        "No fixed-lane Phantom Ages controller or first-person PhantomStrike controller may bootstrap into this executable."
+      ]
+    }
+  ],
+  "native_expansions": [
+    {
+      "id": "cubetown",
+      "title": "Cubetown: Echoes of the Maker",
+      "genre": "voxel action-adventure and creative builder",
+      "camera": "elevated action-adventure",
+      "core_loop": "mine and place blocks, fight creatures, capture their echoes, summon companions, restore shrines, and defeat the Rift Guardian",
+      "product_name": "Cubetown: Echoes of the Maker",
+      "executable": "Builds/Windows/cubetown/Cubetown.exe",
+      "source": "Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp",
+      "save_namespace": "cubetown.echoes.",
+      "identity_invariants": [
+        "Building and mining are direct world interactions rather than decorative menus.",
+        "Defeated creature archetypes unlock summonable echoes that participate in combat.",
+        "The original web source remains available for compatibility while PhantomPlay Run prefers the Unreal player.",
+        "This expansion does not remove or restrict generic Unity, Godot, Panda3D, Unreal, web, or executable support."
+      ]
+    }
+  ]
+}

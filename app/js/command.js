@@ -12,12 +12,12 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260816-149";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260816-149";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260816-149";
-import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260816-149";
-import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260816-149";
-import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260816-149";
+} from "./store.js?v=phantom-live-20260817-152";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260817-152";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260817-152";
+import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260817-152";
+import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260817-152";
+import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260817-152";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -444,8 +444,9 @@ function requestedEffort(value) {
 function routeProfileForEffort(raw, intent, settings, effortOverride = "") {
   const routeProfile = chatRouteProfileForRequest(raw, intent, settings);
   const effort = requestedEffort(effortOverride);
-  if (!effort) return routeProfile;
-  const tier = effort === "deep" ? "deep" : effort;
+  if (!effort || effort === "instant") return routeProfile;
+  if (effort === "standard" && ["reasoning", "advisory", "live"].includes(routeProfile.tier)) return routeProfile;
+  const tier = effort === "deep" ? "deep" : "standard";
   return {
     ...routeProfile,
     tier,

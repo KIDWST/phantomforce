@@ -1,0 +1,8 @@
+﻿PHANTOM GAMES INTERACTION EXECUTION
+installed=2026-08-12T21:23:42
+backup=C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal\InteractionExecutionBackups\20260812-212341
+legends=4km realm; DPI box-select; modifiers; contextual/queued RMB; formation facing; control groups; bookmarks; minimap
+ages=4.2km 2.5D lane; camera focus/orbit/pan; modifier unit queues; six eras; XP/research/tower upgrades
+cubetown=third-person adventure; movement fallback; combat; lock-on; prefab/wall/room build tools; undo
+strike=classic FPS movement; ADS; prone; mantle; weapons; tactical; map; scoreboard; modern frontend
+art=modern CC0 quality gate + corrected-axis generated GLB fallbacks

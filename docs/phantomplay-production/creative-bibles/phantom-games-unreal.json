@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.1",
+  "project_id": "phantom-games-unreal",
+  "title": "PhantomPlay Unreal Flagships",
+  "engine": "Unreal Engine 5.8.1",
+  "engine_key": "unreal",
+  "project_path": "packages/phantom-games-unreal",
+  "games": ["phantom-strike", "phantom-ages", "phantom-legends"],
+  "native_expansions": ["cubetown"],
+  "design_pillars": [
+    "PhantomStrike, Phantom Ages, and Phantom Legends are separate game identities inside one Unreal source project.",
+    "Each flagship launches in its own independently resizable native window and never falls back to a retired web or Panda3D build.",
+    "Gameplay systems must be real, responsive, inspectable, and game-specific rather than decorative.",
+    "PhantomPlay remains a multi-engine platform for unrelated Unity, Godot, Panda3D, web, Unreal, and native uploads."
+    ,"Cubetown joins the shared Unreal production project as an additional native title without changing the exactly-three flagship identity contract."
+  ],
+  "visual_direction": [
+    "PhantomStrike targets a premium modern tactical FPS presentation with readable combat spaces and immediate weapon feedback.",
+    "Phantom Ages uses a fixed orthographic lane-battle view with literal formations, towers, projectiles, research, and age progression.",
+    "Phantom Legends uses an elevated fantasy RTS and base-building view with selection, economy, construction, armies, and persistent progression.",
+    "Cubetown uses a colorful elevated voxel-adventure view with tactile building, captured creature echoes, shrine restoration, and systemic problem solving.",
+    "No visual work is complete until a compiled frame is captured and inspected on the actual target build."
+  ],
+  "audio_direction": {
+    "primary_music_provider": "phantomflow",
+    "engine_role": "adaptive playback, spatial audio, mix states, and gameplay-synchronized transitions",
+    "rule": "Unreal Engine plays and mixes approved music assets; it does not replace the primary PhantomFlow composition route."
+  },
+  "quality_gates": [
+    "compile",
+    "launch each exact game identity",
+    "real input interaction",
+    "gameplay smoke capture",
+    "visual inspection",
+    "performance measurement",
+    "standalone Windows build smoke test"
+  ],
+  "performance_targets": {
+    "windows_fps": 60,
+    "target_resolution": "1920x1080",
+    "frame_budget_ms": 16.67,
+    "measurement_rule": "No performance claim without Unreal Insights or equivalent packaged-build evidence."
+  },
+  "source_records": [
+    "packages/phantom-games-unreal/README.md",
+    "packages/phantom-games-unreal/PhantomGames.uproject",
+    "packages/phantomplay-dioxus-shell/README.md",
+    "docs/PHANTOMPLAY.md",
+    "docs/phantomplay-production/game-registry.json",
+    "docs/phantomplay-production/creative-bibles/phantom-strike.json",
+    "docs/phantomplay-production/creative-bibles/phantom-ages.json",
+    "docs/phantomplay-production/creative-bibles/phantom-legends.json",
+    "docs/phantomplay-production/asset-registries/phantom-games-unreal.json",
+    "docs/phantomplay-production/dependency-ledger.json",
+    "docs/phantomplay-production/knowledge-sources.json"
+  ]
+}

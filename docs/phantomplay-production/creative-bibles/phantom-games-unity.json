@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.1",
+  "project_id": "phantom-games-unity",
+  "title": "PhantomPlay Unity Compatibility Project",
+  "engine": "Unity 6000.3.18f1",
+  "engine_key": "unity",
+  "project_path": "packages/phantom-games-unity",
+  "games": ["unity-upload-compatibility-fixture"],
+  "design_pillars": [
+    "Every flagship launches in its own independently resizable native window.",
+    "Gameplay systems must be real, responsive, and testable rather than decorative.",
+    "This project is retained as migration evidence and a compatibility fixture, not as the runtime for the three Unreal flagships.",
+    "PhantomPlay continues to accept and launch unrelated Unity games through its engine adapter."
+  ],
+  "visual_direction": [
+    "Purpose-built presentation instead of Unity defaults.",
+    "Readable combat silhouettes, coherent materials, intentional lighting, and visible gameplay feedback.",
+    "Rendered-frame inspection is required before visual work is called complete."
+  ],
+  "audio_direction": {
+    "primary_music_provider": "phantomflow",
+    "engine_role": "adaptive playback and state transitions",
+    "rule": "Unity does not synthesize or replace primary game music."
+  },
+  "quality_gates": [
+    "compile",
+    "launch",
+    "real input interaction",
+    "gameplay smoke capture",
+    "visual inspection",
+    "performance measurement",
+    "standalone build smoke test"
+  ],
+  "performance_targets": {
+    "windows_fps": 60,
+    "target_resolution": "1920x1080",
+    "gc_allocations_per_frame": "measure before setting budget"
+  },
+  "source_records": [
+    "packages/phantom-games-unity/README.md",
+    "packages/phantomplay-dioxus-shell/README.md",
+    "docs/PHANTOMPLAY.md",
+    "docs/phantomplay-production/game-registry.json",
+    "docs/phantomplay-production/creative-bibles/phantom-strike.json",
+    "docs/phantomplay-production/creative-bibles/phantom-ages.json",
+    "docs/phantomplay-production/creative-bibles/phantom-legends.json",
+    "docs/phantomplay-production/asset-registries/phantom-games-unity.json",
+    "docs/phantomplay-production/dependency-ledger.json",
+    "docs/phantomplay-production/knowledge-sources.json"
+  ]
+}

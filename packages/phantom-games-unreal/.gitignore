@@ -1,0 +1,11 @@
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+BuildArtifacts/
+Builds/
+Build/Windows/FileOpenOrder/
+Source/*.zip
+Source/**/*.bak
+.vs/
+*.sln

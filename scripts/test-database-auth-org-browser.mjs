@@ -236,9 +236,10 @@ async function waitForExpression(cdp, expression, label, timeoutMs = 15_000, dia
     await sleep(250);
   }
   const browserLog = diagnostics?.messages?.length
-    ? ` Browser diagnostics: ${JSON.stringify(diagnostics.messages).slice(0, 1400)}`
+    ? ` Browser diagnostics: ${JSON.stringify(diagnostics.messages.slice(-15)).slice(0, 5000)}`
     : "";
-  throw new Error(`Timed out waiting for ${label}. Last state: ${JSON.stringify(last).slice(0, 400)}${browserLog}`);
+  const pageState = await evaluate(cdp, stateExpression()).catch((error) => ({ error: error.message }));
+  throw new Error(`Timed out waiting for ${label}. Last state: ${JSON.stringify(last).slice(0, 1800)} Page state: ${JSON.stringify(pageState).slice(0, 1800)}${browserLog}`);
 }
 
 function installDiagnostics(cdp) {
@@ -248,6 +249,7 @@ function installDiagnostics(cdp) {
     if (messages.length > 40) messages.shift();
   };
   cdp.on("Runtime.exceptionThrown", (message) => push("exception", message.params?.exceptionDetails?.exception?.description || message.params?.exceptionDetails?.text));
+  cdp.on("Runtime.consoleAPICalled", (message) => push("console-api", (message.params?.args || []).map((arg) => arg.value ?? arg.description ?? "").join(" ")));
   cdp.on("Log.entryAdded", (message) => push("log", `${message.params?.entry?.level || ""}: ${message.params?.entry?.text || ""}`));
   cdp.on("Console.messageAdded", (message) => push("console", `${message.params?.message?.level || ""}: ${message.params?.message?.text || ""}`));
   cdp.on("Network.loadingFailed", (message) => push("network", `${message.params?.errorText || ""} ${message.params?.blockedReason || ""}`.trim()));
@@ -272,11 +274,19 @@ function stateExpression() {
     const phantomVisible = !!phantom && !phantom.hidden && getComputedStyle(phantom).display !== "none";
     return {
       ok: phantomVisible || !!signIn,
+      url: location.href,
+      hash: location.hash,
+      readyState: document.readyState,
+      build: window.PHANTOM_BUILD || document.querySelector('meta[name="phantom-build"]')?.content || "",
       gateVisible,
       phantomVisible,
       hasSignIn: !!signIn,
       hasSwitcher: !!select,
-      text: document.body.innerText.slice(0, 500),
+      hasCommandForm: !!document.querySelector("[data-command-form]"),
+      workspacePage: document.querySelector("[data-workspace-page]")?.dataset.workspacePage || "",
+      activeWorkspace: document.querySelector("[data-workspace-page].active, [data-workspace-page].is-active")?.dataset.workspacePage || "",
+      hasSessionToken: !!sessionStorage.getItem("pf.live.sessionToken.v1"),
+      text: document.body.innerText.slice(0, 1200),
     };
   }).toString()})()`;
 }
@@ -337,14 +347,17 @@ async function readSwitcherState(cdp) {
 }
 
 async function submitChat(cdp, prompt, diagnostics = null) {
-  const beforeHistoryCount = await evaluate(cdp, `(() => {
+  await waitForExpression(cdp, `!!document.querySelector("[data-phantomai-chat-form]")
+    && !document.querySelector("[data-phantombot-os]")?.hasAttribute("data-busy")`, `PhantomBot composer ready for ${prompt}`, 10_000, diagnostics);
+  const beforeHistory = await evaluate(cdp, `(() => {
     const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
     const activeOrg = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId || "";
-    return (state.chatHistory || []).filter((item) => item.ws === activeOrg).length;
+    const history = (state.chatHistory || []).filter((item) => item.ws === activeOrg);
+    return { count: history.length, newestId: history[0]?.id || "" };
   })()`);
   await evaluate(cdp, `(() => {
-    const form = document.querySelector("[data-command-form]");
-    const input = document.querySelector("[data-command-input]");
+    const form = document.querySelector("[data-phantomai-chat-form]");
+    const input = document.querySelector("[data-phantomai-chat-input]");
     if (!form || !input) return false;
     input.value = ${JSON.stringify(prompt)};
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -356,22 +369,30 @@ async function submitChat(cdp, prompt, diagnostics = null) {
     const localSession = JSON.parse(localStorage.getItem("pf.session.v3") || "{}");
     const activeOrg = localSession.orgId || "";
     const history = (state.chatHistory || []).filter((item) => item.ws === activeOrg);
-    const ok = history.length > ${beforeHistoryCount}
+    const taskKey = Object.keys(localStorage).find((key) => key.startsWith("pf.phantombot.tasks.v1::workspace::") && key.endsWith(activeOrg));
+    const taskPayload = JSON.parse((taskKey && localStorage.getItem(taskKey)) || "{}");
+    const activeTask = (taskPayload.tasks || []).find((item) => item.id === taskPayload.activeId) || taskPayload.tasks?.[0];
+    const latestTaskMessage = activeTask?.messages?.at(-1) || null;
+    const latestExchange = [...document.querySelectorAll("[data-phantomai-chat-log] .phantombot-exchange")].at(-1);
+    const ok = (history.length > ${beforeHistory.count} || history[0]?.id !== ${JSON.stringify(beforeHistory.newestId)})
       && history[0]?.prompt === ${JSON.stringify(prompt)}
       && !!history[0]?.reply;
     return {
       ok,
       activeOrg,
       selectedOrg: document.querySelector("[data-org-select]")?.value || "",
-      formBound: document.querySelector("[data-command-form]")?.dataset.bound || "",
-      formBusy: document.querySelector("[data-command-form]")?.getAttribute("aria-busy") || "",
-      inputDisabled: !!document.querySelector("[data-command-input]")?.disabled,
+      formExists: !!document.querySelector("[data-phantomai-chat-form]"),
+      formBusy: document.querySelector("[data-phantombot-os]")?.hasAttribute("data-busy") || false,
+      inputDisabled: !!document.querySelector("[data-phantomai-chat-input]")?.disabled,
       historyCount: history.length,
       newestPrompt: history[0]?.prompt || "",
       newestReply: history[0]?.reply || "",
+      latestTaskMessage: latestTaskMessage ? { q: latestTaskMessage.q, say: latestTaskMessage.say, error: latestTaskMessage.error, pending: latestTaskMessage.pending } : null,
+      latestExchange: latestExchange?.innerText.trim().slice(0, 800) || "",
+      inputValue: document.querySelector("[data-phantomai-chat-input]")?.value || "",
       totalHistory: (state.chatHistory || []).length,
       tokenPresent: !!sessionStorage.getItem("pf.live.sessionToken.v1"),
-      visibleMessages: [...document.querySelectorAll("[data-chat-log] .msg-text")].slice(-3).map((node) => node.textContent.trim()),
+      visibleMessages: [...document.querySelectorAll("[data-phantomai-chat-log] .phantombot-exchange")].slice(-3).map((node) => node.innerText.trim().slice(0, 500)),
     };
   })()`, `persisted chat answer for ${prompt}`, 20_000, diagnostics);
   const persistedReply = await evaluate(cdp, `(() => {
@@ -380,30 +401,28 @@ async function submitChat(cdp, prompt, diagnostics = null) {
     return (state.chatHistory || []).find((item) => item.ws === activeOrg && item.prompt === ${JSON.stringify(prompt)})?.reply || "";
   })()`);
   await waitForExpression(cdp, `(() => {
-    const users = [...document.querySelectorAll("[data-chat-log] .msg-user .msg-text")];
-    const phantoms = [...document.querySelectorAll("[data-chat-log] .msg-phantom:not(.msg-typing) .msg-text")];
-    const normalize = (value) => String(value || "").replace(/\\s+/g, " ").trim();
-    const visiblePrompt = users.at(-1)?.textContent.trim() || "";
-    const visibleReply = normalize(phantoms.at(-1)?.textContent);
+    const normalize = (value) => String(value || "").replace(/^\\s*[-*]\\s+/gm, "").replace(/\\s+/g, " ").replace(/(^|\\s)[-*]\\s+/g, "$1").trim();
+    const exchange = [...document.querySelectorAll("[data-phantomai-chat-log] .phantombot-exchange")].at(-1);
+    const visiblePrompt = exchange?.querySelector(".phantomai-chat-user")?.innerText.trim() || "";
+    const visibleReply = normalize(exchange?.querySelector(".phantomai-chat-reply")?.innerText);
     const persistedReply = normalize(${JSON.stringify(persistedReply)});
     return {
       ok: visiblePrompt === ${JSON.stringify(prompt)}
         && visibleReply === persistedReply
-        && !document.querySelector("[data-chat-log] .msg-typing"),
+        && !exchange?.querySelector(".is-thinking"),
       visiblePrompt,
       visibleReply,
       persistedReply,
-      typing: !!document.querySelector("[data-chat-log] .msg-typing"),
-      phantomRows: phantoms.length,
+      typing: !!exchange?.querySelector(".is-thinking"),
+      phantomRows: document.querySelectorAll("[data-phantomai-chat-log] .phantombot-turn.is-assistant:not(.is-thinking)").length,
     };
   })()`, `visible chat answer for ${prompt}`, 20_000, diagnostics);
+  await waitForExpression(cdp, `!document.querySelector("[data-phantombot-os]")?.hasAttribute("data-busy")`, `PhantomBot settled after ${prompt}`, 10_000, diagnostics);
   return evaluate(cdp, `(() => {
-    const users = [...document.querySelectorAll("[data-chat-log] .msg-user .msg-text")];
-    const phantomRows = [...document.querySelectorAll("[data-chat-log] .msg-phantom:not(.msg-typing)")];
-    const last = phantomRows.at(-1);
+    const last = [...document.querySelectorAll("[data-phantomai-chat-log] .phantombot-exchange")].at(-1);
     return {
-      prompt: users.at(-1)?.textContent.trim() || "",
-      answer: last?.querySelector(".msg-text")?.textContent.trim() || "",
+      prompt: last?.querySelector(".phantomai-chat-user")?.innerText.trim() || "",
+      answer: last?.querySelector(".phantomai-chat-reply")?.innerText.trim() || "",
       cards: last?.querySelectorAll(".rcard").length || 0,
       url: location.href,
     };
@@ -464,6 +483,10 @@ async function openWorkspace(cdp, navId, expected, absent = [], diagnostics = nu
     window.dispatchEvent(new PopStateEvent("popstate"));
     return true;
   })()`);
+  if (navId === "money") {
+    await waitForExpression(cdp, `!!document.querySelector('[data-accounting-tab="overview"]')`, "accounting overview tab", 10_000, diagnostics);
+    await evaluate(cdp, `document.querySelector('[data-accounting-tab="overview"]')?.click()`);
+  }
   await waitForExpression(cdp, `(() => {
     const text = document.querySelector("main")?.innerText || document.body.innerText;
     return text.includes(${JSON.stringify(expected)});
@@ -519,10 +542,20 @@ async function createBusinessFixture(cdp, orgId, marker) {
     },
   });
   assert.equal(asset.status, 200, `${marker} asset must be created.`);
-  return { lead: lead.body, proposal: proposal.body, approval: approval.body, asset: asset.body };
+  const syncedAsset = await browserApi(cdp, "/phantom-ai/content/assets", {
+    method: "POST",
+    body: {
+      tenant_id: orgId,
+      image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      filename: `${marker} Asset.png`,
+    },
+  });
+  assert.equal(syncedAsset.status, 200, `${marker} asset must persist in the current Content Hub store.`);
+  return { lead: lead.body, proposal: proposal.body, approval: approval.body, asset: asset.body, syncedAsset: syncedAsset.body };
 }
 
 async function createAccountingFixture(cdp, marker, diagnostics = null) {
+  const transactionDescription = `${marker} Transaction ${Date.now().toString(36)}`;
   await evaluate(cdp, `document.querySelector('[data-nav-id="money"]')?.click()`);
   await waitForExpression(cdp, `!!document.querySelector("[data-finance-form]")`, "accounting form", 10_000, diagnostics);
   await evaluate(cdp, `(() => {
@@ -533,7 +566,7 @@ async function createAccountingFixture(cdp, marker, diagnostics = null) {
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     };
-    set("description", ${JSON.stringify(`${marker} Transaction`)});
+    set("description", ${JSON.stringify(transactionDescription)});
     set("direction", "income");
     set("amount", ${JSON.stringify(marker === "Aegis" ? "119.01" : "229.02")});
     set("category", "Sales income");
@@ -541,13 +574,14 @@ async function createAccountingFixture(cdp, marker, diagnostics = null) {
     form.requestSubmit();
     return true;
   })()`);
-  await waitForExpression(cdp, `document.querySelector("main")?.innerText.includes(${JSON.stringify(`${marker} Transaction`)})`, `${marker} accounting transaction`, 10_000, diagnostics);
+  await waitForExpression(cdp, `document.querySelector("main")?.innerText.includes(${JSON.stringify(transactionDescription)})`, `${marker} accounting transaction`, 10_000, diagnostics);
   await evaluate(cdp, `document.querySelector('[data-act="connector"][data-id="bank"]')?.click()`);
   await waitForExpression(cdp, `(() => {
     const state = JSON.parse(localStorage.getItem("pf.phantom.v4") || "{}");
     const org = JSON.parse(localStorage.getItem("pf.session.v3") || "{}").orgId;
     return state.finance?.connectors?.some((item) => item.id === "bank" && item.ws === org && item.status === "requested");
   })()`, `${marker} scoped bank connector request`, 10_000, diagnostics);
+  return transactionDescription;
 }
 
 async function businessState(cdp) {
@@ -566,7 +600,7 @@ async function viewportState(cdp, width, height) {
   await cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: width <= 480 });
   await sleep(150);
   return evaluate(cdp, `(() => {
-    const input = document.querySelector("[data-command-input]");
+    const input = document.querySelector("[data-phantomai-chat-input]");
     const rect = input?.getBoundingClientRect();
     return {
       width: innerWidth,
@@ -669,29 +703,32 @@ async function main() {
     const reloadAfterTamper = cdp.waitEvent("Page.loadEventFired", 15_000).catch(() => null);
     await cdp.send("Page.reload", { ignoreCache: true });
     await reloadAfterTamper;
-    await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "dashboard after tamper reload", 15_000, diagnostics);
+    await waitForExpression(cdp, `!!document.querySelector("[data-dashboard-brief-title]")
+      && document.querySelector("[data-org-select]")?.value === "dev-org-phantomforce"`, "dashboard after tamper reload", 15_000, diagnostics);
 
     const aegisFixture = await createBusinessFixture(cdp, "dev-org-phantomforce", "Aegis");
-    await createAccountingFixture(cdp, "Aegis", diagnostics);
+    const aegisTransaction = await createAccountingFixture(cdp, "Aegis", diagnostics);
     await openWorkspace(cdp, "leads", "Aegis Client", ["Beacon Client"], diagnostics);
     await openWorkspace(cdp, "proposals", "Aegis Proposal", ["Beacon Proposal"], diagnostics);
     await openWorkspace(cdp, "approvals", "Aegis Approval", ["Beacon Approval"], diagnostics);
-    await openWorkspace(cdp, "assets", "Aegis Asset", ["Beacon Asset"], diagnostics);
-    await openWorkspace(cdp, "money", "Aegis Transaction", ["Beacon Transaction"], diagnostics);
+    await openWorkspace(cdp, "content", "Aegis Asset", ["Beacon Asset"], diagnostics);
+    await openWorkspace(cdp, "money", aegisTransaction, ["Beacon Transaction"], diagnostics);
     const aegisState = await businessState(cdp);
-    assert.deepEqual(aegisState.transactions, ["Aegis Transaction"], "PhantomForce accounting must contain only its transaction.");
+    assert.equal(aegisState.transactions.filter((item) => item === aegisTransaction).length, 1, "PhantomForce accounting must contain the current run's transaction exactly once.");
+    assert.equal(aegisState.transactions.some((item) => item.startsWith("Beacon Transaction")), false, "PhantomForce accounting must not contain ChicagoShots transactions.");
     assert.equal(aegisState.connectors.some((item) => item.id === "bank" && item.status === "requested"), true, "PhantomForce bank request must be scoped to PhantomForce.");
 
     await switchBrowserOrg(cdp, "dev-org-chicagoshots", diagnostics);
     const beaconFixture = await createBusinessFixture(cdp, "dev-org-chicagoshots", "Beacon");
-    await createAccountingFixture(cdp, "Beacon", diagnostics);
+    const beaconTransaction = await createAccountingFixture(cdp, "Beacon", diagnostics);
     await openWorkspace(cdp, "leads", "Beacon Client", ["Aegis Client"], diagnostics);
     await openWorkspace(cdp, "proposals", "Beacon Proposal", ["Aegis Proposal"], diagnostics);
     await openWorkspace(cdp, "approvals", "Beacon Approval", ["Aegis Approval"], diagnostics);
-    await openWorkspace(cdp, "assets", "Beacon Asset", ["Aegis Asset"], diagnostics);
-    await openWorkspace(cdp, "money", "Beacon Transaction", ["Aegis Transaction"], diagnostics);
+    await openWorkspace(cdp, "content", "Beacon Asset", ["Aegis Asset"], diagnostics);
+    await openWorkspace(cdp, "money", beaconTransaction, [aegisTransaction], diagnostics);
     const beaconState = await businessState(cdp);
-    assert.deepEqual(beaconState.transactions, ["Beacon Transaction"], "ChicagoShots accounting must contain only its transaction.");
+    assert.equal(beaconState.transactions.filter((item) => item === beaconTransaction).length, 1, "ChicagoShots accounting must contain the current run's transaction exactly once.");
+    assert.equal(beaconState.transactions.some((item) => item.startsWith("Aegis Transaction")), false, "ChicagoShots accounting must not contain PhantomForce transactions.");
     assert.equal(beaconState.connectors.some((item) => item.id === "bank" && item.status === "requested"), true, "ChicagoShots bank request must be scoped to ChicagoShots.");
 
     for (const route of [
@@ -710,17 +747,23 @@ async function main() {
     await waitForExpression(cdp, `document.querySelector("[data-org-select]")?.value === "dev-org-chicagoshots"`, "ChicagoShots shell after business reload", 15_000, diagnostics);
     assert.equal((await browserAuthMe(cdp))?.activeOrg?.id, "dev-org-chicagoshots", "active ChicagoShots organization must survive reload.");
     await openWorkspace(cdp, "leads", "Beacon Client", ["Aegis Client"], diagnostics);
-    await openWorkspace(cdp, "money", "Beacon Transaction", ["Aegis Transaction"], diagnostics);
+    await openWorkspace(cdp, "money", beaconTransaction, [aegisTransaction], diagnostics);
 
     await switchBrowserOrg(cdp, "dev-org-phantomforce", diagnostics);
     await openWorkspace(cdp, "leads", "Aegis Client", ["Beacon Client"], diagnostics);
     await openWorkspace(cdp, "proposals", "Aegis Proposal", ["Beacon Proposal"], diagnostics);
     await openWorkspace(cdp, "approvals", "Aegis Approval", ["Beacon Approval"], diagnostics);
-    await openWorkspace(cdp, "assets", "Aegis Asset", ["Beacon Asset"], diagnostics);
-    await openWorkspace(cdp, "money", "Aegis Transaction", ["Beacon Transaction"], diagnostics);
-    await evaluate(cdp, `document.querySelector('[data-nav-id="dashboard"]')?.click()`);
-    await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "PhantomForce dashboard before chat", 10_000, diagnostics);
+    await openWorkspace(cdp, "content", "Aegis Asset", ["Beacon Asset"], diagnostics);
+    await openWorkspace(cdp, "money", aegisTransaction, [beaconTransaction], diagnostics);
+    await evaluate(cdp, `document.querySelector('[data-nav-id="phantomai"]')?.click()`);
+    await waitForExpression(cdp, `!!document.querySelector("[data-phantomai-chat-form]")`, "PhantomForce PhantomBot before chat", 10_000, diagnostics);
     await sleep(1700);
+    const runtimeResponse = await browserApi(cdp, "/phantom-ai/runtime/config");
+    assert.equal(runtimeResponse.status, 200, "PhantomBot must load the authenticated organization's AI runtime selection.");
+    const runtimeConfig = runtimeResponse.body?.config;
+    assert.ok(runtimeConfig?.primary_provider_id, "AI runtime selection must name a primary provider.");
+    const expectedRuntimeModel = runtimeConfig.models?.[runtimeConfig.primary_provider_id];
+    assert.ok(expectedRuntimeModel, "AI runtime selection must name the model for its primary provider.");
 
     const reasoningPrompts = [
       "Compare electric cars and hybrids for a city commuter in four concise bullets.",
@@ -780,10 +823,12 @@ async function main() {
     assert.equal(reasoningRequests.length, 2, "both customer reasoning prompts must reach the authenticated model endpoint.");
     for (const request of reasoningRequests) {
       assert.equal(request.route_tier, "reasoning");
-      assert.equal(request.requested_model, "qwen3:4b");
-      assert.deepEqual(request.allowed_providers, ["local_ollama"]);
-      assert.equal(request.allow_provider_fallback, false);
-      assert.equal(request.max_provider_ms, 12000);
+      assert.equal(request.runtime_config, true);
+      assert.equal(request.runtime_surface, "phantombot");
+      assert.equal(request.requested_model, expectedRuntimeModel);
+      assert.deepEqual(request.allowed_providers, runtimeConfig.allowed_provider_ids);
+      assert.equal(request.allow_provider_fallback, runtimeConfig.fallback_enabled);
+      assert.equal(request.max_provider_ms === null || (Number.isFinite(request.max_provider_ms) && request.max_provider_ms > 0), true);
       assert.equal((request.module_data || []).every((entry) => entry.module === "recent_conversation"), true);
       assert.doesNotMatch(request.business_summary || "", /Business Manager workspace/i);
     }
@@ -795,7 +840,8 @@ async function main() {
     const creativeRequests = chatRequests.filter((request) => creativePrompts.includes(request.user_request || request.message));
     assert.equal(creativeRequests.length, 2, "planning and feedback must both reach the model endpoint.");
     assert.equal(creativeRequests.every((request) => request.route_tier === "reasoning"), true);
-    assert.equal(creativeRequests.every((request) => request.allowed_providers?.length === 1 && request.allowed_providers[0] === "local_ollama"), true);
+    assert.equal(creativeRequests.every((request) => request.requested_model === expectedRuntimeModel), true);
+    assert.equal(creativeRequests.every((request) => JSON.stringify(request.allowed_providers) === JSON.stringify(runtimeConfig.allowed_provider_ids)), true);
     assert.equal(creativeRequests.every((request) => (request.module_data || []).every((entry) => entry.module === "recent_conversation")), true);
 
     const advisoryResults = promptResults.filter((result) => advisoryPrompts.includes(result.prompt));
@@ -806,9 +852,9 @@ async function main() {
     assert.equal(advisoryRequests.length, 2, "both scoped business-advice prompts must reach the model endpoint.");
     for (const request of advisoryRequests) {
       assert.equal(request.route_tier, "advisory");
-      assert.equal(request.requested_model, "qwen3:4b");
-      assert.deepEqual(request.allowed_providers, ["local_ollama"]);
-      assert.equal(request.allow_provider_fallback, false);
+      assert.equal(request.requested_model, expectedRuntimeModel);
+      assert.deepEqual(request.allowed_providers, runtimeConfig.allowed_provider_ids);
+      assert.equal(request.allow_provider_fallback, runtimeConfig.fallback_enabled);
       assert.match(request.business_summary || "", /Business Manager workspace/i);
       const modules = (request.module_data || []).map((entry) => entry.module);
       assert.equal(modules.includes("active_business"), true);
@@ -947,7 +993,7 @@ async function main() {
     assert.match(browserCorrectedConfirmed.answer.trim(), /^Mina, Theo, Omar[.!]?$/i, "person-level corrections must update one member without replacing the set");
     const browserCorrectedExcluded = await submitChat(cdp, "Who did not confirm now? Name only.", diagnostics);
     continuityResults.push(browserCorrectedExcluded);
-    assert.match(browserCorrectedExcluded.answer.trim(), /^Priya[.!]?$/i, "the newest negative correction must replace only Priya's status");
+    assert.match(browserCorrectedExcluded.answer.trim(), /^Priya[.!]?$/i, `the newest negative correction must replace only Priya's status: ${JSON.stringify(browserCorrectedExcluded)}`);
     continuityResults.push(await submitChat(cdp, "The reviewers are Mina, Theo, Priya, and Omar. Only Mina and Priya confirmed.", diagnostics));
     const browserOnlyExcluded = await submitChat(cdp, "Who did not confirm? Names only.", diagnostics);
     continuityResults.push(browserOnlyExcluded);
@@ -981,7 +1027,7 @@ async function main() {
     continuityResults.push(await submitChat(cdp, "Options: 1) email, 2) call, 3) meeting.", diagnostics));
     const browserReorder = await submitChat(cdp, "Move the third before the first. Return the reordered list only.", diagnostics);
     continuityResults.push(browserReorder);
-    assert.deepEqual(browserReorder.answer.split(/\r?\n/).map((item) => item.trim()), ["meeting", "email", "call"], "list reorder must return the actual moved options");
+    assert.deepEqual(browserReorder.answer.split(/\r?\n/).map((item) => item.trim()).filter(Boolean), ["meeting", "email", "call"], "list reorder must return the actual moved options");
     continuityResults.push(await submitChat(cdp, "Mina packed maps and Theo packed snacks.", diagnostics));
     const browserPlural = await submitChat(cdp, "What did they pack? Name each person and item.", diagnostics);
     continuityResults.push(browserPlural);
@@ -1067,7 +1113,8 @@ async function main() {
     const browserRuleCycle = await submitChat(cdp, "What is required before Alpha?", diagnostics);
     continuityResults.push(browserRuleCycle);
     assert.match(browserRuleCycle.answer, /cycle: Alpha > Beta > Alpha/i, "cyclic requirements must clarify the invalid dependency instead of looping or guessing");
-    assert.equal(continuityResults.every((result) => result.cards === 0), true, "long conversation turns must stay in chat without business cards.");
+    const continuityCardLeaks = continuityResults.filter((result) => result.cards !== 0).map((result) => ({ prompt: result.prompt, cards: result.cards }));
+    assert.equal(continuityCardLeaks.length, 0, `long conversation turns must stay in chat without business cards: ${JSON.stringify(continuityCardLeaks)}`);
     assert.equal(continuityResults.some((result) => /ledger|pipeline|actual cash|transaction reader/i.test(result.answer)), false, "long conversation must not leak accounting language.");
 
     const phantomContext = await localContextState(cdp);
@@ -1079,7 +1126,7 @@ async function main() {
 
     const phantomMemoryText = await openMemory(cdp, diagnostics);
     assert.match(phantomMemoryText, /emerald/i, "PhantomForce memory must render in the Memory UI.");
-    assert.match(phantomMemoryText, /(?:navy|white|orange|original title|sensor shut down)/i, "the Memory UI must render recent PhantomForce temporary history while older retained history remains state-verified.");
+    assert.match(phantomMemoryText, /(?:dependency cycle|Alpha requires Beta|legal review|publishing prerequisites)/i, "the Memory UI must render the newest PhantomForce temporary history while older retained history remains state-verified.");
 
     const reloadMemory = cdp.waitEvent("Page.loadEventFired", 15_000).catch(() => null);
     await cdp.send("Page.reload", { ignoreCache: true });
@@ -1095,6 +1142,8 @@ async function main() {
     assert.deepEqual(chicagoInitialContext.memory, [], "ChicagoShots must start without PhantomForce durable memory.");
     assert.deepEqual(chicagoInitialContext.history, [], "ChicagoShots must start without PhantomForce temporary history.");
 
+    await evaluate(cdp, `document.querySelector('[data-nav-id="phantomai"]')?.click()`);
+    await waitForExpression(cdp, `!!document.querySelector("[data-phantomai-chat-form]")`, "ChicagoShots PhantomBot after organization switch", 10_000, diagnostics);
     const chicagoRequestStart = chatRequests.length;
     const chicagoNoContext = await submitChat(cdp, "What temporary code word did I use earlier?", diagnostics);
     assert.doesNotMatch(chicagoNoContext.answer, /comet|emerald/i, "ChicagoShots answer must not reveal PhantomForce context.");
@@ -1129,8 +1178,8 @@ async function main() {
     assert.match(restoredMemoryText, /emerald|comet/i, "restored PhantomForce context must render in the UI.");
     assert.doesNotMatch(restoredMemoryText, /ChicagoShots test color|\blens\b/i, "restored PhantomForce UI must not contain ChicagoShots context.");
 
-    await evaluate(cdp, `document.querySelector('[data-nav-id="dashboard"]')?.click()`);
-    await waitForExpression(cdp, `!!document.querySelector("[data-command-form]")`, "restored dashboard", 10_000, diagnostics);
+    await evaluate(cdp, `document.querySelector('[data-nav-id="phantomai"]')?.click()`);
+    await waitForExpression(cdp, `!!document.querySelector("[data-phantomai-chat-form]")`, "restored PhantomBot", 10_000, diagnostics);
     const restoredRequestStart = chatRequests.length;
     const restoredAnswer = await submitChat(cdp, "Back to Nova: what color is her raincoat? Color only.", diagnostics);
     const restoredRequest = chatRequests.slice(restoredRequestStart).at(-1);

@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: phantomplay-native
+Version: 0.1.0
+Summary: Shared Panda3D runtime for native PhantomPlay games
+Requires-Python: >=3.11
+Requires-Dist: Panda3D==1.10.16

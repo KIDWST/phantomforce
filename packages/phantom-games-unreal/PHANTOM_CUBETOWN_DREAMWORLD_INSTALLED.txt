@@ -1,0 +1,8 @@
+﻿PHANTOM GAMES CUBETOWN DREAMWORLD FULL
+installed=2026-08-12T21:50:17
+backup=C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal\CubetownDreamworldBackups\20260812-215016
+compile_repair=LastBuildTransaction removed; FBuildTransaction undo/redo architecture installed
+cubetown=third-person adventure; crimson dreamworld; regional landmarks; day-night/weather; Creation wheel; friends schedules; non-voxel Build Mode; 50-op undo/redo; persistent builds
+interaction_execution=Legends/Ages/Strike cumulative mechanics retained
+generated_glbs=96
+art=modern CC0 quality gate + corrected-axis generated GLB fallbacks

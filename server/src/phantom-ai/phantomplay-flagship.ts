@@ -19,35 +19,34 @@
 
 import { PHANTOMPLAY_BUILT_IN_GAMES, PHANTOMPLAY_ENGINE, type PhantomPlayGame } from "./phantomplay.js";
 
-// The flagship games are now built and ready to ship. Each entry's
-// launchUrl points at the real on-disk file verified under app/games/.
-// thumbnail points at an original placeholder SVG cover under
-// app/assets/phantomplay/ (a simple on-brand placeholder generated per game
-// rather than referencing a nonexistent asset or borrowing another game's
-// unrelated cover — kingdom-breakers-cover.svg already existed on disk when
-// this entry was added and follows the same pattern as the other four).
+const UNREAL_ENGINE_LABEL = "Unreal Engine 5.8";
+const unrealPlayerUrl = (gameId: string) => `/app/games/native/${gameId}?engine=unreal&version=5.8`;
+
+// The flagship games are now native Unreal entries. launchUrl intentionally
+// names the native player route so the catalog does not imply an obsolete web
+// fallback for the Unreal-owned games.
 export const PHANTOMPLAY_FLAGSHIP_GAMES: PhantomPlayGame[] = [
   {
     id: "cubetown",
     title: "CubeTown",
-    summary: "Build a cozy blocky town with quests, fishing, cooking, night fireflies, and Spark.",
-    description: "A cozy single-tile town-builder: gather Grain, Shale, and Loom from the map, place and rotate 13 kinds of build pieces on a snap grid, cook dishes at a hearth to restore your Spark meter, fish a timing minigame for Driftfish, and watch the town breathe with a day/night cycle, glowing dusk fireflies, and a gentle generative soundscape — wind, birdsong, crickets, and music-box notes that follow the time of day. Three residents (Miro, Tally, and Bo) each have one quest that unlocks new cosmetics once completed. A private \"Together\" room lets a group gather, fish, cook, and visit residents side by side — only the room host's placements become the shared town; everyone else's builds stay local previews so nothing gets overwritten.",
+    summary: "Unreal Engine 5.8 native voxel adventure: mine, build, learn echoes, restore shrines, and fight the Rift Guardian.",
+    description: "The Unreal-native Cubetown player is the current canonical build: a voxel island adventure inspired by Echoes of Wisdom and Minecraft, with mining, block placement, learned Echo companions, Wisdom Shrines, combat, waves, and a guardian finale. PhantomPlay still preserves web and other engine compatibility for unrelated uploads.",
     category: "Creative",
-    tags: ["building", "life-sim", "cozy", "farming", "multiplayer", "touch"],
+    tags: ["unreal", "native", "building", "voxel", "adventure", "echoes", "touch"],
     contentRating: "everyone",
     contentDescriptors: ["no_reading_required"],
     multiplayerDescriptor: "Together: cross-network relay rooms, host-authoritative shared building, guest placements stay local previews",
     chatDescriptor: "No player chat or voice — only fixed, pre-written resident dialogue",
     developer: "Tak",
     kind: "built_in",
-    launchUrl: "/app/games/cubetown/index.html?v=1.3.0",
+    launchUrl: unrealPlayerUrl("cubetown"),
     thumbnail: "/app/assets/phantomplay/cubetown-cover.svg?v=1.0.0",
     featured: true,
-    version: "1.3.0",
-    controls: "WASD/arrow keys or tap an adjacent tile to move. Space/E to gather, fish, cook, sleep, or talk. B opens Build, Escape cancels/closes panels. Touch devices get an on-screen D-pad.",
+    version: "5.8.0-unreal",
+    controls: "Native Unreal player. WASD moves, mouse aims, E mines/interacts, Q places blocks, Shift dashes, Space uses Echo power, 1/2/3 choose block slots.",
     progressSupport: true,
     scoreSupport: true,
-    engine: { tier: "sandbox-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
+    engine: { tier: UNREAL_ENGINE_LABEL, minVersion: PHANTOMPLAY_ENGINE.version },
   },
   {
     id: "skyguard-arena",
@@ -175,26 +174,70 @@ export const PHANTOMPLAY_FLAGSHIP_GAMES: PhantomPlayGame[] = [
     engine: { tier: "creative-sim", minVersion: PHANTOMPLAY_ENGINE.version },
   },
   {
-    id: "phantom-strike",
-    title: "Phantom Strike",
-    summary: "First-person combat with full mouse-look, sprint/jump/crouch, ADS, reloads, bots, four military maps, a DMR, and real local split-screen.",
-    description: "A network-silent first-person shooter with real vertical aim (shots respect where you point, including over cover), sprint, jump, crouch, aim-down-sights, ammo and reloads, low sandbag cover that protects crouching fighters, four 24x24 military maps with buildings, containers, the new Neon Bazaar lane maze, medkit and ammo field pickups that bots also contest, four primary weapon builds, three bot difficulty tiers, layered synthesized combat audio with positional enemy fire, a rotating minimap, compass, killfeed, Solo Ops against a labeled four-bot squad, and genuine same-device 1v1 split-screen.",
-    category: "Arcade",
-    tags: ["fps", "shooter", "first-person", "bots", "multiplayer", "split-screen"],
-    contentRating: "teen",
-    contentDescriptors: ["intense_action", "competitive_play"],
-    multiplayerDescriptor: "Local 1v1 is real same-device split-screen. Solo Ops uses clearly labeled bots. No public matchmaking or external networking.",
+    id: "phantom-ages",
+    title: "Phantom Ages",
+    summary: "Unreal Engine 5.8 native fixed-lane age battler with troop upgrades, siege counters, faster AI, and readable formations.",
+    description: "The canonical Phantom Ages build is now the packaged Unreal-native lane war game. It stays simple and readable like Age of War, but the native player owns the modern battlefield, literal troop upgrade paths, multi-rank ranged firing, siege units, catapult tower pressure, springald anti-siege logic, tower shots, speed controls, economy pressure, and era progression.",
+    category: "Strategy",
+    tags: ["unreal", "native", "strategy", "age-of-war", "lane-battle", "siege", "upgrades"],
+    contentRating: "everyone10",
+    contentDescriptors: ["cartoon_action", "competitive_play", "strategic_complexity"],
+    multiplayerDescriptor: "Single-player native strategy battle. No public matchmaking, chat, voice, or external networking.",
     chatDescriptor: "No player chat or voice",
     developer: "Tak",
     kind: "built_in",
-    launchUrl: "/app/games/phantom-strike.html?v=2.2.0",
-    thumbnail: "/app/assets/phantomplay/phantom-strike-cover.svg?v=1.0.0",
+    launchUrl: unrealPlayerUrl("phantom-ages"),
+    thumbnail: "/app/assets/phantomplay/phantom-ages-cover.svg?v=1.0.0",
     featured: true,
-    version: "2.2.0",
-    controls: "P1: click to lock the mouse - full look including up/down, WASD moves, Shift sprints, Space jumps, Ctrl/C crouches, left mouse fires, right mouse aims down sights, R reloads (F fires without the mouse, Q/E turn). Gamepad: sticks move/look, RT fire, LT ADS, A jump, B crouch, X reload, L3 sprint. P2 (split-screen): arrows turn/move, comma/period strafe, M jumps, Enter or slash fires, or a second gamepad.",
+    version: "5.8.0-unreal",
+    controls: "Native Unreal player. 1-5 deploy units, Q/W/E/R/T/Y buy research, A advances age, Space triggers tower volley, F1/F2/F3 set game speed.",
     progressSupport: true,
     scoreSupport: true,
-    engine: { tier: "raycast-fps", minVersion: PHANTOMPLAY_ENGINE.version },
+    engine: { tier: UNREAL_ENGINE_LABEL, minVersion: PHANTOMPLAY_ENGINE.version },
+  },
+  {
+    id: "phantom-strike",
+    title: "Phantom Strike",
+    summary: "Unreal Engine 5.8 native tactical FPS with rifle handling, enemy squads, waves, extraction, HUD, and a neon command complex.",
+    description: "The canonical Phantom Strike build is now the packaged Unreal-native player: modern tactical first-person movement, automatic rifle handling, aiming, recoil, reloads, headshots, hit markers, scoring, health and armor, enemy archetypes, escalating waves, extraction, and procedural near-future combat spaces.",
+    category: "Arcade",
+    tags: ["unreal", "native", "fps", "shooter", "first-person", "bots", "tactical"],
+    contentRating: "teen",
+    contentDescriptors: ["intense_action", "competitive_play"],
+    multiplayerDescriptor: "Solo Ops uses labeled enemy squads. No public matchmaking, local multiplayer, chat, voice, or external networking.",
+    chatDescriptor: "No player chat or voice",
+    developer: "Tak",
+    kind: "built_in",
+    launchUrl: unrealPlayerUrl("phantom-strike"),
+    thumbnail: "/app/assets/phantomplay/phantom-strike-cover.svg?v=1.0.0",
+    featured: true,
+    version: "5.8.0-unreal",
+    controls: "Native Unreal player. Mouse looks, WASD moves, Shift sprints, Space jumps, left mouse fires, right mouse aims, R reloads.",
+    progressSupport: true,
+    scoreSupport: true,
+    engine: { tier: UNREAL_ENGINE_LABEL, minVersion: PHANTOMPLAY_ENGINE.version },
+  },
+  {
+    id: "phantom-legends",
+    title: "Phantom Legends",
+    summary: "Unreal Engine 5.8 native fantasy RTS and persistent base builder with workers, armies, towers, raids, resources, and saves.",
+    description: "A distinct Unreal-native strategy game, separate from Phantom Ages: command workers, harvest Gold/Wood/Stone/Shards, build a stronghold, raise defenses, train guards, rangers, brutes, survive Rift raids, upgrade your base, break the Rift Gate, and keep campaign progress between sessions.",
+    category: "Strategy",
+    tags: ["unreal", "native", "rts", "base-builder", "fantasy", "economy", "armies"],
+    contentRating: "everyone10",
+    contentDescriptors: ["fantasy_conflict", "strategic_complexity", "competitive_play"],
+    multiplayerDescriptor: "Single-player native RTS campaign foundation. No public matchmaking, chat, voice, or external networking.",
+    chatDescriptor: "No player chat or voice",
+    developer: "Tak",
+    kind: "built_in",
+    launchUrl: unrealPlayerUrl("phantom-legends"),
+    thumbnail: "/app/assets/phantomplay/phantom-legends-cover.svg?v=1.0.0",
+    featured: true,
+    version: "5.8.0-unreal",
+    controls: "Native Unreal player. WASD pans camera, left mouse selects squads, right mouse attacks, gathers, or moves, Tab selects army, 1 workers, 2 guards, 3 towers, 4 rangers, 5 brutes, U upgrades.",
+    progressSupport: true,
+    scoreSupport: true,
+    engine: { tier: UNREAL_ENGINE_LABEL, minVersion: PHANTOMPLAY_ENGINE.version },
   },
 ];
 
@@ -203,6 +246,11 @@ export function registerPhantomPlayFlagshipGames() {
   if (gamesRegistered) return;
   gamesRegistered = true;
   for (const game of PHANTOMPLAY_FLAGSHIP_GAMES) {
-    if (!PHANTOMPLAY_BUILT_IN_GAMES.some((item) => item.id === game.id)) PHANTOMPLAY_BUILT_IN_GAMES.push(game);
+    const existingIndex = PHANTOMPLAY_BUILT_IN_GAMES.findIndex((item) => item.id === game.id);
+    if (existingIndex >= 0) {
+      PHANTOMPLAY_BUILT_IN_GAMES[existingIndex] = game;
+    } else {
+      PHANTOMPLAY_BUILT_IN_GAMES.push(game);
+    }
   }
 }

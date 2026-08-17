@@ -1,0 +1,11 @@
+﻿PHANTOM GAMES ASSET OVERHAUL V5
+installed=2026-08-13T11:15:54
+backup=C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal\AssetOverhaulV5Backups\20260813-111552
+core=required Kenney + KayKit creator-first CC0 library; optional Quaternius variety
+fab=already-imported owned Fab/Quixel/Marketplace assets scanned and promoted into stable aliases
+runtime=game directors visibly reference per-game curated assets; authored external materials preserved
+gate=packaging refuses to continue when required curated meshes are missing
+strike=recovered original rifle/city assets remain primary; external industrial/city art is secondary/high-fidelity dressing
+sky=UE 5.8 USkyAtmosphereComponent hotfix included
+bundled_fallback_glbs=127
+visual_targets=4

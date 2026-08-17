@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "policy": "detect/use only if already owned/imported or free; never auto-purchase",
+  "updated": "2026-08-13",
+  "cubetown": [
+    {"name":"Stylized Fantasy Village - Emerald Haven","keywords":["emerald","haven","stylized","fantasy","village"]},
+    {"name":"STYLIZED Fantasy Village - Low Poly 3D Art","keywords":["stylized","fantasy","village","lowpoly"]}
+  ],
+  "phantom_legends": [
+    {"name":"Medieval Castle Village Environment Megapack","keywords":["medieval","castle","village","megapack"]},
+    {"name":"Toony Tiny RTS Set","keywords":["toony","tiny","rts"]},
+    {"name":"Toon RTS Environment - Humans","keywords":["toon","rts","humans"]},
+    {"name":"Low-Poly Medieval Environment Pack","keywords":["medieval","environment","lowpoly"]}
+  ],
+  "phantom_strike": [
+    {"name":"Modular Military Operation Urban Training Environment","keywords":["military","urban","mout","training"]},
+    {"name":"WW2 Warzone Environment Megapack","keywords":["warzone","urban","rubble","debris"]},
+    {"name":"Military Base Megapack","keywords":["military","base","industrial"]}
+  ],
+  "phantom_ages": [
+    {"name":"Medieval Castle Village Environment Megapack","keywords":["medieval","castle","tower","wall"]},
+    {"name":"Siege of Ponthus","keywords":["siege","medieval","castle"]}
+  ]
+}

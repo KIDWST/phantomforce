@@ -1,0 +1,10 @@
+﻿PHANTOM GAMES EMERGENCY VISUAL RECOVERY
+installed=2026-08-13T00:47:25
+backup=C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal\EmergencyVisualRecoveryBackups\20260813-004723
+ages=36000x11000cm fixed full-battlefield camera; 96-unit cap; opening armies; titan/dragon/siege spectacle; no camera navigation
+cubetown=96000x96000cm dense magical dreamworld; dense Heartstone opening; crimson trees; 8 life-sim quick-build prefabs; 25/50/100cm snaps
+strike=48000x36000cm Blackridge Coast; 144 cover rhythm + 84 micro-cover + 96 street props; stronger enemy waves; first-contact target 8-15s
+legends=409600x409600cm premium RTS; 49-cell world density grid; populated capitals; 32m-120m camera envelope; up to 300 player population architecture
+ui=sharp responsive live-world title shell; motion blur and DOF disabled
+generated_glbs=127
+visual_targets=4

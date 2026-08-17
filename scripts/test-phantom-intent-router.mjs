@@ -240,34 +240,32 @@ globalThis.fetch = async (url, init) => {
 const instantQuestion = await handleSmartCommand("what's your favorite food?");
 assert.equal(instantQuestion.say, "I'd pick tacos.");
 assert.equal(capturedChatBody.route_tier, "instant");
-assert.equal(capturedChatBody.requested_model, "phantom-v1:latest");
+assert.equal(capturedChatBody.requested_model, "local-auto", "the request must honor the currently selected local model instead of hardcoding a Phantom alias");
 assert.equal(capturedChatBody.admin_model, "local_ollama");
-assert.deepEqual(capturedChatBody.allowed_providers, ["local_ollama"]);
-assert.equal(capturedChatBody.allow_provider_fallback, false);
+assert.deepEqual(capturedChatBody.allowed_providers, ["local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"], "the request must carry the configured user-selectable provider set");
+assert.equal(capturedChatBody.allow_provider_fallback, true);
 assert.ok(capturedChatBody.max_provider_ms <= 4500, "instant questions should cap one provider attempt tightly");
 globalThis.fetch = originalFetch;
 
 let liveChatBody = null;
 globalThis.fetch = async (url, init) => {
-  assert.match(String(url), /\/phantom-ai\/respond$/, "live weather questions should use the protected Phantom response endpoint");
+  assert.match(String(url), /\/phantom-ai\/chat$/, "live weather questions should use the authenticated Phantom chat endpoint");
   liveChatBody = JSON.parse(init.body);
   return {
     ok: true,
     json: async () => ({
       ok: true,
-      answer: "New York, NY: 72°F, partly cloudy.",
-      effort: "instant",
+      message: { role: "assistant", content: "New York, NY: 72°F, partly cloudy." },
+      hermes: { route_tier: "instant" },
     }),
   };
 };
 const liveWeather = await handleSmartCommand("tell me the weather in nyc");
 globalThis.fetch = originalFetch;
 assert.equal(liveWeather.say, "New York, NY: 72°F, partly cloudy.");
-assert.equal(liveChatBody.mode, "instant", "typed-location weather should use ChatGPT instant mode");
-assert.equal(liveChatBody.effort, "instant", "the bridge should receive the selected effort");
-assert.equal(liveChatBody.caller, "phantombot");
-assert.equal("provider" in liveChatBody, false, "provider identity must remain behind the server curtain");
-assert.equal("requested_model" in liveChatBody, false, "model identity must remain behind the server curtain");
+assert.equal(liveChatBody.route_tier, "instant", "typed-location weather should use the instant lane");
+assert.equal(liveChatBody.runtime_config, true, "live questions must honor the organization's saved AI runtime");
+assert.equal(liveChatBody.requested_model, "local-auto", "the organization's selected model must remain canonical");
 
 assert.equal(classifyPhantomIntent("why does rain happen?").needsLiveData, false, "stable rain science must not require a live lookup");
 assert.equal(classifyPhantomIntent("write a haiku about rain").needsLiveData, false, "creative rain writing must not require a live lookup");
@@ -335,27 +333,26 @@ assert.match(store.state.memory[0].summary, /brand color is green/i);
 
 let broadChatBody = null;
 globalThis.fetch = async (url, init) => {
-  assert.match(String(url), /\/phantom-ai\/respond$/, "broad thinking requests should use the protected Phantom response endpoint");
+  assert.match(String(url), /\/phantom-ai\/chat$/, "broad thinking requests should use the authenticated Phantom chat endpoint");
   broadChatBody = JSON.parse(init.body);
   return {
     ok: true,
     json: async () => ({
       ok: true,
-      answer: "Model-backed answer with a useful plan.",
-      effort: "deep",
+      message: { role: "assistant", content: "Model-backed answer with a useful plan." },
+      hermes: { route_tier: "reasoning" },
     }),
   };
 };
 const broadThought = await handleSmartCommand("help me think through a school growth strategy for PhantomPlay");
 globalThis.fetch = originalFetch;
 assert.equal(broadThought.say, "Model-backed answer with a useful plan.");
-assert.equal(broadChatBody.mode, "strategy", "action-free strategy should use the reasoning lane");
-assert.equal(broadChatBody.effort, "deep", "action-free strategy should use ChatGPT deep effort");
-assert.equal("provider" in broadChatBody, false, "provider identity must stay behind the server curtain");
-assert.equal("requested_model" in broadChatBody, false, "model identity must stay behind the server curtain");
+assert.equal(broadChatBody.route_tier, "reasoning", "action-free strategy should use the reasoning lane");
+assert.equal(broadChatBody.runtime_config, true, "reasoning must use the organization's saved AI runtime");
+assert.equal(broadChatBody.requested_model, "local-auto", "reasoning must carry the selected model instead of a hidden fixed provider");
 
 globalThis.fetch = async (url, init) => {
-  assert.match(String(url), /\/phantom-ai\/respond$/, "provider failures should still prove the backend was attempted");
+  assert.match(String(url), /\/phantom-ai\/chat$/, "provider failures should still prove the backend was attempted");
   broadChatBody = JSON.parse(init.body);
   return {
     ok: false,
@@ -479,7 +476,7 @@ assert.ok(VACATION_POLICY.allowDrafting && VACATION_POLICY.allowTaskCreation && 
 assert.ok(VACATION_POLICY.maxRunMinutes <= 480, "runs are time-bounded");
 assert.ok(Array.isArray(store.state.vacationRuns), "vacationRuns state exists");
 
-assert.match(mainSrc, /Tell Phantom to create a task/i, "mission map should include the task creation keeper copy");
+assert.match(commandSrc, /Say 'create a task for this'/i, "task candidates should keep an explicit task-creation path without creating records automatically");
 assert.match(mainSrc, /data-map-prompt/i, "mission map should load task prompts into chat");
 assert.match(indexSrc, /data-map-open type="button">Open operations map/i, "right rail operations map button should open the map overlay");
 assert.doesNotMatch(indexSrc, /data-open-ws="dashboard">View business map/i, "right rail mission map button should not navigate to an empty dashboard route");

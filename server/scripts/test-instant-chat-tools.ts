@@ -140,13 +140,13 @@ assert.deepEqual(
   }]),
   { output_text: "I have 2 people and 3 choices. Which choice belongs to Theo?", tool_id: "phantom-clarifier" },
 );
-assert.equal(
+assert.deepEqual(
   buildInstantChatToolReply("What did they pack? Name each person and item.", [
     { user: "Mina and Theo chose tea, coffee, and juice, respectively.", assistant: "The lists do not pair evenly." },
     { user: "Mina packed maps and Theo packed snacks.", assistant: "Mina packed maps; Theo packed snacks." },
   ]),
-  null,
-  "an older unequal mapping must not hijack an unrelated plural follow-up",
+  { output_text: "Mina: maps\nTheo: snacks", tool_id: "phantom-reference-resolver" },
+  "the newest named-item statement must resolve directly instead of letting an older unequal mapping hijack it",
 );
 assert.equal(
   buildInstantChatToolReply("How many more laps did Theo log than Mina? Number and unit only.", [

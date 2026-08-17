@@ -1,0 +1,30 @@
+PHANTOM GAMES GAMEPLAY-FIRST V6 // STATIC/OFFLINE VALIDATION
+
+PASS=20
+FAIL=0
+payload_files_before_report=226
+glb_count=127
+authored_strike_uasset_count=51
+
+PASS: Python tool syntax -- 5 files
+PASS: Payload JSON parse -- 2 files
+PASS: C++ structural delimiter audit -- 12 files
+PASS: UE own-header-first audit -- 4 directors
+PASS: PowerShell structural audit -- 7 files
+PASS: Required markers base -- 5
+PASS: Required markers ages -- 3
+PASS: Required markers cube -- 3
+PASS: Required markers legends -- 4
+PASS: Required markers strike -- 3
+PASS: Required markers build -- 6
+PASS: Required markers acquire -- 5
+PASS: Required markers capture -- 5
+PASS: Required markers unity -- 5
+PASS: Forbidden absent: obsolete SkyAtmosphere include
+PASS: Forbidden absent: old multi-resolution build invocation
+PASS: Forbidden absent: known UE5.8 RemoveAt bool regression
+PASS: Bundled generated GLB safety net -- 127
+PASS: Recovered authored Strike UAssets -- 51
+PASS: Stale phase docs removed
+
+LIMITATION: This container cannot run the user's Windows UE 5.8.1 installation. The installer performs the authoritative Unreal compile/import/cook/package and four packaged gameplay capture gates on the user machine.

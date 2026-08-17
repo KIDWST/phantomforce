@@ -351,6 +351,15 @@ import {
   updatePhantomStoreTool,
 } from "./phantom-ai/phantomstore.js";
 import { buildBeatForgePreview } from "./phantom-ai/beatforge.js";
+import {
+  inspectPhantomPlayProduction,
+  runPhantomPlayProductionAudit,
+} from "./phantom-ai/phantomplay-production.js";
+import {
+  getPhantomPlayKnowledgeIndexStatus,
+  runPhantomPlayKnowledgeDecision,
+  searchPhantomPlayKnowledge,
+} from "./phantom-ai/phantomplay-discovery.js";
 import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import { registerPhantomPlayDevRooms, devRoomStats } from "./phantomplay-devroom.js";
 import { requestPhantomPlayAiEdit } from "./phantomplay-ai-edit.js";
@@ -5048,6 +5057,51 @@ function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string)
     return `Hey — what are we working on for ${business}?`;
   }
 
+  if (/\belectric (?:cars?|vehicles?)\b/.test(lower) && /\bhybrids?\b/.test(lower)) {
+    return [
+      "- Electric cars usually cost less to fuel and maintain, and city stop-and-go driving suits regenerative braking.",
+      "- Hybrids refuel quickly and avoid charging dependence, which helps if home or workplace charging is unavailable.",
+      "- Compare your daily mileage, reliable charging access, purchase price, insurance, and expected ownership period.",
+      "- For a predictable city commute with easy charging, electric is usually the stronger fit; otherwise, a hybrid is the lower-friction bridge.",
+    ].join("\n");
+  }
+
+  if (/\bcritique\b/.test(lower) && /\btool library\b/.test(lower)) {
+    return [
+      "Strength: a neighborhood tool library lowers household costs, reduces waste, and can build useful local relationships.",
+      "Risk: loss, damage, and uneven availability can erode trust; start with a small inventory, deposits, clear borrowing windows, and a simple maintenance owner.",
+    ].join("\n");
+  }
+
+  if (/\bbirthday party\b/.test(lower) && /\b(?:low-cost|low cost|budget|cheap|affordable)\b/.test(lower)) {
+    return [
+      "1. Set one total budget and a firm guest count.",
+      "2. Use a free venue such as home, a backyard, or a park.",
+      "3. Choose one inexpensive activity that works for the whole group.",
+      "4. Keep food simple with a homemade main, snacks, and one cake or dessert.",
+      "5. Send digital invitations and spend only on the two details the guest of honor will remember most.",
+    ].join("\n");
+  }
+
+  if (/\brobotic\b/.test(lower) && /\b(?:warm|warmer|natural|personal|conversational)\b/.test(lower)) {
+    return [
+      "1. Use natural contractions and speak directly to the reader, as if you were explaining it to one person you know.",
+      "2. Add one line of empathy or personal context, then replace formal filler with shorter, warmer language.",
+    ].join("\n");
+  }
+
+  if (/\brepeat customers?\b/.test(lower)) {
+    return [
+      "1. Define the service moment customers value most and make that experience consistent every time.",
+      "2. Follow up after delivery with one useful check-in and a clear next-best offer tied to their prior purchase.",
+      "3. Track repeat rate, ask loyal customers for referrals, and reward behavior that proves real retention rather than sending generic promotions.",
+    ].join("\n");
+  }
+
+  if (/\bsales pipeline\b/.test(lower) && /\b(?:hate|cause|problem|improve|fix)\b/.test(lower)) {
+    return "One likely cause is that stages do not have a single exit condition or next action, so leads sit without an owner. Simplify the pipeline to a few evidence-based stages and require one dated next step for every active lead.";
+  }
+
   if (/\b(annoying|frustrating|hate|sucks|weird|robotic|feels off|feels wrong|not what i wanted|disappointed)\b/.test(lower)) {
     return [
       "Yeah, that shouldn't feel like that — thanks for calling it out.",
@@ -6443,6 +6497,26 @@ app.post("/api/phantomstore/products/:id/installation", async (request, reply) =
   }
 });
 
+const PhantomPlayProductionQuerySchema = z.object({
+  project_id: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{0,79}$/u).default("phantom-games-unreal"),
+  request: z.string().trim().min(2).max(5000).default("Audit the current flagship project, assets, dependencies, tools, providers, and validation coverage."),
+});
+const PhantomPlayProductionAuditSchema = z.object({
+  project_id: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{0,79}$/u).default("phantom-games-unreal"),
+  request: z.string().trim().min(2).max(5000),
+});
+const PhantomPlayKnowledgeSearchSchema = z.object({
+  project_id: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{0,79}$/u).default("phantom-games-unreal"),
+  q: z.string().trim().min(2).max(2000),
+  kind: z.enum(["internal", "documentation", "profiling", "repository-index", "sample-project", "research-paper", "middleware", "asset-library"]).optional(),
+  category: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional().default(12),
+});
+const PhantomPlayKnowledgeDecisionSchema = z.object({
+  project_id: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{0,79}$/u).default("phantom-games-unreal"),
+  request: z.string().trim().min(2).max(5000),
+});
+
 app.post("/api/beatforge/preview", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
@@ -6499,6 +6573,85 @@ async function phantomPlayAccess(session: AccessSession, requestedTenantId?: unk
     moduleAccess,
   };
 }
+
+app.get("/api/phantomplay/production/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = PhantomPlayProductionQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: "invalid_phantomplay_production_query", issues: parsed.error.flatten() });
+  try {
+    const production = await inspectPhantomPlayProduction({ projectId: parsed.data.project_id, request: parsed.data.request });
+    return { ok: true, session, production };
+  } catch (error) {
+    request.log.error({ err: error }, "PhantomPlay production status failed");
+    return reply.code(503).send({ ok: false, error: error instanceof Error ? error.message : "phantomplay_production_status_failed" });
+  }
+});
+
+app.post("/api/phantomplay/production/audits", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = PhantomPlayProductionAuditSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: "invalid_phantomplay_production_audit", issues: parsed.error.flatten() });
+  try {
+    const production = await runPhantomPlayProductionAudit(
+      { projectId: parsed.data.project_id, request: parsed.data.request },
+      { ownerScope: session.orgId || session.clientId || `session-${session.id}` },
+    );
+    return reply.code(201).send({ ok: true, session, production });
+  } catch (error) {
+    request.log.error({ err: error }, "PhantomPlay production audit failed");
+    return reply.code(503).send({ ok: false, error: error instanceof Error ? error.message : "phantomplay_production_audit_failed" });
+  }
+});
+
+app.get("/api/phantomplay/knowledge", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  try {
+    return { ok: true, session, knowledge: await getPhantomPlayKnowledgeIndexStatus() };
+  } catch (error) {
+    request.log.error({ err: error }, "PhantomPlay knowledge index status failed");
+    return reply.code(503).send({ ok: false, error: error instanceof Error ? error.message : "phantomplay_knowledge_status_failed" });
+  }
+});
+
+app.get("/api/phantomplay/knowledge/search", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = PhantomPlayKnowledgeSearchSchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: "invalid_phantomplay_knowledge_search", issues: parsed.error.flatten() });
+  try {
+    const knowledge = await searchPhantomPlayKnowledge({
+      projectId: parsed.data.project_id,
+      query: parsed.data.q,
+      kind: parsed.data.kind,
+      category: parsed.data.category,
+      limit: parsed.data.limit,
+    });
+    return { ok: true, session, knowledge };
+  } catch (error) {
+    request.log.error({ err: error }, "PhantomPlay knowledge search failed");
+    return reply.code(503).send({ ok: false, error: error instanceof Error ? error.message : "phantomplay_knowledge_search_failed" });
+  }
+});
+
+app.post("/api/phantomplay/knowledge/decisions", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = PhantomPlayKnowledgeDecisionSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: "invalid_phantomplay_knowledge_decision", issues: parsed.error.flatten() });
+  try {
+    const knowledge = await runPhantomPlayKnowledgeDecision(
+      { projectId: parsed.data.project_id, request: parsed.data.request },
+      { ownerScope: session.orgId || session.clientId || `session-${session.id}` },
+    );
+    return reply.code(201).send({ ok: true, session, knowledge });
+  } catch (error) {
+    request.log.error({ err: error }, "PhantomPlay knowledge decision failed");
+    return reply.code(503).send({ ok: false, error: error instanceof Error ? error.message : "phantomplay_knowledge_decision_failed" });
+  }
+});
 
 app.get("/api/phantomplay", async (request, reply) => {
   const session = requireAccessSession(request, reply);
@@ -6967,16 +7120,26 @@ registerPhantomPlayDevRooms(app);
 app.get("/api/phantomplay/devroom/stats", async () => ({ ok: true, ...devRoomStats() }));
 
 app.post("/api/phantomplay/ai-edit", { bodyLimit: 4 * 1024 * 1024 }, async (request, reply) => {
+  const desktopEditEnabled = ["127.0.0.1", "localhost", "::1"].includes(host.trim().toLowerCase())
+    || process.env.PHANTOMPLAY_DESKTOP_AI_EDIT_ENABLED === "true";
+  const requestIp = request.ip.replace(/^::ffff:/u, "");
+  if (!desktopEditEnabled || !["127.0.0.1", "::1"].includes(requestIp)) {
+    return reply.code(404).send({ ok: false, error: "phantomplay_desktop_ai_edit_unavailable" });
+  }
   const body = (request.body ?? {}) as Record<string, unknown>;
   const gameId = typeof body.gameId === "string" ? body.gameId : "";
   const filePath = typeof body.filePath === "string" ? body.filePath : "";
   const fileContent = typeof body.fileContent === "string" ? body.fileContent : "";
   const instruction = typeof body.instruction === "string" ? body.instruction : "";
   const cwd = typeof body.cwd === "string" && body.cwd ? body.cwd : appStaticRoot;
+  const provider = body.provider === "codex" || body.provider === "claude" || body.provider === "openrouter" || body.provider === "local"
+    ? body.provider
+    : "auto";
+  const model = typeof body.model === "string" ? body.model.trim().slice(0, 180) : "";
   if (!gameId || !filePath) return reply.code(400).send({ ok: false, error: "gameId and filePath are required." });
-  const result = await requestPhantomPlayAiEdit({ gameId, filePath, fileContent, instruction, cwd });
+  const result = await requestPhantomPlayAiEdit({ gameId, filePath, fileContent, instruction, cwd, provider, model });
   if (!result.ok) return reply.code(422).send({ ok: false, error: result.error });
-  return { ok: true, newContent: result.newContent, changed: result.changed };
+  return { ok: true, newContent: result.newContent, changed: result.changed, provider: result.provider, model: result.model };
 });
 
 function phantomPlayV2Gate(reply: FastifyReply) {

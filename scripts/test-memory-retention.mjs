@@ -58,6 +58,8 @@ rememberConversation({ prompt: "why do we have 0 active workers", reply: technic
 assert.equal(store.state.memory.length, 0, "failed conversation must not become durable memory");
 assert.equal(store.state.chatHistory.length, 1, "non-trivial question may remain in temporary history");
 assert.equal(store.state.chatHistory[0].reply, "Request failed before a usable answer was produced.");
+assert.equal(recentChatTurns()[0]?.user, "why do we have 0 active workers", "a failed provider reply must not discard the user's temporary context turn");
+assert.equal(recentChatTurns()[0]?.assistant, "No usable assistant answer was produced for this turn.", "failed provider details must be replaced with a truthful neutral context marker");
 
 rememberConversation({ prompt: "Remember that workers must report real activity", reply: "Got it." });
 assert.equal(store.state.memory.length, 1, "explicit durable instruction should become memory");

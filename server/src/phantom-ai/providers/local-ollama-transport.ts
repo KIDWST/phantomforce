@@ -161,6 +161,11 @@ function resolveBaseUrl(
     : normalizeBaseUrl(env.OLLAMA_BASE_URL);
 }
 
+function boundedInteger(value: string | undefined, fallback: number, min: number, max: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.trunc(parsed))) : fallback;
+}
+
 function resolveKeepAlive(
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,
   conversationMode: boolean,
@@ -512,8 +517,17 @@ export async function callLocalOllamaChat(
     options: {
       temperature: conversationMode ? 0.3 : 0.35,
       think: false,
-      num_ctx: conversationMode ? 8192 : 32768,
-      num_predict: input.maxTokens ?? (conversationMode ? 320 : 4096),
+      num_ctx: boundedInteger(
+        env.PHANTOM_OLLAMA_NUM_CTX,
+        conversationMode ? 8192 : 32768,
+        2048,
+        131072,
+      ),
+      num_thread: boundedInteger(env.PHANTOM_OLLAMA_NUM_THREAD, 4, 1, 8),
+      num_predict: Math.min(
+        input.maxTokens ?? (conversationMode ? 320 : 4096),
+        input.adminOperatorLane ? 32_768 : conversationMode ? 512 : 8192,
+      ),
     },
     messages: [
       {

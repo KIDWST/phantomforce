@@ -15,6 +15,10 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
+import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
+import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
+
 const MAX_FILE_CHARS = 220_000; // generous headroom over the largest current game.js
 const MAX_INSTRUCTION_CHARS = 4000;
 const DEFAULT_WINDOWS_CLAUDE_PS1 = "C:\\Users\\jorda\\AppData\\Local\\hermes\\node\\claude.ps1";
@@ -27,12 +31,23 @@ export type PhantomPlayAiEditInput = {
   fileContent: string;
   instruction: string;
   cwd: string;
+  provider?: PhantomPlayAiProvider;
+  model?: string;
   timeoutMs?: number;
 };
 
+export type PhantomPlayAiProvider = "auto" | "codex" | "claude" | "openrouter" | "local";
+
 export type PhantomPlayAiEditResult =
-  | { ok: true; newContent: string; changed: boolean; raw: string }
+  | { ok: true; newContent: string; changed: boolean; provider: Exclude<PhantomPlayAiProvider, "auto">; model: string; raw: string }
   | { ok: false; error: string };
+
+export type PhantomPlayAiEditProviderCall = (
+  provider: Exclude<PhantomPlayAiProvider, "auto">,
+  prompt: string,
+  input: PhantomPlayAiEditInput,
+  timeout: number,
+) => Promise<{ raw: string; provider: Exclude<PhantomPlayAiProvider, "auto">; model: string }>;
 
 function resolveClaudeCliCommand(env: NodeJS.ProcessEnv) {
   const configured = env.PHANTOM_CLAUDE_CLI_COMMAND?.trim();
@@ -83,13 +98,115 @@ function extractFile(raw: string): string | null {
   return raw.slice(start + BEGIN.length, end).replace(/^\r?\n/, "").replace(/\r?\n$/, "");
 }
 
-export async function requestPhantomPlayAiEdit(input: PhantomPlayAiEditInput): Promise<PhantomPlayAiEditResult> {
+function normalizedProvider(value: unknown): PhantomPlayAiProvider {
+  return value === "codex" || value === "claude" || value === "openrouter" || value === "local" ? value : "auto";
+}
+
+function normalizedModel(value: unknown) {
+  return typeof value === "string" ? value.trim().slice(0, 180) : "";
+}
+
+async function callEditProvider(
+  provider: Exclude<PhantomPlayAiProvider, "auto">,
+  prompt: string,
+  input: PhantomPlayAiEditInput,
+  timeout: number,
+): Promise<{ raw: string; provider: Exclude<PhantomPlayAiProvider, "auto">; model: string }> {
+  const model = normalizedModel(input.model);
+  const requestId = `phantomplay-edit-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  if (provider === "claude") {
+    const claudeCommand = resolveClaudeCliCommand(process.env);
+    const modelArgs = model && model !== "auto" ? ["--model", model] : [];
+    const result = await runClaudeCliProcess(
+      claudeCommand.command,
+      [...claudeCommand.argsPrefix, ...modelArgs, "-p", prompt],
+      resolve(input.cwd),
+      timeout,
+    );
+    const raw = result.stdout || result.stderr || "";
+    if ((result.code ?? 0) !== 0 && !raw.includes(BEGIN)) {
+      throw new Error(`Claude exited with ${result.code}: ${(result.stderr || "no output").slice(0, 500)}`);
+    }
+    return { raw, provider, model: model || "claude-cli" };
+  }
+
+  if (provider === "codex") {
+    const result = await callCodexCliChat({
+      requestId,
+      businessName: "PhantomPlay",
+      taskType: "single-file game code edit",
+      userMessage: prompt,
+      compactContext: "Return the complete revised file only inside the exact PhantomPlay file markers supplied by the request.",
+      approvalRequired: false,
+      executionMode: "auto",
+      cwd: input.cwd,
+      maxTokens: 32_768,
+    }, {
+      env: {
+        ...process.env,
+        PHANTOM_CODEX_MODEL: model && model !== "auto" ? model : process.env.PHANTOM_CODEX_MODEL,
+        PHANTOM_CODEX_SANDBOX: "read-only",
+        PHANTOM_CODEX_TIMEOUT_MS: String(timeout),
+      },
+    });
+    if (result.status !== "called") throw new Error(result.error_message || "Codex is unavailable.");
+    return { raw: result.output_text, provider, model: result.model_id };
+  }
+
+  if (provider === "openrouter") {
+    const result = await callOpenRouterGlm52({
+      requestId,
+      businessName: "PhantomPlay",
+      taskType: "single-file game code edit",
+      userMessage: prompt,
+      compactContext: "Return the complete revised file only inside the exact PhantomPlay file markers supplied by the request.",
+      sensitivityLevel: "low",
+      approvalRequired: false,
+      executionMode: "auto",
+      maxTokens: 32_768,
+      adminOperatorLane: true,
+    }, {
+      env: {
+        ...process.env,
+        OPENROUTER_MODEL: model && model !== "auto" ? model : process.env.OPENROUTER_MODEL,
+      },
+    });
+    if (result.status !== "called") throw new Error(result.blocked_reason || result.error_message || "OpenRouter is unavailable.");
+    return { raw: result.output_text, provider, model: model || result.model_id };
+  }
+
+  const result = await callLocalOllamaChat({
+    requestId,
+    businessName: "PhantomPlay",
+    taskType: "single-file game code edit",
+    userMessage: prompt,
+    compactContext: "Return the complete revised file only inside the exact PhantomPlay file markers supplied by the request.",
+    sensitivityLevel: "low",
+    approvalRequired: false,
+    executionMode: "auto",
+    maxTokens: 32_768,
+    adminOperatorLane: true,
+  }, {
+    env: {
+      ...process.env,
+      PHANTOM_OLLAMA_MODEL: model && model !== "auto" ? model : process.env.PHANTOM_OLLAMA_MODEL,
+      PHANTOM_OLLAMA_TIMEOUT_MS: String(timeout),
+    },
+  });
+  if (result.status !== "called") throw new Error(result.blocked_reason || result.error_message || "The local model is unavailable.");
+  return { raw: result.output_text, provider, model: result.model_id };
+}
+
+export async function requestPhantomPlayAiEdit(
+  input: PhantomPlayAiEditInput,
+  options: { callProvider?: PhantomPlayAiEditProviderCall } = {},
+): Promise<PhantomPlayAiEditResult> {
   if (!input.instruction.trim()) return { ok: false, error: "An instruction is required." };
   if (input.fileContent.length > MAX_FILE_CHARS) {
     return { ok: false, error: `File is too large for the AI panel (${input.fileContent.length} chars, max ${MAX_FILE_CHARS}). Edit it directly.` };
   }
 
-  const claudeCommand = resolveClaudeCliCommand(process.env);
   const cwd = resolve(input.cwd);
   const timeout = Math.min(Math.max(input.timeoutMs ?? 120000, 10000), 240000);
 
@@ -114,20 +231,37 @@ export async function requestPhantomPlayAiEdit(input: PhantomPlayAiEditInput): P
     END,
   ].join("\n");
 
-  try {
-    const result = await runClaudeCliProcess(claudeCommand.command, [...claudeCommand.argsPrefix, "-p", prompt], cwd, timeout);
-    const raw = result.stdout || result.stderr || "";
-    if ((result.code ?? 0) !== 0 && !raw.includes(BEGIN)) {
-      return { ok: false, error: `Claude CLI exited with ${result.code}: ${(result.stderr || "no output").slice(0, 500)}` };
+  const selectedProvider = normalizedProvider(input.provider);
+  const providers: Array<Exclude<PhantomPlayAiProvider, "auto">> = selectedProvider === "auto"
+    ? ["codex", "claude", "local", "openrouter"]
+    : [selectedProvider];
+  const failures: string[] = [];
+  const providerCall = options.callProvider ?? callEditProvider;
+  for (const provider of providers) {
+    try {
+      const result = await providerCall(provider, prompt, { ...input, cwd }, timeout);
+      const newContent = extractFile(result.raw);
+      if (newContent === null) {
+        throw new Error("The model response did not include the required complete-file markers.");
+      }
+      return {
+        ok: true,
+        newContent,
+        changed: newContent !== input.fileContent,
+        provider: result.provider,
+        model: result.model,
+        raw: result.raw.slice(0, 2000),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const notFound = /ENOENT/i.test(message) || /not recognized/i.test(message) || /not found/i.test(message);
+      failures.push(`${provider}: ${notFound ? "provider command is not available" : message}`);
     }
-    const newContent = extractFile(raw);
-    if (newContent === null) {
-      return { ok: false, error: "AI response didn't include a recognizable file block. Nothing was changed." };
-    }
-    return { ok: true, newContent, changed: newContent !== input.fileContent, raw: raw.slice(0, 2000) };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const notFound = /ENOENT/i.test(message) || /not recognized/i.test(message) || /not found/i.test(message);
-    return { ok: false, error: notFound ? `Claude CLI ("${claudeCommand.display}") isn't available to the backend process.` : message };
   }
+  return {
+    ok: false,
+    error: selectedProvider === "auto"
+      ? `No selected AI route completed the edit. ${failures.join(" ")}`
+      : `${selectedProvider} could not complete the edit. ${failures.join(" ")}`,
+  };
 }

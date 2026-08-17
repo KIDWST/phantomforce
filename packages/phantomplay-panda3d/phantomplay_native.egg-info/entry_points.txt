@@ -1,0 +1,2 @@
+[console_scripts]
+phantomplay-native = phantomplay_native.__main__:main

@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.1",
+  "providers": [
+    {
+      "id": "local-filesystem",
+      "display_name": "Local Project Filesystem",
+      "probe": "filesystem",
+      "capabilities": ["registry", "audit_artifacts", "creative_bible", "asset_inventory"]
+    },
+    {
+      "id": "phantomplay-runtime-adapters",
+      "display_name": "PhantomPlay Multi-Engine Runtime Adapters",
+      "probe": "evidence_paths",
+      "capabilities": ["web_runtime", "godot_runtime", "unity_runtime", "panda3d_runtime", "unreal_runtime", "native_executable_runtime"],
+      "evidence_paths": [
+        "packages/phantomplay-dioxus-shell/src/main.rs",
+        "packages/phantomplay-dioxus-shell/src/studio.rs"
+      ]
+    },
+    {
+      "id": "unreal-project",
+      "display_name": "PhantomPlay Unreal Flagship Project",
+      "probe": "evidence_paths",
+      "capabilities": ["unreal_project"],
+      "evidence_paths": [
+        "packages/phantom-games-unreal/PhantomGames.uproject",
+        "packages/phantom-games-unreal/Source/PhantomGames/PhantomGames.Build.cs"
+      ]
+    },
+    {
+      "id": "unreal-editor",
+      "display_name": "Unreal Editor",
+      "probe": "unreal_editor",
+      "capabilities": ["unreal_compile", "unreal_play", "unreal_build", "unreal_capture", "unreal_profile"]
+    },
+    {
+      "id": "unity-project",
+      "display_name": "PhantomPlay Unity Compatibility Project",
+      "probe": "evidence_paths",
+      "capabilities": ["unity_project"],
+      "evidence_paths": [
+        "packages/phantom-games-unity/ProjectSettings/ProjectVersion.txt",
+        "packages/phantom-games-unity/Packages/manifest.json"
+      ]
+    },
+    {
+      "id": "unity-editor",
+      "display_name": "Unity Editor",
+      "probe": "unity_editor",
+      "capabilities": ["unity_compile", "unity_playmode", "unity_build", "unity_capture"]
+    },
+    {
+      "id": "knowledge-index",
+      "display_name": "PhantomPlay Curated Multi-Engine Knowledge Index",
+      "probe": "evidence_paths",
+      "capabilities": ["knowledge_search", "official_engine_sources", "sample_index", "repository_scoring", "research_decisions"],
+      "evidence_paths": [
+        "docs/phantomplay-production/knowledge-sources.json",
+        "server/src/phantom-ai/phantomplay-discovery.ts"
+      ]
+    },
+    {
+      "id": "phantomflow",
+      "display_name": "PhantomFlow Local Engine",
+      "probe": "phantomflow",
+      "capabilities": ["music_generation", "music_variations", "music_stems"]
+    }
+  ]
+}

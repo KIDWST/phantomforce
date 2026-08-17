@@ -22,25 +22,17 @@
     (gamesIdx !== -1 ? pathParts[gamesIdx + 1] : pathParts[0]) ||
     (document.title || "unknown-game").toLowerCase().replace(/\s+/g, "-");
   var STORAGE_KEY = "phantomplay_mods_" + gameId;
+  var nativeHost = document.documentElement.getAttribute("data-pm-native") === "true";
+  var bootstrap = window.__PHANTOMPLAY_MOD_BOOTSTRAP__ || {};
+  var singleFileGame = /\.html$/i.test(pathParts[0] || "");
+  var modBase = bootstrap.modBase || (singleFileGame
+    ? "/shared/mods/" + encodeURIComponent(gameId) + "/"
+    : "/" + encodeURIComponent(gameId) + "/mods/");
+  var modStateUrl = "/__pm_mods/" + encodeURIComponent(gameId);
 
   var registry = new Map(); // id -> mod
-  var hasStoredPrefs = localStorage.getItem(STORAGE_KEY) !== null;
-  var activeIds = new Set(loadEnabled());
+  var activeIds = new Set();
   var liveInstances = new Map(); // id -> return value of apply(), passed to remove()
-
-  // First-ever launch for this game: seed from the native shell's quick-load
-  // Mods menu selection (app/games/<id>/mods/.enabled.json) if present. Once
-  // localStorage has anything saved, it's the source of truth (in-game F10
-  // edits win from then on).
-  if (!hasStoredPrefs) {
-    fetch("./mods/.enabled.json").then(function (r) { return r.ok ? r.json() : []; }).then(function (ids) {
-      (Array.isArray(ids) ? ids : []).forEach(function (id) {
-        activeIds.add(id);
-        if (registry.has(id)) enable(id, true); // already registered before this resolved
-      });
-      saveEnabled();
-    }).catch(function () {});
-  }
 
   function loadEnabled() {
     try {
@@ -54,6 +46,24 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(activeIds)));
     } catch (e) {}
+  }
+  function persistEnabled() {
+    saveEnabled();
+    if (!nativeHost) return Promise.resolve();
+    return new Promise(function (resolve) {
+      var safeIds = Array.from(activeIds).filter(function (id) { return /^[a-zA-Z0-9_-]+$/.test(id); });
+      var beacon = document.createElement("script");
+      beacon.async = true;
+      beacon.src = "/__pm_mods_write/" + encodeURIComponent(gameId) + "/" + safeIds.join(",") + "?ts=" + Date.now();
+      beacon.onload = function () { beacon.remove(); resolve(); };
+      beacon.onerror = function () {
+        beacon.remove();
+        console.error("[PhantomMods] could not persist native mod state");
+        toast("Mod is live, but desktop persistence failed");
+        resolve();
+      };
+      document.head.appendChild(beacon);
+    });
   }
 
   function toast(text) {
@@ -69,17 +79,44 @@
 
   var frameCallbacks = [];
   var rafPatched = false;
+  var timeScale = 1;
   function ensureRafHook() {
     if (rafPatched) return;
     rafPatched = true;
     var nativeRaf = window.requestAnimationFrame.bind(window);
+    var nativeTime = null;
+    var gameTime = null;
     window.requestAnimationFrame = function (cb) {
       return nativeRaf(function (t) {
+        if (nativeTime === null) { nativeTime = t; gameTime = t; }
+        gameTime += Math.max(0, t - nativeTime) * timeScale;
+        nativeTime = t;
         for (var i = 0; i < frameCallbacks.length; i++) {
-          try { frameCallbacks[i](t); } catch (e) {}
+          try { frameCallbacks[i](gameTime); } catch (e) {}
         }
-        cb(t);
+        cb(gameTime);
       });
+    };
+  }
+
+  var devFlagClaims = new Map();
+  function claimDevFlag(owner, name, value) {
+    var dev = window.PhantomPlayDev;
+    if (!dev || typeof dev.setFlag !== "function") throw new Error("This game does not expose the " + name + " developer capability");
+    var bucket = devFlagClaims.get(name);
+    if (!bucket) {
+      bucket = { base: typeof dev.getFlag === "function" ? dev.getFlag(name) : false, claims: new Map() };
+      devFlagClaims.set(name, bucket);
+    }
+    bucket.claims.set(owner, value);
+    dev.setFlag(name, value);
+    return function () {
+      var current = devFlagClaims.get(name);
+      if (!current) return;
+      current.claims.delete(owner);
+      var remaining = Array.from(current.claims.values());
+      dev.setFlag(name, remaining.length ? remaining[remaining.length - 1] : current.base);
+      if (!remaining.length) devFlagClaims.delete(name);
     };
   }
 
@@ -87,7 +124,10 @@
     game: window,
     gameId: gameId,
     toast: toast,
+    dev: window.PhantomPlayDev || null,
+    claimDevFlag: claimDevFlag,
     onFrame: function (cb) { ensureRafHook(); frameCallbacks.push(cb); return function () { frameCallbacks = frameCallbacks.filter(function (f) { return f !== cb; }); }; },
+    setTimeScale: function (scale) { ensureRafHook(); timeScale = Math.max(0.05, Number(scale) || 1); },
     canvas: function () { return document.querySelector("canvas"); },
   };
 
@@ -95,7 +135,7 @@
     register: function (mod) {
       if (!mod || !mod.id || typeof mod.apply !== "function") return;
       registry.set(mod.id, mod);
-      if (activeIds.has(mod.id)) enable(mod.id, true);
+      if (activeIds.has(mod.id)) enable(mod.id, true, true);
       renderMenu();
     },
     list: function () { return Array.from(registry.values()).map(function (m) { return { id: m.id, name: m.name, desc: m.desc, category: m.category || "game", active: activeIds.has(m.id) }; }); },
@@ -104,20 +144,20 @@
     disable: disable,
   });
 
-  function enable(id, silent) {
+  function enable(id, silent, skipPersist) {
     var mod = registry.get(id);
     if (!mod || liveInstances.has(id)) return;
     try {
       liveInstances.set(id, mod.apply(ctx) || true);
       activeIds.add(id);
-      saveEnabled();
+      if (!skipPersist) persistEnabled();
       if (!silent) toast("Mod ON: " + (mod.name || id));
       renderMenu();
     } catch (e) {
       console.error("[PhantomMods] failed to enable", id, e);
     }
   }
-  function disable(id) {
+  function disable(id, silent, skipPersist) {
     var mod = registry.get(id);
     if (!mod) return;
     try {
@@ -125,25 +165,20 @@
     } catch (e) {}
     liveInstances.delete(id);
     activeIds.delete(id);
-    saveEnabled();
-    toast("Mod off: " + (mod.name || id));
+    if (!skipPersist) persistEnabled();
+    if (!silent) toast("Mod off: " + (mod.name || id));
     renderMenu();
   }
   function toggle(id) { (activeIds.has(id) ? disable : enable)(id); }
 
   // ---- universal mods: work on every game, no cooperation required -------
   PM.register({
-    id: "universal_slowmo", name: "Slow Motion", desc: "Halves effective frame rate.", category: "universal",
+    id: "universal_slowmo", name: "Slow Motion", desc: "Runs game time at 35% speed.", category: "universal",
     apply: function (c) {
-      var skip = false;
-      return c.onFrame(function () {
-        skip = !skip;
-        // relies on rAF hook order: a real slow-mo needs per-game cooperation
-        // to scale delta-time; this baseline drops every other visual frame,
-        // which reads as slow-mo for most of these games' simple loops.
-      });
+      c.setTimeScale(0.35);
+      return true;
     },
-    remove: function (c, unsub) { if (typeof unsub === "function") unsub(); },
+    remove: function (c) { c.setTimeScale(1); },
   });
   PM.register({
     id: "universal_crt", name: "CRT Filter", desc: "Retro scanline + vignette look.", category: "universal",
@@ -170,8 +205,9 @@
   });
   PM.register({
     id: "universal_mute", name: "Mute Audio", desc: "Suspends all Web Audio output.", category: "universal",
-    apply: function () {
+    apply: function (c) {
       var suspended = [];
+      if (c.dev && typeof c.dev.setAudioMuted === "function") c.dev.setAudioMuted(true);
       var NativeCtx = window.AudioContext || window.webkitAudioContext;
       if (!NativeCtx) return null;
       var PatchedCtx = new Proxy(NativeCtx, {
@@ -188,6 +224,7 @@
       return { NativeCtx: NativeCtx, suspended: suspended };
     },
     remove: function (c, state) {
+      if (c.dev && typeof c.dev.setAudioMuted === "function") c.dev.setAudioMuted(false);
       if (!state) return;
       window.AudioContext = state.NativeCtx;
       window.webkitAudioContext = state.NativeCtx;
@@ -208,54 +245,63 @@
     remove: function (c, state) { if (state) state.cv.style.transform = state.prev; },
   });
 
-  // ---- F10 quick-load mod menu (separate from Dev Mode) -------------------
-  var menuEl = null;
-  function toggleMenu() {
-    if (menuEl) { menuEl.remove(); menuEl = null; return; }
-    buildMenu();
-  }
-  function buildMenu() {
-    menuEl = document.createElement("div");
-    menuEl.id = "pm-mod-menu";
-    menuEl.style.cssText = "position:fixed;top:16px;right:16px;width:260px;max-height:80vh;overflow:auto;" +
-      "background:rgba(8,7,14,0.95);border:1px solid rgba(143,233,255,0.35);border-radius:10px;" +
-      "font:12px monospace;color:#eaf2ff;z-index:2147483647;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,0.5);";
-    document.body.appendChild(menuEl);
-    renderMenu();
-  }
-  function renderMenu() {
-    if (!menuEl) return;
-    var items = PM.list();
-    var byCategory = {};
-    items.forEach(function (m) { (byCategory[m.category] = byCategory[m.category] || []).push(m); });
-    var html = '<div style="font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between;">' +
-      '<span>MODS — ' + gameId + '</span><span style="opacity:.5;">F10</span></div>';
-    if (!items.length) html += '<div style="opacity:.6;">No mods available for this game yet.</div>';
-    Object.keys(byCategory).forEach(function (cat) {
-      html += '<div style="opacity:.6;text-transform:uppercase;margin:8px 0 4px;font-size:10px;">' + cat + '</div>';
-      byCategory[cat].forEach(function (m) {
-        html += '<label style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;cursor:pointer;">' +
-          '<input type="checkbox" data-pm-toggle="' + m.id + '" ' + (m.active ? "checked" : "") + ' style="margin-top:2px;">' +
-          '<span><b>' + m.name + '</b><br><span style="opacity:.65;">' + (m.desc || "") + '</span></span></label>';
-      });
-    });
-    menuEl.innerHTML = html;
-    menuEl.querySelectorAll("[data-pm-toggle]").forEach(function (input) {
-      input.addEventListener("change", function () { toggle(input.getAttribute("data-pm-toggle")); });
-    });
-  }
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "F10") { e.preventDefault(); toggleMenu(); }
-  });
+  // PhantomPlay Desktop owns the visible mod controls. The injected runtime
+  // only applies the state selected in the shell and never covers the game
+  // with a second in-game menu.
+  function renderMenu() {}
 
-  // ---- load per-game mods (best-effort; 404s are expected for games that
-  // don't have a mods/ folder yet) -----------------------------------------
-  fetch("./mods/manifest.json").then(function (r) { return r.ok ? r.json() : []; }).then(function (list) {
-    (Array.isArray(list) ? list : []).forEach(function (entry) {
-      var s = document.createElement("script");
-      s.src = "./mods/" + entry.file;
-      s.async = true;
-      document.body.appendChild(s);
+  function readHostState() {
+    if (nativeHost && Array.isArray(bootstrap.enabled)) {
+      activeIds = new Set(bootstrap.enabled);
+      saveEnabled();
+      return Promise.resolve();
+    }
+    var source = nativeHost ? modStateUrl : modBase + ".enabled.json";
+    return fetch(source, { cache: "no-store" }).then(function (response) {
+      if (!response.ok) throw new Error("mod state read failed: " + response.status);
+      return response.json();
+    }).catch(function () {
+      return loadEnabled();
+    }).then(function (ids) {
+      activeIds = new Set(Array.isArray(ids) ? ids : []);
+      saveEnabled();
     });
-  }).catch(function () {});
+  }
+
+  function loadProjectMods() {
+    function loadEntries(list) {
+        return Promise.all((Array.isArray(list) ? list : []).map(function (entry) {
+          return new Promise(function (resolve) {
+            var s = document.createElement("script");
+            s.src = modBase + entry.file;
+            s.async = true;
+            s.onload = resolve;
+            s.onerror = function () {
+              console.error("[PhantomMods] failed to load", s.src);
+              resolve();
+            };
+            document.body.appendChild(s);
+          });
+        }));
+    }
+    if (nativeHost && Array.isArray(bootstrap.mods)) return loadEntries(bootstrap.mods);
+    return fetch(modBase + "manifest.json", { cache: "no-store" })
+      .then(function (response) { return response.ok ? response.json() : []; })
+      .then(loadEntries).catch(function (error) {
+        console.error("[PhantomMods] manifest load failed", error);
+      });
+  }
+
+  // The native endpoint is authoritative for the desktop Mods tab. Waiting
+  // for state and scripts removes the old startup race where checked mods
+  // could register before the shell selection arrived and never apply.
+  Promise.all([readHostState(), loadProjectMods()]).then(function () {
+    registry.forEach(function (_mod, id) {
+      if (activeIds.has(id)) enable(id, true, true);
+    });
+    renderMenu();
+    window.dispatchEvent(new CustomEvent("phantommods:ready", {
+      detail: { gameId: gameId, active: Array.from(activeIds), available: PM.list() },
+    }));
+  });
 })();

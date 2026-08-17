@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "project_id": "phantom-games-unreal",
+  "engine": "Unreal Engine 5.8.1",
+  "assets": [
+    {
+      "id": "phantom-strike-keyart",
+      "kind": "key_art",
+      "path": "SourceArt/KeyArt/phantom-strike-keyart.png",
+      "source": "PhantomForce internal",
+      "source_url": "",
+      "license": "PhantomForce internal",
+      "commercial_use": true,
+      "ownership": "internal",
+      "license_evidence": [],
+      "license_token": ""
+    },
+    {
+      "id": "phantom-ages-keyart",
+      "kind": "key_art",
+      "path": "SourceArt/KeyArt/phantom-ages-keyart.png",
+      "source": "PhantomForce internal image generation guided by owner-supplied Phantom Ages reference",
+      "source_url": "",
+      "license": "PhantomForce internal",
+      "commercial_use": true,
+      "ownership": "internal",
+      "license_evidence": [],
+      "license_token": ""
+    },
+    {
+      "id": "phantom-legends-keyart",
+      "kind": "key_art",
+      "path": "SourceArt/KeyArt/phantom-legends-keyart.png",
+      "source": "PhantomForce internal",
+      "source_url": "",
+      "license": "PhantomForce internal",
+      "commercial_use": true,
+      "ownership": "internal",
+      "license_evidence": [],
+      "license_token": ""
+    },
+    {
+      "id": "quaternius-strike-kit-unreal",
+      "kind": "model_collection",
+      "path": "Content/Phantom/Strike",
+      "source": "Quaternius",
+      "source_url": "https://quaternius.com/",
+      "license": "CC0-1.0",
+      "commercial_use": true,
+      "ownership": "external",
+      "license_evidence": [
+        "packages/phantom-games-unity/Assets/Resources/Models/Quaternius/Strike/License_Guns.txt",
+        "packages/phantom-games-unity/Assets/Resources/Models/Quaternius/Strike/License_Streets.txt"
+      ],
+      "license_token": "CC0 1.0"
+    }
+  ],
+  "migration_sources": [
+    {
+      "registry": "phantom-games-unity.json",
+      "purpose": "license evidence and source-model migration only",
+      "runtime_allowed": false
+    }
+  ]
+}

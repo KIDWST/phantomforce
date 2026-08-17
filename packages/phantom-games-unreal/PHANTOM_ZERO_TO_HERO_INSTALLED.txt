@@ -1,0 +1,4 @@
+﻿PHANTOM GAMES ZERO TO HERO
+installed=2026-08-12T17:54:29
+backup=C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal\ZeroToHeroBackups\20260812-175429
+mechanics=RTS selection/orders; Ages XP/click deck; Cubetown lock-on/combo/stamina; Strike dual weapon

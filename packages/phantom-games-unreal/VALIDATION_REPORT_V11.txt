@@ -1,0 +1,59 @@
+PHANTOM GAMES // PRODUCTION REBOOT V11 // OFFLINE PACKAGE VALIDATION
+===================================================================
+
+This report validates what can actually be checked outside the user's local UE 5.8 installation.
+It does NOT claim UnrealBuildTool, UnrealEditor import, BuildCookRun or the final Windows render ran here.
+
+LATEST OFFLINE VALIDATION
+-------------------------
+PASS: 9 Python pipeline tools compile.
+PASS: 2 JSON configuration files parse.
+PASS: all changed C++/header files pass comment/string-aware delimiter validation.
+PASS: Unreal own-header-first checks pass for all changed .cpp files.
+PASS: 10 PowerShell scripts pass quote/comment-aware structural delimiter validation.
+PASS: obsolete Engine/SkyAtmosphere.h include absent.
+PASS: illegal Ages GetCapsuleComponent()-> regression absent.
+PASS: 279 bundled deterministic support GLBs have valid glTF 2.0 headers and load as geometry.
+PASS: 319,312 total faces were parsed across the 279 bundled GLBs.
+PASS: 51 recovered original PhantomStrike .uasset files remain bundled.
+PASS: all 4 user-supplied V10.1 rejected gameplay frames are bundled as anti-regression evidence.
+
+REJECTED V10.1 SCREENSHOT REGRESSION TEST
+-----------------------------------------
+The exact four user-supplied V10.1 gameplay screenshots were tested with the V11 frame-gate algorithm.
+Result: 4/4 REJECTED.
+
+CubeTown rejected: full/lower local-detail occupancy far below V11 thresholds.
+Phantom Ages rejected: full/lower local-detail occupancy below V11 thresholds.
+Phantom Legends rejected: dominant flat-color field, low edge density, extremely low local detail.
+PhantomStrike rejected: nearly-black frame, low variance, dominant black field, low edge/local detail.
+
+The supplied visual-target images clear the same gate with large margin. This metric gate is only a minimum anti-prototype filter; human approval remains mandatory before any live promotion.
+
+V11 SOURCE/PACKAGE CONTRACTS
+----------------------------
+- Production character importer probes both FBX and glTF creator variants and only counts a character when Unreal produces a real SkeletalMesh.
+- Character gate requires >=6 production SkeletalMeshes, >=18 mapped animation aliases and >=4 characters with at least 3 imported AnimSequences.
+- Stable production aliases exist for Knight/Rogue/Barbarian and Skeleton variants.
+- Poly Haven production-material acquisition/import pipeline exists for 7 PBR surface roles.
+- Persistent editor-time world builder requires real imported primary architecture/vegetation/fortifications; generated support art cannot satisfy those primary slots.
+- Persistent world validator blocks Engine BasicShape actors, under-density near the real opening camera/spawn, blocked Strike insertion space and giant non-terrain outliers.
+- DefaultGame.ini explicitly cooks all four persistent worlds.
+- PhantomStrike lighting is materially brighter than the rejected V10.1 near-black mood.
+- CubeTown hero and common enemies prefer production SkeletalMeshes + animation aliases.
+- Phantom Ages humanoids prefer production SkeletalMeshes while preserving the fixed-screen contract.
+- Phantom Legends ordinary units prefer production SkeletalMeshes while preserving the RTS simulation.
+- Candidate workflow captures exactly one 1920x1080 gameplay frame per game.
+- The four live PhantomPlay builds cannot be replaced unless the human types exact PROMOTE after the four candidate screenshots are opened.
+- Unity safety baseline builder executes the original Unity flagship build methods only in an isolated clone and never auto-replaces Unreal/live outputs.
+
+LOCAL AUTHORITATIVE TEST STILL REQUIRED
+---------------------------------------
+The user's H:\UE_5.8 installation remains authoritative for:
+- UnrealHeaderTool / UnrealBuildTool compilation
+- actual creator FBX/glTF skeletal import and animation extraction behavior
+- Poly Haven texture import/material compilation
+- persistent .umap creation and imported-asset resolution
+- BuildCookRun for all four Win64 targets
+- packaged-game launch and gameplay capture
+- final human visual approval

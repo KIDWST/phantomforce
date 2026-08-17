@@ -41,8 +41,15 @@ try {
   assert(initial.engine?.distributedRuntime?.cloudStreamingFromJordan === false, "Distributed runtime must not imply Jordan-hosted cloud game streaming.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
   assert(builtInIds.size === initial.catalog.length, "Built-in game IDs should not duplicate after catalog registration.");
-  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "phantom-rumble", "sudoku-signal", "cubetown", "skyguard-arena", "crown-circuit", "phantom-dash", "phantom-cube", "tidefront-tactics", "kingdom-breakers", "cipher-keep"]) {
+  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "phantom-rumble", "sudoku-signal", "cubetown", "phantom-ages", "phantom-legends", "phantom-strike", "skyguard-arena", "crown-circuit", "phantom-dash", "phantom-cube", "tidefront-tactics", "kingdom-breakers", "cipher-keep"]) {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
+  }
+  for (const unrealId of ["cubetown", "phantom-ages", "phantom-legends", "phantom-strike"]) {
+    const game = initial.catalog.find((item) => item.id === unrealId);
+    assert(game, `${unrealId} should be available in PhantomPlay.`);
+    assert(game.launchUrl.includes(`/app/games/native/${unrealId}`), `${unrealId} should launch through the native Unreal route.`);
+    assert(game.tags.includes("unreal"), `${unrealId} should visibly advertise Unreal in the catalog.`);
+    assert(game.engine?.tier === "Unreal Engine 5.8", `${unrealId} should expose the Unreal Engine 5.8 catalog tier.`);
   }
   const kidsOnlyIds = ["signal-match", "focus-stack", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "sudoku-signal", "neon-drift", "phantom-dash", "word-weld", "phantom-cube", "tidefront-tactics", "kingdom-breakers"];
   for (const gameId of kidsOnlyIds) {

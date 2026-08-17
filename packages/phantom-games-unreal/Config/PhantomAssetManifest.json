@@ -1,0 +1,186 @@
+{
+  "schema": "phantom-production-rescue-v10",
+  "policy": {
+    "official_workflow_only": true,
+    "allowed": [
+      "free listings",
+      "already-owned listings",
+      "already-entitled Quixel/Fab assets"
+    ],
+    "forbidden": [
+      "credential export",
+      "cookie/token scraping",
+      "protected CDN scraping",
+      "automatic paid purchases"
+    ],
+    "fab_quixel_url": "https://www.fab.com/sellers/Quixel%20Megascans",
+    "source_priority": "Authored Phantom and compatible Unity assets first; already-imported owned Fab/Quixel semantic matches are promoted into stable aliases; curated current CC0 creator packs provide deterministic coverage; V8/V9/V10 local production art is fallback support, never Engine primitive geometry.",
+    "candidate_gate": "cook to CandidateBuilds/V11, launch each actual packaged game once at 1920x1080, capture actual gameplay, validate world actor-density report plus visual frame detail, then promote transactionally with rollback"
+  },
+  "projects": {
+    "PhantomAges": {
+      "canonical_map_cm": [
+        36000,
+        11000
+      ],
+      "queries": [
+        "medieval fortress stone",
+        "castle wall battlement",
+        "battlefield mud",
+        "trampled grass",
+        "rock cliff alpine mountains",
+        "burned ground rubble",
+        "damaged masonry",
+        "medieval road wood iron"
+      ]
+    },
+    "CubeTown": {
+      "canonical_map_cm": [
+        96000,
+        96000
+      ],
+      "queries": [
+        "fantasy village",
+        "stylized medieval cottages",
+        "red autumn foliage",
+        "orange foliage",
+        "flowers mushrooms",
+        "creek river rocks",
+        "waterfall cliffs",
+        "garden market props",
+        "roofs doors fences"
+      ]
+    },
+    "PhantomStrike": {
+      "canonical_map_cm": [
+        48000,
+        36000
+      ],
+      "queries": [
+        "Mediterranean stone walls",
+        "damaged plaster concrete",
+        "wet asphalt",
+        "rubble debris",
+        "brick cables pipes AC units",
+        "warehouse harbor docks",
+        "palm vegetation litter decals"
+      ]
+    },
+    "PhantomLegends": {
+      "canonical_map_cm": [
+        409600,
+        409600
+      ],
+      "queries": [
+        "massive cliffs forest ground",
+        "autumn forest pine forest",
+        "mountains riverbanks",
+        "ancient ruins medieval architecture",
+        "farmland crops",
+        "rocky outcrops caves",
+        "corrupted terrain snow volcanic"
+      ]
+    }
+  },
+  "acquired": [],
+  "curated_sources": {
+    "required_cc0": [
+      {
+        "name": "Kenney Nature Kit",
+        "role": [
+          "CubeTown foliage",
+          "Legends biome dressing"
+        ],
+        "license": "CC0"
+      },
+      {
+        "name": "Kenney Fantasy Town Kit",
+        "role": [
+          "CubeTown architecture"
+        ],
+        "license": "CC0"
+      },
+      {
+        "name": "Kenney City Kit Commercial",
+        "role": [
+          "PhantomStrike secondary city dressing"
+        ],
+        "license": "CC0"
+      },
+      {
+        "name": "Kenney City Kit Industrial",
+        "role": [
+          "PhantomStrike secondary industrial dressing"
+        ],
+        "license": "CC0"
+      },
+      {
+        "name": "KayKit Medieval Hexagon",
+        "role": [
+          "PhantomLegends RTS structures",
+          "Phantom Ages fortifications",
+          "CubeTown props"
+        ],
+        "license": "CC0",
+        "repo": "KayKit-Game-Assets/KayKit-Medieval-Hexagon-Pack-1.0"
+      },
+      {
+        "name": "KayKit Dungeon Remastered",
+        "role": [
+          "Legends/Ages ruins and modular stone"
+        ],
+        "license": "CC0",
+        "repo": "KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0"
+      },
+      {
+        "name": "KayKit Adventurers",
+        "role": [
+          "fantasy character source"
+        ],
+        "license": "CC0",
+        "repo": "KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0"
+      },
+      {
+        "name": "KayKit Skeletons",
+        "role": [
+          "fantasy enemy character source"
+        ],
+        "license": "CC0",
+        "repo": "KayKit-Game-Assets/KayKit-Character-Pack-Skeletons-1.0"
+      },
+      {
+        "name": "KayKit City Builder Bits",
+        "role": [
+          "PhantomStrike secondary urban props",
+          "PhantomLegends settlement/RTS props",
+          "CubeTown town variety"
+        ],
+        "license": "CC0",
+        "repo": "KayKit-Game-Assets/KayKit-City-Builder-Bits-1.0"
+      }
+    ],
+    "optional_cc0": [
+      "Kenney Castle Kit 2.0",
+      "Quaternius Medieval Village MegaKit",
+      "Quaternius Stylized Nature MegaKit",
+      "Quaternius Fantasy Props",
+      "Quaternius character/monster packs"
+    ],
+    "owned_fab_policy": "Harvest only assets already imported into the current project; never scrape credentials or protected download endpoints."
+  },
+  "visual_quality_gate": {
+    "required_compatibility_aliases": 14,
+    "required_game_curated_aliases": 27,
+    "package_on_missing": false,
+    "preserve_imported_materials": true,
+    "prefer_owned_fab_aliases_when_available": true,
+    "source_priority": "Authored Phantom assets and already-imported owned Fab/Quixel semantic matches are preferred where compatible; current Kenney/KayKit/Quaternius creator libraries provide verified CC0 coverage; V9 generated setpieces are guaranteed deterministic production content, not primitive fallbacks; missing required art blocks packaging."
+  },
+  "pipeline": {
+    "unity_baseline": "scan packages/phantom-games-unity and preserve compatible source assets/mechanics instead of treating Unreal as a blank rewrite",
+    "owned_fab": "harvest already-imported owned Fab/Quixel/Marketplace assets into stable semantic aliases; never scrape credentials or protected download URLs",
+    "creator_assets": "resolve current first-party Kenney pages and current KayKit GitHub main branches; optional Quaternius packs staged when creator downloads are available",
+    "persistent_worlds": "BuildProductionWorlds.py creates four real /Game/Phantom/Worlds/*.umap assets after all imports in the same UnrealEditor-Cmd session",
+    "candidate_gate": "cook to CandidateBuilds/V9, launch actual packaged gameplay once per game at 1920x1080, reject obviously blank/flat frames, then promote transactionally with rollback"
+  }
+}

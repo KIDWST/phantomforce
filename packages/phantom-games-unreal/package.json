@@ -1,0 +1,10 @@
+{
+  "name": "@phantomforce/phantom-games-unreal",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "powershell -NoProfile -ExecutionPolicy Bypass -File ./Build-Flagships.ps1 -CompileOnly",
+    "package:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File ./Build-Flagships.ps1",
+    "smoke:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File ./Smoke-Flagships.ps1"
+  }
+}

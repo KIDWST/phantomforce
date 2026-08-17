@@ -1,0 +1,9 @@
+﻿PHANTOM GAMES PRODUCTION RESCUE V10
+installed=2026-08-14T11:04:20
+backup=C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal\ProductionRescueV10Backups\20260814-110418
+root_fix=persistent visible world is no longer duplicated by old BeginPlay world generation
+scale_fix=persistent imported meshes are bounds-normalized and grounded by semantic type
+asset_order=authored Phantom -> compatible Unity -> owned imported Fab/Quixel -> curated creator library -> local deterministic production art
+missing_art=required semantic assets fail rather than silently becoming Engine primitive geometry
+qa=game-specific world actor-density floor + actual packaged gameplay frame + visual flat/empty gate
+promotion=transactional candidate-first with rollback; live builds untouched until 4/4 pass

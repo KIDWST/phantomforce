@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phantomplay-native"
+version = "0.1.0"
+description = "Shared Panda3D runtime for native PhantomPlay games"
+requires-python = ">=3.11"
+dependencies = ["Panda3D==1.10.16"]
+
+[project.scripts]
+phantomplay-native = "phantomplay_native.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["phantomplay_native*"]

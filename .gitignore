@@ -16,6 +16,25 @@ node_modules/
 packages/*/dist/
 server/dist/
 
+# Unreal Engine generated build state and local players
+packages/phantom-games-unreal/.vs/
+packages/phantom-games-unreal/.autodsk/
+packages/phantom-games-unreal/Binaries/
+packages/phantom-games-unreal/BuildArtifacts/
+packages/phantom-games-unreal/Builds/
+packages/phantom-games-unreal/CandidateBuilds/
+packages/phantom-games-unreal/DerivedDataCache/
+packages/phantom-games-unreal/Intermediate/
+packages/phantom-games-unreal/Saved/
+packages/phantom-games-unreal/SourceArt/*
+!packages/phantom-games-unreal/SourceArt/KeyArt/
+packages/phantom-games-unreal/SourceArt/KeyArt/*
+!packages/phantom-games-unreal/SourceArt/KeyArt/*.png
+packages/phantom-games-unreal/MissionCheckpoints/
+packages/phantom-games-unreal/*Backups/
+packages/Source/
+packages/Source.zip
+
 # Python bytecode cache
 __pycache__/
 *.pyc

@@ -1,0 +1,227 @@
+{
+  "schema_version": "1.1",
+  "tools": [
+    {
+      "id": "phantomplay.creative-director",
+      "display_name": "Game Creative Director",
+      "capabilities": ["creative_direction"],
+      "execution_mode": "local_read_only",
+      "implementation_evidence": ["server/src/phantom-ai/phantomplay-production.ts"],
+      "required_providers": ["local-filesystem"],
+      "supported_engines": ["all"],
+      "outputs": ["production_requirements", "phantomflow_music_brief"]
+    },
+    {
+      "id": "phantomplay.task-planner",
+      "display_name": "Game Task Planner",
+      "capabilities": ["task_planning"],
+      "execution_mode": "local_read_only",
+      "implementation_evidence": ["server/src/phantom-ai/phantomplay-production.ts"],
+      "required_providers": ["local-filesystem"],
+      "supported_engines": ["all"],
+      "outputs": ["dependency_graph", "blockers"]
+    },
+    {
+      "id": "phantomplay.validation-engine",
+      "display_name": "Game Validation Engine",
+      "capabilities": ["validation"],
+      "execution_mode": "local_artifact_write",
+      "implementation_evidence": ["server/src/phantom-ai/phantomplay-production.ts"],
+      "required_providers": ["local-filesystem"],
+      "supported_engines": ["all"],
+      "outputs": ["validated_audit_receipt"]
+    },
+    {
+      "id": "phantomplay.asset-registry",
+      "display_name": "Game Asset Registry",
+      "capabilities": ["asset_registry"],
+      "execution_mode": "local_read_only",
+      "implementation_evidence": [
+        "server/src/phantom-ai/phantomplay-production.ts",
+        "docs/phantomplay-production/asset-registries/phantom-games-unreal.json"
+      ],
+      "required_providers": ["local-filesystem"],
+      "supported_engines": ["all"],
+      "outputs": ["asset_inventory", "license_findings", "duplicate_findings"]
+    },
+    {
+      "id": "phantomplay.dependency-auditor",
+      "display_name": "Game Dependency Auditor",
+      "capabilities": ["dependency_audit"],
+      "execution_mode": "local_read_only",
+      "implementation_evidence": [
+        "server/src/phantom-ai/phantomplay-production.ts",
+        "docs/phantomplay-production/dependency-ledger.json"
+      ],
+      "required_providers": ["local-filesystem"],
+      "supported_engines": ["unreal", "unity", "godot", "web", "panda3d", "native"],
+      "outputs": ["dependency_decisions", "license_findings", "security_limitations"]
+    },
+    {
+      "id": "phantomplay.knowledge-search",
+      "display_name": "Multi-Engine Game Development Knowledge Search",
+      "capabilities": ["knowledge_search"],
+      "execution_mode": "local_read_only",
+      "implementation_evidence": [
+        "server/src/phantom-ai/phantomplay-discovery.ts",
+        "docs/phantomplay-production/knowledge-sources.json"
+      ],
+      "required_providers": ["local-filesystem", "knowledge-index"],
+      "supported_engines": ["all"],
+      "outputs": ["ranked_evidence", "sample_project_coverage", "implementation_decision"]
+    },
+    {
+      "id": "phantomplay.github-scout",
+      "display_name": "Multi-Engine GitHub Scout",
+      "capabilities": ["repository_discovery", "repository_scoring"],
+      "execution_mode": "curated_index_read_only",
+      "implementation_evidence": [
+        "server/src/phantom-ai/phantomplay-discovery.ts",
+        "docs/phantomplay-production/knowledge-sources.json"
+      ],
+      "required_providers": ["local-filesystem", "knowledge-index"],
+      "supported_engines": ["all"],
+      "outputs": ["official_engine_first_results", "engineering_score", "sandbox_requirement"]
+    },
+    {
+      "id": "phantomplay.middleware-scout",
+      "display_name": "Game Middleware Scout",
+      "capabilities": ["middleware_discovery"],
+      "execution_mode": "curated_index_read_only",
+      "implementation_evidence": ["server/src/phantom-ai/phantomplay-discovery.ts"],
+      "required_providers": ["local-filesystem", "knowledge-index"],
+      "supported_engines": ["all"],
+      "outputs": ["middleware_candidates", "lock_in_risk", "integration_cost"]
+    },
+    {
+      "id": "phantomplay.asset-scout",
+      "display_name": "Licensed Game Asset Scout",
+      "capabilities": ["asset_discovery"],
+      "execution_mode": "curated_index_read_only",
+      "implementation_evidence": ["server/src/phantom-ai/phantomplay-discovery.ts"],
+      "required_providers": ["local-filesystem", "knowledge-index"],
+      "supported_engines": ["all"],
+      "outputs": ["licensed_asset_candidates", "license_cautions", "art_direction_requirement"]
+    },
+    {
+      "id": "phantomplay.research-scout",
+      "display_name": "Game Technology Research Scout",
+      "capabilities": ["research_discovery"],
+      "execution_mode": "curated_index_read_only",
+      "implementation_evidence": ["server/src/phantom-ai/phantomplay-discovery.ts"],
+      "required_providers": ["local-filesystem", "knowledge-index"],
+      "supported_engines": ["all"],
+      "outputs": ["paper_summary", "practical_value", "engine_implementation_assessment"]
+    },
+    {
+      "id": "phantomplay.dependency-sandbox",
+      "display_name": "Engine Dependency Sandbox Gate",
+      "capabilities": ["dependency_sandbox"],
+      "execution_mode": "local_plan_only",
+      "implementation_evidence": ["server/src/phantom-ai/phantomplay-discovery.ts"],
+      "required_providers": ["local-filesystem", "knowledge-index"],
+      "supported_engines": ["all"],
+      "outputs": ["twelve_step_gate", "integration_blocker"]
+    },
+    {
+      "id": "unreal.architect",
+      "display_name": "Unreal Architect",
+      "capabilities": ["engine_architecture", "unreal_architecture"],
+      "execution_mode": "local_read_only",
+      "implementation_evidence": [
+        "packages/phantom-games-unreal/PhantomGames.uproject",
+        "packages/phantom-games-unreal/Source/PhantomGames/PhantomGames.Build.cs",
+        "packages/phantom-games-unreal/Source/PhantomGames/Private/Core/PhantomRouterGameMode.cpp"
+      ],
+      "required_providers": ["unreal-project"],
+      "supported_engines": ["unreal"],
+      "outputs": ["unreal_project_status", "flagship_identity_map"]
+    },
+    {
+      "id": "unreal.build-engineer",
+      "display_name": "Unreal Build Engineer",
+      "capabilities": ["build_engineering"],
+      "execution_mode": "unreal_editor_or_ubt",
+      "implementation_evidence": ["packages/phantom-games-unreal/Build-Flagships.ps1"],
+      "required_providers": ["unreal-project", "unreal-editor"],
+      "supported_engines": ["unreal"],
+      "outputs": ["windows_players", "build_report"]
+    },
+    {
+      "id": "unreal.profiling-toolkit",
+      "display_name": "Unreal Profiling Toolkit",
+      "capabilities": ["profiling_toolkit", "performance"],
+      "execution_mode": "local_availability_audit",
+      "implementation_evidence": ["server/src/phantom-ai/phantomplay-discovery.ts"],
+      "required_providers": ["local-filesystem", "unreal-project", "unreal-editor", "knowledge-index"],
+      "supported_engines": ["unreal"],
+      "outputs": ["insights_availability", "gpu_tool_availability", "capture_blockers"]
+    },
+    {
+      "id": "unity.architect",
+      "display_name": "Unity Architect",
+      "capabilities": ["engine_architecture", "unity_architecture"],
+      "execution_mode": "local_read_only",
+      "implementation_evidence": [
+        "packages/phantom-games-unity/ProjectSettings/ProjectVersion.txt",
+        "packages/phantom-games-unity/Packages/manifest.json"
+      ],
+      "required_providers": ["unity-project"],
+      "supported_engines": ["unity"],
+      "outputs": ["unity_project_status"]
+    },
+    {
+      "id": "unity.build-engineer",
+      "display_name": "Unity Build Engineer",
+      "capabilities": ["build_engineering"],
+      "execution_mode": "unity_editor_batch",
+      "implementation_evidence": ["packages/phantom-games-unity/Assets/PhantomForge/Editor/PhantomBuildPipeline.cs"],
+      "required_providers": ["unity-project", "unity-editor"],
+      "supported_engines": ["unity"],
+      "outputs": ["windows_player", "build_report"]
+    },
+    {
+      "id": "unity.gameplay-smoke",
+      "display_name": "Unity Gameplay Smoke Agent",
+      "capabilities": ["gameplay_qa"],
+      "execution_mode": "unity_player_smoke",
+      "implementation_evidence": ["packages/phantom-games-unity/Assets/PhantomForge/Scripts/Core/PhantomSmokeCapture.cs"],
+      "required_providers": ["unity-project", "unity-editor"],
+      "supported_engines": ["unity"],
+      "outputs": ["interaction_receipt", "gameplay_screenshot"]
+    },
+    {
+      "id": "unity.visual-capture",
+      "display_name": "Unity Visual QA Capture",
+      "capabilities": ["visual_qa"],
+      "execution_mode": "unity_player_smoke",
+      "implementation_evidence": ["packages/phantom-games-unity/Assets/PhantomForge/Scripts/Core/PhantomSmokeCapture.cs"],
+      "required_providers": ["unity-project", "unity-editor"],
+      "supported_engines": ["unity"],
+      "outputs": ["rendered_frame", "capture_log"]
+    },
+    {
+      "id": "unity.profiling-toolkit",
+      "display_name": "Unity Profiling Toolkit",
+      "capabilities": ["profiling_toolkit", "performance"],
+      "execution_mode": "local_availability_audit",
+      "implementation_evidence": ["server/src/phantom-ai/phantomplay-discovery.ts"],
+      "required_providers": ["local-filesystem", "unity-project", "unity-editor", "knowledge-index"],
+      "supported_engines": ["unity"],
+      "outputs": ["profiler_availability", "missing_packages", "external_gpu_tool_availability"]
+    },
+    {
+      "id": "phantomflow.music-bridge",
+      "display_name": "PhantomFlow Music Bridge",
+      "capabilities": ["phantomflow_music"],
+      "execution_mode": "local_provider",
+      "implementation_evidence": [
+        "server/src/phantom-ai/phantomflow.ts",
+        "ops/phantomflow/Start-PhantomFlowEngine.ps1"
+      ],
+      "required_providers": ["phantomflow"],
+      "supported_engines": ["all"],
+      "outputs": ["music_task", "track_metadata", "audio_asset"]
+    }
+  ]
+}

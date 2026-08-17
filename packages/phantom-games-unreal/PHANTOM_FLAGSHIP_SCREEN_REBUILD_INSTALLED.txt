@@ -1,0 +1,10 @@
+﻿PHANTOM GAMES FLAGSHIP SCREEN REBUILD
+installed=2026-08-12T23:14:37
+backup=C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal\FlagshipScreenRebuildBackups\20260812-231436
+ages=36000x11000cm fixed full-battlefield camera towers +/-15500; no camera navigation
+cubetown=96000x96000cm dense magical dreamworld; crimson trees; Mirror Lake; Mushroom Hollow; 25/50/100cm build snaps
+strike=48000x36000cm Blackridge Coast; dense authored blocks; first-contact target 8-15s
+legends=409600x409600cm premium RTS; 32m-120m camera envelope; up to 300 player population architecture
+ui=sharp responsive live-world title shell; motion blur and DOF disabled
+generated_glbs=96
+visual_targets=4

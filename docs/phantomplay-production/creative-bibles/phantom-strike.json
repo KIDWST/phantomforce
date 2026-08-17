@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "game_id": "phantom-strike",
+  "north_star": "A fast, readable, modern tactical FPS with the responsiveness and spectacle players expect from a premium 2026 release.",
+  "pillars": [
+    "Immediate weapon response and reliable enemy damage",
+    "Dense combat spaces with clear tactical routes",
+    "Aggressive but legible enemy behavior",
+    "High-information combat HUD without visual clutter",
+    "Standalone resizable native-window play"
+  ],
+  "camera_contract": "First-person only during gameplay.",
+  "forbidden_crossovers": [
+    "Phantom Ages fixed-lane controller",
+    "Phantom Legends RTS selection camera"
+  ],
+  "production_status": "Unreal gameplay source now owns movement, hitscan damage, enemies, combat space, and HUD; Unreal Editor compile, packaged-player smoke testing, authored assets, animation, audio, and final rendered-frame polish remain required"
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "game_id": "phantom-ages",
+  "north_star": "A beautiful, fast fixed-lane age war that is as instantly readable as a great mobile battler and as strategically expressive as a deep counter game.",
+  "pillars": [
+    "Fixed side-view battlefield with no camera-management burden",
+    "Front-line infantry, independently firing ranged ranks, and protected rear siege",
+    "Distinct historical silhouettes and architecture for every age",
+    "Literal troop research paths that visibly improve the army",
+    "Fast AI pressure, clear counters, and restrained tower abilities",
+    "Standalone resizable native-window play"
+  ],
+  "age_sequence": [
+    "Stone Age",
+    "Bronze Age",
+    "Iron Age",
+    "Medieval Age",
+    "Future Age",
+    "Phantom Age"
+  ],
+  "siege_contract": {
+    "catapult": "unlocks in the third age and attacks towers only",
+    "springald": "unlocks in the third age, attacks siege first, attacks a tower only when no enemy siege exists, and never attacks normal troops"
+  },
+  "reference_art_rule": "Supplied concept images guide composition, density, color, and hierarchy; gameplay uses separated engine-native systems and clean production assets rather than pasting a screenshot over the game.",
+  "forbidden_crossovers": [
+    "RTS selection boxes",
+    "free camera rotation or zoom",
+    "settlement resource-node gathering",
+    "first-person controls"
+  ],
+  "production_status": "Unreal fixed-lane source now owns formations, independent ranged attacks, research, age progression, siege rules, AI, towers, and HUD; Unreal Editor compile, packaged-player smoke testing, authored assets, animation, audio, and final rendered-frame polish remain required"
+}

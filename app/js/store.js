@@ -1,4 +1,4 @@
-import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260816-149";
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260817-152";
 
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
@@ -1166,7 +1166,8 @@ const IMMEDIATE_CHAT_FOLLOW_UP = /^(?:actually[, ]+)?(?:explain|say|phrase|rewri
 
 function chatContextTerms(value = "") {
   return new Set((sanitizeMemoryText(value).toLowerCase().match(/[a-z0-9]{4,}/g) || [])
-    .filter((term) => !CHAT_CONTEXT_STOP_WORDS.has(term)));
+    .filter((term) => !CHAT_CONTEXT_STOP_WORDS.has(term))
+    .map((term) => /^confirm(?:ed|ing|ation|ations)?$/.test(term) ? "confirm" : term));
 }
 
 /* Recent chat is temporary working context, never durable memory. Keep the
@@ -1203,9 +1204,11 @@ export function recentChatTurns(limit = 8, userRequest = "") {
     .map((index) => history[index])
     .map((entry) => ({
       user: sanitizeMemoryText(entry.prompt).slice(0, 420),
-      assistant: sanitizeMemoryText(entry.reply).slice(0, 520),
+      assistant: entry.reply === FAILED_HISTORY_REPLY
+        ? "No usable assistant answer was produced for this turn."
+        : sanitizeMemoryText(entry.reply).slice(0, 520),
     }))
-    .filter((entry) => entry.user && entry.assistant && entry.assistant !== FAILED_HISTORY_REPLY);
+    .filter((entry) => entry.user && entry.assistant);
 }
 
 /* ---------------- derived: money ---------------- */

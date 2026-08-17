@@ -139,8 +139,14 @@ try {
   const servedIds = new Set((v1Route.json().catalog as Array<{ id: string }>).map((game) => game.id));
   assert(v1Route.statusCode === 200 && servedIds.size === registeredIds.size && [...registeredIds].every((id) => servedIds.has(id)), "The V1 catalog route should serve exactly the registered built-in set.");
   assert(v2.PHANTOMPLAY_V2_GAMES.every((game) => servedIds.has(game.id)), "The V1 catalog route should include the registered V2 games.");
-  for (const flagshipId of ["cubetown", "skyguard-arena", "crown-circuit", "tidefront-tactics", "kingdom-breakers", "cipher-keep"]) {
+  for (const flagshipId of ["cubetown", "phantom-ages", "phantom-legends", "phantom-strike", "skyguard-arena", "crown-circuit", "tidefront-tactics", "kingdom-breakers", "cipher-keep"]) {
     assert(servedIds.has(flagshipId), `The V1 catalog route should include flagship game ${flagshipId}.`);
+  }
+  for (const unrealId of ["cubetown", "phantom-ages", "phantom-legends", "phantom-strike"]) {
+    const game = (v1Route.json().catalog as Array<{ id: string; launchUrl: string; tags: string[]; engine?: { tier?: string } }>).find((item) => item.id === unrealId);
+    assert(game?.launchUrl.includes(`/app/games/native/${unrealId}`), `${unrealId} should launch through the native Unreal route.`);
+    assert(game?.tags.includes("unreal"), `${unrealId} should be visibly tagged as Unreal.`);
+    assert(game?.engine?.tier === "Unreal Engine 5.8", `${unrealId} should expose the Unreal Engine 5.8 catalog tier.`);
   }
   assert(!servedIds.has("keyboardist-on-tour"), "Keyboardist on Tour must not be served by either PhantomPlay catalog.");
   const gamePageRoute = await app.inject({ method: "GET", url: "/api/phantomplay/v2/games/phantom-rumble", headers: { Authorization: `Bearer ${ownerToken}` } });

@@ -4337,8 +4337,8 @@ body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
 
 @media (max-width: 680px) {
   body:has(.workspace-page[data-workspace-page="phantomai"]) .app-main {
-    height: calc(100svh - 72px);
-    min-height: 0;
+    height: calc(100svh - 72px) !important;
+    min-height: 0 !important;
     padding-bottom: 0 !important;
   }
   .phantombot-titlebar { flex-basis: 54px; min-height: 54px; gap: 9px; padding: 0 11px; }
@@ -6994,5 +6994,21 @@ html[data-command-os="2040"] .phantombot-session-clock {
     max-width: 98px;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* The generic mobile shell expands app-main to a full scrolling page.
+     PhantomBot owns an internal scrollport and a bottom composer, so it must
+     keep the viewport budget above the mobile navigation instead. */
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"]) .phantom.command-os-enabled .app-main {
+    display: block !important;
+    height: calc(100svh - 72px) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"]) .phantom.command-os-enabled .app-main > .console.console-workspace {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
   }
 }

@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "project_id": "phantom-games-unity",
+  "status": "migration_source_only_not_registered_with_phantomplay",
+  "assets": [
+    {
+      "id": "quaternius-fantasy-rts",
+      "kind": "model_collection",
+      "path": "Assets/Resources/Models/Quaternius/FantasyRTS",
+      "source": "Quaternius",
+      "source_url": "https://quaternius.com/",
+      "license": "CC0-1.0",
+      "commercial_use": true,
+      "ownership": "external",
+      "license_evidence": ["Assets/Resources/Models/Quaternius/FantasyRTS/License.txt"],
+      "license_token": "CC0 1.0"
+    },
+    {
+      "id": "quaternius-strike-kit",
+      "kind": "model_collection",
+      "path": "Assets/Resources/Models/Quaternius/Strike",
+      "source": "Quaternius",
+      "source_url": "https://quaternius.com/",
+      "license": "CC0-1.0",
+      "commercial_use": true,
+      "ownership": "external",
+      "license_evidence": [
+        "Assets/Resources/Models/Quaternius/Strike/License_Guns.txt",
+        "Assets/Resources/Models/Quaternius/Strike/License_Streets.txt"
+      ],
+      "license_token": "CC0 1.0"
+    },
+    {
+      "id": "phantom-strike-keyart",
+      "kind": "key_art",
+      "path": "Assets/Resources/Art/phantom-strike-keyart.png",
+      "source": "PhantomForce internal",
+      "source_url": "",
+      "license": "PhantomForce internal",
+      "commercial_use": true,
+      "ownership": "internal",
+      "license_evidence": [],
+      "license_token": ""
+    },
+    {
+      "id": "phantom-ages-keyart",
+      "kind": "key_art",
+      "path": "Assets/Resources/Art/phantom-ages-keyart.png",
+      "source": "PhantomForce internal image generation guided by owner-supplied Phantom Ages reference",
+      "source_url": "",
+      "license": "PhantomForce internal",
+      "commercial_use": true,
+      "ownership": "internal",
+      "license_evidence": [],
+      "license_token": ""
+    },
+    {
+      "id": "phantom-legends-keyart",
+      "kind": "key_art",
+      "path": "Assets/Resources/Art/phantom-legends-keyart.png",
+      "source": "PhantomForce internal",
+      "source_url": "",
+      "license": "PhantomForce internal",
+      "commercial_use": true,
+      "ownership": "internal",
+      "license_evidence": [],
+      "license_token": ""
+    }
+  ]
+}

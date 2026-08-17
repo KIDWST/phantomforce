@@ -1,0 +1,11 @@
+﻿PHANTOM GAMES PRODUCTION REBOOT V11
+installed=2026-08-16T14:18:11
+backup=C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal\ProductionRebootV11Backups\20260816-141808
+characters=real skeletal import + animation aliases required
+surfaces=production PBR material pass required
+worlds=persistent maps + spawn-local density/occlusion validation required
+asset_order=original Phantom + compatible Unity + owned/imported Fab/Quixel + curated creator art; generated assets restricted to support/setpieces
+missing_art=required production assets fail instead of silently becoming Engine primitive geometry
+qa=exactly one actual 1920x1080 gameplay capture per candidate
+promotion=manual human PROMOTE only; live builds otherwise unchanged
+unity_safety=available separately and never overwrites Unreal/live output automatically

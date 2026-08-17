@@ -3,3 +3,4 @@
 server[/\\]\.env(\..*)?$
 package-lock\.json$
 trufflehog_[0-9.]+_(checksums\.txt|windows_amd64\.tar\.gz)$
+packages[/\\]phantomplay-dioxus-shell[/\\]target([/\\]|$)

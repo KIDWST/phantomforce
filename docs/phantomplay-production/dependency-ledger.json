@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "records": [
+    {
+      "package_prefix": "com.unity.",
+      "source": "Unity Package Manager",
+      "license": "Unity package terms",
+      "commercial_use": "subject_to_active_unity_terms",
+      "decision": "accepted_with_terms",
+      "evidence": "Packages/packages-lock.json",
+      "note": "Official Unity packages are pinned. Their license text is not vendored, so release review must retain Unity terms verification."
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+PHANTOM GAMES // PRODUCTION RESCUE V10 // OFFLINE PACKAGE VALIDATION
+===================================================================
+
+STATUS: PASS for offline/package-level validation.
+Authoritative UE 5.8 compile/import/map-build/cook/gameplay execution still occurs on the user's Windows PC.
+
+ROOT-CAUSE REPAIRS VERIFIED
+---------------------------
+PASS: CubeTown production-map branch prevents BuildDreamWorld from rebuilding the old visible runtime world over CubeTown_World.
+PASS: CubeTown production-map village branch keeps social actors but does not duplicate persistent Heartstone architecture.
+PASS: Phantom Ages production-map branch keeps hidden authoritative gameplay towers/collision but does not rebuild the old visible battlefield.
+PASS: Phantom Legends production-map branch keeps hidden RTS gameplay structures/resources/collision but does not rebuild the old visible 4km environment.
+PASS: PhantomStrike retains its production-map early-return and does not duplicate persistent Blackridge architecture.
+PASS: BuildProductionWorlds.py uses StaticMesh bounds normalization + post-scale grounding for editor-authored persistent actors.
+PASS: Required semantic art does not silently degrade to Engine cube/cylinder fallback.
+PASS: Owned/imported Fab/Quixel harvester now exposes additional CubeTown castle/market/ruin/cliff/flower, Legends gate/bridge/farm/crystal and Strike hotel/shop/barrier aliases.
+
+PERSISTENT WORLD DENSITY CONTRACTS
+----------------------------------
+Calculated deterministic persistent-actor counts from the V10 world builder:
+- CubeTown: 338 visible persistent actors before runtime NPC/gameplay actors. Build gate minimum: 280.
+- Phantom Ages: 187 visible persistent actors before live battle actors. Build gate minimum: 180.
+- Phantom Legends: 547 visible persistent actors before live RTS units/resources. Build gate minimum: 430.
+- PhantomStrike: 505 visible persistent actors before live enemies/gameplay actors. Build gate minimum: 420.
+
+CANONICAL MAP CONTRACTS PRESERVED
+---------------------------------
+- CubeTown: 960m x 960m.
+- Phantom Ages: 360m x 110m, fixed one-screen gameplay camera contract remains.
+- Phantom Legends: 4096m x 4096m.
+- PhantomStrike: 480m x 360m.
+
+ART LIBRARY VALIDATION
+----------------------
+PASS: 279 bundled/generated GLB files have valid glTF 2.0 headers and declared lengths.
+PASS: All 279 GLBs were loaded offline with trimesh; every file has non-zero geometry/faces.
+PASS: Total bundled GLB face count: 319,312.
+PASS: V10 introduces 25 new production/setpiece GLBs.
+PASS: V10 new assets contain 3+ geometry nodes each; average 16.52 geometry nodes; 23,180 faces total.
+PASS: 51 recovered original PhantomStrike UAssets remain bundled.
+PASS: V10 importer continues to preserve authored materials on external assets where compatible.
+
+SOURCE / TOOL VALIDATION
+------------------------
+PASS: All six Python tools compile with Python.
+PASS: All JSON files parse.
+PASS: Project C++ own-header-first checks pass for the major Director/Core translation units.
+PASS: Comment/string-aware delimiter validation passes across project C++/headers.
+PASS: Obsolete Engine/SkyAtmosphere.h include is absent.
+PASS: Build-Flagships.ps1 uses CandidateBuilds/V10 and Builds/Rollback/V10-* transactional promotion.
+PASS: Build-Flagships.ps1 requires one UnrealEditor-Cmd content session before isolated cooks.
+PASS: Build-Flagships.ps1 refuses -SkipGameplayProof in V10 approval mode.
+PASS: Test-GameplayFrame.ps1 uses stricter per-game detail/flat-field thresholds, including lower-frame gameplay-detail checks.
+PASS: Capture-GameplayProof.ps1 launches actual packaged candidates, auto-enters gameplay, captures one 1920x1080 gameplay frame per game, then exits.
+
+IMPORTANT LIMITATION
+--------------------
+No UnrealBuildTool, UnrealHeaderTool, UnrealEditor-Cmd import, persistent-map save, BuildCookRun, or packaged Windows gameplay was executed inside this Linux sandbox because the authoritative engine is the user's local H:\UE_5.8 installation.
+
+Therefore V10 does NOT claim that the final Windows games are fixed merely because this ZIP exists. The installer deliberately requires the user's UE 5.8 machine to compile, import, create the persistent maps, cook four candidate executables, capture four actual gameplay frames, pass the world-density gate and pass the visual gate before any candidate replaces the live PhantomPlay build.

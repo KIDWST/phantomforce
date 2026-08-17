@@ -139,6 +139,7 @@ function shouldProxy(urlPath) {
     || urlPath.startsWith("/api/workspace-approvals")
     || urlPath.startsWith("/api/managed-growth")
     || urlPath.startsWith("/api/production-core")
+    || urlPath.startsWith("/api/connections")
     || urlPath.startsWith("/api/finance")
     || urlPath.startsWith("/api/invoices")
     || urlPath.startsWith("/phantom-ai/")

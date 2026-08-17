@@ -198,6 +198,19 @@ store.state.chatHistory = [
 const relevantOlderThread = recentChatTurns(10, "Back to Nova: what color is her raincoat?");
 assert.ok(relevantOlderThread.length <= 10);
 assert.match(JSON.stringify(relevantOlderThread), /Nova[\s\S]*purple/i, "a named older topic and its correction must replace irrelevant recent turns");
+store.state.chatHistory = [
+  { id: "membership-8", ws: "phantomforce", source: "temporary-chat", prompt: "Who confirmed now?", reply: "Mina, Theo, Omar", createdAt: new Date(Date.now() - 1_000).toISOString() },
+  { id: "membership-7", ws: "phantomforce", source: "temporary-chat", prompt: "Actually, Priya did not confirm.", reply: "Updated.", createdAt: new Date(Date.now() - 2_000).toISOString() },
+  { id: "membership-6", ws: "phantomforce", source: "temporary-chat", prompt: "Correction: Theo confirmed after all.", reply: "Updated.", createdAt: new Date(Date.now() - 3_000).toISOString() },
+  { id: "membership-5", ws: "phantomforce", source: "temporary-chat", prompt: "Did Theo confirm?", reply: "No", createdAt: new Date(Date.now() - 4_000).toISOString() },
+  { id: "membership-4", ws: "phantomforce", source: "temporary-chat", prompt: "How many confirmed?", reply: "3", createdAt: new Date(Date.now() - 5_000).toISOString() },
+  { id: "membership-3", ws: "phantomforce", source: "temporary-chat", prompt: "Who did not confirm?", reply: "Theo", createdAt: new Date(Date.now() - 6_000).toISOString() },
+  { id: "membership-2", ws: "phantomforce", source: "temporary-chat", prompt: "Who confirmed?", reply: "Mina, Priya, Omar", createdAt: new Date(Date.now() - 7_000).toISOString() },
+  { id: "membership-1", ws: "phantomforce", source: "temporary-chat", prompt: "The launch team is Mina, Theo, Priya, and Omar. Everyone except Theo confirmed.", reply: "Noted.", createdAt: new Date(Date.now() - 8_000).toISOString() },
+];
+const correctedMembershipThread = recentChatTurns(10, "Who did not confirm now? Names only.");
+assert.ok(correctedMembershipThread.length <= 10);
+assert.match(JSON.stringify(correctedMembershipThread), /launch team[\s\S]*Priya did not confirm/i, "confirmation follow-ups must retain the governing roster and its newest correction");
 store.state.chatHistory = priorHistory;
 assert.equal(store.state.memory.length, 0, "casual questions must not become durable memory");
 const chatOnlyMemoryBody = capturedBodies.find((body) => /Remember for this chat only/i.test(body.message));
@@ -318,6 +331,9 @@ for (const [prompt] of offlineGeneralQuestions.slice(0, 7)) {
 }
 assert.equal(classifyPhantomIntent("how does an approval workflow help my school project?").primaryIntent, "question");
 assert.notEqual(classifyPhantomIntent("what is in my approval queue?").reasonCode, "informational_concept_question");
+assert.equal(classifyPhantomIntent("Correction: Publishing requires legal review instead of approval.").primaryIntent, "chat", "a conversational rule correction must not become an approval-queue command");
+const conversationalRuleCorrection = await handleSmartCommand("Correction: Publishing requires legal review instead of approval.");
+assert.equal(conversationalRuleCorrection.cards?.length || 0, 0, "a conversational rule correction must not render live approval cards");
 const forbiddenOfflineStatus = /\b(?:ledger|pipeline|cashflow|open proposals?|leads? loaded|approval queue|media items? loaded|today'?s (?:plan|board)|workspace status)\b/i;
 for (const [prompt, expected] of offlineGeneralQuestions) {
   const response = await handleSmartCommand(prompt);

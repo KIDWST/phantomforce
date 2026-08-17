@@ -1,0 +1,8 @@
+﻿PHANTOM GAMES GAMEPLAY-FIRST REBUILD V6
+installed=2026-08-13T14:33:22
+backup=C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal\GameplayFirstV6Backups\20260813-143320
+unity=baseline gameplay/scripts scanned; compatible source art imported and promoted
+assets=current creator-pack refresh + owned imported Fab/Quixel semantic harvest
+worlds=canonical sizes preserved; connective density moved to HISM; additional gameplay/POIs added
+qa=one actual packaged gameplay screenshot per game; multi-resolution title/menu matrix disabled
+editor=one headless content import session before four headless cooks

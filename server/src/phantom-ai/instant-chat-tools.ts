@@ -457,6 +457,32 @@ function namedPredicateReferenceReply(userRequest: string, turns: InstantChatToo
   return null;
 }
 
+type NamedCarriedItem = { name: string; item: string };
+
+function namedCarriedItemsFromText(value: string): NamedCarriedItem[] {
+  const items: NamedCarriedItem[] = [];
+  const pattern = /(?:^|,\s*|\band\s+)([A-Z][a-z][A-Za-z'-]{1,38})\s+(?:packed|brought|carried)\s+(.+?)(?=\s*(?:,\s*|\band\s+)[A-Z][a-z][A-Za-z'-]{1,38}\s+(?:packed|brought|carried)\b|[.!?]?\s*$)/gi;
+  for (const match of value.matchAll(pattern)) {
+    const item = cleanListItem(match[2]);
+    if (item && item.length <= 100) items.push({ name: match[1], item });
+  }
+  return items.length >= 2 && items.length <= 10 ? items : [];
+}
+
+function namedCarriedItemReply(userRequest: string, turns: InstantChatToolTurn[]): InstantChatToolReply | null {
+  if (!/\b(?:what|which)\b.{0,40}\b(?:they|them|each person)\b|\bwhat did they (?:pack|bring|carry)\b/i.test(userRequest)) return null;
+  if (!/\b(?:pack|packed|bring|brought|carry|carried|item)\b/i.test(userRequest)) return null;
+  for (const turn of [...turns].reverse()) {
+    const items = namedCarriedItemsFromText(turn.user);
+    if (items.length < 2) continue;
+    return {
+      output_text: items.map(({ name, item }) => `${name}: ${item}`).join("\n"),
+      tool_id: "phantom-reference-resolver",
+    };
+  }
+  return null;
+}
+
 type ConfirmationState = {
   universe: string[];
   confirmed: Set<string>;
@@ -1009,6 +1035,7 @@ export function buildInstantChatToolReply(userRequest: string, turns: InstantCha
     || namedQuantityComparisonReply(userRequest, turns)
     || orderedEventReferenceReply(userRequest, turns)
     || namedPredicateReferenceReply(userRequest, turns)
+    || namedCarriedItemReply(userRequest, turns)
     || causalReferenceReply(userRequest, turns)
     || listReorderReply(userRequest, turns)
     || listSelectionReply(userRequest, turns);

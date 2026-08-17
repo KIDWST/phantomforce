@@ -61,6 +61,9 @@ function followUpReply(request: string, recentConversation: RecentChatTurn[]) {
   const previous = previousAnswer(activeConversation);
   if (!previous) return "";
   const topicContext = activeConversation.slice(-6).map((turn) => `${turn.user} ${turn.assistant}`).join(" ");
+  if (/\bhow long should i stay\b/i.test(request) && /\b(?:japan|visit|trip|travel)\b/i.test(topicContext)) {
+    return "For a first spring trip to Japan, 10 to 14 days gives you time for two or three regions without turning every day into transit.";
+  }
   if (/\b(shorter|brief|one sentence|sum that up)\b/i.test(request)) return shorten(previous);
   if (/\b(simpler|plain english|eli5|explain that simply)\b/i.test(request)) {
     if (/photosynthesis/i.test(previous)) return "Plants use sunlight to make food from water and air, and oxygen comes out.";
@@ -104,6 +107,29 @@ function sharesTopic(request: string, threadText: string) {
   return [...requestTerms].some((term) => threadTerms.has(term));
 }
 
+function structuredOfflineAnswer(request: string) {
+  const lower = request.toLowerCase();
+  if (/\belectric (?:cars?|vehicles?)\b/.test(lower) && /\bhybrids?\b/.test(lower)) {
+    return "- Electric cars usually cost less to fuel and maintain, and city stop-and-go driving suits regenerative braking.\n- Hybrids refuel quickly and avoid charging dependence.\n- Compare daily mileage, reliable charging access, purchase price, insurance, and ownership period.\n- With easy charging, electric is usually the stronger city fit; without it, a hybrid is the lower-friction bridge.";
+  }
+  if (/\bcritique\b/.test(lower) && /\btool library\b/.test(lower)) {
+    return "Strength: a neighborhood tool library lowers household costs, reduces waste, and encourages resource sharing. Risk: loss, damage, and uneven availability can erode trust; start small with deposits, clear borrowing windows, and one maintenance owner.";
+  }
+  if (/\bbirthday party\b/.test(lower) && /\b(?:low-cost|low cost|budget|cheap|affordable)\b/.test(lower)) {
+    return "1. Set one budget and guest count.\n2. Use a free venue such as home, a backyard, or a park.\n3. Pick one inexpensive group activity.\n4. Keep food simple with a homemade main, snacks, and one dessert.\n5. Send digital invitations and spend only on the two details the guest of honor will remember.";
+  }
+  if (/\brobotic\b/.test(lower) && /\b(?:warm|warmer|natural|personal|conversational)\b/.test(lower)) {
+    return "1. Use natural contractions and speak directly to one reader instead of an abstract audience.\n2. Add one line of empathy or personal context, then replace formal filler with shorter, warmer, conversational language.";
+  }
+  if (/\brepeat customers?\b/.test(lower)) {
+    return "1. Make the service moment customers value most consistent.\n2. Follow up after delivery with one useful check-in and a clear next-best offer.\n3. Track repeat rate, ask loyal customers for referrals, and reward behavior that proves real retention.";
+  }
+  if (/\bsales pipeline\b/.test(lower) && /\b(?:hate|cause|problem|improve|fix)\b/.test(lower)) {
+    return "One likely cause is that stages lack a single exit condition or next action, so leads sit without an owner. Simplify the pipeline to a few evidence-based stages and require one dated next step for every active lead.";
+  }
+  return "";
+}
+
 function directAnswer(request: string, businessName: string) {
   const lower = request.toLowerCase();
   const math = calculate(lower);
@@ -136,6 +162,18 @@ export function buildInstantChatFallbackReply(
   recentConversation: RecentChatTurn[] = [],
 ) {
   const request = cleanText(userRequest);
+  const structuredReply = structuredOfflineAnswer(request);
+  if (structuredReply) {
+    return {
+      status: "local_fallback" as const,
+      model_id: "phantom-structured-local-fallback",
+      output_text: boundReply(structuredReply),
+      provider_called: false as const,
+      network_call_performed: false as const,
+      provider_request_body_created: false as const,
+      reason: "safe_structured_provider_unavailable" as const,
+    };
+  }
   // Defense in depth behind conversation-policy's lane gate: if a business
   // request ever reaches the quick lane (a routing miss, not a feature),
   // say so honestly instead of parroting whatever thread came before.

@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "game_id": "phantom-legends",
+  "north_star": "A fantasy strategy world combining real-time army command, meaningful settlement building, social pressure, and satisfying persistent progression.",
+  "pillars": [
+    "Readable real-time army control",
+    "Expressive settlement layouts and defensive planning",
+    "Resource and territory pressure that creates strategic stories",
+    "Persistent progression without replacing skill",
+    "A fantasy world with distinct factions, creatures, and architecture",
+    "Standalone resizable native-window play"
+  ],
+  "camera_contract": "Elevated controllable RTS camera; this camera belongs only to Phantom Legends.",
+  "forbidden_crossovers": [
+    "Phantom Ages fixed lane",
+    "PhantomStrike first-person controller"
+  ],
+  "production_status": "Unreal RTS source now owns the strategy camera, selection, orders, workers, economy, construction, generated realm, and persistence; combat depth, campaign structure, Unreal Editor compile, packaged-player smoke testing, authored assets, animation, audio, and final polish remain required"
+}

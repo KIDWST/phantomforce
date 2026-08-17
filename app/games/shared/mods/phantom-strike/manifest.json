@@ -1,0 +1,9 @@
+[
+  { "id": "ps_training_mode", "file": "training-mode.mod.js", "name": "Training Mode", "desc": "God mode, frozen bots, endless ammo and grenades, and zero reload or recoil." },
+  { "id": "ps_god_mode", "file": "god-mode.mod.js", "name": "God Mode", "desc": "Enemy fire and blast damage cannot kill P1." },
+  { "id": "ps_infinite_ammo", "file": "infinite-ammo.mod.js", "name": "Infinite Ammo", "desc": "Keeps the active weapon full without consuming reserve ammo." },
+  { "id": "ps_infinite_grenades", "file": "infinite-grenades.mod.js", "name": "Infinite Grenades", "desc": "Throw unlimited live frag grenades with G or gamepad Y." },
+  { "id": "ps_bot_ceasefire", "file": "bot-ceasefire.mod.js", "name": "Bot Ceasefire", "desc": "Freezes bot movement, aim, and firing for safe weapon tests." },
+  { "id": "ps_weapon_lab", "file": "weapon-lab.mod.js", "name": "Weapon Lab", "desc": "Removes reload delays and recoil while preserving hit and damage behavior." },
+  { "id": "ps_clear_hostiles", "file": "clear-hostiles.mod.js", "name": "Clear Hostiles (K)", "desc": "Press K to eliminate every live bot in the current match." }
+]
