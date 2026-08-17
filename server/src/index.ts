@@ -277,6 +277,15 @@ import {
   SecurityScanRequestSchema,
 } from "./phantom-ai/security-scanner.js";
 import {
+  cancelPhantomHunterScan,
+  createPhantomHunterWebScan,
+  exportPhantomHunterActiveCsv,
+  getPhantomHunterScan,
+  getPhantomHunterStatus,
+  getPhantomHunterWebRepository,
+  listPhantomHunterScans,
+} from "./phantom-ai/phantom-hunter.js";
+import {
   ExternalSecurityMonitorRequestSchema,
   getExternalSecurityMonitorStatus,
   runExternalSecurityMonitor,
@@ -9710,6 +9719,160 @@ app.get("/phantom-ai/security/scan/status", async (request, reply) => {
       admin_filesystem_scan_required: false,
     },
   };
+});
+
+/* PhantomHunter Web is deliberately narrower than PhantomHunter Desktop. The
+   browser cannot supply targets: it can scan only the repository already bound
+   to this organization. Results and durable state are verified-active only. */
+app.get("/phantom-ai/phantom-hunter/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const tenantId = customizationTenantForSession(session, (request.query as { tenant_id?: string } | undefined)?.tenant_id);
+  const allowPlatformDefault = Boolean(session.isSuperAdmin || (!session.userId && session.canManageAccess));
+  const repository = await getPhantomHunterWebRepository({
+    organizationId: tenantId,
+    actorId: session.userId || session.id,
+    allowPlatformDefault,
+  });
+  return {
+    ok: true,
+    organization_id: tenantId,
+    hunter: await getPhantomHunterStatus(),
+    web: repository,
+    access: {
+      surface: "bound_repository_only",
+      can_intake: false,
+      can_scan: repository.connected,
+      can_verify_active: repository.connected,
+      raw_secret_access: false,
+      arbitrary_targets: false,
+    },
+  };
+});
+
+app.get("/phantom-ai/phantom-hunter/web", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query || {}) as { tenant_id?: string; limit?: string };
+  const tenantId = customizationTenantForSession(session, query.tenant_id);
+  const repository = await getPhantomHunterWebRepository({
+    organizationId: tenantId,
+    actorId: session.userId || session.id,
+    allowPlatformDefault: Boolean(session.isSuperAdmin || (!session.userId && session.canManageAccess)),
+  });
+  return {
+    ok: true,
+    organization_id: tenantId,
+    repository,
+    scans: await listPhantomHunterScans(tenantId, Math.max(1, Math.min(20, Number(query.limit) || 10))),
+    hunter: await getPhantomHunterStatus(),
+    surface: "bound_repository_only",
+    raw_secrets_returned: false,
+  };
+});
+
+app.post("/phantom-ai/phantom-hunter/assets/bulk", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  return reply.code(410).send({ ok: false, error: "arbitrary_target_intake_is_desktop_only", desktop_app: "PhantomHunter Desktop" });
+});
+
+app.get("/phantom-ai/phantom-hunter/scans", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query || {}) as { tenant_id?: string; limit?: string };
+  const tenantId = customizationTenantForSession(session, query.tenant_id);
+  const limit = Math.max(1, Math.min(50, Number(query.limit) || 20));
+  return { ok: true, organization_id: tenantId, scans: await listPhantomHunterScans(tenantId, limit), raw_secrets_returned: false };
+});
+
+app.post("/phantom-ai/phantom-hunter/scans", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  return reply.code(410).send({ ok: false, error: "custom_scan_requests_are_desktop_only", desktop_app: "PhantomHunter Desktop" });
+});
+
+app.post("/phantom-ai/phantom-hunter/web/scan", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body || {}) as { tenant_id?: string; authorization_attested?: boolean };
+  if (body.authorization_attested !== true) return reply.code(400).send({ ok: false, error: "authorization_attestation_required" });
+  const tenantId = customizationTenantForSession(session, body.tenant_id);
+  try {
+    const scan = await createPhantomHunterWebScan({
+      organizationId: tenantId,
+      actorId: session.userId || session.id,
+      allowPlatformDefault: Boolean(session.isSuperAdmin || (!session.userId && session.canManageAccess)),
+      authorizationAttested: true,
+    });
+    return reply.code(202).send({ ok: true, organization_id: tenantId, scan, raw_secrets_returned: false });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "scan_request_rejected";
+    return reply.code(code === "repository_connection_required" ? 409 : 400).send({ ok: false, error: code });
+  }
+});
+
+app.post("/phantom-ai/phantom-hunter/web/connect", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body || {}) as { tenant_id?: string; provider?: string };
+  if (!body.provider || !["github", "gitlab", "bitbucket"].includes(body.provider)) {
+    return reply.code(400).send({ ok: false, error: "supported_code_provider_required" });
+  }
+  const tenantId = customizationTenantForSession(session, body.tenant_id);
+  const connectorId = `code-${body.provider}` as CustomerConnectorId;
+  const connectRequest = requestCustomerConnection({
+    tenantId,
+    connectorId,
+    actor: session.userId || session.id,
+  });
+  return reply.code(202).send({
+    ok: true,
+    organization_id: tenantId,
+    state: "requested",
+    connect_request: {
+      id: connectRequest.id,
+      provider: body.provider,
+      requested_at: connectRequest.requestedAt,
+      attempts: connectRequest.attempts,
+    },
+    customer_message: `${body.provider[0].toUpperCase()}${body.provider.slice(1)} connection requested. Nothing else is needed from you. Your workspace owner can finish the secure provider connection without asking you for a repository path.`,
+    secrets_exposed: false,
+  });
+});
+
+app.get("/phantom-ai/phantom-hunter/scans/:scanId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query || {}) as { tenant_id?: string };
+  const tenantId = customizationTenantForSession(session, query.tenant_id);
+  const scanId = String((request.params as { scanId?: string }).scanId || "");
+  const scan = await getPhantomHunterScan(tenantId, scanId, false);
+  if (!scan) return reply.code(404).send({ ok: false, error: "scan_not_found" });
+  return { ok: true, organization_id: tenantId, scan, raw_secrets_returned: false };
+});
+
+app.post("/phantom-ai/phantom-hunter/scans/:scanId/cancel", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const tenantId = customizationTenantForSession(session, (request.body as { tenant_id?: string } | undefined)?.tenant_id);
+  const scanId = String((request.params as { scanId?: string }).scanId || "");
+  const scan = await cancelPhantomHunterScan(tenantId, scanId);
+  if (!scan) return reply.code(404).send({ ok: false, error: "scan_not_found" });
+  return { ok: true, organization_id: tenantId, scan, raw_secrets_returned: false };
+});
+
+app.get("/phantom-ai/phantom-hunter/scans/:scanId/export.csv", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const tenantId = customizationTenantForSession(session, (request.query as { tenant_id?: string } | undefined)?.tenant_id);
+  const scanId = String((request.params as { scanId?: string }).scanId || "");
+  const csv = await exportPhantomHunterActiveCsv(tenantId, scanId);
+  if (csv == null) return reply.code(404).send({ ok: false, error: "scan_not_found" });
+  reply.header("content-type", "text/csv; charset=utf-8");
+  reply.header("content-disposition", `attachment; filename="phantomhunter-${scanId.slice(0, 8)}-verified-active.csv"`);
+  reply.header("x-phantomhunter-raw-secrets", "false");
+  return reply.send(csv);
 });
 
 app.get("/phantom-ai/security/external-monitor/status", async (request, reply) => {

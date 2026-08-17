@@ -1,6 +1,6 @@
 /* Reusable live Phantom canvas for dashboard and PhantomBot surfaces. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260817-153";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260817-156";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const mounted = new WeakMap();

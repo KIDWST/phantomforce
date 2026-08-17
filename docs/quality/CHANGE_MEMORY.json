@@ -1454,6 +1454,66 @@
           "description": "The customer connection center cannot ask for technical configuration."
         }
       ]
+    },
+    {
+      "id": "phantom-hunter-desktop-web-split-floor",
+      "status": "active",
+      "title": "PhantomHunter keeps advanced desktop access separate from one-repository web",
+      "ownerDecision": "PhantomHunter Desktop is the advanced local application for explicitly selected local, Git, website/API, or pasted targets. PhantomHunter Web accepts no arbitrary target and scans only the repository bound to the active organization. Both run Betterleaks, TruffleHog, and KeyHunter as one pipeline, and user-facing or durable results contain provider-confirmed active findings only. Web never returns raw credentials; Desktop permits an explicitly confirmed one-time reveal from volatile local memory but never persists raw values.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/phantom-hunter.ts",
+          "pattern": "runBetterleaks[\\s\\S]*runTrufflehog[\\s\\S]*runKeyHunterBridge[\\s\\S]*raw_secrets_stored: false",
+          "description": "The three-engine pipeline and no-persistence contract remain one implementation."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "arbitrary_target_intake_is_desktop_only[\\s\\S]*custom_scan_requests_are_desktop_only[\\s\\S]*app.post\\(\"/phantom-ai/phantom-hunter/web/scan\"",
+          "description": "PhantomForce disables arbitrary browser targets and exposes only the bound-repository scan action."
+        },
+        {
+          "file": "server/src/phantom-ai/phantom-hunter.ts",
+          "pattern": "getPhantomHunterWebRepository[\\s\\S]*accepts_arbitrary_targets: false[\\s\\S]*createPhantomHunterWebScan",
+          "description": "The module resolves one server-bound repository and refuses target selection from the browser."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "id: \"phantomhunter\"[\\s\\S]*renderPhantomHunter",
+          "description": "PhantomHunter remains a first-class PhantomForce workspace."
+        },
+        {
+          "file": "app/js/phantomhunter.js",
+          "pattern": "Your repository[\\s\\S]*One clear answer[\\s\\S]*Scan now",
+          "description": "The web client keeps one-repository simplicity and the three-engine pipeline."
+        },
+        {
+          "file": "app/js/phantomhunter.js",
+          "pattern": "import \\{ currentTenantId, friendlyBackendError, session \\} from \\\"\\./store\\.js\\?v=phantom-live-[0-9]{8}-[0-9]+\\\";[\\s\\S]*const token = session\\.token\\(\\);",
+          "description": "PhantomHunter must use the signed-in shell's shared tenant and bearer-session contract on web and desktop-class app surfaces."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "server/src/phantom-ai/phantom-hunter.ts",
+          "pattern": "raw_secrets_(?:stored|returned): true|raw_secret_stored: true",
+          "description": "No PhantomHunter web contract may enable raw-secret persistence or return."
+        },
+        {
+          "file": "app/js/phantomhunter.js",
+          "pattern": "key_full|Show raw key|Copy full key|assets/bulk|include_review|targetInput|candidate review|unverified",
+          "description": "The web UI cannot grow raw-key controls, arbitrary target intake, or a non-active review lane."
+        },
+        {
+          "file": "app/js/phantomhunter.js",
+          "pattern": "phantomforce_access_token",
+          "description": "The client cannot regress to the obsolete private token key that caused authenticated PhantomHunter requests to be sent without a bearer token."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "phantom-live-20260817-(?:153|154)",
+          "description": "The app cannot regress to a build before the desktop/web PhantomHunter split."
+        }
+      ]
     }
   ]
 }

@@ -63,6 +63,7 @@
     "test:hermes-operator-stream": "tsx scripts/test-hermes-operator-stream.ts",
     "test:hermes-ecosystem-knowledge": "tsx scripts/test-hermes-ecosystem-knowledge.ts",
     "test:phantom-capability-registry": "tsx scripts/test-phantom-capability-registry.ts",
+    "test:phantom-hunter": "tsx scripts/test-phantom-hunter.ts",
     "test:hermes-acp-live": "tsx scripts/test-hermes-acp-live.ts",
     "test:local-customer-plan": "tsx scripts/test-local-customer-plan-preview.ts",
     "test:prompt-integrity": "tsx scripts/test-prompt-integrity.ts",

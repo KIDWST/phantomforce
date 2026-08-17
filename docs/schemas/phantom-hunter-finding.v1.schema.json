@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phantomforce.local/schemas/phantom-hunter-finding.v1.schema.json",
+  "title": "PhantomHunter Finding v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "organization_id", "scan_id", "provider", "masked_secret", "secret_fingerprint", "verification_status", "verification_engines", "detection_engines", "confidence", "sources", "remediation", "raw_secret_stored"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "organization_id": { "type": "string", "minLength": 1 },
+    "scan_id": { "type": "string", "format": "uuid" },
+    "provider": { "type": "string", "minLength": 1 },
+    "masked_secret": { "type": "string", "minLength": 1 },
+    "secret_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "verification_status": { "const": "active" },
+    "verified_at": { "type": ["string", "null"], "format": "date-time" },
+    "verification_engines": { "type": "array", "uniqueItems": true, "items": { "enum": ["betterleaks", "trufflehog", "keyhunter"] } },
+    "detection_engines": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["betterleaks", "trufflehog", "keyhunter"] } },
+    "confidence": { "const": "verified_active" },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["engine", "asset_id", "location", "line", "commit", "source_url", "detector"],
+        "properties": {
+          "engine": { "enum": ["betterleaks", "trufflehog", "keyhunter"] },
+          "asset_id": { "type": "string", "format": "uuid" },
+          "location": { "type": "string" },
+          "line": { "type": ["integer", "null"], "minimum": 1 },
+          "commit": { "type": ["string", "null"] },
+          "source_url": { "type": ["string", "null"], "format": "uri" },
+          "detector": { "type": "string" }
+        }
+      }
+    },
+    "remediation": { "type": "string", "minLength": 1 },
+    "raw_secret_stored": { "const": false }
+  }
+}

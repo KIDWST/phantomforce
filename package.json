@@ -65,6 +65,7 @@
     "test:seatbelt-posture": "node scripts/test-seatbelt-posture.mjs && npm run test:seatbelt-posture --workspace @phantomforce/server",
     "test:stripe-billing": "node scripts/test-stripe-billing.mjs && npm run test:stripe-billing --workspace @phantomforce/server",
     "test:change-memory": "node scripts/guard-change-memory.mjs",
+    "test:phantom-hunter": "npm run test:phantom-hunter --workspace @phantomforce/server && node scripts/test-phantom-hunter-ui.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
     "test:automation-workspace": "node scripts/test-automation-workspace.mjs",
     "test:phantom-presence": "node scripts/test-phantom-presence-recovery.mjs",

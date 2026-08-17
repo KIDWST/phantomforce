@@ -1,0 +1,29 @@
+.hunter-web-notice {
+  margin-top: 22px;
+  border: 1px solid rgba(21, 242, 154, 0.3);
+  border-radius: 12px;
+  background: var(--hp);
+  padding: 17px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--hg);
+}
+
+.hunter-web-notice span { color: #91a49c; }
+
+.hunter-web-providers button {
+  appearance: none;
+  border: 1px solid var(--hl);
+  background: #08100d !important;
+  padding: 10px 14px !important;
+  border-radius: 9px;
+  color: #9aaba5 !important;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.hunter-web-providers button:hover {
+  border-color: #38614f;
+  color: var(--hg) !important;
+}
