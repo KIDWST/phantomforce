@@ -7,9 +7,9 @@
  * and its OAuth/Hermes bridge machinery — no media generation.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260801-141";
-import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260801-141";
-import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260801-141";
+import { session as accessSession, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260816-149";
+import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260816-149";
+import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260816-149";
 
 const SOCIAL_LOGIN_URLS = {
   instagram: "https://www.instagram.com/accounts/login/",
@@ -35,12 +35,6 @@ let socialOAuthState = {
   error: "",
   connectors: [],
   preflight: null,
-};
-let socialOAuthSetupState = {
-  loaded: false,
-  loading: false,
-  error: "",
-  setup: null,
 };
 
 function cleanSocialHandle(value = "") {
@@ -79,7 +73,8 @@ function socialLoginTarget(account) {
 }
 function socialAuthHeaders(extra = {}) {
   const token = typeof accessSession?.token === "function" ? accessSession.token() : "";
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const sessionId = typeof accessSession?.get === "function" ? accessSession.get()?.sessionId : "";
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(sessionId ? { "x-phantomforce-session": sessionId } : {}) };
 }
 async function requestSocialOAuthStart(platform) {
   const response = await fetch("/phantom-ai/ops/social-oauth/start", {
@@ -88,9 +83,10 @@ async function requestSocialOAuthStart(platform) {
     body: JSON.stringify({ platform }),
   });
   const json = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(String(json?.error || `OAuth start failed (${response.status}).`));
-  if (!json?.oauth?.authorizationUrl) throw new Error("OAuth start did not return an authorization URL.");
-  return json.oauth;
+  if (!response.ok) throw new Error(String(json?.error || `Account connection failed (${response.status}).`));
+  if (json?.oauth?.authorizationUrl) return { mode: "oauth", oauth: json.oauth, message: "" };
+  if (json?.connect_request) return { mode: "requested", request: json.connect_request, message: json.customer_message || "Connection requested. Nothing else is needed from you." };
+  throw new Error("The secure account connection could not start.");
 }
 function openSocialAuthWindow(accountName = "account") {
   const safeName = String(accountName || "account").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "account";
@@ -116,11 +112,9 @@ function routeSocialAuthWindow(popup, url) {
   return Boolean(fallback);
 }
 async function beginSocialAccountConnection(account, popup = null) {
-  if (!socialOAuthState.loaded) await refreshSocialOAuthStatus({ force: true });
-  const connector = socialConnectorFor(account.id);
-  if (connector?.oauthConfigured || connector?.configured) {
-    const oauth = await requestSocialOAuthStart(account.id);
-    const opened = routeSocialAuthWindow(popup, oauth.authorizationUrl);
+  const start = await requestSocialOAuthStart(account.id);
+  if (start.mode === "oauth") {
+    const opened = routeSocialAuthWindow(popup, start.oauth.authorizationUrl);
     account.connectMode = "oauth-started";
     account.lastConnectAt = new Date().toISOString();
     socialNotice = opened
@@ -129,7 +123,11 @@ async function beginSocialAccountConnection(account, popup = null) {
     startSocialOAuthAuthorizationPolling(account.id);
     return { mode: "oauth", opened };
   }
-  throw new Error(`${account.name} OAuth is not available in this deployment.`);
+  try { popup?.close(); } catch {}
+  account.connectMode = "connection-requested";
+  account.lastConnectAt = new Date().toISOString();
+  socialNotice = start.message;
+  return { mode: "requested", opened: false };
 }
 async function refreshSocialOAuthStatus({ force = false } = {}) {
   if (socialOAuthState.loading || (socialOAuthState.loaded && !force)) return socialOAuthState;
@@ -158,41 +156,6 @@ async function refreshSocialOAuthStatus({ force = false } = {}) {
   }
   rerenderSocialSettings();
   return socialOAuthState;
-}
-async function refreshSocialOAuthSetup({ force = false } = {}) {
-  if (socialOAuthSetupState.loading || (socialOAuthSetupState.loaded && !force)) return socialOAuthSetupState;
-  socialOAuthSetupState = { ...socialOAuthSetupState, loading: true, error: "" };
-  try {
-    const response = await fetch("/phantom-ai/ops/social-oauth/setup", {
-      headers: socialAuthHeaders(),
-    });
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(String(json?.error || `OAuth setup check failed (${response.status}).`));
-    socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
-  } catch (error) {
-    socialOAuthSetupState = {
-      ...socialOAuthSetupState,
-      loaded: true,
-      loading: false,
-      error: error?.message || "OAuth app setup could not be checked.",
-    };
-  }
-  rerenderSocialSettings();
-  return socialOAuthSetupState;
-}
-async function saveSocialOAuthAppSetup(payload = {}) {
-  const response = await fetch("/phantom-ai/ops/social-oauth/setup", {
-    method: "POST",
-    headers: socialAuthHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(payload),
-  });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(String(json?.error || `OAuth setup save failed (${response.status}).`));
-  socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
-  socialOAuthState.preflight = json?.social_analytics?.oauthPreflight || socialOAuthState.preflight;
-  socialOAuthState.loaded = false;
-  await refreshSocialOAuthStatus({ force: true });
-  return json;
 }
 function socialConnectorFor(platform) {
   return socialOAuthState.connectors.find((connector) => connector.id === platform) || null;
@@ -270,7 +233,6 @@ function ensureSocialOAuthCompletionListener() {
   const refreshWhenReturned = () => {
     if (!socialSettingsMount?.isConnected) return;
     void refreshSocialOAuthStatus({ force: true });
-    void refreshSocialOAuthSetup({ force: true });
   };
   window.addEventListener("focus", refreshWhenReturned);
   document.addEventListener("visibilitychange", () => {
@@ -280,35 +242,34 @@ function ensureSocialOAuthCompletionListener() {
 function socialStatusLabel(account) {
   const connector = socialConnectorFor(account.id);
   if (connector?.configured) return "live authorized";
-  if (connector?.oauthConfigured) return "OAuth ready";
-  if (socialOAuthState.loading) return "checking OAuth";
+  if (account.connectMode === "connection-requested") return "connection requested";
+  if (socialOAuthState.loading) return "checking connection";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live OAuth";
   if (st === "linked") return "handle saved — not connected";
   if (account.handle) return "handle saved — not connected";
-  if (st === "pending") return "finish setup";
-  return "not saved";
+  if (st === "pending") return "connecting";
+  return "ready to connect";
 }
 function socialPostingState(account) {
   const connector = socialConnectorFor(account.id);
   if (connector?.configured) return "live feed + posting gated";
-  if (connector?.oauthConfigured) return "connect signed-in account";
-  if (socialOAuthState.loading) return "checking setup";
+  if (account.connectMode === "connection-requested") return "connection requested";
+  if (socialOAuthState.loading) return "checking connection";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live data";
   if (account.analytics) return "report imported";
   if (st === "linked") return "OAuth needed";
   if (account.handle) return "handle ready";
-  if (st === "pending") return "waiting";
-  return "not configured";
+  if (st === "pending") return "connecting";
+  return "connect account";
 }
 function socialActionLabel(account) {
   const connector = socialConnectorFor(account.id);
   if (account.connectMode === "live-api" && account.analytics?.live) return `Sync ${account.name}`;
   if (connector?.configured) return `Reconnect ${account.name}`;
-  if (connector?.oauthConfigured) return `Connect ${account.name}`;
   if (socialOAuthState.loading) return "Checking…";
-  return `Open ${account.name} login`;
+  return `Connect ${account.name}`;
 }
 function clampHermesText(value = "", limit = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -479,9 +440,7 @@ export function renderSocialSettings(el, opts = {}) {
   socialSettingsOpts = opts;
   ensureHermesExtensionListener();
   ensureSocialOAuthCompletionListener();
-  const canManageApps = canManageSocialOAuthApps();
   if (!socialOAuthState.loaded && !socialOAuthState.loading) void refreshSocialOAuthStatus();
-  if (canManageApps && !socialOAuthSetupState.loaded && !socialOAuthSetupState.loading) void refreshSocialOAuthSetup();
   const esc = opts.esc || ((s) => String(s));
   const socialAccounts = loadSocialAccounts();
   const oauthReadyCount = socialOAuthState.connectors.filter((connector) => connector.oauthConfigured).length;
@@ -492,59 +451,28 @@ export function renderSocialSettings(el, opts = {}) {
         <div class="set-sec-head">
           <div>
             <h3>Connect accounts</h3>
-            <p class="set-note">Pick a channel and sign in. PhantomForce opens the platform's official authorization flow and marks the account connected only after the provider callback succeeds. Saved public handles remain profile references, not authorization.</p>
+            <p class="set-note">Choose Connect, sign in, and approve. PhantomForce handles the secure provider handoff, account protection, and connection health.</p>
           </div>
           <span class="set-safe-pill">${authorizedCount}/${socialAccounts.length} live · ${oauthReadyCount}/${socialAccounts.length} ready</span>
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
-        ${socialOAuthState.error ? `<div class="set-social-notice">OAuth status check: ${esc(socialOAuthState.error)}</div>` : ""}
+        ${socialOAuthState.error ? `<div class="set-social-notice">Connection check: ${esc(socialOAuthState.error)}</div>` : ""}
         ${socialOAuthManagedPanel(esc)}
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>
-        ${canManageApps ? socialOAuthSetupPanel(esc) : ""}
       </div>
     </div>`;
-
-  const callbackInput = el.querySelector("[data-oauth-callback]");
-  if (callbackInput) callbackInput.onclick = () => { callbackInput.select(); navigator.clipboard?.writeText(callbackInput.value).catch(() => {}); };
-  const oauthSetupForm = el.querySelector("[data-oauth-setup-form]");
-  if (oauthSetupForm) oauthSetupForm.onsubmit = async (event) => {
-    event.preventDefault();
-    const platform = oauthSetupForm.querySelector("[data-oauth-platform]")?.value || "";
-    const clientId = oauthSetupForm.querySelector("[data-oauth-client-id]")?.value.trim() || "";
-    const clientSecret = oauthSetupForm.querySelector("[data-oauth-client-secret]")?.value.trim() || "";
-    const redirectUri = callbackInput?.value || "";
-    if (!clientId && !clientSecret) {
-      socialNotice = "Paste the provider app ID or secret before saving.";
-      renderSocialSettings(el, opts);
-      return;
-    }
-    try {
-      socialNotice = `Saving ${platform} OAuth app setup…`;
-      await saveSocialOAuthAppSetup({ platform, clientId, clientSecret, redirectUri });
-      socialNotice = `${platform} OAuth app saved. Connect the account from its channel card.`;
-    } catch (error) {
-      socialNotice = error?.message || "OAuth app setup could not be saved.";
-    }
-    renderSocialSettings(el, opts);
-  };
   const quickConnect = el.querySelector("[data-social-quick-connect]");
   if (quickConnect) quickConnect.onclick = async () => {
     quickConnect.disabled = true;
-    let readyAccounts = socialAccounts.filter((account) => {
-      const connector = socialConnectorFor(account.id);
-      return connector?.oauthConfigured && !connector?.configured;
-    });
+    let readyAccounts = socialAccounts.filter((account) => !socialConnectorFor(account.id)?.configured);
     if (!readyAccounts.length && !socialOAuthState.loading) {
       await refreshSocialOAuthStatus({ force: true });
-      readyAccounts = socialAccounts.filter((account) => {
-        const connector = socialConnectorFor(account.id);
-        return connector?.oauthConfigured && !connector?.configured;
-      });
+      readyAccounts = socialAccounts.filter((account) => !socialConnectorFor(account.id)?.configured);
     }
     if (!readyAccounts.length) {
-      socialNotice = "No OAuth-ready provider apps are available yet. Open Developer provider setup once, save the provider app credentials, then Quick connect can authorize accounts.";
+      socialNotice = "Every listed account is already connected.";
       renderSocialSettings(el, opts);
       return;
     }
@@ -560,7 +488,10 @@ export function renderSocialSettings(el, opts = {}) {
       }
     }
     saveSocialAccounts(socialAccounts);
-    socialNotice = `Quick connect opened ${opened}/${readyAccounts.length} OAuth-ready account authorization ${readyAccounts.length === 1 ? "window" : "windows"}.${blocked ? ` ${blocked} popup ${blocked === 1 ? "was" : "were"} blocked by the browser.` : ""} Facebook/Instagram will ask which Meta Page assets to authorize; choose the exact Page you want PhantomForce to use.`;
+    const requested = readyAccounts.length - opened;
+    socialNotice = opened
+      ? `Quick connect opened ${opened} secure sign-in ${opened === 1 ? "window" : "windows"}.${requested ? ` ${requested} connection ${requested === 1 ? "request is" : "requests are"} saved and need nothing else from you.` : ""}${blocked ? ` ${blocked} popup ${blocked === 1 ? "was" : "were"} blocked by the browser.` : ""}`
+      : `${requested} connection ${requested === 1 ? "request is" : "requests are"} saved. Nothing else is needed from you.`;
     renderSocialSettings(el, opts);
   };
 
@@ -607,55 +538,11 @@ export function renderSocialSettings(el, opts = {}) {
       account.lastConnectAt = new Date().toISOString();
       delete account.hermesProof;
       if (socialBridgePollTimer) { clearInterval(socialBridgePollTimer); socialBridgePollTimer = 0; }
-      socialNotice = `${account.name} handle saved. Live data and cross-posting remain locked until OAuth/API authorization is configured.`;
+      socialNotice = `${account.name} handle saved as a public reference. Choose Connect for live data and approved publishing.`;
       saveAndRender();
     };
   });
 
-}
-
-function socialOAuthSetupPanel(esc) {
-  const setup = socialOAuthSetupState.setup;
-  const providers = Array.isArray(setup?.providers) ? setup.providers : [];
-  const callbackUrl = setup?.recommendedRedirectUri || setup?.redirectUri || "https://admin.phantomforce.online/phantom-ai/ops/social-oauth/callback";
-  const preflight = socialOAuthState.preflight || {};
-  const nextLabel = preflight.nextGlobalLabel || "Set up provider apps";
-  const nextDetail = preflight.nextGlobalAction === "connect_signed_in_account"
-    ? "Provider apps are saved. Connect each account with the browser that is already signed in."
-    : preflight.nextGlobalAction === "sync_live_feed"
-      ? "Accounts are authorized. Sync live metrics from the official platform APIs."
-      : "Create the provider app credentials once, then every workspace can connect accounts with OAuth.";
-  const providerOptions = providers.length
-    ? providers.map((provider) => `<option value="${esc(provider.id)}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""}</option>`).join("")
-    : PLATFORMS.map((platform) => `<option value="${esc(platform.id)}">${esc(platform.name)}</option>`).join("");
-  const providerRows = providers.length
-    ? providers.map((provider) => `<span class="${provider.oauthConfigured ? "is-ready" : "is-missing"}">${esc(provider.name)}${provider.id === "instagram" ? " + Facebook" : ""} · ${provider.oauthConfigured ? "ready" : "needs app"}</span>`).join("")
-    : `<span>Checking provider app setup…</span>`;
-  return `<details class="set-oauth-apps">
-    <summary>
-      <span>Developer provider setup</span>
-      <b>${esc(String(setup?.readyCount ?? 0))}/${esc(String(setup?.totalCount ?? (providers.length || PLATFORMS.length)))} ready</b>
-    </summary>
-    <p>This is the one-time developer setup for official OAuth/API access. Keep it collapsed unless you are adding provider app credentials. Normal account sign-in happens on the cards above.</p>
-    <p class="set-social-next"><b>Next:</b> ${esc(nextLabel)} · ${esc(nextDetail)}</p>
-    ${socialOAuthSetupState.error ? `<div class="set-social-notice">${esc(socialOAuthSetupState.error)}</div>` : ""}
-    <label class="set-oauth-callback">
-      <span>Callback URL for provider consoles</span>
-      <input readonly value="${esc(callbackUrl)}" data-oauth-callback />
-    </label>
-    <div class="set-oauth-provider-row">${providerRows}</div>
-    <form class="set-oauth-form" data-oauth-setup-form>
-      <select data-oauth-platform>${providerOptions}</select>
-      <input data-oauth-client-id autocomplete="off" placeholder="Client ID / App ID / Client key" />
-      <input data-oauth-client-secret autocomplete="off" placeholder="Client secret / App secret" type="password" />
-      <button class="btn btn-primary" type="submit">${socialOAuthSetupState.loading ? "Checking…" : "Save app"}</button>
-    </form>
-  </details>`;
-}
-
-function canManageSocialOAuthApps() {
-  const active = ctx?.session || {};
-  return Boolean(active.canManageAccess || active.isSuperAdmin);
 }
 
 function socialOAuthManagedPanel(esc) {
@@ -663,19 +550,19 @@ function socialOAuthManagedPanel(esc) {
   const authorizedCount = socialOAuthState.connectors.filter((connector) => connector.configured).length;
   const totalCount = socialOAuthState.connectors.length || PLATFORMS.length;
   const preflight = socialOAuthState.preflight || {};
-  const nextLabel = preflight.nextGlobalLabel || (authorizedCount ? "Sync live feed" : readyCount ? "Connect accounts" : "Connections temporarily unavailable");
-  const nextDetail = preflight.nextGlobalAction === "sync_live_feed"
+  const nextLabel = authorizedCount ? "Sync live feed" : "Connect accounts";
+  const nextDetail = authorizedCount || preflight.nextGlobalAction === "sync_live_feed"
     ? "Authorized accounts can now pull official metrics."
-    : preflight.nextGlobalAction === "connect_signed_in_account"
+    : readyCount || preflight.nextGlobalAction === "connect_signed_in_account"
       ? "Use the browser account you are already signed into; PhantomForce stores the resulting token server-side."
-      : "The platform app must be configured by the owner before account OAuth can begin.";
+      : "Choose Connect. PhantomForce handles secure sign-in and account protection; nothing else is needed from you.";
   return `<div class="set-social-command">
     <div>
       <span>Account sign-in</span>
       <b>${esc(String(authorizedCount))}/${esc(String(totalCount))} live connections</b>
-      <p>${esc(nextLabel)} · ${esc(nextDetail)} ${readyCount ? `(${readyCount}/${totalCount} provider apps ready)` : ""}</p>
+      <p>${esc(nextLabel)} · ${esc(nextDetail)}</p>
     </div>
-    <button class="set-social-bolt" data-social-quick-connect type="button" title="Connect every OAuth-ready account">
+    <button class="set-social-bolt" data-social-quick-connect type="button" title="Connect every unconnected account">
       ${svgIc("spark")}
       <span>Quick connect</span>
     </button>
@@ -690,14 +577,16 @@ function socialCard(account, esc) {
     ? `Authorized account: ${connector.savedConnection?.accountHandle || connector.savedConnection?.accountName || connector.handle || account.name}`
     : connector?.oauthConfigured
       ? "OAuth app ready. Click connect and approve once."
-      : status === "linked"
+      : account.connectMode === "connection-requested"
+        ? "Connection request saved"
+        : status === "linked"
     ? (profile ? `Public handle saved: ${profile}` : "Public handle saved")
   : status === "pending"
       ? "Sign-in page opened. Save the visible handle below."
       : account.handle
         ? `Public handle ready: ${account.handle}`
-        : "Open login, then save the public handle";
-  const providerUnavailableCopy = "Public login only";
+        : "Choose Connect to continue";
+  const providerUnavailableCopy = "Ready for Connect";
   const oauthDetail = connector
     ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Connected" : connector.oauthConfigured ? "Ready to connect" : providerUnavailableCopy)}</div>`
     : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking…</div>` : "";

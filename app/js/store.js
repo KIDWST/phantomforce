@@ -1,4 +1,4 @@
-import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260801-141";
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260816-149";
 
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
@@ -68,8 +68,8 @@ export const FINANCE_CATEGORIES = [
   "Uncategorized",
 ];
 export const FINANCE_CONNECTORS = [
-  { id: "bank", type: "bank", name: "Bank account", provider: "Plaid", status: "setup-ready" },
-  { id: "card", type: "credit-card", name: "Credit card", provider: "Plaid", status: "setup-ready" },
+  { id: "bank", type: "bank", name: "Bank account", provider: "Secure bank connection", status: "disconnected" },
+  { id: "card", type: "credit-card", name: "Credit card", provider: "Secure card connection", status: "disconnected" },
   { id: "manual", type: "manual", name: "Manual ledger", provider: "Local entry / CSV", status: "ready" },
 ];
 
@@ -460,7 +460,7 @@ function normalizeFinance(finance) {
     .map((item) => ({
       ...FINANCE_CONNECTORS.find((definition) => definition.id === item.id),
       ...item,
-      status: item.status === "requested" || item.status === "not-connected" ? "setup-ready" : item.status,
+      status: item.status === "not-connected" || item.status === "setup-ready" ? "disconnected" : item.status,
       ws: item.ws || "phantomforce",
     })) : [];
   const accounts = Array.isArray(input.accounts) ? input.accounts.map((account) => ({
@@ -603,7 +603,7 @@ function load() {
 const listeners = new Set();
 export const store = {
   state: load(),
-  save() {
+  save(options = {}) {
     try {
       this.state.memory = pruneMemory(Array.isArray(this.state.memory) ? this.state.memory : []);
       this.state.chatHistory = pruneChatHistory(Array.isArray(this.state.chatHistory) ? this.state.chatHistory : []);
@@ -615,7 +615,7 @@ export const store = {
         window.dispatchEvent(new CustomEvent("pf:save-failed", { detail: { error: String(error?.message || error) } }));
       } catch {}
     }
-    listeners.forEach((fn) => fn());
+    if (options.notify !== false) listeners.forEach((fn) => fn());
   },
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   reset() { try { localStorage.removeItem(DB_KEY); } catch {} this.state = normalizeData(seed()); this.save(); },
@@ -1348,7 +1348,10 @@ const MODEL_DISPLAY_LABELS = {
   "claude-sonnet-5": "Balanced", "claude-opus-4-8": "Deep", "claude-haiku-4-5": "Fast",
   "glm-5": "Standard", "openrouter-auto": "Auto-routed",
   "claude-cli": "Claude default", "claude-sonnet": "Sonnet", "claude-opus": "Opus",
-  "private-default": "Private default", "private-high": "High reasoning", "private-fast": "Fast",
+  "default": "Account default", "sonnet": "Sonnet", "opus": "Opus",
+  "private-default": "Codex default", "private-high": "Codex high reasoning", "private-fast": "Codex fast",
+  "gpt-5.5": "GPT-5.5", "gpt-5.6-sol": "GPT-5.6 Codex", "gpt-5.5-instant": "GPT-5.5 Instant",
+  "openrouter/auto": "Auto Router", "openrouter/free": "Free Router",
   "z-ai/glm-5.2": "GLM 5.2", "kimi-k3-hf": "Kimi K3 — Hugging Face Direct", "kimi-k3-hf:latest": "Kimi K3 — Hugging Face Direct", "local-auto": "Auto-detect Ollama", "local-ollama": "Ollama auto", "local-glm": "Local GLM",
   "llama3": "Fast", "mistral": "Balanced", "custom-local": "Custom",
   "custom": "Custom",
@@ -1356,8 +1359,8 @@ const MODEL_DISPLAY_LABELS = {
 export const modelDisplayLabel = (id) => MODEL_DISPLAY_LABELS[id] || id;
 
 /* ============================ Phantom Lane Targets ============================
-   Owner-only backend mapping for the four chat lanes. These are real routing
-   preferences read by command.js before it calls /phantom-ai/chat. */
+   Legacy owner diagnostic aliases. The server-backed organization AI runtime
+   is authoritative for live prompt routing. */
 const PHANTOM_LANE_KEY = "pf.phantomlanes.v1";
 export const PHANTOM_LANES = [
   { id: "claude", name: "Phantom Reasoning", role: "Strategy, copy, review", defaultTarget: "claude_cli" },
@@ -1368,7 +1371,7 @@ export const PHANTOM_LANES = [
 ];
 export const PHANTOM_LANE_TARGETS = [
   { id: "claude_cli", name: "Claude CLI", provider: "phantom", models: ["claude-cli", "claude-sonnet", "claude-opus"] },
-  { id: "private", name: "Private Operator", provider: "phantom", models: ["private-default", "private-high", "private-fast"] },
+  { id: "private", name: "Codex CLI (legacy alias)", provider: "phantom", models: ["private-default", "private-high", "private-fast"] },
   { id: "chatgpt_bridge", name: "ChatGPT Assist Bridge", provider: "chatgpt_plus", models: ["chatgpt-instant", "chatgpt-standard", "chatgpt-deep"] },
   { id: "glm_5_2", name: "GLM / OpenRouter Route", provider: "openrouter_glm", models: ["z-ai/glm-5.2", "openrouter-auto", "local-glm"] },
   { id: "local_ollama", name: "Ollama / Local PC", provider: "local_ollama", models: ["local-auto"], allowCustomModel: true },

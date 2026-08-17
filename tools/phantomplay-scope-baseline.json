@@ -1,0 +1,63 @@
+{
+  "baseline_commit": "fb5814749ae20f184bd890a0ed5f14c4f76eb874",
+  "created_at": "2026-08-16T00:00:00-05:00",
+  "frozen_fingerprints": {
+    "app/assets/phantomplay": "223bae62d190a33d3d1c71e3eafdbe4b15325445",
+    "app/games": "21e6c70786fe4b88e397e188431aaf01b3a8e6d7",
+    "app/js/phantomplay.js": "8130157ee19708afb692c406d1fe040492cd66d2",
+    "app/js/phantomplay-v2.js": "260e3187ade4442b900ba3a0a1fa8198c606579b",
+    "app/phantomplay.css": "52053ab5d9e8bc26646ff9c14e5c344c63c74436",
+    "app/phantomplay-v2.css": "6f115e076b8270a85f5bf1e597a2b5dce7adaa44",
+    "packages/phantomplay-dioxus-shell": "bc96fc32489769eeca6f7946e99b600408b7142b",
+    "packages/phantomplay-edge-worker": "26b39921ce2c42c47215ecfdd00173fad05c0acb",
+    "server/src/phantom-ai/phantomplay.ts": "9a49fcb7964ab5614cb599d3b5f8ffe767526561",
+    "server/src/phantom-ai/phantomplay-v2.ts": "7ddc22a9e48f3bbdacc28fbbfe10a027c23ed21d",
+    "server/src/phantom-ai/phantomplay-edge-network.ts": "e82f19d823f4e1f383f4278e5c5f7636df5d1232",
+    "server/src/phantom-ai/phantomplay-flagship.ts": "59e4d3fb1148a3606ea5f223d66e028518498f08",
+    "server/src/phantom-ai/phantomplay-handle.ts": "a5e3f8eaa40150516a251d214eb7b3129b03c7a5",
+    "server/src/phantomplay-ai-edit.ts": "2c41857d23e0c139daf6921188d57db4133ae269",
+    "server/src/phantomplay-devroom.ts": "2c1306144332b52f9e6d1f48d70ef99bd0aa8621"
+  },
+  "nav_contracts": [
+    {
+      "path": "app/js/main.js",
+      "text": "  { id: \"phantomplay\", label: \"PhantomPlay\", icon: \"film\",  ws: \"phantomplay\", navZone: \"bottom\", quiet: true, optionalModule: true },",
+      "count": 1
+    },
+    {
+      "path": "app/js/main.js",
+      "text": "  phantomplay: \"phantomPlay\",",
+      "count": 1
+    },
+    {
+      "path": "app/js/main.js",
+      "text": "  phantomplay: \"Play\",",
+      "count": 1
+    },
+    {
+      "path": "app/js/main.js",
+      "text": "  const primaryIds = [\"dashboard\", \"crm\", \"sites\", \"phantomplay\", \"phantomstore\", \"analytics\", \"money\", \"approvals\", \"intelligence\", \"settings\", \"adminos\", \"developer\"];",
+      "count": 1
+    },
+    {
+      "path": "app/js/main.js",
+      "text": "const openNavTabs = new Set([\"dashboard\", \"phantomai\", \"media\", \"sites\", \"analytics\", \"automation\", \"planner\", \"phantomplay\", \"phantomstore\"]);",
+      "count": 1
+    },
+    {
+      "path": "app/js/main.js",
+      "text": "  phantomplay: { title: \"PhantomPlay\", kicker: \"Intentional downtime and approved games\", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },",
+      "count": 1
+    },
+    {
+      "path": "app/index.html",
+      "text": "          <button data-nav-id=\"phantomplay\" type=\"button\">PhantomPlay</button>",
+      "count": 1
+    },
+    {
+      "path": "app/js/command-os.js",
+      "text": "const GO_MAP = { d: \"dashboard\", p: \"phantomplay\", s: \"phantomstore\", w: \"sites\", a: \"analytics\", i: \"intelligence\", $: \"money\" };",
+      "count": 1
+    }
+  ]
+}

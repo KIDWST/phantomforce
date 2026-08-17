@@ -9,22 +9,22 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260801-141";
-import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260801-141";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260801-141";
-import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260801-141";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260801-141";
+} from "./imagefilters.js?v=phantom-live-20260816-149";
+import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260816-149";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260816-149";
+import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260816-149";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260816-149";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260801-141";
+} from "./content-editor.js?v=phantom-live-20260816-149";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260801-141";
-import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260801-141";
+} from "./store.js?v=phantom-live-20260816-149";
+import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260816-149";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -108,14 +108,14 @@ const PUBLISH_TONES = [
   ["local", "Local"],
 ];
 const PLANNER_CONNECTORS = [
-  { id: "gmail", group: "Email", name: "Gmail", method: "Google account", capability: "Inbox, drafts, replies", guide: "https://support.google.com/accounts/answer/3466521" },
-  { id: "outlook-mail", group: "Email", name: "Outlook", method: "Microsoft account", capability: "Inbox, drafts, replies", guide: "https://account.live.com/consent/Manage" },
-  { id: "proton-mail", group: "Email", name: "Proton Mail", method: "Proton desktop connection", capability: "Mail access", guide: "https://proton.me/mail/bridge" },
-  { id: "other-mail", group: "Email", name: "Other email", method: "Secure account connection", capability: "Account-specific setup", guide: "" },
-  { id: "google-calendar", group: "Calendar", name: "Google Calendar", method: "Google account", capability: "Events, availability, reminders", guide: "https://support.google.com/calendar/answer/37648" },
-  { id: "outlook-calendar", group: "Calendar", name: "Outlook Calendar", method: "Microsoft account", capability: "Events, availability, reminders", guide: "https://support.microsoft.com/outlook" },
-  { id: "calendly", group: "Calendar", name: "Calendly", method: "Calendly integration", capability: "Bookings and event types", guide: "https://calendly.com/integrations" },
-  { id: "icloud-calendar", group: "Calendar", name: "Apple / iCloud", method: "CalDAV connector", capability: "Calendar events and availability", guide: "https://support.apple.com/102654" },
+  { id: "email-gmail", group: "Email", name: "Gmail", capability: "Inbox, drafts, replies" },
+  { id: "email-outlook", group: "Email", name: "Outlook", capability: "Inbox, drafts, replies" },
+  { id: "email-proton", group: "Email", name: "Proton Mail", capability: "Mail access" },
+  { id: "email-other", group: "Email", name: "Other email", capability: "Secure mail connection" },
+  { id: "calendar-google", group: "Calendar", name: "Google Calendar", capability: "Events, availability, reminders" },
+  { id: "calendar-outlook", group: "Calendar", name: "Outlook Calendar", capability: "Events, availability, reminders" },
+  { id: "calendar-calendly", group: "Calendar", name: "Calendly", capability: "Bookings and event types" },
+  { id: "calendar-icloud", group: "Calendar", name: "Apple / iCloud", capability: "Calendar events and availability" },
 ];
 const plannerState = { weekOffset: 0, openConnector: "" };
 function defaultSocialAccounts() {
@@ -1075,7 +1075,7 @@ function plannerConnectorMarkup(connector, esc) {
     <button type="button" class="ch-planner-connector-head" data-planner-connector="${esc(connector.id)}" aria-expanded="${open}">
       <span><b>${esc(connector.name)}</b><i>${esc(connector.capability)}</i></span><em>Not connected</em>
     </button>
-    ${open ? `<div class="ch-planner-connector-body"><p>Connect with your <b>${esc(connector.method)}</b>. Passwords are never entered on this page.</p>${connector.guide ? `<button type="button" class="btn btn-quiet" data-planner-guide="${esc(connector.guide)}">Open setup guide</button>` : `<span class="ch-src">The workspace owner can finish this connection in Settings.</span>`}</div>` : ""}
+    ${open ? `<div class="ch-planner-connector-body"><p>Choose Connect. PhantomForce handles the secure provider sign-in and protects the account connection.</p><button type="button" class="btn btn-primary" data-open-ws="settings" data-settings-target="media">Connect</button></div>` : ""}
   </article>`;
 }
 function renderContentPlanner(body, data, esc, root, opts) {
@@ -1089,7 +1089,7 @@ function renderContentPlanner(body, data, esc, root, opts) {
   body.innerHTML = `
     <section class="ch-planner-hero ch-card">
       <div><p class="ch-planner-kicker">BUSINESS PLANNER</p><h3>Everything that needs a time and place.</h3><span>Content, calls, follow-ups, meetings, and deadlines in one week.</span></div>
-      <div class="ch-planner-metrics"><span><b>${visibleRows.length}</b><i>This week</i></span><span><b>${waiting}</b><i>Upcoming</i></span><span><b>${PLANNER_CONNECTORS.length}</b><i>Connectors ready to set up</i></span></div>
+      <div class="ch-planner-metrics"><span><b>${visibleRows.length}</b><i>This week</i></span><span><b>${waiting}</b><i>Upcoming</i></span><span><b>${PLANNER_CONNECTORS.length}</b><i>Accounts ready to connect</i></span></div>
     </section>
     <section class="ch-planner-layout">
       <div class="ch-card ch-planner-calendar">
@@ -1134,7 +1134,6 @@ function renderContentPlanner(body, data, esc, root, opts) {
   });
   body.querySelectorAll("[data-planner-remove]").forEach((button) => { button.onclick = (event) => { event.stopPropagation(); savePlannerItems(loadPlannerItems().filter((item) => item.id !== button.dataset.plannerRemove)); renderContentHub(root, opts); }; });
   body.querySelectorAll("[data-planner-connector]").forEach((button) => { button.onclick = () => { plannerState.openConnector = plannerState.openConnector === button.dataset.plannerConnector ? "" : button.dataset.plannerConnector; renderContentHub(root, opts); }; });
-  body.querySelectorAll("[data-planner-guide]").forEach((button) => { button.onclick = () => window.open(button.dataset.plannerGuide, "_blank", "noopener,noreferrer"); });
   wirePostCards(body, data, esc, root, opts);
 }
 function publishSources(data, assets) {
@@ -3917,12 +3916,12 @@ function accountAnalyticsRow(row, esc) {
   const syncFailed = syncOutcome?.state === "error";
   const sourceState = canSync
     ? (syncFailed ? "Live sync failed" : "Ready to sync")
-    : oauthReady ? "Connect account" : saved || account.handle ? "Public handle saved" : "Not connected";
+    : "Connect account";
   const sourceCopy = canSync
     ? (syncFailed ? syncOutcome.error : "Official read-only analytics are ready.")
     : oauthReady
       ? "The connection is ready. Sign in once to start reporting."
-      : connector?.reason || "Choose Connect account to sign in with this platform.";
+      : connector?.reason || "Choose Connect account. PhantomForce handles secure sign-in.";
   const safetyCopy = connector?.targetSafetyCopy || account.targetSafetyCopy || "";
   const targetKind = String(connector?.publishTargetKind || account.publishTargetKind || "").replaceAll("_", " ");
   const targetLabel = connector?.targetLabel || account.publishTargetLabel || "";
@@ -4014,8 +4013,10 @@ function wireAnalyticsActions(el, accounts, opts) {
         window.open(authUrl, "_blank", "noopener,noreferrer");
         analyticsNotice = `${connectorStatus(platform)?.name || platform} sign-in opened. Approve it once; PhantomForce will refresh this page when the callback returns.`;
         startAnalyticsOAuthPolling(platform);
+      } else if (response?.connect_request) {
+        analyticsNotice = response.customer_message || "Connection requested. Nothing else is needed from you.";
       } else {
-        analyticsNotice = "That platform did not return a sign-in link.";
+        analyticsNotice = "The secure account connection could not start.";
       }
     } catch (error) {
       const connector = connectorStatus(platform);
@@ -4027,7 +4028,7 @@ function wireAnalyticsActions(el, accounts, opts) {
     }
   });
   el.querySelectorAll("[data-an-connect-all]").forEach((button) => button.onclick = async () => {
-    const targets = analyticsConnectorState.connectors.filter((connector) => connector.oauthConfigured && !connector.configured);
+    const targets = analyticsConnectorState.connectors.filter((connector) => !connector.configured);
     if (!targets.length) {
       analyticsNotice = "No unconnected channels are waiting.";
       renderAnalytics(el, opts, { skipAutoRefresh: true });
@@ -4039,6 +4040,7 @@ function wireAnalyticsActions(el, accounts, opts) {
       try { return window.open("about:blank", "_blank"); } catch { return null; }
     });
     let opened = 0;
+    let requested = 0;
     for (const [index, connector] of targets.entries()) {
       try {
         const response = await analyticsApi("/phantom-ai/ops/social-oauth/start", {
@@ -4050,6 +4052,9 @@ function wireAnalyticsActions(el, accounts, opts) {
           if (placeholders[index]) placeholders[index].location.href = authUrl;
           else window.open(authUrl, "_blank", "noopener,noreferrer");
           opened += 1;
+        } else if (response?.connect_request) {
+          requested += 1;
+          if (placeholders[index]) placeholders[index].close();
         } else if (placeholders[index]) {
           placeholders[index].close();
         }
@@ -4059,9 +4064,11 @@ function wireAnalyticsActions(el, accounts, opts) {
       }
     }
     analyticsNotice = opened
-      ? `${opened} sign-in flow${opened === 1 ? "" : "s"} opened. Approve the business/page targets and PhantomForce will sync when callbacks return.`
-      : "No social sign-in windows could be opened. Check account connections in Settings.";
-    startAnalyticsOAuthPolling(targets[0]?.id);
+      ? `${opened} secure sign-in flow${opened === 1 ? "" : "s"} opened.${requested ? ` ${requested} additional connection ${requested === 1 ? "request is" : "requests are"} saved.` : ""}`
+      : requested
+        ? `${requested} connection ${requested === 1 ? "request is" : "requests are"} saved. Nothing else is needed from you.`
+        : "The secure social sign-in windows could not be opened.";
+    if (opened) startAnalyticsOAuthPolling(targets[0]?.id);
     renderAnalytics(el, opts, { skipAutoRefresh: true });
   });
   el.querySelectorAll("[data-an-import]").forEach((input) => input.onchange = async () => {

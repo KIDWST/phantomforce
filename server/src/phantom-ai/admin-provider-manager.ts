@@ -80,7 +80,7 @@ function quotaFromFailure(detail: string): AdminProviderQuota {
 }
 
 function publicProviderMeta(providerId: AdminProviderId): { display_id: PublicAdminProviderId; display_name: string } {
-  if (providerId === "codex_cli") return { display_id: "private", display_name: "Private" };
+  if (providerId === "codex_cli") return { display_id: "private", display_name: "Codex CLI" };
   if (providerId === "claude_cli") return { display_id: "claude", display_name: "Claude" };
   if (providerId === "chatgpt_bridge") return { display_id: "chatgpt", display_name: "ChatGPT Bridge" };
   if (providerId === "openrouter_glm") return { display_id: "openrouter", display_name: "OpenRouter" };
@@ -201,16 +201,29 @@ async function checkProvider(providerId: AdminProviderId) {
   if (providerId === "claude_cli") {
     const command = process.env.PHANTOM_CLAUDE_CLI_COMMAND?.trim();
     if (!command && process.platform === "win32" && existsSync(DEFAULT_CLAUDE_PS1)) {
-      return { online: true, latencyMs: 0, detail: "Local CLI is available." };
+      return timedCheck(async () => {
+        const result = await execFileAsync("powershell.exe", [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          DEFAULT_CLAUDE_PS1,
+          "auth",
+          "status",
+        ], { timeout: 5000, windowsHide: true });
+        return /"loggedIn"\s*:\s*true/u.test(result.stdout);
+      }, "CLI authentication is available.");
     }
     return timedCheck(async () => {
-      await execFileAsync(command || "claude", ["--version"], { timeout: 5000, windowsHide: true });
-      return true;
-    }, "CLI is available.");
+      const result = await execFileAsync(command || "claude", ["auth", "status"], { timeout: 5000, windowsHide: true });
+      return /"loggedIn"\s*:\s*true/u.test(result.stdout);
+    }, "CLI authentication is available.");
   }
   if (providerId === "openrouter_glm") {
     const key = process.env.OPENROUTER_API_KEY?.trim();
-    if (!key || process.env.PHANTOM_FORCE_OPENROUTER_GLM !== "true") {
+    const enabled = process.env.PHANTOM_LIVE_PROVIDERS_ENABLED === "true"
+      && process.env.PHANTOM_OPENROUTER_TRANSPORT_ENABLED === "true";
+    if (!key || !enabled) {
       return { online: false, latencyMs: 0, detail: "Cloud route is not configured." };
     }
     return timedCheck(

@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260801-141";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260816-149";
 
 function esc(value = "") {
   return String(value)
@@ -51,7 +51,7 @@ function severityLabel(severity = "info") {
 function moduleStatusLabel(status = "waiting") {
   if (status === "live") return "Ready";
   if (status === "needs_action") return "Needs action";
-  if (status === "needs_setup") return "Needs setup";
+  if (status === "needs_setup") return "Connect";
   return "Waiting";
 }
 

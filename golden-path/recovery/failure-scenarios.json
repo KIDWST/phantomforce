@@ -1,0 +1,31 @@
+{
+  "automatedNow": [
+    "GP-002_PROVIDER_TOKEN_EXPIRED",
+    "GP-003_PROVIDER_RATE_LIMITED",
+    "GP-004_PROVIDER_TIMEOUT",
+    "GP-005_PROVIDER_ASYNC_FAILURE",
+    "GP-006_MEDIA_REJECTED",
+    "GP-007_PERMISSION_LOST_BEFORE_APPROVAL",
+    "GP-008_PERMISSION_LOST_BEFORE_PUBLISH",
+    "GP-009_CLIENT_ARCHIVED",
+    "GP-010_WORKER_CRASH",
+    "GP-011_QUEUE_UNAVAILABLE",
+    "GP-012_TRANSACTION_FAILURE",
+    "GP-013_DUPLICATE_PUBLISH",
+    "GP-014_BROWSER_REPEAT",
+    "GP-015_ANALYTICS_UNAVAILABLE",
+    "GP-016_DUPLICATE_WEBHOOK",
+    "GP-017_OUT_OF_ORDER_WEBHOOK",
+    "GP-018_TOKEN_REFRESH_FAILURE",
+    "GP-019_ORGANIZATION_SUSPENDED",
+    "GP-020_DEPLOY_DURING_ACTIVE_JOB"
+  ],
+  "releaseBlockingBacklog": [],
+  "evidenceLevel": "local compiled API plus real HTTP sandbox transport",
+  "externalPromotionRequirements": [
+    "repeat GP-001 through GP-020 on deployed production-like staging",
+    "replace sandbox authorization with configured provider OAuth sandbox credentials",
+    "prove deployment and schema rollback policy against the staging data service"
+  ],
+  "policy": "The local failure suite is complete, but production promotion still fails closed until the same suite and external requirements pass on deployed staging."
+}

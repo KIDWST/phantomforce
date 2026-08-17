@@ -87,6 +87,14 @@ const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
    park a large llama service on Jordan's PC unless an explicit model setting
    opts into that heavier lane. */
 const DEFAULT_LOCAL_MODEL = "phantom-v1:latest";
+const AUTO_LOCAL_MODEL = "local-auto";
+const AUTO_LOCAL_MODEL_PREFERENCES = [
+  "phantom:latest",
+  "phantom-v1:latest",
+  "qwen3:4b",
+  "qwen3:8b",
+  "qwen3-coder:30b",
+] as const;
 const MAX_CONTEXT_CHARS = 24_000;
 const MAX_MESSAGE_CHARS = 200_000;
 const MAX_RESPONSE_CHARS = 128_000;
@@ -112,6 +120,29 @@ function resolveFallbackModel(env: NodeJS.ProcessEnv | Record<string, string | u
     env.PHANTOM_LOCAL_GLM_FALLBACK_MODEL?.trim() ||
     "";
   return explicit && explicit !== primaryModelId ? explicit : null;
+}
+
+export function selectAutoLocalModel(
+  installedModels: ReadonlySet<string>,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+) {
+  const configured = env.PHANTOM_OLLAMA_AUTO_MODEL?.trim();
+  if (configured && installedModels.has(configured)) return configured;
+  for (const modelId of AUTO_LOCAL_MODEL_PREFERENCES) {
+    if (installedModels.has(modelId)) return modelId;
+  }
+  const ranked = Array.from(installedModels).sort((left, right) => {
+    const score = (modelId: string) => {
+      const normalized = modelId.toLowerCase();
+      if (/^phantom(?::|$)/u.test(normalized)) return 0;
+      if (/qwen[^\n]*(?:3b|4b|7b|8b)/u.test(normalized)) return 1;
+      if (/phantom/u.test(normalized)) return 2;
+      if (/coder/u.test(normalized)) return 4;
+      return 3;
+    };
+    return score(left) - score(right) || left.localeCompare(right);
+  });
+  return ranked[0] ?? null;
 }
 
 function isKimiModel(modelId: string) {
@@ -291,17 +322,17 @@ export async function getLocalOllamaStatus(
   } = {},
 ): Promise<LocalOllamaStatus> {
   const env = options.env ?? process.env;
-  const modelId = resolveLocalModel(env);
-  const baseUrl = resolveBaseUrl(env, modelId);
+  const requestedModelId = resolveLocalModel(env);
+  const baseUrl = resolveBaseUrl(env, requestedModelId);
   const endpoint = `${baseUrl}/api/tags`;
-  const fallbackModelId = resolveFallbackModel(env, modelId);
+  const fallbackModelId = resolveFallbackModel(env, requestedModelId);
   const localOnly = isLocalOllamaBaseUrl(baseUrl);
 
   if (!localOnly && env.PHANTOM_ALLOW_REMOTE_OLLAMA !== "true") {
     return {
       ok: false,
       endpoint,
-      model_id: modelId,
+      model_id: requestedModelId,
       fallback_model_id: fallbackModelId,
       local_only: false,
       models: [],
@@ -314,7 +345,7 @@ export async function getLocalOllamaStatus(
     return {
       ok: false,
       endpoint,
-      model_id: modelId,
+      model_id: requestedModelId,
       fallback_model_id: fallbackModelId,
       local_only: localOnly,
       models: [],
@@ -327,7 +358,7 @@ export async function getLocalOllamaStatus(
     return {
       ok: false,
       endpoint,
-      model_id: modelId,
+      model_id: requestedModelId,
       fallback_model_id: fallbackModelId,
       local_only: localOnly,
       models: [],
@@ -335,16 +366,22 @@ export async function getLocalOllamaStatus(
     };
   }
 
+  const modelId = requestedModelId === AUTO_LOCAL_MODEL
+    ? selectAutoLocalModel(models, env)
+    : requestedModelId;
+  const ready = Boolean(modelId && (models.has(modelId) || Boolean(fallbackModelId && models.has(fallbackModelId))));
   return {
-    ok: models.has(modelId) || Boolean(fallbackModelId && models.has(fallbackModelId)),
+    ok: ready,
     endpoint,
-    model_id: modelId,
+    model_id: modelId || requestedModelId,
     fallback_model_id: fallbackModelId,
     local_only: localOnly,
     models: Array.from(models).sort(),
-    error: models.has(modelId) || Boolean(fallbackModelId && models.has(fallbackModelId))
+    error: ready
       ? null
-      : `Requested local model "${modelId}" is not installed.`,
+      : requestedModelId === AUTO_LOCAL_MODEL
+        ? "No installed Ollama model is available for automatic selection."
+        : `Requested local model "${requestedModelId}" is not installed.`,
   };
 }
 
@@ -401,7 +438,21 @@ export async function callLocalOllamaChat(
   }
 
   const installedModels = await listInstalledOllamaModels(baseUrl, fetchImpl);
-  if (installedModels && !installedModels.has(requestedModelId)) {
+  if (installedModels && requestedModelId === AUTO_LOCAL_MODEL) {
+    const selectedModelId = selectAutoLocalModel(installedModels, env);
+    if (!selectedModelId) {
+      return blockedResult(
+        input,
+        endpoint,
+        requestedModelId,
+        requestedModelId,
+        fallbackModelId,
+        false,
+        "No installed Ollama model is available for automatic selection.",
+      );
+    }
+    modelId = selectedModelId;
+  } else if (installedModels && !installedModels.has(requestedModelId)) {
     if (fallbackModelId && installedModels.has(fallbackModelId)) {
       modelId = fallbackModelId;
       fallbackUsed = true;

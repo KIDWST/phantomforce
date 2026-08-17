@@ -62,6 +62,8 @@
     "test:local-customer-plan": "tsx scripts/test-local-customer-plan-preview.ts",
     "test:prompt-integrity": "tsx scripts/test-prompt-integrity.ts",
     "test:local-ollama-transport": "tsx scripts/test-local-ollama-transport.ts",
+    "test:ai-runtime": "tsx scripts/test-ai-runtime-config.ts && tsx scripts/test-ai-runtime-http.ts",
+    "test:customer-connections": "tsx scripts/test-customer-connections.ts",
     "test:stripe-billing": "tsx scripts/test-stripe-billing.ts",
     "test:site-store-render": "tsx scripts/test-site-store-render.ts",
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",

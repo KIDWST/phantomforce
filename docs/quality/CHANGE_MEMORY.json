@@ -506,8 +506,8 @@
     {
       "id": "dashboard-chat-context-and-fast-routing",
       "status": "active",
-      "title": "Dashboard chat keeps the thread behind Phantom V1",
-      "ownerDecision": "Phantom V1 is the visible operating model. Selected effort and live-data requests use the protected ChatGPT Plus response lane; local Phantom handles fast local work and code execution. Provider details remain server-side and failures never degrade into an unrelated status dump.",
+      "title": "Dashboard chat keeps the thread behind the saved organization AI runtime",
+      "ownerDecision": "The organization owner can choose the provider and exact model that powers PhantomForce. The server-persisted organization runtime overrides forged browser provider fields, Ghost Mode remains a server-side local-only floor, and failures never silently switch providers or degrade into an unrelated status dump.",
       "requiredPatterns": [
         {
           "file": "app/js/store.js",
@@ -716,8 +716,8 @@
         },
         {
           "file": "server/src/index.ts",
-          "pattern": "runAdminPhantomAiChatWithFallback\\(\"local_ollama\"[\\s\\S]*\\[\"local_ollama\"\\], \\{ allowFallback: false \\}\\)",
-          "description": "The server pins every validated action-free route to the local model even if an authenticated browser forges private model and provider fields."
+          "pattern": "const runtimeConfig = runtimeConfigState\\?\\.source === \"saved\"[\\s\\S]*const actionFreeRequestedLane = runtimeConfig \\? adminModelLane : \"local_ollama\"[\\s\\S]*runtimeConfig \\? allowedAdminProviders : \\[\"local_ollama\"\\]",
+          "description": "Validated action-free chat uses the server-saved organization provider and exact model; legacy or forged browser fields cannot override saved runtime state, while organizations without a saved choice retain the local default."
         },
         {
           "file": "app/js/command.js",
@@ -1196,11 +1196,11 @@
       "id": "phantombot-chatgpt-account-switching",
       "status": "active",
       "title": "PhantomBot provides a recovery path when a ChatGPT account reaches its limit",
-      "ownerDecision": "ChatGPT Bridge settings must offer Switch / add account and Log out actions through ChatGPT-managed authentication without collecting passwords. PhantomBot usage-limit errors must link directly to those controls so the operator can change subscription accounts and refresh the bridge.",
+      "ownerDecision": "ChatGPT Bridge settings must offer Connect / switch account and Log out actions through ChatGPT-managed authentication without collecting passwords. PhantomBot usage-limit errors must link directly to those controls so the operator can change subscription accounts and refresh the bridge.",
       "requiredPatterns": [
         {
           "file": "app/js/settings.js",
-          "pattern": "data-chatgpt-account=\"switch\"[\\s\\S]*Switch / add account[\\s\\S]*data-chatgpt-account=\"logout\"[\\s\\S]*Log out of ChatGPT",
+          "pattern": "data-chatgpt-account=\"switch\"[\\s\\S]*Connect / switch account[\\s\\S]*data-chatgpt-account=\"logout\"[\\s\\S]*Log out of ChatGPT",
           "description": "ChatGPT Bridge settings expose both account switching and logout."
         },
         {
@@ -1334,6 +1334,51 @@
           "file": "app/js/analytics-hub.js",
           "pattern": "id: \"pulse\", label: \"Business\"",
           "description": "Analytics cannot regress to a Business label."
+        }
+      ]
+    },
+    {
+      "id": "customer-connections-are-one-click-not-configuration",
+      "status": "active",
+      "title": "External accounts use one-click Connect",
+      "ownerDecision": "Customers never configure provider apps, developer credentials, callback URLs, API keys, or connector infrastructure. Social, accounting, payments, calendar, email, and CRM surfaces present Connect; the server either opens secure provider authorization or persists an organization-scoped connection request without claiming a connection.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/settings.js",
+          "pattern": "id: \"media\", label: \"Connections\", category: \"Connections\"",
+          "description": "Settings exposes one clear Connections destination."
+        },
+        {
+          "file": "app/js/connection-center.js",
+          "pattern": "One-click connections[\\s\\S]*data-connection-start[\\s\\S]*/api/connections/start",
+          "description": "The connection center uses a direct Connect action backed by the server."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "data-act=\"connector\"[\\s\\S]{0,220}connector.status === \"connected\" \\? \"Manage\" : \"Connect\"",
+          "description": "Accounting bank and card cards use Connect, never setup instructions."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "app.post\\(\"/api/connections/start\"[\\s\\S]*startCustomerConnection",
+          "description": "Connect requests are authenticated, tenant-scoped, and server persisted."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/social-settings.js",
+          "pattern": "Developer provider setup|data-oauth-client-id|data-oauth-client-secret|Callback URL for provider consoles",
+          "description": "Social account settings cannot expose developer credential setup."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "Set up now|backend credentials and secure token storage",
+          "description": "Accounting cannot regress to technical setup language or a fake setup action."
+        },
+        {
+          "file": "app/js/connection-center.js",
+          "pattern": "Needs configuration|Setup required|Client secret|App secret",
+          "description": "The customer connection center cannot ask for technical configuration."
         }
       ]
     }

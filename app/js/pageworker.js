@@ -4,8 +4,10 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260801-141";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260801-141";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260816-149";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260816-149";
+import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260816-149";
+import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260816-149";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -13,6 +15,20 @@ const esc = (value = "") => String(value)
   .replaceAll(">", "&gt;")
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#039;");
+
+function pageWorkerAiSettings() {
+  const defaults = {
+    provider: "local",
+    providerMode: "smart",
+    selectedProviders: ["local", "private", "claude", "openrouter", "chatgpt"],
+    models: { local: "local-auto", private: "gpt-5.5", claude: "default", openrouter: "openrouter/auto", chatgpt: "chatgpt-standard" },
+  };
+  try {
+    return { ...defaults, ...JSON.parse(workspaceStorageGetItem("pf.operator.settings.v1") || "{}") };
+  } catch {
+    return defaults;
+  }
+}
 
 const PAGE_WORKERS = {
   automation: {
@@ -130,7 +146,7 @@ const THINKING_LINES = [
   "Checking context, memory, and page intent before we make a confident mess.",
   "Running the real AI path now. The local heuristic has been asked to sit down.",
   "Thinking through the boring safety stuff first so the useful answer can be sharp.",
-  "Consulting the private brain, then I’ll bring back the clean version.",
+  "Consulting your selected AI brain, then I’ll bring back the clean version.",
 ];
 
 function workerFor(pageId) {
@@ -462,6 +478,11 @@ function backendTextFrom(payload) {
 
 function backendStatusLabel(backend) {
   const payload = backend?.payload || {};
+  const runtime = payload.ai_runtime;
+  if (runtime) {
+    const providers = { local_ollama: "Local / Ollama", codex_cli: "Codex", claude_cli: "Claude", openrouter_glm: "OpenRouter", chatgpt_bridge: "ChatGPT Bridge", deterministic_tool: "Built-in tool" };
+    return `${String(runtime.state || "degraded").toUpperCase()} · ${providers[runtime.responding_provider_id] || runtime.responding_provider_id || "Unknown"} · ${runtime.responding_model_id || "model not reported"}${runtime.fallback_used ? " · fallback" : ""}`;
+  }
   return backend?.provider
     || payload.admin_model_label
     || payload.model_id
@@ -571,19 +592,23 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   try {
+    await waitForAiRuntimeSave();
+    const message = backendPrompt(pageId, prompt, analysis);
+    const promptIntegrity = await buildPromptIntegrityEnvelope(message, {
+      messageId: `page-outcome-${Date.now()}`,
+      conversationId: `${currentTenantId()}:${pageId}`,
+    });
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
       headers,
       signal: controller?.signal,
       body: JSON.stringify({
-        message: backendPrompt(pageId, prompt, analysis),
+        message,
         user_request: prompt,
-        provider: "phantom",
-        admin_model: "private",
-        model_lane: "private",
+        prompt_integrity: promptIntegrity,
+        ...buildAiRuntimeRequest(pageWorkerAiSettings(), `page_outcome:${pageId}`),
         route_tier: "standard",
         max_provider_ms: BACKEND_TIMEOUT_MS,
-        allow_provider_fallback: true,
         execution_mode: "approval",
         task_type: `page_outcome_${pageId}`,
         tenant_id: currentTenantId(),
@@ -622,6 +647,7 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
 
 function renderPageWorkerResult(out, analysis, pageAction, backend) {
   const hasBackendAnswer = Boolean(backend?.content);
+  out.hidden = false;
   out.classList.remove("is-thinking");
   out.innerHTML = `
     <div class="page-worker-intel-head">
@@ -682,9 +708,10 @@ async function renderPlan(card, pageId, prompt) {
   out = currentWorkerOutput(card, pageId);
   if (!out) return { analysis, pageAction, backend };
   if (prompt.trim()) rememberPrompt(pageId, prompt, analysis);
-  renderPageWorkerResult(out, analysis, pageAction, backend);
   pushActivity("Page Intelligence", pageAction ? pageAction.summary : (analysis.question ? `needs one detail for ${analysis.intent.toLowerCase()}.` : `${backend?.content ? "AI backend answered" : "Local fallback prepared"} ${analysis.intent.toLowerCase()} from one prompt.`));
-  store.save();
+  store.save({ notify: false });
+  out = currentWorkerOutput(card, pageId);
+  if (out) renderPageWorkerResult(out, analysis, pageAction, backend);
   return { analysis, pageAction, backend };
 }
 
@@ -709,6 +736,13 @@ export function mountPageWorkers(root = document, opts = {}) {
         opts.notify?.("Phantom", result?.pageAction?.summary || (result?.backend?.content
           ? "AI backend analyzed the prompt and reported the result."
           : "I could not get a backend answer, so I kept the local fallback result visible."));
+        // The shell's activity notification persists and refreshes the active
+        // workspace. Repaint the completed receipt into that fresh surface so
+        // the result cannot disappear immediately after success.
+        const refreshedOutput = currentWorkerOutput(card, pageId);
+        if (refreshedOutput && result?.analysis) {
+          renderPageWorkerResult(refreshedOutput, result.analysis, result.pageAction, result.backend);
+        }
         if (result?.pageAction?.refreshWorkspace) {
           setTimeout(() => opts.openWorkspace?.(pageId), 320);
         }

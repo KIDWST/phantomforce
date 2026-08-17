@@ -1,13 +1,20 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260801-141";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260801-141";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260801-141";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260801-141";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260801-141";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260801-141";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260801-141";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260816-149";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260816-149";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260816-149";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260816-149";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260816-149";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260816-149";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260816-149";
+import {
+  getAiRuntimeState,
+  loadAiRuntimeConfig,
+  persistAiRuntimeConfig,
+  refreshAiRuntimeProviders,
+  settingsFromAiRuntimeConfig,
+} from "./ai-runtime.js?v=phantom-live-20260816-149";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -23,10 +30,10 @@ const SETTINGS_TABS = [
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
   { id: "modules", label: "Workspace Modules", category: "Workspace" },
   { id: "companion", label: "Companion", category: "Workspace" },
-  { id: "media", label: "Social accounts", category: "Social" },
+  { id: "media", label: "Connections", category: "Connections" },
 ];
 
-const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Social"];
+const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Connections"];
 const SETTINGS_CONTEXT = {
   clientsetup: { title: "Workspace setup", note: "Configure the organization before lead, content, approval, and reporting work starts." },
   organization: { title: "Organization & access", note: "Manage employees, roles, invitations, and module access for this workspace." },
@@ -55,18 +62,20 @@ const PROVIDERS = [
     name: "Claude",
     short: "CL",
     role: "Writing, strategy, and careful review",
-    models: ["claude-cli", "claude-sonnet", "claude-opus"],
+    models: ["default", "sonnet", "opus"],
+    allowCustomModel: true,
   },
   {
     id: "private",
-    name: "Private",
-    short: "PV",
-    role: "Code, files, debugging, and implementation",
-    models: ["private-default", "private-high", "private-fast"],
+    name: "Codex",
+    short: "CX",
+    role: "Codex CLI for code, files, debugging, and implementation",
+    models: ["gpt-5.5", "gpt-5.6-sol", "gpt-5.5-instant"],
+    allowCustomModel: true,
   },
   {
     id: "chatgpt",
-    name: "ChatGPT",
+    name: "ChatGPT Bridge",
     short: "CG",
     role: "User-owned ChatGPT Plus bridge for fast thinking, answers, and Hermes handoff.",
     models: ["chatgpt-instant", "chatgpt-standard", "chatgpt-deep"],
@@ -76,14 +85,15 @@ const PROVIDERS = [
     name: "OpenRouter",
     short: "OR",
     role: "Cloud model routing and flexible fallbacks",
-    models: ["openrouter-auto", "z-ai/glm-5.2"],
+    models: ["openrouter/auto", "z-ai/glm-5.2", "openrouter/free"],
+    allowCustomModel: true,
   },
   {
     id: "local",
     name: "Phantom V1",
     short: "PC",
-    role: "Phantom V1, Qwen3-Coder, installed Ollama models, and direct Kimi K3 reasoning",
-    models: ["phantom-v1:latest", "qwen3-coder:30b", KIMI_OLLAMA_MODEL, "local-auto"],
+    role: "Installed Ollama models on this machine",
+    models: ["local-auto"],
     allowCustomModel: true,
   },
 ];
@@ -141,9 +151,8 @@ function providerModels(provider) {
   if (provider.id !== "local") return provider.models;
   const installed = localModelStatus.models
     .map((model) => model.model || model.name)
-    .filter(Boolean)
-    .filter((model) => !KIMI_OLLAMA_ALIASES.has(model));
-  return [...new Set(["local-auto", KIMI_OLLAMA_MODEL, ...installed])];
+    .filter(Boolean);
+  return [...new Set(["local-auto", ...installed])];
 }
 
 const DEFAULT_SETTINGS = {
@@ -152,11 +161,11 @@ const DEFAULT_SETTINGS = {
   selectedProviders: ["local", "chatgpt"],
   brainMode: "subscription",
   models: {
-    claude: "claude-cli",
-    private: "private-default",
+    claude: "default",
+    private: "gpt-5.5",
     chatgpt: "chatgpt-standard",
-    openrouter: "openrouter-auto",
-    local: "phantom-v1:latest",
+    openrouter: "openrouter/auto",
+    local: "local-auto",
   },
   responseStyle: "operator",
   responseLength: "balanced",
@@ -258,15 +267,6 @@ function loadOperatorSettings() {
   }
 }
 
-function rawOperatorSettingsSaved() {
-  try {
-    const raw = workspaceStorageGetItem(AI_SETTINGS_KEY);
-    return Boolean(raw && raw.trim() && raw.trim() !== "{}");
-  } catch {
-    return false;
-  }
-}
-
 function saveOperatorSettings(settings) {
   try { workspaceStorageSetItem(AI_SETTINGS_KEY, JSON.stringify(normalizeSettings(settings))); } catch {}
 }
@@ -275,26 +275,51 @@ export function getOperatorSettings() {
   return loadOperatorSettings();
 }
 
+export async function hydrateOperatorRuntimeSettings() {
+  await loadAiRuntimeConfig();
+  const runtime = getAiRuntimeState();
+  if (runtime.source === "saved" && runtime.config) {
+    saveOperatorSettings(settingsFromAiRuntimeConfig(loadOperatorSettings(), runtime.config));
+  } else if (runtime.source === "default" && runtime.canManage) {
+    // Persist even a first-run default so every prompt has one canonical,
+    // organization-scoped runtime decision and an auditable execution receipt.
+    await persistAiRuntimeConfig(loadOperatorSettings());
+  }
+  return getAiRuntimeState();
+}
+
 export function getOperatorInfrastructureStatus() {
   const settings = loadOperatorSettings();
   const activeProvider = providerFor(settings.provider);
   const activeModels = providerModels(activeProvider);
   const activeModel = settings.models[activeProvider.id] || activeModels[0] || activeProvider.models[0] || "";
   const modelLabel = activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel);
+  const runtime = getAiRuntimeState();
+  const allowedStates = (runtime.providerManager?.providers || []).filter((provider) => settings.selectedProviders.includes(provider.display_id));
+  const activeState = allowedStates.find((provider) => provider.display_id === settings.provider);
   if (!activeProvider?.id || !activeModel) {
     return {
-      label: "Needs configuration",
+      label: "Choose model",
       detail: "Choose a model in Settings",
       tone: "error",
       configured: false,
     };
   }
   if (settings.providerMode === "smart") {
+    const online = allowedStates.filter((provider) => provider.status === "online");
+    if (!online.length && allowedStates.length && allowedStates.every((provider) => provider.status === "offline")) {
+      return {
+        label: "AI brain unavailable",
+        detail: "No enabled provider passed its health check",
+        tone: "error",
+        configured: false,
+      };
+    }
     return {
-      label: "Phantom V1 · Ready",
-      detail: "Local operating model with private intelligence routing",
-      tone: "ok",
-      configured: true,
+      label: online.length ? "Phantom Hybrid · Real" : "Phantom Hybrid · Checking",
+      detail: online.length ? `${online.length} enabled provider${online.length === 1 ? "" : "s"} passed health checks` : "Provider health is not confirmed yet",
+      tone: online.length ? "ok" : "warn",
+      configured: Boolean(online.length),
     };
   }
   if (activeProvider.id === "local" && activeModel === "local-auto" && localModelStatus.loaded && !localModelStatus.models.length) {
@@ -305,11 +330,16 @@ export function getOperatorInfrastructureStatus() {
       configured: false,
     };
   }
+  const activeTruth = activeState?.status === "online"
+    ? "Real"
+    : activeState?.status === "offline"
+      ? "Unavailable"
+      : "Checking";
   return {
-    label: `${activeProvider.name} · ${modelLabel}`,
-    detail: `${activeProvider.name} / ${modelLabel}`,
-    tone: activeProvider.id === "local" && localModelStatus.error ? "error" : "ok",
-    configured: true,
+    label: `${activeProvider.name} · ${activeTruth}`,
+    detail: activeState?.status === "online" ? `Real · ${activeProvider.name} / ${modelLabel}` : activeState?.status === "offline" ? `Unavailable · ${activeState.detail || "Choose Connect or another provider"}` : `Checking · ${activeProvider.name} / ${modelLabel}`,
+    tone: activeState?.status === "online" ? "ok" : activeState?.status === "offline" || (activeProvider.id === "local" && localModelStatus.error) ? "error" : "warn",
+    configured: activeState?.status === "online",
   };
 }
 
@@ -353,28 +383,41 @@ async function refreshAgentAssistBridge(el, opts, rerender = true) {
 
 function bridgeStatusLabel(status) {
   if (agentAssistBridgeStatus.loading) return "Checking";
-  if (agentAssistBridgeStatus.error) return "Needs setup";
-  if (status?.executable) return "Adapter callable";
-  return "Relay only";
+  if (agentAssistBridgeStatus.error) return "Unavailable";
+  if (status?.executable) return "Connected";
+  return "Ready to connect";
+}
+
+function runtimeProviderStatus(providerId) {
+  const runtime = getAiRuntimeState();
+  const provider = runtime.providerManager?.providers?.find((item) => item.display_id === providerId);
+  if (!provider) return { state: runtime.loading ? "checking" : "unknown", label: runtime.loading ? "Checking" : "Not checked", detail: runtime.error || "Run a provider check to confirm availability." };
+  if (provider.truth_state === "degraded") return { state: "checking", label: "Degraded", detail: provider.detail || "The provider exists, but a real model response has not been confirmed." };
+  if (provider.status === "online") return { state: "real", label: "Real", detail: provider.detail || "Health check passed." };
+  if (provider.status === "offline") return { state: "unavailable", label: "Unavailable", detail: provider.detail || "Not authenticated or reachable." };
+  return { state: "checking", label: "Checking", detail: provider.detail || "Health has not been confirmed yet." };
 }
 
 function renderProviderCards(settings) {
-  return PROVIDERS.map((provider) => `
-    <button class="set-model-card ${settings.selectedProviders.includes(provider.id) ? "is-active" : ""} ${settings.provider === provider.id ? "is-preferred" : ""}" type="button" data-ai-provider="${esc(provider.id)}" aria-pressed="${settings.selectedProviders.includes(provider.id) ? "true" : "false"}">
+  return PROVIDERS.map((provider) => {
+    const runtime = runtimeProviderStatus(provider.id);
+    return `
+    <button class="set-model-card ${settings.selectedProviders.includes(provider.id) ? "is-active" : ""} ${settings.provider === provider.id ? "is-preferred" : ""} is-${runtime.state}" type="button" data-ai-provider="${esc(provider.id)}" aria-pressed="${settings.selectedProviders.includes(provider.id) ? "true" : "false"}">
       <span class="set-provider-mark">${esc(provider.short)}</span>
-      <span class="set-provider-copy"><b>${esc(provider.name)}</b><i>${esc(provider.id === "local" ? localProviderStatusText() : provider.role)}</i></span>
+      <span class="set-provider-copy"><b>${esc(provider.name)} <em class="set-runtime-state is-${runtime.state}">${esc(runtime.label)}</em></b><i>${esc(provider.id === "local" ? localProviderStatusText() : `${provider.role} · ${runtime.detail}`)}</i></span>
       <span class="set-provider-check">${settings.selectedProviders.includes(provider.id) ? "✓" : "+"}</span>
-    </button>`).join("");
+    </button>`;
+  }).join("");
 }
 
 function localProviderStatusText() {
-  if (localModelStatus.loading) return "Checking Ollama and Kimi bridge...";
+  if (localModelStatus.loading) return "Checking Ollama on this machine...";
   if (localModelStatus.loaded && localModelStatus.models.length) {
-    return `${localModelStatus.models.length} local Ollama model${localModelStatus.models.length === 1 ? "" : "s"} + Kimi K3 direct`;
+    return `${localModelStatus.models.length} installed Ollama model${localModelStatus.models.length === 1 ? "" : "s"}`;
   }
-  if (localModelStatus.loaded) return "Kimi K3 direct is available; no local Ollama models found";
-  if (localModelStatus.error) return `Kimi K3 direct available · ${cleanLocalProviderMessage(localModelStatus.error)}`;
-  return "Local Ollama models plus Kimi K3 through Hugging Face Direct";
+  if (localModelStatus.loaded) return "No installed Ollama model passed the local check";
+  if (localModelStatus.error) return cleanLocalProviderMessage(localModelStatus.error);
+  return "Installed Ollama models on this machine";
 }
 
 function renderProviderModeCards(settings) {
@@ -389,10 +432,15 @@ function renderSelectedModelControls(settings) {
     const provider = providerFor(providerId);
     const selectedModel = settings.models[provider.id] || provider.models[0];
     const models = providerModels(provider);
+    const listId = `ai-models-${provider.id}`;
+    const control = provider.allowCustomModel
+      ? `<input type="text" list="${listId}" data-ai-provider-model="${provider.id}" value="${esc(selectedModel)}" autocomplete="off" spellcheck="false" aria-label="${esc(provider.name)} model ID"/>
+         <datalist id="${listId}">${models.map((model) => `<option value="${esc(model)}">${esc(provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}</datalist>`
+      : `<select data-ai-provider-model="${provider.id}">
+          ${models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(modelDisplayLabel(model))}</option>`).join("")}
+        </select>`;
     return `<label class="set-control set-provider-model"><span>${esc(provider.name)} model</span>
-      <select data-ai-provider-model="${provider.id}">
-        ${models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}
-      </select>
+      ${control}
       ${provider.id === "local" ? `<i>${esc(localProviderStatusText())}</i>` : ""}
     </label>`;
   }).join("");
@@ -400,7 +448,7 @@ function renderSelectedModelControls(settings) {
 
 function localModelLabel(modelId) {
   if (modelId === "local-auto") return localModelStatus.models.length ? "Auto - best installed Ollama model" : "Auto - read Ollama";
-  if (KIMI_OLLAMA_ALIASES.has(modelId)) return "Kimi K3 — Hugging Face Direct (remote; no OpenRouter)";
+  if (KIMI_OLLAMA_ALIASES.has(modelId)) return "Kimi K3 (requires this exact model in Ollama)";
   const model = localModelStatus.models.find((item) => item.model === modelId || item.name === modelId);
   const suffix = [model?.parameter_size, model?.quantization_level].filter(Boolean).join(" ");
   return `${model?.display_name || modelId}${suffix ? ` (${suffix})` : ""}`;
@@ -482,7 +530,9 @@ function renderSafetySummary(settings) {
 
 function saveMiniAndRender(el, opts, settings) {
   saveOperatorSettings(settings);
-  if (typeof opts.onChange === "function") opts.onChange(normalizeSettings(settings));
+  void persistAiRuntimeConfig(settings)
+    .then(() => { if (typeof opts.onChange === "function") opts.onChange(normalizeSettings(settings)); })
+    .catch(() => { if (typeof opts.onChange === "function") opts.onChange(normalizeSettings(settings)); });
   renderOperatorMiniSettings(el, opts);
   /* confirmation lives in the panel so nothing can overwrite it */
   const saved = el.querySelector("[data-mini-saved]");
@@ -733,14 +783,28 @@ function renderGhostModeSection() {
 
 function renderModelTab(settings, activeProvider, activeModel) {
   const mode = PROVIDER_MODES.find((item) => item.id === settings.providerMode) || PROVIDER_MODES[0];
+  const runtime = getAiRuntimeState();
+  const persistenceLabel = runtime.saving
+    ? "Saving organization brain…"
+    : runtime.error
+      ? `Degraded: ${runtime.error}`
+      : runtime.config?.version
+        ? `Saved for this organization · version ${runtime.config.version}`
+        : runtime.loading
+          ? "Loading organization brain…"
+          : "Local choice ready to sync";
   return `
       ${renderGhostModeSection()}
       <div class="set-section">
         <div class="set-sec-head">
           <div>
             <h3>AI models</h3>
-            <p class="set-note">Choose Ghost/local behavior, one explicitly selected provider, several selected providers, or Phantom Hybrid routing. Kimi K3 appears inside Local / Ollama and is used only when that model is explicitly selected.</p>
+            <p class="set-note">Choose the provider and exact model that powers PhantomBot, Prompt the Outcome, page intelligence, and prompt-driven automation planning. The choice is organization-wide and persisted on the server.</p>
           </div>
+        </div>
+        <div class="set-selection-summary set-runtime-summary">
+          <span><b>Runtime truth</b><i>${esc(persistenceLabel)}</i></span>
+          <button class="btn btn-quiet" type="button" data-ai-runtime-refresh ${runtime.refreshing ? "disabled" : ""}>${runtime.refreshing ? "Checking…" : "Check providers now"}</button>
         </div>
         <p class="set-label">How Phantom chooses</p>
         <div class="set-choice-grid">${renderProviderModeCards(settings)}</div>
@@ -758,7 +822,7 @@ function renderModelTab(settings, activeProvider, activeModel) {
         <div class="set-control-grid set-provider-models">${renderSelectedModelControls(settings)}</div>
         ${settings.selectedProviders.includes("local") ? `
           <div class="set-rule-list">
-            <span>Local includes Ollama on this PC (${esc(localModelStatus.baseUrl)}) plus Kimi K3 via the direct Hugging Face bridge</span>
+            <span>Local uses Ollama on this machine (${esc(localModelStatus.baseUrl)}). A named model is usable only when Ollama reports it as installed.</span>
             <span>${esc(localProviderStatusText())}</span>
             <button class="btn btn-quiet" type="button" data-local-model-refresh>Re-read Ollama models</button>
           </div>` : ""}
@@ -779,7 +843,7 @@ function renderModelTab(settings, activeProvider, activeModel) {
             ], settings.responseLength)}</select>
           </label>
         </div>
-        <p class="set-footnote">If a selected provider is unavailable, Smart Mix and Multiple can try another enabled provider. Selected-provider-only mode never switches silently.</p>
+        <p class="set-footnote">Real means a live health check passed. Unavailable means the provider is not authenticated or reachable. Hybrid and Multiple may use another enabled provider and show the fallback in the response receipt; Selected-provider-only never switches silently.</p>
       </div>`;
 }
 
@@ -824,7 +888,7 @@ function renderChatBehaviorTab(settings) {
         <label class="set-inline set-inline-tight"><input type="checkbox" data-ai-toggle="receipts" ${settings.receipts ? "checked" : ""}/> Keep receipts for important actions</label>
         <div class="set-rule-list">
           <span>No public demo sends</span>
-          <span>No uploads without a configured lane</span>
+          <span>No uploads without a connected lane</span>
           <span>No charges without owner rules</span>
           <span>Autopilot is for safe repeat work</span>
         </div>
@@ -836,9 +900,6 @@ function renderChatBehaviorTab(settings) {
 
 function renderChatGptBridgeTab() {
   const status = agentAssistBridgeStatus.status || {};
-  const options = Array.isArray(status.setup_options) ? status.setup_options : [];
-  const optionById = (id) => options.find((item) => item.id === id) || {};
-  const env = status.env || {};
   const error = agentAssistBridgeStatus.error;
   const setupRequired = status.setup_required !== false;
   return `
@@ -854,13 +915,13 @@ function renderChatGptBridgeTab() {
         <div class="set-status-grid">
           <span><b>Status</b><i>${esc(bridgeStatusLabel(status))}</i></span>
           <span><b>Effort</b><i>${esc((status.effort_levels || ["instant", "standard", "deep"]).join(" / "))}</i></span>
-          <span><b>Adapter URL</b><i>${status.bridge_url_configured ? "Configured" : "Missing"}</i></span>
-          <span><b>OpenAI API key</b><i>${optionById("openai_api_key").ready ? "Configured" : "Not configured"}</i></span>
+          <span><b>Account connection</b><i>${setupRequired ? "Connect" : "Connected"}</i></span>
+          <span><b>Connection privacy</b><i>Credentials stay outside the browser</i></span>
           <span><b>Credential safety</b><i>No ChatGPT password stored</i></span>
         </div>
         <div class="set-bridge-note ${setupRequired ? "is-warning" : "is-ready"}">
-          <b>${setupRequired ? "Bridge is not executable yet" : "Bridge adapter is callable"}</b>
-          <span>${esc(status.subscription_billing_note || "ChatGPT app subscriptions and OpenAI API usage are separate billing paths. PhantomForce never stores a ChatGPT password.")}</span>
+          <b>${setupRequired ? "Connect ChatGPT" : "ChatGPT is connected"}</b>
+          <span>${setupRequired ? "Choose Connect / switch account, sign in with ChatGPT, and return here to refresh the connection." : "PhantomForce can use this account for the ChatGPT model lane you select."}</span>
         </div>
         <p class="set-label">ChatGPT subscription account</p>
         <article class="set-bridge-card is-ready">
@@ -868,37 +929,14 @@ function renderChatGptBridgeTab() {
           <i>ChatGPT-managed sign-in</i>
           <span>Open ChatGPT’s account menu to switch between signed-in accounts or add another subscription account. Accounts, billing, chats, and usage limits remain separate.</span>
           <div class="record-actions">
-            <button class="btn" type="button" data-chatgpt-account="switch">Switch / add account</button>
+            <button class="btn" type="button" data-chatgpt-account="switch">Connect / switch account</button>
             <button class="btn btn-quiet" type="button" data-chatgpt-account="logout">Log out of ChatGPT</button>
           </div>
           ${chatGptAccountMessage ? `<span class="set-status-pill">${esc(chatGptAccountMessage)}</span>` : ""}
         </article>
-        <p class="set-label">Setup options</p>
-        <div class="set-bridge-grid">
-          ${options.map((item) => `
-            <article class="set-bridge-card ${item.ready ? "is-ready" : ""}">
-              <b>${esc(item.label)}</b>
-              <i>${item.ready ? "Ready" : "Needs setup"}</i>
-              <span>${esc(item.note)}</span>
-            </article>
-          `).join("") || `
-            <article class="set-bridge-card">
-              <b>Relay packet</b>
-              <i>Ready</i>
-              <span>PhantomForce can prepare a bounded review packet for a human or browser assistant.</span>
-            </article>
-          `}
-        </div>
-        <p class="set-label">Universal agent bridge env</p>
-        <div class="set-code-list">
-          <code>${esc(env.bridge_enabled || "PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED")}=true</code>
-          <code>${esc(env.bridge_url || "PHANTOM_AGENT_ASSIST_BRIDGE_URL")}=http://127.0.0.1:&lt;adapter-port&gt;/assist</code>
-          <code>${esc(env.bridge_token || "PHANTOM_AGENT_ASSIST_BRIDGE_TOKEN")}=&lt;optional local token&gt;</code>
-          <code>${esc(env.openai_api_key || "OPENAI_API_KEY")}=&lt;OpenAI Platform API key&gt;</code>
-        </div>
         <div class="set-rule-list">
-          <span>Do not paste ChatGPT passwords here</span>
-          <span>Plus/Pro does not include API billing</span>
+          <span>Choose Switch / add account to connect</span>
+          <span>Account credentials remain with ChatGPT</span>
           <span>Relay packets remain available offline</span>
           <span>Agents must still obey approval/autopilot rules</span>
         </div>
@@ -1030,7 +1068,7 @@ function renderPlanCard(plan, currentKey, options = {}) {
         ? `<button type="button" class="btn btn-primary" data-billing-checkout="${esc(plan.key)}">Continue to secure checkout</button>`
         : ""}
       ${!localCustomer && !current && billing?.checkoutEnabled && !billing?.hasOpenSubscription && plan.key !== "free" && !plan.intervals?.[interval]
-        ? `<span class="set-note">This billing interval is not configured yet.</span>`
+        ? `<span class="set-note">This billing interval is unavailable right now.</span>`
         : ""}
     </article>`;
 }
@@ -1066,14 +1104,14 @@ async function renderPlanAccessTab(el, opts = {}) {
       ? "Safe simulator"
       : billing?.productionReady
         ? "Stripe verified"
-        : "Setup required";
+        : "Connect payments";
     const planDescription = localCustomer
       ? "Switch Basic, Pro, and Elite instantly. Workspace type is configured separately, and this local simulator never charges a payment method."
       : !canManagePlan
         ? "This workspace plan and billing are managed by an owner or admin."
         : billing?.productionReady
           ? "Choose a plan with Stripe Checkout. Card, Apple Pay, and eligible PayPal options appear securely at checkout; access changes only after Stripe verifies payment."
-          : "Secure Stripe checkout is not connected yet. Your current access remains unchanged; an owner can finish the server-side Stripe setup without exposing payment credentials here.";
+          : "Secure checkout is not connected yet. Your current access remains unchanged; choose Connect for Stripe in Connections. No payment credentials are entered here.";
     el.innerHTML = `
       <div class="set-section">
         <div class="set-section-head">
@@ -1301,7 +1339,7 @@ export function renderOperatorSettings(el, opts = {}) {
         <div>
           <p class="set-eyebrow">Operator brain</p>
           <h3>Phantom Console settings</h3>
-          <p class="set-note">Phantom AI is the chatbot. Phantom Console is the operating layer around it: brain routing, Phantom Loop, memory depth, Termina hands, and the approval/autopilot boundary. These are local owner settings; the public demo chat still cannot send, upload, charge, or touch private systems.</p>
+          <p class="set-note">Phantom AI is the chatbot. Phantom Console is the operating layer around it: organization-wide model routing, Phantom Loop, memory depth, Termina hands, and the approval/autopilot boundary. Provider credentials stay on the server; the public demo still cannot send, upload, charge, or touch private systems.</p>
         </div>
         ${renderSafetySummary(settings)}
       </div>
@@ -1324,6 +1362,9 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const saveAndRender = () => {
     saveOperatorSettings(settings);
+    void persistAiRuntimeConfig(settings)
+      .then(() => { if (el.isConnected && loadSettingsTab() === "model") renderOperatorSettings(el, opts); })
+      .catch(() => { if (el.isConnected && loadSettingsTab() === "model") renderOperatorSettings(el, opts); });
     renderOperatorSettings(el, opts);
   };
 
@@ -1358,10 +1399,17 @@ export function renderOperatorSettings(el, opts = {}) {
   });
 
   el.querySelectorAll("[data-ai-provider-model]").forEach((select) => {
-    select.onchange = () => {
+    const commitModel = () => {
       settings.models[select.dataset.aiProviderModel] = select.value;
       saveAndRender();
     };
+    select.onchange = commitModel;
+    if (select.tagName === "INPUT") {
+      select.oninput = () => {
+        window.clearTimeout(select._phantomModelSaveTimer);
+        select._phantomModelSaveTimer = window.setTimeout(commitModel, 450);
+      };
+    }
   });
 
   const preferred = el.querySelector("[data-ai-preferred]");
@@ -1372,6 +1420,14 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const localRefresh = el.querySelector("[data-local-model-refresh]");
   if (localRefresh) localRefresh.onclick = () => refreshLocalModels(el, opts);
+
+  const runtimeRefresh = el.querySelector("[data-ai-runtime-refresh]");
+  if (runtimeRefresh) runtimeRefresh.onclick = () => {
+    void refreshAiRuntimeProviders()
+      .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
+      .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
+    renderOperatorSettings(el, opts);
+  };
 
   const bridgeRefresh = el.querySelector("[data-agent-assist-refresh]");
   if (bridgeRefresh) bridgeRefresh.onclick = () => refreshAgentAssistBridge(el, opts);
@@ -1399,6 +1455,9 @@ export function renderOperatorSettings(el, opts = {}) {
   const reset = el.querySelector("[data-ai-reset]");
   if (reset) reset.onclick = () => {
     saveOperatorSettings(DEFAULT_SETTINGS);
+    void persistAiRuntimeConfig(DEFAULT_SETTINGS)
+      .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
+      .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
     renderOperatorSettings(el, opts);
   };
 
@@ -1482,7 +1541,7 @@ export function renderOperatorSettings(el, opts = {}) {
   });
 
   const mediaMount = el.querySelector(`#${mediaMountId}`);
-  if (mediaMount) renderSocialSettings(mediaMount, opts);
+  if (mediaMount) renderConnectionCenter(mediaMount, opts);
 
   const clientSetupMount = el.querySelector(`#${clientSetupMountId}`);
   if (clientSetupMount) renderClientSetupConsole(clientSetupMount);
@@ -1510,6 +1569,12 @@ export function renderOperatorSettings(el, opts = {}) {
 
   if (activeTab === "model" && settings.selectedProviders.includes("local") && !localModelStatus.loaded && !localModelStatus.loading) {
     refreshLocalModels(el, opts);
+  }
+  const runtime = getAiRuntimeState();
+  if (activeTab === "model" && !runtime.loaded && !runtime.loading) {
+    void hydrateOperatorRuntimeSettings()
+      .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
+      .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
   }
   if (activeTab === "bridge" && !agentAssistBridgeStatus.loaded && !agentAssistBridgeStatus.loading) {
     refreshAgentAssistBridge(el, opts);

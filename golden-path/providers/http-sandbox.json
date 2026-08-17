@@ -1,0 +1,9 @@
+{
+  "provider": "phantomforce-http-sandbox",
+  "environment": "sandbox",
+  "transport": "HTTP",
+  "healthEndpoint": "/health",
+  "publishEndpoint": "/publications",
+  "analyticsEndpoint": "/publications/:providerPublicationId/analytics",
+  "truthRule": "The connection is authorized only after a live health response. Provider success is persisted only with a provider publication ID."
+}

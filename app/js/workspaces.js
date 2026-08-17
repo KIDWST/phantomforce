@@ -9,24 +9,24 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260801-141";
+} from "./store.js?v=phantom-live-20260816-149";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260801-141";
+} from "./orgs.js?v=phantom-live-20260816-149";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260801-141";
+} from "./proposalpipeline.js?v=phantom-live-20260816-149";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260801-141";
+} from "./approvalpipeline.js?v=phantom-live-20260816-149";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -34,8 +34,9 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260801-141";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260801-141";
+} from "./financeledger.js?v=phantom-live-20260816-149";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260816-149";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260816-149";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1271,8 +1272,23 @@ function parseFinanceCsv(text, ws) {
 function connectorLabel(connector) {
   if (connector.status === "ready") return "Ready";
   if (connector.status === "connected") return "Connected";
-  if (connector.status === "setup-ready") return "Setup available";
-  return "Ready to set up";
+  if (connector.status === "requested") return "Connection requested";
+  return "Ready to connect";
+}
+
+async function requestAccountingConnection(id) {
+  const connectorId = id === "card" ? "finance-card" : "finance-bank";
+  const token = session.token();
+  const sessionId = session.get()?.sessionId || "";
+  const response = await fetch("/api/connections/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(sessionId ? { "x-phantomforce-session": sessionId } : {}) },
+    body: JSON.stringify({ tenant_id: currentTenantId(), connector_id: connectorId }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Connection request failed (${response.status}).`);
+  if (payload.authorizationUrl) window.open(payload.authorizationUrl, "_blank", "noopener,noreferrer");
+  return payload;
 }
 
 function applyServerFinanceDocument(document, ws) {
@@ -1398,12 +1414,12 @@ function renderMoney(el, rerender) {
                 <b>${esc(connector.name)}</b>
                 <p>${connector.id === "manual"
                   ? "Manual entry and CSV import are active right now."
-                  : `Live sync uses ${esc(connector.provider)} once backend credentials and secure token storage are configured.`}</p>
+                  : "Choose Connect. PhantomForce handles the secure provider handoff and account protection behind the scenes."}</p>
                 <div class="finance-connector-foot">
                   <i>${esc(connectorLabel(connector))}</i>
                   ${connector.id === "manual"
                     ? `<label class="btn btn-quiet finance-import ${readOnly ? "is-disabled" : ""}">Import CSV<input type="file" accept=".csv,text/csv" data-finance-import hidden ${readOnly ? "disabled" : ""} /></label>`
-                    : `<button class="btn btn-quiet" data-act="connector" data-id="${esc(connector.id)}" type="button">${connector.status === "connected" ? "Manage connection" : "Set up now"}</button>`}
+                    : `<button class="btn ${connector.status === "connected" ? "btn-quiet" : "btn-primary"}" data-act="connector" data-id="${esc(connector.id)}" type="button">${connector.status === "connected" ? "Manage" : "Connect"}</button>`}
                 </div>
               </article>`).join("")}
           </div>
@@ -1587,7 +1603,7 @@ function renderMoney(el, rerender) {
       }
       rerender();
     },
-    connector: (id) => {
+    connector: async (id) => {
       const finance = financeNow();
       let connector = finance.connectors.find((item) => item.ws === ws && item.id === id);
       if (!connector) {
@@ -1596,17 +1612,34 @@ function renderMoney(el, rerender) {
         connector = { ...definition, ws };
         finance.connectors.push(connector);
       }
-      connector.status = "setup-ready";
-      connector.setupAt = new Date().toISOString();
-      financeUi.notice = connector.id === "bank" || connector.id === "card"
-        ? `${connector.name} setup is available now. Choose your verified CSV export to import transactions immediately.`
-        : `${connector.name} is ready.`;
-      pushActivity("Accounting Ledger", `${connector.name} setup opened.`, ws);
-      store.save();
-      rerender();
-      if ((connector.id === "bank" || connector.id === "card") && !readOnly) {
-        window.setTimeout(() => el.querySelector("[data-finance-import]")?.click(), 0);
+      if (readOnly) {
+        financeUi.notice = "Owner or admin access is required to connect accounting accounts.";
+        rerender();
+        return;
       }
+      financeUi.notice = `Opening ${connector.name} connection…`;
+      rerender();
+      try {
+        const payload = await requestAccountingConnection(id);
+        // rerender() normalizes and replaces the finance document, so reacquire
+        // the current connector instead of mutating the pre-render reference.
+        const currentFinance = financeNow();
+        let currentConnector = currentFinance.connectors.find((item) => item.ws === ws && item.id === id);
+        if (!currentConnector) {
+          const definition = FINANCE_CONNECTORS.find((item) => item.id === id);
+          if (!definition) return;
+          currentConnector = { ...definition, ws };
+          currentFinance.connectors.push(currentConnector);
+        }
+        currentConnector.status = payload.state === "connected" ? "connected" : "requested";
+        currentConnector.requestedAt = payload.request?.requestedAt || new Date().toISOString();
+        financeUi.notice = payload.customerMessage || "Connection requested. Nothing else is needed from you.";
+        pushActivity("Accounting Ledger", `${currentConnector.name} connection requested.`, ws);
+        store.save();
+      } catch (error) {
+        financeUi.notice = error instanceof Error ? error.message : "The secure connection could not start.";
+      }
+      rerender();
     },
     export: (id, btn) => {
       const header = "date,description,amount,category,account,source";
@@ -1831,7 +1864,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260801-141")
+      import("./brain.js?v=phantom-live-20260816-149")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -3541,6 +3574,7 @@ function renderAdmin(el, rerender) {
     <div class="ws-toolbar">
       <p class="ws-note">Owner controls, diagnostics, and connector readiness. Clients only see what you choose to expose.</p>
     </div>
+    <div data-production-core-panel></div>
     <h3 class="ws-subhead">Active control layer</h3>
     <p class="ws-note">Every tool is mapped to a Phantom desk. “Ready” means available to the owner; external sends, paid runs, and account changes still need the right connector and owner mode.</p>
     ${renderToolSpineCards()}
@@ -3576,6 +3610,7 @@ function renderAdmin(el, rerender) {
   bindActions(el, {
     reset: () => { if (confirm("Reset local Phantom data to a blank account?")) { store.reset(); rerender(); } },
   });
+  void mountProductionCorePanel(el.querySelector("[data-production-core-panel]"));
 }
 
 /* ============================ PHANTOM CONSOLE ============================ */

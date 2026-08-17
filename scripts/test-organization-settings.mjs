@@ -27,14 +27,10 @@ assert.match(settings, /id: "bridge", label: "ChatGPT Bridge", category: "AI Bra
   "ChatGPT Bridge setup belongs in AI Brain settings.");
 assert.match(settings, /\/phantom-ai\/agent-assist\/status/u,
   "Settings must read the universal agent assist bridge status.");
-assert.match(settings, /ChatGPT app subscriptions and OpenAI API usage are separate billing paths/u,
-  "Settings must explain that ChatGPT app subscriptions are not the API billing path.");
-assert.match(settings, /OPENAI_API_KEY/u,
-  "Settings must expose the OpenAI API key setup path without capturing secrets.");
-assert.match(settings, /Do not paste ChatGPT passwords here/u,
-  "Settings must forbid ChatGPT password capture.");
-assert.match(settings, /data-chatgpt-account="switch"[\s\S]*Switch \/ add account/u,
-  "ChatGPT Bridge settings must offer a direct account-switch action.");
+assert.doesNotMatch(settings, /OPENAI_API_KEY|api.?key input|password input/iu,
+  "Settings must never send customers into AI secret or password configuration.");
+assert.match(settings, /data-chatgpt-account="switch"[\s\S]*Connect \/ switch account/u,
+  "ChatGPT Bridge settings must offer a direct account connection action.");
 assert.match(settings, /data-chatgpt-account="logout"[\s\S]*Log out of ChatGPT/u,
   "ChatGPT Bridge settings must offer a direct logout action.");
 assert.match(settings, /window\.PhantomBotDesktop\?\.openExternal[\s\S]*window\.open/u,

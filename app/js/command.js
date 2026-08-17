@@ -12,11 +12,12 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260801-141";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260801-141";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260801-141";
-import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260801-141";
-import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260801-141";
+} from "./store.js?v=phantom-live-20260816-149";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260816-149";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260816-149";
+import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260816-149";
+import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260816-149";
+import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260816-149";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -39,7 +40,6 @@ const LOCAL_FIRST_INTENTS = new Set([
   "create_automation", "reminder", "termina_parallel", "vacation_mode",
   "looper_build", "approval_request",
 ]);
-const PROVIDER_FAILURE_MESSAGE = "I couldn't complete that just now. Your request is still here";
 
 /* Pull a subject out of phrases like "draft a proposal for Sarah's gym". */
 function subjectOf(text) {
@@ -69,7 +69,7 @@ function loadRuntimeAiSettings() {
      provider answers — so Connected-by-default degrades gracefully instead
      of silently locking everyone into canned regex replies forever. */
   const defaults = {
-    provider: "claude",
+    provider: "local",
     providerMode: "smart",
     selectedProviders: ["claude", "private", "chatgpt", "openrouter", "local"],
     brainMode: "subscription",
@@ -78,6 +78,7 @@ function loadRuntimeAiSettings() {
     memoryMode: "business",
     contextDepth: "standard",
     externalActionMode: "approval",
+    models: { local: "local-auto", private: "gpt-5.5", claude: "default", openrouter: "openrouter/auto", chatgpt: "chatgpt-standard" },
   };
   try {
     const saved = JSON.parse(workspaceStorageGetItem(AI_SETTINGS_KEY) || "{}");
@@ -124,6 +125,13 @@ const PHANTOM_V1_CODE_MODEL = "qwen3-coder:30b";
 const PHANTOM_V1_REASONING_MODEL = "kimi-k3-hf:latest";
 const INSTANT_CHAT_MODEL = PHANTOM_V1_MODEL;
 const INSTANT_CHAT_MAX_PROVIDER_MS = 4500;
+const SINGLE_PROVIDER_MAX_PROVIDER_MS = Object.freeze({
+  local: 25000,
+  private: 30000,
+  claude: 30000,
+  openrouter: 12000,
+  chatgpt: 120000,
+});
 const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
 const REASONING_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat", "brainstorm", "feedback", "plan"]);
 const ADVISORY_CHAT_INTENTS = new Set(["brainstorm", "feedback", "plan"]);
@@ -210,22 +218,6 @@ function providerIdForRequest(settings, intent, deepReasoning = false, raw = "")
   return selected[0];
 }
 
-function modelLaneForProvider(providerId) {
-  if (providerId === "claude") return "claude_cli";
-  if (providerId === "chatgpt") return "chatgpt_bridge";
-  if (providerId === "kimi") return "local_ollama";
-  if (providerId === "openrouter") return "glm_5_2";
-  if (providerId === "local") return "local_ollama";
-  return "private";
-}
-
-function providerForRequest(providerId) {
-  if (providerId === "openrouter") return "openrouter_glm";
-  if (providerId === "chatgpt") return "chatgpt_bridge";
-  if (providerId === "kimi") return "local_ollama";
-  return "phantom";
-}
-
 function selectedModelForProvider(settings, providerId, routeProfile = null) {
   if (providerId === "kimi") return selectedLocalModel(settings);
   if (providerId === "local" && localSelectionUsesKimi(settings, providerId)) return selectedLocalModel(settings);
@@ -243,8 +235,8 @@ function selectedModelForProvider(settings, providerId, routeProfile = null) {
   return providerId === "private" ? (PRIVATE_BACKEND_MODEL_BY_ALIAS[model] || model || "gpt-5.5") : model;
 }
 
-function thoughtProviderIdForRequest() {
-  return "chatgpt";
+function thoughtProviderIdForRequest(_settings, fallbackProviderId) {
+  return fallbackProviderId || "local";
 }
 
 function allowedProvidersForSettings(settings, routeProfile = null) {
@@ -261,6 +253,9 @@ function chatRouteProfileForRequest(raw, intent, settings) {
   const deepReasoning = shouldUseDeepReasoning(raw, intent);
   const selectedProviderId = providerIdForRequest(settings, intent, deepReasoning, raw);
   const normalProviderId = effectiveProviderId(settings, selectedProviderId);
+  const directProviderBudget = (providerId) => settings.providerMode === "single"
+    ? (SINGLE_PROVIDER_MAX_PROVIDER_MS[providerId] || INSTANT_CHAT_MAX_PROVIDER_MS)
+    : INSTANT_CHAT_MAX_PROVIDER_MS;
   if (isLiveDataChatRequest(raw, intent)) {
     const selected = selectedProviderIds(settings);
     const providerId = settings.brainMode !== "local" && settings.providerMode === "smart"
@@ -274,7 +269,7 @@ function chatRouteProfileForRequest(raw, intent, settings) {
       requestedModel: selectedModelForProvider(settings, providerId, { tier: "instant" }),
       allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
       allowFallback: false,
-      maxProviderMs: providerId === "chatgpt" ? null : INSTANT_CHAT_MAX_PROVIDER_MS,
+      maxProviderMs: directProviderBudget(providerId),
     };
   }
   if (isInstantChatRequest(raw, intent)) {
@@ -288,7 +283,7 @@ function chatRouteProfileForRequest(raw, intent, settings) {
       requestedModel: selectedModelForProvider(settings, providerId, { tier: "instant" }),
       allowedProviders: instantProviders.map((id) => PROVIDER_TO_BACKEND[id]).filter(Boolean),
       allowFallback: instantProviders.length > 1,
-      maxProviderMs: INSTANT_CHAT_MAX_PROVIDER_MS,
+      maxProviderMs: directProviderBudget(providerId),
     };
   }
   if (isReasoningChatRequest(raw, intent)) {
@@ -297,7 +292,7 @@ function chatRouteProfileForRequest(raw, intent, settings) {
       tier: "reasoning",
       providerId,
       requestedModel: selectedModelForProvider(settings, providerId, { tier: "reasoning" }),
-      allowedProviders: [PROVIDER_TO_BACKEND.chatgpt],
+      allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
       allowFallback: false,
       maxProviderMs: null,
     };
@@ -308,7 +303,7 @@ function chatRouteProfileForRequest(raw, intent, settings) {
       tier: "advisory",
       providerId,
       requestedModel: selectedModelForProvider(settings, providerId, { tier: "advisory" }),
-      allowedProviders: [PROVIDER_TO_BACKEND.chatgpt],
+      allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
       allowFallback: false,
       maxProviderMs: null,
     };
@@ -439,17 +434,6 @@ function buildContextModules(settings, raw, intent, recentConversation = recentC
   return modules;
 }
 
-function assistMode(routeTier) {
-  if (routeTier === "deep" || routeTier === "reasoning" || routeTier === "advisory") return "strategy";
-  return "instant";
-}
-
-function assistEffort(routeTier) {
-  if (routeTier === "deep" || routeTier === "reasoning" || routeTier === "advisory") return "deep";
-  if (routeTier === "standard") return "standard";
-  return "instant";
-}
-
 function requestedEffort(value) {
   const effort = String(value || "").trim().toLowerCase();
   if (effort === "deep") return "deep";
@@ -465,111 +449,8 @@ function routeProfileForEffort(raw, intent, settings, effortOverride = "") {
   return {
     ...routeProfile,
     tier,
-    providerId: "chatgpt",
-    requestedModel: selectedModelForProvider(settings, "chatgpt", { tier }),
-    allowedProviders: [PROVIDER_TO_BACKEND.chatgpt],
-    allowFallback: false,
-    maxProviderMs: null,
+    requestedModel: selectedModelForProvider(settings, routeProfile.providerId, { tier }),
   };
-}
-
-function isLocalDevelopmentHost() {
-  try {
-    return ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
-  } catch {
-    return false;
-  }
-}
-
-async function refreshLocalDevelopmentToken(signal) {
-  if (!isLocalDevelopmentHost()) return "";
-  const sessionId = ctx.session?.canManageAccess ? "admin-jordan" : "client-sports-demo";
-  try {
-    const response = await fetch("/auth/demo-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal,
-      body: JSON.stringify({ sessionId }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload?.token || !payload?.session) return "";
-    ctx.session = {
-      ...(ctx.session || {}),
-      sessionId: payload.session.id,
-      label: payload.session.label || ctx.session?.label || "",
-      canManageAccess: !!payload.session.canManageAccess,
-      token: payload.token,
-    };
-    session.set(ctx.session);
-    return session.token();
-  } catch {
-    return "";
-  }
-}
-
-async function askPhantomAssist(raw, intent, settings, routeProfile, signal, recentConversation, headers, promptIntegrity) {
-  const includeBusinessContext = needsBusinessContext(raw, intent);
-  const boundedConversation = Array.isArray(recentConversation) ? recentConversation.slice(-10) : [];
-  const contextModules = buildContextModules(settings, raw, intent, boundedConversation);
-  const context = [
-    `Workspace: ${wsName(currentWs())}`,
-    `Task type: ${intent.primaryIntent}`,
-    `Route tier: ${routeProfile.tier}`,
-    includeBusinessContext
-      ? "Use the bounded workspace context below when it is relevant."
-      : "This is general conversation; do not invent private workspace facts.",
-    ...contextModules.map((module) => [
-      `${module.module}: ${module.summary || ""}`,
-      ...(module.items || []).map((item) => `${item.title || ""}${item.status ? ` (${item.status})` : ""}${item.detail ? `: ${item.detail}` : ""}`),
-    ].join("\n")),
-  ].join("\n\n").slice(0, 5200);
-  const constraints = [
-    "Answer the user's request directly.",
-    "Do not claim tools or external actions ran unless a real receipt is present.",
-    "Do not expose hidden reasoning, tokens, credentials, cookies, or secrets.",
-    "Return only the answer that PhantomBot should display.",
-  ];
-  const requestBody = JSON.stringify({
-    caller: "phantombot",
-    mode: assistMode(routeProfile.tier),
-    effort: assistEffort(routeProfile.tier),
-    task: String(raw || ""),
-    context,
-    constraints,
-    desired_output: "Return the complete answer PhantomBot should display to the user.",
-    prompt_integrity: promptIntegrity,
-  });
-  const request = (requestHeaders) => fetch("/phantom-ai/respond", {
-    method: "POST",
-    headers: requestHeaders,
-    signal,
-    body: requestBody,
-  });
-  try {
-    let response = await request(headers);
-    if (response.status === 401) {
-      const refreshedToken = await refreshLocalDevelopmentToken(signal);
-      if (refreshedToken) {
-        response = await request({ ...headers, Authorization: `Bearer ${refreshedToken}` });
-      }
-    }
-    const payload = await response.json().catch(() => ({}));
-    const output = String(payload?.answer || "").trim();
-    if (!response.ok || payload?.ok !== true || !output) return null;
-    return {
-      say: output,
-      cards: [],
-      open: null,
-      intent,
-      hermes: {
-        route_tier: routeProfile.tier,
-        status: "complete",
-      },
-      skills: [],
-    };
-  } catch {
-    return null;
-  }
 }
 
 /* Standard/deep backend chat can walk multiple providers before giving up.
@@ -577,13 +458,19 @@ async function askPhantomAssist(raw, intent, settings, routeProfile, signal, rec
    fall back to the local responder instead of making the user wait. */
 async function askHermesBrain(raw, intent, settings, effortOverride = "") {
   if (typeof fetch !== "function" || typeof AbortController === "undefined") return null;
+  await waitForAiRuntimeSave();
   const routeProfile = routeProfileForEffort(raw, intent, settings, effortOverride);
   const controller = new AbortController();
+  const explicitSingleTimeout = settings.providerMode === "single" && Number.isFinite(routeProfile.maxProviderMs)
+    ? routeProfile.maxProviderMs + 8000
+    : null;
   const timeout = setTimeout(
     () => controller.abort(),
     routeProfile.providerId === "chatgpt"
       ? 240000
-      : routeProfile.tier === "instant"
+      : explicitSingleTimeout != null
+        ? explicitSingleTimeout
+        : routeProfile.tier === "instant"
         ? 6500
         : ["reasoning", "advisory"].includes(routeProfile.tier)
           ? 16000
@@ -593,7 +480,6 @@ async function askHermesBrain(raw, intent, settings, effortOverride = "") {
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   const loop = loadPhantomLoop();
-  const requestedProviderId = routeProfile.providerId;
   const recentConversation = recentChatTurns(10, raw);
   const includeBusinessContext = needsBusinessContext(raw, intent);
   const promptIntegrity = await buildPromptIntegrityEnvelope(raw, {
@@ -601,9 +487,6 @@ async function askHermesBrain(raw, intent, settings, effortOverride = "") {
     conversationId: currentTenantId() || currentWs() || "phantom-chat",
   });
   try {
-    if (requestedProviderId === "chatgpt") {
-      return await askPhantomAssist(raw, intent, settings, routeProfile, controller.signal, recentConversation, headers, promptIntegrity);
-    }
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
       headers,
@@ -611,14 +494,9 @@ async function askHermesBrain(raw, intent, settings, effortOverride = "") {
       body: JSON.stringify({
         message: raw,
         user_request: raw,
-        provider: providerForRequest(requestedProviderId),
-        admin_model: modelLaneForProvider(requestedProviderId),
-        model_lane: modelLaneForProvider(requestedProviderId),
-        requested_model: routeProfile.requestedModel,
+        ...buildAiRuntimeRequest(settings, "phantombot"),
         route_tier: routeProfile.tier,
         max_provider_ms: routeProfile.maxProviderMs,
-        allow_provider_fallback: routeProfile.allowFallback,
-        allowed_providers: allowedProvidersForSettings(settings, routeProfile),
         execution_mode: settings.externalActionMode === "owner_rules" ? "auto" : "approval",
         task_type: intent.primaryIntent,
         tenant_id: currentTenantId(),
@@ -649,17 +527,16 @@ async function askHermesBrain(raw, intent, settings, effortOverride = "") {
       }),
     });
     const payload = await response.json().catch(() => ({}));
-    if (payload?.fallback?.all_failed && !payload?.fallback?.local_response) return null;
     if (!response.ok || !payload?.message?.content) return null;
     const say = String(payload.message.content || "").replace(/\s+\n/g, "\n").trim();
     if (!say) return null;
-    if (say.includes(PROVIDER_FAILURE_MESSAGE)) return null;
     return {
       say,
       cards: [],
       open: null,
       intent,
       hermes: payload.hermes || null,
+      aiRuntime: payload.ai_runtime || null,
       /* Skills the brain visibly engaged for this reply (names only - the
          playbook text stays server-side). Empty when none matched. */
       skills: (payload.brain?.engaged_skills || []).map((skill) => skill?.name).filter(Boolean),
@@ -1545,7 +1422,7 @@ function routeCommand(raw, settings) {
     const m = moneyView();
     const line = m.transactions.length
       ? `${signedMoney(m.netCash)} net cashflow across ${m.transactions.length} actual transaction${m.transactions.length === 1 ? "" : "s"}: ${fmtMoney(m.cashIn)} in, ${fmtMoney(m.cashOut)} out.`
-      : "Your accounting records have no transactions yet. Add one manually or import a bank/card CSV; live bank sync should stay marked not connected until the secure connector backend is configured.";
+      : "Your accounting records have no transactions yet. Open Accounting and choose Connect for a bank or card, or add a manual transaction while the secure connection opens.";
     return {
       say: line,
       cards: [card("Accounting", "Actual transactions",

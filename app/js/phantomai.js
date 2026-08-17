@@ -14,21 +14,22 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260801-141";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260801-141";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260801-141";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260801-141";
-import { esc } from "./workspaces.js?v=phantom-live-20260801-141";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260801-141";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260801-141";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260801-141";
-import { setCompanionState } from "./companion.js?v=phantom-live-20260801-141";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260801-141";
+} from "./store.js?v=phantom-live-20260816-149";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260816-149";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260816-149";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260816-149";
+import { esc } from "./workspaces.js?v=phantom-live-20260816-149";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260816-149";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260816-149";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260816-149";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260816-149";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260816-149";
+import { getOperatorInfrastructureStatus, getOperatorSettings } from "./settings.js?v=phantom-live-20260816-149";
 import {
   buildPromptIntegrityEnvelope,
   MAX_PROMPT_CHARS,
   promptSizeError,
-} from "./prompt-integrity.js?v=phantom-live-20260801-141";
+} from "./prompt-integrity.js?v=phantom-live-20260816-149";
 
 const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -37,6 +38,17 @@ const MAX_MESSAGES = 80;
 const NEW_TASK_TITLE = "New session";
 const INTERRUPTED_REPLY = "This response was interrupted before it finished. Retry the message when you are ready.";
 const ACP_TERMINAL_STATES = new Set(["completed", "denied", "failed", "cancelled", "blocked"]);
+
+function selectedBrainIdentity() {
+  const settings = getOperatorSettings();
+  const status = getOperatorInfrastructureStatus();
+  const providerNames = { local: "Phantom V1 / Ollama", private: "Codex CLI", claude: "Claude CLI", openrouter: "OpenRouter", chatgpt: "ChatGPT Bridge" };
+  return {
+    provider: providerNames[settings.provider] || settings.provider || "AI brain",
+    model: String(settings.models?.[settings.provider] || "model not selected"),
+    status,
+  };
+}
 
 let rootEl = null;
 let taskState = { workspace: "", activeId: "", tasks: [] };
@@ -93,6 +105,7 @@ function normalizedMessage(message = {}) {
     media: Array.isArray(message.media) ? message.media.slice(0, 8) : [],
     attachments: Array.isArray(message.attachments) ? message.attachments.slice(0, 8) : [],
     background: !!message.background,
+    aiRuntime: message.aiRuntime && typeof message.aiRuntime === "object" ? message.aiRuntime : null,
     operator: message.operator && typeof message.operator === "object" ? message.operator : null,
     pending: false,
     error: pending || !!message.error,
@@ -429,10 +442,13 @@ function paintDetailDrawer() {
 
   const attachmentCount = task.messages.reduce((total, message) => total + (message.attachments?.length || 0), 0);
   const approval = operator?.state === "awaiting_approval";
+  const brain = selectedBrainIdentity();
   body.innerHTML = `<dl class="phantombot-context-list">
     <div><dt>Workspace</dt><dd>${esc(wsName(currentWs()) || "PhantomForce")}</dd></div>
     <div><dt>Session</dt><dd>${esc(task.title || NEW_TASK_TITLE)}</dd></div>
-    <div><dt>Model</dt><dd>Phantom V1:Latest</dd></div>
+    <div><dt>Provider</dt><dd>${esc(brain.provider)}</dd></div>
+    <div><dt>Model</dt><dd>${esc(brain.model)}</dd></div>
+    <div><dt>Runtime</dt><dd>${esc(brain.status.label)}</dd></div>
     <div><dt>Effort</dt><dd>${esc((task.effort || "instant").replace(/^./, (c) => c.toUpperCase()))}</dd></div>
     <div><dt>Attachments</dt><dd>${attachmentCount}</dd></div>
     <div><dt>Artifacts</dt><dd>${artifacts.length}</dd></div>
@@ -675,11 +691,17 @@ function assistantTurnHtml(message, messageIndex) {
       </article>`;
   }
   const accountLimit = message.error && /usage limit|quota|rate limit|too many requests|429|subscription limit/i.test(String(message.say || ""));
+  const runtime = message.aiRuntime;
+  const runtimeProviderNames = { local_ollama: "Local / Ollama", codex_cli: "Codex", claude_cli: "Claude", openrouter_glm: "OpenRouter", chatgpt_bridge: "ChatGPT Bridge", deterministic_tool: "Built-in tool" };
+  const runtimeReceipt = runtime
+    ? `<p class="phantomai-runtime-receipt is-${esc(runtime.state || "degraded")}"><b>${esc(String(runtime.state || "degraded").toUpperCase())}</b><span>${esc(runtimeProviderNames[runtime.responding_provider_id] || runtime.responding_provider_id || "Unknown provider")} · ${esc(runtime.responding_model_id || "model not reported")}${runtime.fallback_used ? " · fallback used" : ""}</span></p>`
+    : "";
   return `
     <article class="phantombot-turn is-assistant ${message.error ? "is-error" : ""}">
       <div class="phantombot-avatar"><img src="/app/assets/brand-phantom-favicon.png" alt="" /></div>
       <div class="phantombot-turn-content">
         <header><b>PhantomBot</b>${message.background ? "<span>Working in background</span>" : ""}</header>
+        ${runtimeReceipt}
         <div class="phantomai-chat-reply phantomai-rich-text">${richTextHtml(message.say)}</div>
         ${operatorTimelineHtml(message.operator)}
         ${message.background ? `<p class="phantomai-chat-status">The task is still running. Results will stay attached to this workspace.</p>` : ""}
@@ -870,7 +892,10 @@ function setBusy(busy) {
   const runtime = rootEl.querySelector("[data-phantombot-runtime]");
   if (runtime) runtime.querySelector("span").textContent = busy ? "Working" : "Ready";
   const companion = rootEl.querySelector("[data-phantombot-companion] span");
-  if (companion) companion.textContent = busy ? "PhantomBot working" : (session.token() ? "PhantomBot connected" : "PhantomBot local");
+  if (companion) {
+    const brain = selectedBrainIdentity();
+    companion.textContent = busy ? `${brain.provider} working` : brain.status.label;
+  }
   const status = rootEl.querySelector("[data-phantombot-composer-status]");
   if (status) {
     status.hidden = !busy;
@@ -1114,6 +1139,7 @@ function mountChatTab() {
         }
       }
       targetMessage.background = backgroundNoteFor(result);
+      targetMessage.aiRuntime = result?.aiRuntime || null;
       targetMessage.pending = false;
       targetMessage.error = !result?.say;
       targetTask.updatedAt = new Date().toISOString();
@@ -1242,7 +1268,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260801-141")
+  import("./brain.js?v=phantom-live-20260816-149")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }

@@ -6,9 +6,10 @@ import {
   moneyView,
   memoryStats,
   fmtMoney,
-} from "./store.js?v=phantom-live-20260801-141";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260801-141";
-import { getOperatorInfrastructureStatus, renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260801-141";
+  session,
+} from "./store.js?v=phantom-live-20260816-149";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260816-149";
+import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260816-149";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -27,7 +28,7 @@ function setText(selector, value) {
 
 function setOperatorModelStatus() {
   const status = getOperatorInfrastructureStatus();
-  const value = status.label || "Needs configuration";
+  const value = status.label || "Connect AI";
   const element = $("[data-os-system-health]");
   const host = element?.closest("[data-os-model-status]");
   setText("[data-os-system-health]", value);
@@ -945,4 +946,12 @@ export function initCommandOS() {
   ensureDecisionObserver();
   syncDecisionOffset();
   scheduleSync();
+  if (ctx.session || session.token()) {
+    void hydrateOperatorRuntimeSettings().then(() => {
+      setOperatorModelStatus();
+      scheduleSync();
+    }).catch(() => setOperatorModelStatus());
+  } else {
+    setOperatorModelStatus();
+  }
 }

@@ -146,10 +146,12 @@ for (const prompt of casualPrompts) {
 assert.equal(capturedBodies.length, casualPrompts.length, "all casual prompts must exercise the backend route");
 for (const body of capturedBodies) {
   assert.equal(body.route_tier, "instant");
-  assert.equal(body.requested_model, "phantom-v1:latest");
+  assert.equal(body.runtime_config, true, "chat must ask the server to use the saved organization runtime");
+  assert.equal(body.runtime_surface, "phantombot");
+  assert.equal(body.requested_model, "local-auto", "the unsaved browser default should auto-select an installed local model");
   assert.equal(body.admin_model, "local_ollama");
-  assert.deepEqual(body.allowed_providers, ["local_ollama"]);
-  assert.equal(body.allow_provider_fallback, false);
+  assert.deepEqual(body.allowed_providers, ["local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"]);
+  assert.equal(body.allow_provider_fallback, true, "the default Hybrid mode may use another enabled provider and must disclose it in the receipt");
   assert.ok(body.max_provider_ms <= 4500, "instant provider time must stay tightly bounded");
   assert.ok(Array.isArray(body.conversation_history));
   assert.ok(body.conversation_history.length <= 10, "only a bounded relevant-turn window may leave the browser");
@@ -208,7 +210,8 @@ const customerChat = await handleSmartCommand("tell me a joke about breakfast");
 assert.match(customerChat.say, /Direct answer/);
 assert.equal(capturedBodies.length, customerRequestCount + 1, "authenticated customers must reach the instant brain from the browser");
 assert.equal(capturedBodies.at(-1).route_tier, "instant");
-assert.deepEqual(capturedBodies.at(-1).allowed_providers, ["local_ollama"]);
+assert.equal(capturedBodies.at(-1).runtime_config, true, "customer chat must also resolve the organization runtime on the server");
+assert.deepEqual(capturedBodies.at(-1).allowed_providers, ["local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"]);
 
 const customerReasoningPrompts = [
   "Compare electric cars and hybrids for a city commuter.",
@@ -221,14 +224,13 @@ for (const prompt of customerReasoningPrompts) {
   const result = await handleSmartCommand(prompt);
   const body = capturedBodies.at(-1);
   assert.equal(result.hermes?.route_tier, "reasoning", `${prompt} must reach the reasoning model lane`);
-  assert.equal(body.caller, "phantombot");
-  assert.equal(body.mode, "strategy");
-  assert.equal(body.effort, "deep");
-  assert.equal(body.task, prompt);
-  assert.match(body.context, /general conversation; do not invent private workspace facts/i);
-  assert.equal("provider" in body, false);
-  assert.equal("requested_model" in body, false);
-  assert.equal("allowed_providers" in body, false);
+  assert.equal(body.runtime_config, true);
+  assert.equal(body.runtime_surface, "phantombot");
+  assert.equal(body.route_tier, "reasoning");
+  assert.equal(body.message, prompt);
+  assert.match(body.business_summary, /General conversation/i);
+  assert.ok(body.requested_model);
+  assert.ok(Array.isArray(body.allowed_providers));
   assert.deepEqual(result.cards || [], []);
   assert.equal(result.open || null, null);
 }
@@ -245,14 +247,13 @@ for (const prompt of customerCreativePrompts) {
   const result = await handleSmartCommand(prompt);
   const body = capturedBodies.at(-1);
   assert.equal(result.hermes?.route_tier, "reasoning", `${prompt} must use a real model instead of canned intent copy`);
-  assert.equal(body.caller, "phantombot");
-  assert.equal(body.mode, "strategy");
-  assert.equal(body.effort, "deep");
-  assert.equal(body.task, prompt);
-  assert.match(body.context, /general conversation; do not invent private workspace facts/i);
-  assert.equal("provider" in body, false);
-  assert.equal("requested_model" in body, false);
-  assert.equal("allowed_providers" in body, false);
+  assert.equal(body.runtime_config, true);
+  assert.equal(body.runtime_surface, "phantombot");
+  assert.equal(body.route_tier, "reasoning");
+  assert.equal(body.message, prompt);
+  assert.match(body.business_summary, /General conversation/i);
+  assert.ok(body.requested_model);
+  assert.ok(Array.isArray(body.allowed_providers));
   assert.deepEqual(result.cards || [], []);
   assert.equal(result.open || null, null);
 }
@@ -267,15 +268,14 @@ for (const prompt of customerAdvisoryPrompts) {
   const result = await handleSmartCommand(prompt);
   const body = capturedBodies.at(-1);
   assert.equal(result.hermes?.route_tier, "advisory", `${prompt} must use scoped business advice`);
-  assert.equal(body.caller, "phantombot");
-  assert.equal(body.mode, "strategy");
-  assert.equal(body.effort, "deep");
-  assert.equal(body.task, prompt);
-  assert.match(body.context, /Use the bounded workspace context below/i);
-  assert.match(body.context, /active_business: Workspace: customer-one/i);
-  assert.equal("provider" in body, false);
-  assert.equal("requested_model" in body, false);
-  assert.equal("allowed_providers" in body, false);
+  assert.equal(body.runtime_config, true);
+  assert.equal(body.runtime_surface, "phantombot");
+  assert.equal(body.route_tier, "advisory");
+  assert.equal(body.message, prompt);
+  assert.match(body.business_summary, /Business Manager workspace/i);
+  assert.ok(body.module_data.some((entry) => entry.module === "active_business"));
+  assert.ok(body.requested_model);
+  assert.ok(Array.isArray(body.allowed_providers));
   assert.deepEqual(result.cards || [], []);
   assert.equal(result.open || null, null);
 }

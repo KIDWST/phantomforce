@@ -4,10 +4,10 @@
 import {
   store, isAdmin, isOwnerOperator, session, currentTenantId, moneyView, fmtMoney,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260801-141";
-import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260801-141";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260801-141";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260801-141";
+} from "./store.js?v=phantom-live-20260816-149";
+import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260816-149";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260816-149";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260816-149";
 
 const LAST_DOMAIN_KEY = "pf.analytics.lastDomain.v1";
 const CUSTOM_SOURCES_KEY = "pf.analytics.customSources.v1";
@@ -167,13 +167,13 @@ function domainCardHtml({ eyebrow, title, status, chartHtml, secondaryHtml = "",
       <div><p class="ch-eyebrow">${esc(eyebrow)}</p><h2>${esc(title)}</h2>${coverage ? `<p>${esc(coverage)}</p>` : ""}</div>
       ${status ? `<span class="an-live-label">${esc(status)}</span>` : ""}
     </section>
-    ${kpisHtml ? `<div class="ch-kpis an-kpis">${kpisHtml}</div>` : ""}
     <section class="an-visual-grid ${secondaryHtml ? "has-secondary" : ""}">
       <div class="an-primary-visual">
         ${chartHtml}
       </div>
       ${secondaryHtml ? `<aside class="an-secondary-visual">${secondaryHtml}</aside>` : ""}
     </section>
+    ${kpisHtml ? `<div class="ch-kpis an-kpis">${kpisHtml}</div>` : ""}
     <div class="an-insight-strip" aria-live="polite"><span>Explore</span><output data-an-insight-output>Select or hover a data point for detail.</output></div>
     ${detailsHtml || ""}
   </div>`;

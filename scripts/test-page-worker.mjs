@@ -40,6 +40,8 @@ assert.match(skipPages, /"sites"[\s\S]*"media"[\s\S]*"content"[\s\S]*"analytics"
 assert.doesNotMatch(skipPages, /"intelligence"|"vacation"|"phantomplay"/u, "Pages without a main AI prompter should keep the page outcome prompt available.");
 assert.doesNotMatch(worker, /^\s*assets:\s*\{/mu, "Removed Asset Cloud must not retain a dead page worker.");
 assert.match(worker, /fetch\("\/phantom-ai\/chat"/u, "Page outcome prompts must call the Phantom AI backend.");
+assert.match(worker, /buildPromptIntegrityEnvelope\(message,/u, "Page outcome prompts must protect the complete backend instruction envelope.");
+assert.match(worker, /prompt_integrity:\s*promptIntegrity/u, "Page outcome prompts must send prompt-integrity evidence to the backend.");
 assert.match(worker, /module_data: pageContextModules/u, "Backend page prompts must send page context modules.");
 assert.match(worker, /currentTenantId/u, "Backend page prompts must carry tenant context.");
 assert.match(worker, /AI backend thinking/u, "Page prompts must show a backend thinking state.");
@@ -50,6 +52,9 @@ assert.match(worker, /Before we proceed, answer this:/u, "Blocking questions mus
 assert.match(worker, /button\.disabled = true/u, "Submitting a page prompt must disable the button while the backend runs.");
 assert.match(worker, /data-page-worker-form/u, "Worker prompt form must be bindable.");
 assert.match(worker, /opts\.notify/u, "Worker prompt should log/notify without executing external actions.");
+assert.match(worker, /store\.save\(\{ notify: false \}\)/u, "Saving Page Outcome activity must not repaint away the completed result.");
+assert.match(worker, /function renderPageWorkerResult[\s\S]{0,180}out\.hidden = false/u, "Completed Page Outcome output must always become visible.");
+assert.match(worker, /const refreshedOutput = currentWorkerOutput[\s\S]{0,240}renderPageWorkerResult\(refreshedOutput/u, "Page Outcome must repaint its completed receipt after activity notifications refresh the workspace.");
 
 assert.match(main, /import \{ pageWorkerHtml, mountPageWorkers \} from "\.\/pageworker\.js\?v=phantom-live-\d{8}-\d+"/u, "main.js must import the current page worker module.");
 assert.match(main, /\$\{key === "phantomplay" \? "" : pageWorkerHtml\(key, def\)\}/u, "Workspace pages must mount the worker prompt (PhantomPlay renders its own interface and intentionally skips the generic overlay).");

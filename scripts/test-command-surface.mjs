@@ -12,6 +12,9 @@ const contentHub = readFileSync(new URL("../app/js/contenthub.js", import.meta.u
 const phantomAi = readFileSync(new URL("../app/js/phantomai.js", import.meta.url), "utf8");
 const pageWorker = readFileSync(new URL("../app/js/pageworker.js", import.meta.url), "utf8");
 const flowMap = readFileSync(new URL("../app/js/flowmap.js", import.meta.url), "utf8");
+const productionCore = readFileSync(new URL("../app/js/production-core.js", import.meta.url), "utf8");
+const workspaces = readFileSync(new URL("../app/js/workspaces.js", import.meta.url), "utf8");
+const staticServer = readFileSync(new URL("../ops/admin-live/admin-static-server.mjs", import.meta.url), "utf8");
 const count = (source, pattern) => source.match(pattern)?.length || 0;
 
 // Full chat (log + composer) moved off the dashboard into its own PhantomBot
@@ -97,7 +100,11 @@ assert.doesNotMatch(main, /renderAssetCloud|\.\/assetcloud\.js|id:\s*"assets"/u,
 assert.doesNotMatch(index, /data-nav-id="assets"/u, "Removed Asset Cloud must not remain in the command rail.");
 assert.doesNotMatch(flowMap, /ws:\s*"assets"/u, "Flow-map delivery must not route into the removed Asset Cloud workspace.");
 assert.match(main, /data-mobile-more/u, "Phone dock must expose the complete navigation through More.");
-assert.match(main, /setMobileNav\(!mobileNavOpen\)/u, "More must open and close the existing mobile drawer.");
+assert.match(main, /const willOpen = !mobileNavOpen;[\s\S]*setMobileNav\(willOpen, \{ restoreFocus: !willOpen \}\)/u, "More must open and close the existing mobile drawer with focus restoration.");
+assert.match(main, /const MOBILE_NAV_FOCUSABLE[\s\S]*function mobileNavFocusables/u, "Mobile drawer must define one visible focus order.");
+assert.match(main, /sidebar\.setAttribute\("role", "dialog"\)[\s\S]*sidebar\.setAttribute\("aria-modal", "true"\)/u, "Open mobile drawer must expose modal dialog semantics.");
+assert.match(main, /e\.key === "Tab" && mobileNavOpen[\s\S]*focusWithoutScroll\(e\.shiftKey \? last : first\)/u, "Mobile drawer must trap forward and reverse keyboard focus.");
+assert.match(main, /e\.key === "Escape" && mobileNavOpen[\s\S]*setMobileNav\(false, \{ restoreFocus: true \}\)/u, "Escape must close the mobile drawer and restore focus to More.");
 assert.match(css, /\.mobile-bottom-nav\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\)/u, "Phone dock must fit six controls without horizontal clipping.");
 assert.match(css, /Mobile shell cleanup: bottom dock only\.[\s\S]*?@media \(max-width: 900px\)[\s\S]*?--mobile-admin-topbar:\s*0px\s*!important/u, "Compact base shell must not reserve height for a second mobile nav bar.");
 assert.match(css, /Mobile shell cleanup: bottom dock only\.[\s\S]*?@media \(max-width: 900px\)[\s\S]*?\.os-command-rail,[\s\S]*?\.mobile-admin-homebar\s*\{[\s\S]*?display:\s*none\s*!important/u, "Compact base shell must hide the top nav surfaces.");
@@ -132,6 +139,8 @@ assert.match(commandOsCss, /Compact layout ownership:[\s\S]*?\.phantom\.command-
 assert.match(commandOsCss, /Compact layout ownership:[\s\S]*?\.phantom\.command-os-enabled \.decision-deck\s*\{[\s\S]*?position:\s*relative\s*!important[\s\S]*?max-height:\s*none\s*!important/u, "Compact decisions must not be absolutely layered or vertically clipped.");
 assert.match(commandOsCss, /Compact layout ownership:[\s\S]*?\.phantom\.command-os-enabled \.console:not\(\.console-workspace\) \.hero2-copy\s*\{[\s\S]*?position:\s*relative\s*!important/u, "Compact Phantom Console must participate in document flow instead of covering decisions.");
 assert.match(commandOsCss, /Compact layout ownership:[\s\S]*?\.phantom\.command-os-enabled \.dashboard-intel-band\s*\{[\s\S]*?order:\s*4\s*!important/u, "Dashboard intelligence cards must sit below the compact brief and console, not above them like another nav bar.");
+assert.match(commandOsCss, /@media \(max-width: 900px\)[\s\S]*?html\[data-command-os="2040"\] \.phantom\.command-os-enabled \.dashboard-intel-band\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)\s*!important/u, "Compact dashboard signals must override the later desktop three-column rule.");
+assert.match(commandOsCss, /@media \(max-width: 680px\)[\s\S]*?html\[data-command-os="2040"\] \.phantom\.command-os-enabled \.dashboard-intel-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)\s*!important/u, "Phone dashboard signals must use readable single-column summaries.");
 assert.match(main, /class="decision-review-all"[\s\S]*?data-open-ws="approvals"/u, "The compact decision preview must provide a direct route to the complete approvals queue.");
 assert.match(commandOsCss, /Phone command surface:[\s\S]*?\.decision-list\s*\{[\s\S]*?grid-auto-flow:\s*row\s*!important[\s\S]*?overflow:\s*visible\s*!important/u, "Phone decisions must use a single-column flow instead of a sideways carousel.");
 assert.match(commandOsCss, /Phone command surface:[\s\S]*?\.decision-card:nth-child\(n \+ 2\)\s*\{[\s\S]*?display:\s*none\s*!important/u, "Phone home must show one priority decision before the command surface.");
@@ -142,5 +151,11 @@ assert.match(commandOsCss, /Final loaded mobile nav kill switch:[\s\S]*?@media \
 assert.match(main, /chatAttachMedia\(r\.media\)/u, "Completed media must render inline in the dashboard chat.");
 assert.match(main, /Byting cyberchips into the frame/u, "Creative render progress should have a specific Phantom voice.");
 assert.match(css, /\.chat-media\s*\{/u, "Inline chat media needs a stable media card treatment.");
+assert.match(workspaces, /data-production-core-panel/u, "PhantomOps must expose the canonical Production Core status and diagnosis surface.");
+assert.match(main, /adminos:[\s\S]*data-production-core-panel[\s\S]*mountProductionCorePanel\(corePanel\)[\s\S]*renderOperatorSettings\(settingsPanel/u, "The live Admin route must mount Production Core before organization settings.");
+assert.match(productionCore, /\/api\/production-core\/commands/u, "Production Core UI commands must use the typed backend command transport.");
+assert.match(productionCore, /real[\s\S]*sandbox[\s\S]*mock[\s\S]*degraded[\s\S]*unavailable/u, "Production Core UI must distinguish every truthful system-state class.");
+assert.match(productionCore, /\/api\/production-core\/admin\/diagnose/u, "PhantomOps must diagnose a correlation without database access.");
+assert.match(staticServer, /urlPath\.startsWith\("\/api\/production-core"\)/u, "The admin web server must proxy every Production Core API request to the authenticated backend.");
 
 console.log("Compact command surface checks passed.");

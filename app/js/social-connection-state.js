@@ -45,10 +45,10 @@ export function socialPreflightFromResponse(payload = {}, connectors = socialCon
       name: connector.name,
       oauthAppReady: connector.oauthConfigured,
       accountAuthorized: connector.configured,
-      canStartOAuth: connector.oauthConfigured && !connector.configured,
+      canStartOAuth: !connector.configured,
       canSync: connector.configured,
-      nextAction: connector.configured ? "sync_live_feed" : connector.oauthConfigured ? "connect_signed_in_account" : "temporarily_unavailable",
-      nextLabel: connector.configured ? "Sync live feed" : connector.oauthConfigured ? "Connect account" : "Temporarily unavailable",
+      nextAction: connector.configured ? "sync_live_feed" : "connect_signed_in_account",
+      nextLabel: connector.configured ? "Sync live feed" : "Connect account",
       nextDetail: connector.reason,
     })),
   };

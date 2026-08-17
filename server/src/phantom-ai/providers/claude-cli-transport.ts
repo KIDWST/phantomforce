@@ -16,11 +16,12 @@ export type ClaudeCliChatInput = {
   executionMode?: "approval" | "auto";
   cwd?: string;
   timeoutMs?: number;
+  modelId?: string;
 };
 
 export type ClaudeCliChatResult = {
   provider_id: "claude_cli";
-  model_id: "claude-cli";
+  model_id: string;
   status: "blocked" | "called" | "error";
   blocked_reason: string | null;
   error_message: string | null;
@@ -81,7 +82,16 @@ function runClaudeCliProcess(command: string, args: string[], cwd: string, timeo
       let finished = false;
       const timer = setTimeout(() => {
         if (finished) return;
-        child.kill();
+        finished = true;
+        if (process.platform === "win32" && child.pid) {
+          const killer = spawn("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
+            windowsHide: true,
+            stdio: "ignore",
+          });
+          killer.unref();
+        } else {
+          child.kill("SIGKILL");
+        }
         reject(new Error(`Claude CLI timed out after ${timeout}ms.`));
       }, timeout);
 
@@ -111,10 +121,23 @@ function truncate(value: string, max = MAX_RESPONSE_CHARS) {
   return redactSensitiveText(value).slice(0, max);
 }
 
-function blockedResult(input: ClaudeCliChatInput, reason: string): ClaudeCliChatResult {
+export function resolveClaudeModel(value: string | undefined) {
+  const requested = value?.trim() || "default";
+  if (requested === "claude-cli" || requested === "default") return "default";
+  if (requested === "claude-sonnet") return "sonnet";
+  if (requested === "claude-opus") return "opus";
+  return requested;
+}
+
+export function claudeModelArgs(value: string | undefined) {
+  const modelId = resolveClaudeModel(value);
+  return modelId === "default" ? [] : ["--model", modelId];
+}
+
+function blockedResult(input: ClaudeCliChatInput, reason: string, modelId = resolveClaudeModel(input.modelId)): ClaudeCliChatResult {
   return {
     provider_id: "claude_cli",
-    model_id: "claude-cli",
+    model_id: modelId,
     status: "blocked",
     blocked_reason: redactSensitiveText(reason),
     error_message: null,
@@ -145,6 +168,8 @@ export async function callClaudeCliChat(
   const claudeCommand = resolveClaudeCliCommand(env);
   const cwd = resolve(input.cwd ?? process.cwd());
   const timeout = Math.min(Math.max(input.timeoutMs ?? 90000, 5000), 180000);
+  const modelId = resolveClaudeModel(input.modelId || env.PHANTOM_CLAUDE_MODEL);
+  const modelArgs = claudeModelArgs(modelId);
 
   const prompt = [
     "You are Phantom Console's operator brain inside Jordan's local PhantomForce admin dashboard.",
@@ -174,13 +199,13 @@ export async function callClaudeCliChat(
   ].join("\n");
 
   try {
-    const result = await runClaudeCliProcess(claudeCommand.command, [...claudeCommand.argsPrefix, "-p", prompt], cwd, timeout);
+    const result = await runClaudeCliProcess(claudeCommand.command, [...claudeCommand.argsPrefix, ...modelArgs, "-p", prompt], cwd, timeout);
     const output = truncate(result.stdout || result.stderr || "Claude CLI returned an empty response.");
     const exitCode = result.code ?? 0;
 
     return {
       provider_id: "claude_cli",
-      model_id: "claude-cli",
+      model_id: modelId,
       status: exitCode === 0 ? "called" : "error",
       blocked_reason: null,
       error_message: exitCode === 0 ? null : truncate(result.stderr || `Claude CLI exited with ${exitCode}.`, 1000),
@@ -211,12 +236,12 @@ export async function callClaudeCliChat(
       /not found/i.test(stderr);
 
     if (notFound) {
-      return blockedResult(input, `Claude CLI command "${claudeCommand.display}" is not available to the backend process.`);
+      return blockedResult(input, `Claude CLI command "${claudeCommand.display}" is not available to the backend process.`, modelId);
     }
 
     return {
       provider_id: "claude_cli",
-      model_id: "claude-cli",
+      model_id: modelId,
       status: "error",
       blocked_reason: null,
       error_message: truncate(stderr || message, 1000),

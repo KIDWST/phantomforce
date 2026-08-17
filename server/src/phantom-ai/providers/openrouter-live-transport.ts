@@ -40,7 +40,7 @@ export type OpenRouterGlm52ChatInput = {
 
 export type OpenRouterGlm52ChatResult = {
   provider_id: typeof OPENROUTER_GLM_PROVIDER_ID;
-  model_id: typeof OPENROUTER_GLM_52_MODEL_ID;
+  model_id: string;
   endpoint: typeof OPENROUTER_CHAT_COMPLETIONS_ENDPOINT;
   status: "blocked" | "called" | "error";
   blocked_reason: string | null;
@@ -75,15 +75,15 @@ function envEnabled(value: string | undefined) {
   return value === "true";
 }
 
-function blockedResult(input: OpenRouterGlm52ChatInput, reason: string): OpenRouterGlm52ChatResult {
+function blockedResult(input: OpenRouterGlm52ChatInput, reason: string, modelId: string = OPENROUTER_GLM_52_MODEL_ID): OpenRouterGlm52ChatResult {
   return {
     provider_id: OPENROUTER_GLM_PROVIDER_ID,
-    model_id: OPENROUTER_GLM_52_MODEL_ID,
+    model_id: modelId,
     endpoint: OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
     status: "blocked",
     blocked_reason: redactSensitiveText(reason),
     error_message: null,
-    output_text: `GLM 5.2 is wired through OpenRouter, but this request is blocked: ${redactSensitiveText(reason)}`,
+    output_text: `The selected OpenRouter model is blocked: ${redactSensitiveText(reason)}`,
     provider_called: false,
     network_call_performed: false,
     request_body_prepared: false,
@@ -160,30 +160,31 @@ export async function callOpenRouterGlm52(
 ): Promise<OpenRouterGlm52ChatResult> {
   const env = options.env ?? process.env;
   const apiKey = env.OPENROUTER_API_KEY?.trim();
+  const modelId = env.OPENROUTER_MODEL?.trim() || OPENROUTER_GLM_52_MODEL_ID;
 
   if (!envEnabled(env.PHANTOM_LIVE_PROVIDERS_ENABLED)) {
-    return blockedResult(input, "Set PHANTOM_LIVE_PROVIDERS_ENABLED=true to allow live provider calls.");
+    return blockedResult(input, "Set PHANTOM_LIVE_PROVIDERS_ENABLED=true to allow live provider calls.", modelId);
   }
 
   if (!envEnabled(env.PHANTOM_OPENROUTER_TRANSPORT_ENABLED)) {
-    return blockedResult(input, "Set PHANTOM_OPENROUTER_TRANSPORT_ENABLED=true to enable the OpenRouter transport.");
+    return blockedResult(input, "Set PHANTOM_OPENROUTER_TRANSPORT_ENABLED=true to enable the OpenRouter transport.", modelId);
   }
 
   if (!apiKey) {
-    return blockedResult(input, "OPENROUTER_API_KEY is not configured on the server.");
+    return blockedResult(input, "OPENROUTER_API_KEY is not configured on the server.", modelId);
   }
 
   if (input.sensitivityLevel === "high" && !input.adminOperatorLane) {
-    return blockedResult(input, "High-sensitivity requests are blocked from the OpenRouter GLM worker lane.");
+    return blockedResult(input, "High-sensitivity requests are blocked from the OpenRouter worker lane.", modelId);
   }
 
   if (input.approvalRequired && !input.adminOperatorLane) {
-    return blockedResult(input, "Approval-required requests cannot run through the OpenRouter GLM worker lane.");
+    return blockedResult(input, "Approval-required requests cannot run through the OpenRouter worker lane.", modelId);
   }
 
   const fetchImpl = options.fetchImpl ?? (globalThis.fetch as unknown as OpenRouterFetch | undefined);
   if (!fetchImpl) {
-    return blockedResult(input, "No server fetch implementation is available for OpenRouter transport.");
+    return blockedResult(input, "No server fetch implementation is available for OpenRouter transport.", modelId);
   }
 
   const redactedContext = redactSensitiveText(input.compactContext).slice(0, MAX_CONTEXT_CHARS);
@@ -212,7 +213,7 @@ export async function callOpenRouterGlm52(
     `User request: ${redactedMessage}`,
   ].join("\n");
   const body = JSON.stringify({
-    model: env.OPENROUTER_MODEL?.trim() || OPENROUTER_GLM_52_MODEL_ID,
+    model: modelId,
     messages: [
       {
         role: "system",
@@ -254,12 +255,12 @@ export async function callOpenRouterGlm52(
     const safeOutput =
       outputText ||
       (response.ok
-        ? "GLM 5.2 returned an empty response through OpenRouter."
+        ? `${modelId} returned an empty response through OpenRouter.`
         : `OpenRouter returned an error: ${errorText}`);
 
     return {
       provider_id: OPENROUTER_GLM_PROVIDER_ID,
-      model_id: OPENROUTER_GLM_52_MODEL_ID,
+      model_id: modelId,
       endpoint: OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
       status: response.ok ? "called" : "error",
       blocked_reason: null,
@@ -285,7 +286,7 @@ export async function callOpenRouterGlm52(
     const timedOut = error instanceof Error && error.name === "AbortError";
     return {
       provider_id: OPENROUTER_GLM_PROVIDER_ID,
-      model_id: OPENROUTER_GLM_52_MODEL_ID,
+      model_id: modelId,
       endpoint: OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
       status: "error",
       blocked_reason: null,

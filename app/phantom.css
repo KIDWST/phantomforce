@@ -7580,7 +7580,7 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260801-141") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260816-149") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(91, 76, 255, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -13061,3 +13061,24 @@ body .phantom .workspace-page :where(
 }
 .accounting-tab-body { min-width: 0; }
 .mission-map-body-clean { grid-template-columns: minmax(0, 1fr); }
+/* Unified one-click customer connection center. */
+.set-connection-center{display:grid;gap:18px}
+.set-connect-hero{display:flex;align-items:center;justify-content:space-between;gap:24px}
+.set-connect-hero>div{max-width:780px}
+.set-connect-group{display:grid;gap:10px}
+.set-connect-group-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 4px}
+.set-connect-group-head h3{margin:0;font-size:15px}
+.set-connect-group-head span{color:var(--muted);font-size:12px}
+.set-connect-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.set-connect-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.025)}
+.set-connect-card.is-connected{border-color:rgba(63,229,151,.35);background:rgba(38,169,111,.07)}
+.set-connect-card.is-requested{border-color:rgba(124,162,255,.28);background:rgba(76,112,210,.06)}
+.set-connect-card-top{display:flex;align-items:center;gap:11px;min-width:0}
+.set-connect-card-top>span:last-child{display:grid;gap:3px;min-width:0}
+.set-connect-card-top b{font-size:14px}.set-connect-card-top i{color:var(--muted);font-size:11px;font-style:normal}
+.set-connect-mark{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:11px;background:rgba(86,255,181,.1);color:var(--mint);font-weight:900}
+.set-connect-state{grid-column:1/-1;display:grid;gap:3px}.set-connect-state span{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.set-connect-state i{color:var(--muted);font-size:12px;line-height:1.45;font-style:normal}
+.set-connect-card>.btn{grid-column:2;grid-row:1;min-width:94px}
+.set-connect-loading{padding:24px;border:1px dashed var(--line);border-radius:16px;color:var(--muted);text-align:center}
+.set-connect-social{margin-top:2px}
+@media(max-width:760px){.set-connect-hero{align-items:flex-start;flex-direction:column}.set-connect-grid{grid-template-columns:1fr}.set-connect-card{grid-template-columns:minmax(0,1fr) auto}.set-connect-card>.btn{min-width:86px}}

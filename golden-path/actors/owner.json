@@ -1,0 +1,7 @@
+{
+  "fixture": "local-staging-owner",
+  "sessionId": "admin-jordan",
+  "effectivePolicyRole": "owner",
+  "tenantId": "golden-path-staging",
+  "containsCredentials": false
+}

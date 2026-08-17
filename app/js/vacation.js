@@ -1,4 +1,4 @@
-import { session as accessSession, ago } from "./store.js?v=phantom-live-20260801-141";
+import { session as accessSession, ago } from "./store.js?v=phantom-live-20260816-149";
 
 const esc = (value = "") => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const cacheKey = "pf.vacation.statusCache.v2";
@@ -202,7 +202,7 @@ function activityCard(events) {
 }
 
 function readinessCard(items) {
-  return `<details class="vm-card vm-wide vm-details"><summary><span><b>Connections and digital coverage</b><i>See what is ready and what still needs setup</i></span><em>${items.filter((item) => item.status === "ready").length}/${items.length} ready</em></summary><div class="vm-readiness">${items.map((item) => `<article class="vm-ready vm-ready-${esc(item.status)}"><span></span><div><b>${esc(item.label)}</b><i>${esc(item.detail)}</i></div><em>${esc(item.status.replaceAll("_", " "))}</em></article>`).join("")}</div></details>`;
+  return `<details class="vm-card vm-wide vm-details"><summary><span><b>Connections and digital coverage</b><i>See what is connected and choose Connect for anything missing</i></span><em>${items.filter((item) => item.status === "ready").length}/${items.length} ready</em></summary><div class="vm-readiness">${items.map((item) => `<article class="vm-ready vm-ready-${esc(item.status)}"><span></span><div><b>${esc(item.label)}</b><i>${esc(item.detail)}</i></div><em>${esc(item.status === "needs_setup" || item.status === "not_connected" ? "Connect" : item.status.replaceAll("_", " "))}</em></article>`).join("")}</div></details>`;
 }
 
 function render(el) {

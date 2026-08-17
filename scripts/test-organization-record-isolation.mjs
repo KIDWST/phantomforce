@@ -28,7 +28,7 @@ assert.equal(alpha.connectors.find((item) => item.id === "bank")?.status, "conne
 ctx.session = { role: "admin", database: true, orgId: "org-b" };
 const beta = moneyView();
 assert.deepEqual(beta.transactions.map((item) => item.description), ["Beta"]);
-assert.equal(beta.connectors.find((item) => item.id === "bank")?.status, "setup-ready");
+assert.equal(beta.connectors.find((item) => item.id === "bank")?.status, "disconnected");
 
 const root = new URL("../", import.meta.url);
 for (const file of [

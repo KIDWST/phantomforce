@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
+const apiOrigin = process.env.PHANTOMFORCE_RESPONSIVE_API_ORIGIN || "http://127.0.0.1:5190";
 const chromeCandidates = [
   process.env.CHROME_PATH,
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -30,6 +31,7 @@ const pages = [
   { id: "phantomplay", label: "phantomplay" },
   { id: "phantomstore", label: "phantomstore" },
   { id: "settings", label: "settings" },
+  { id: "adminos", label: "admin" },
 ];
 
 const viewports = [
@@ -40,6 +42,11 @@ const viewports = [
   { width: 1440, height: 1000 },
   { width: 1920, height: 1080 },
 ];
+
+const requestedPages = new Set(String(process.env.PHANTOMFORCE_RESPONSIVE_PAGES || "").split(",").map((value) => value.trim()).filter(Boolean));
+if (requestedPages.size) pages.splice(0, pages.length, ...pages.filter((page) => requestedPages.has(page.id) || requestedPages.has(page.label)));
+const requestedWidths = new Set(String(process.env.PHANTOMFORCE_RESPONSIVE_WIDTHS || "").split(",").map((value) => value.trim()).filter(Boolean).map(Number).filter(Number.isFinite));
+if (requestedWidths.size) viewports.splice(0, viewports.length, ...viewports.filter((viewport) => requestedWidths.has(viewport.width)));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -127,7 +134,7 @@ function spawnStaticServer(port) {
     "--root", repoRoot,
     "--port", String(port),
     "--host", "127.0.0.1",
-    "--api", "http://127.0.0.1:5190",
+    "--api", apiOrigin,
   ], {
     cwd: repoRoot,
     windowsHide: true,
@@ -347,17 +354,20 @@ function auditPage() {
   const dashboardComposer = consoleRoot?.querySelector(".phantompet-orb");
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
+  const featuredProductMedia = document.querySelector(".ps-spotlight-panel");
   const phantomPlayActions = [...document.querySelectorAll(".pp-game-actions button")];
   const pageWorker = document.querySelector(".page-worker");
   const storeSearch = document.querySelector(".ps-search");
-  const analyticsGraph = document.querySelector("[data-workspace-page='analytics'] .an-top-visual-grid");
+  const analyticsGraph = document.querySelector("[data-workspace-page='analytics'] .an-top-visual-grid, [data-workspace-page='analytics'] .an-domain-shell .an-visual-grid");
   const analyticsTrendCard = document.querySelector("[data-workspace-page='analytics'] .an-trend-card");
   const dashboardIntel = document.querySelector("[data-dashboard-intel]");
+  const dashboardIntelGrid = dashboardIntel?.querySelector(".dashboard-intel-grid");
+  const dashboardIntelCards = [...(dashboardIntel?.querySelectorAll(".dashboard-intel-card") || [])];
   const phantomBotShell = document.querySelector("[data-phantombot-os]");
   const phantomBotTaskRail = document.querySelector("[data-phantombot-taskrail]");
   const phantomBotTaskList = document.querySelector("[data-phantombot-task-list]");
   const phantomBotComposer = document.querySelector("[data-phantomai-chat-input]");
-  const phantomBotRailToggle = document.querySelector("[data-phantombot-rail-toggle]");
+  const phantomBotRailToggles = [...document.querySelectorAll("[data-phantombot-rail-toggle]")];
   const commandRailSearch = document.querySelector("[data-os-command-rail] [data-cmdk-open]");
   const isVisible = (el) => {
     if (!el) return false;
@@ -571,6 +581,7 @@ function auditPage() {
       pageWorkerVisible: isVisible(pageWorker),
       searchVisible: isVisible(storeSearch),
       firstProductMediaTop: productMedia[0] ? Math.round(productMedia[0].getBoundingClientRect().top) : null,
+      firstProductArtTop: [featuredProductMedia, productMedia[0]].filter(isVisible).map((media) => Math.round(media.getBoundingClientRect().top)).sort((a, b) => a - b)[0] ?? null,
       brokenMedia: productMedia.filter((media) => {
         const rect = media.getBoundingClientRect();
         const img = media.querySelector("img");
@@ -592,15 +603,18 @@ function auditPage() {
       pageWorkerVisible: isVisible(pageWorker),
       graphTop: analyticsGraph ? Math.round(analyticsGraph.getBoundingClientRect().top) : null,
       trendCardTop: analyticsTrendCard ? Math.round(analyticsTrendCard.getBoundingClientRect().top) : null,
-      firstVisibleLabel: [...document.querySelectorAll("[data-workspace-page='analytics'] .page-worker, [data-workspace-page='analytics'] .an-top-visual-grid, [data-workspace-page='analytics'] .an-kpis")]
+      firstVisibleLabel: [...document.querySelectorAll("[data-workspace-page='analytics'] .page-worker, [data-workspace-page='analytics'] .an-top-visual-grid, [data-workspace-page='analytics'] .an-domain-shell .an-visual-grid, [data-workspace-page='analytics'] .an-kpis")]
         .filter(isVisible)
         .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
-        .map((el) => el.classList.contains("page-worker") ? "page-worker" : el.classList.contains("an-top-visual-grid") ? "graph" : "kpis")[0] || "",
+        .map((el) => el.classList.contains("page-worker") ? "page-worker" : el.classList.contains("an-visual-grid") ? "graph" : "kpis")[0] || "",
     },
     dashboard: {
       briefTop: dashboardBrief ? Math.round(dashboardBrief.getBoundingClientRect().top) : null,
       heroTop: dashboardHero ? Math.round(dashboardHero.getBoundingClientRect().top) : null,
       intelTop: dashboardIntel ? Math.round(dashboardIntel.getBoundingClientRect().top) : null,
+      intelBandColumns: dashboardIntel ? getComputedStyle(dashboardIntel).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length : null,
+      intelGridColumns: dashboardIntelGrid ? getComputedStyle(dashboardIntelGrid).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length : null,
+      intelMinCardWidth: dashboardIntelCards.length ? Math.round(Math.min(...dashboardIntelCards.map((card) => card.getBoundingClientRect().width))) : null,
       visibleDecisionCards: decisionCards.filter(isVisible).length,
       decisionListHorizontalOverflow: decisionList ? decisionList.scrollWidth > decisionList.clientWidth + 2 : false,
       reviewAllVisible: isVisible(decisionReviewAll),
@@ -613,7 +627,7 @@ function auditPage() {
       taskCount: phantomBotTaskList?.querySelectorAll("[data-phantombot-task]").length || 0,
       composerVisible: isVisible(phantomBotComposer),
       composerTag: phantomBotComposer?.tagName || "",
-      railToggleVisible: isVisible(phantomBotRailToggle),
+      railToggleVisible: phantomBotRailToggles.some(isVisible),
       pageWorkerVisible: isVisible(pageWorker),
       topSearchVisible: isVisible(commandRailSearch),
     },
@@ -642,6 +656,38 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
     await evaluate(cdp, `(${injectDashboardDecisionFixture.toString()})()`);
   }
   const audit = await evaluate(cdp, `(${auditPage.toString()})()`);
+  if (page.id === "dashboard" && viewport.width <= 900) {
+    await evaluate(cdp, `(() => {
+      const opener = document.querySelector("[data-mobile-more]");
+      if (!opener) return false;
+      opener.focus();
+      opener.click();
+      return true;
+    })()`);
+    await sleep(120);
+    const opened = await evaluate(cdp, `(() => {
+      const sidebar = document.querySelector(".sidebar");
+      const active = document.activeElement;
+      return {
+        expanded: !!sidebar?.classList.contains("is-expanded"),
+        focusInside: !!sidebar?.contains(active),
+        role: sidebar?.getAttribute("role") || "",
+        modal: sidebar?.getAttribute("aria-modal") || "",
+      };
+    })()`);
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+    await sleep(120);
+    const closed = await evaluate(cdp, `(() => {
+      const sidebar = document.querySelector(".sidebar");
+      const active = document.activeElement;
+      return {
+        collapsed: !sidebar?.classList.contains("is-expanded"),
+        focusRestored: !!active?.matches?.("[data-mobile-more]"),
+      };
+    })()`);
+    audit.mobileDrawer = { ...opened, ...closed };
+  }
   const png = await cdp.send("Page.captureScreenshot", {
     format: "png",
     captureBeyondViewport: false,
@@ -674,9 +720,21 @@ function assertCase(result) {
     assert.equal(audit.nav.systemLineVisible, false, `${label} ${viewport.width}: system status line must stay hidden so the bottom dock is the only mobile bar.`);
     assert.equal(audit.nav.desktopVisible, false, `${label} ${viewport.width}: desktop sidebar must be hidden on compact widths.`);
     if (page === "dashboard") {
+      assert.equal(audit.mobileDrawer?.expanded, true, `${label} ${viewport.width}: More must open the compact navigation drawer.`);
+      assert.equal(audit.mobileDrawer?.focusInside, true, `${label} ${viewport.width}: opening the compact drawer must move focus inside it.`);
+      assert.equal(audit.mobileDrawer?.role, "dialog", `${label} ${viewport.width}: compact drawer must expose dialog semantics while open.`);
+      assert.equal(audit.mobileDrawer?.modal, "true", `${label} ${viewport.width}: compact drawer must identify its modal focus boundary.`);
+      assert.equal(audit.mobileDrawer?.collapsed, true, `${label} ${viewport.width}: Escape must close the compact drawer.`);
+      assert.equal(audit.mobileDrawer?.focusRestored, true, `${label} ${viewport.width}: Escape must restore focus to the More control.`);
       assert.deepEqual(audit.dashboardCollisions, [], `${label} ${viewport.width}: dashboard brief, decisions and console must remain separate in the mobile document flow.`);
       assert.equal(audit.dashboard.reviewAllVisible, true, `${label} ${viewport.width}: decision preview must link to the complete queue.`);
       if (viewport.width <= 680) {
+        assert.equal(audit.dashboard.intelBandColumns, 1, `${label} ${viewport.width}: phone Business Signals must not retain the desktop header/card columns.`);
+        assert.equal(audit.dashboard.intelGridColumns, 1, `${label} ${viewport.width}: phone Business Signals cards must form one readable list.`);
+        assert.ok(
+          audit.dashboard.intelMinCardWidth !== null && audit.dashboard.intelMinCardWidth >= viewport.width - 52,
+          `${label} ${viewport.width}: each Business Signals summary must retain a useful phone width.`
+        );
         assert.equal(audit.dashboard.decisionListHorizontalOverflow, false, `${label} ${viewport.width}: decision preview must not create a sideways phone scroller.`);
         assert.equal(audit.dashboard.visibleDecisionCards, 1, `${label} ${viewport.width}: phone home must show one priority decision before Phantom.`);
         assert.ok(
@@ -702,8 +760,8 @@ function assertCase(result) {
       assert.equal(audit.phantomStore.pageWorkerVisible, false, `${label} ${viewport.width}: Store phone view must not bury products under the global prompt panel.`);
       assert.equal(audit.phantomStore.searchVisible, false, `${label} ${viewport.width}: Store phone view must put products before search controls.`);
       assert.ok(
-        audit.phantomStore.firstProductMediaTop !== null && audit.phantomStore.firstProductMediaTop < audit.nav.mobileTop - 16,
-        `${label} ${viewport.width}: first Store product art must appear above the mobile dock.`
+        audit.phantomStore.firstProductArtTop !== null && audit.phantomStore.firstProductArtTop < audit.nav.mobileTop - 16,
+        `${label} ${viewport.width}: first Store product art must appear above the mobile dock (art top ${audit.phantomStore.firstProductArtTop}, dock top ${audit.nav.mobileTop}).`
       );
     }
   }
@@ -734,6 +792,8 @@ function assertCase(result) {
 
 async function main() {
   assert.equal(typeof WebSocket, "function", "Node 22+ global WebSocket is required for the Chrome CDP responsive smoke test.");
+  assert.ok(pages.length > 0, "Responsive page selection must include at least one known page.");
+  assert.ok(viewports.length > 0, "Responsive viewport selection must include at least one known width.");
 
   const staticPort = await getFreePort();
   const debugPort = await getFreePort();
@@ -785,6 +845,8 @@ async function main() {
         "visible elements do not escape viewport",
         "dark mode has no large pale/white UI surfaces",
         "visible control text is not clipped",
+        "compact drawer focus enters, traps, closes, and restores",
+        "phone Business Signals use one readable column",
         "PhantomPlay card actions stay fully visible inside game cards",
         "PhantomStore phone view puts product art before prompt chrome",
         "PhantomStore products render with full-frame media blocks",

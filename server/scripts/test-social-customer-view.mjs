@@ -61,9 +61,10 @@ t("stringified payload contains none of the forbidden substrings", () => {
   }
 });
 
-t("provider not globally configured -> Temporarily unavailable / PLATFORM_UNCONFIGURED", () => {
+t("provider readiness stays internal while the customer receives Connect", () => {
   assert.equal(byId.tiktok.connectionStatus, "PLATFORM_UNCONFIGURED");
-  assert.equal(byId.tiktok.action, "Temporarily unavailable");
+  assert.equal(byId.tiktok.action, "Connect account");
+  assert.match(byId.tiktok.customerMessage, /nothing else is needed from you/iu);
   assert.equal(byId.tiktok.globallyAvailable, false);
 });
 
