@@ -78,7 +78,7 @@ class CubeTownSimulationTests(unittest.TestCase):
 
 
 class NativePersistenceTests(unittest.TestCase):
-    def test_save_store_writes_valid_atomic_json(self) -> None:
+    def test_native_save_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = SaveStore("cubetown", Path(directory))
             store.save({"day": 7, "buildings": [{"x": 1, "y": 2, "kind": "lamp"}]})
