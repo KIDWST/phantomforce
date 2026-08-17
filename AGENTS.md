@@ -70,7 +70,8 @@
   and four V11R15 Unreal Shipping candidates whose candidate and installed
   gameplay captures passed 4/4 visual gates. PhantomForce adds organization-
   scoped provider/model choice across auto, local, Codex, Claude, OpenRouter,
-  and ChatGPT lanes; one-click customer connection initiation; truthful runtime
+  and ChatGPT lanes, with saved organization choices powering standard member
+  chat without granting platform-admin execution; one-click customer connection initiation; truthful runtime
   state; stronger conversational continuity; and a corrected mobile PhantomBot
   composer. Release-critical passed 31/31, responsive Chrome passed 60/60,
   database/auth passed 57 API checks plus the 139-turn two-organization browser

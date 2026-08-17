@@ -189,6 +189,56 @@ try {
   assert.equal(chat.ai_runtime.provider_called, true);
   assert.equal(chat.ai_runtime.fallback_used, false);
 
+  const clientRuntimeResponse = await fetch(`${appBaseUrl}/phantom-ai/runtime/config`, {
+    headers: auth(clientToken),
+  });
+  assert.equal(clientRuntimeResponse.ok, true);
+  const clientRuntimeInitial = await clientRuntimeResponse.json() as Record<string, any>;
+  const clientTenantId = String(clientRuntimeInitial.tenant_id);
+  assert.ok(clientTenantId);
+
+  const saveClientRuntimeResponse = await fetch(`${appBaseUrl}/phantom-ai/runtime/config`, {
+    method: "PUT",
+    headers: auth(adminToken),
+    body: JSON.stringify({
+      tenant_id: clientTenantId,
+      expected_version: clientRuntimeInitial.config.version,
+      mode: "single",
+      primary_provider_id: "local_ollama",
+      allowed_provider_ids: ["local_ollama"],
+      models,
+      fallback_enabled: false,
+    }),
+  });
+  assert.equal(saveClientRuntimeResponse.ok, true);
+
+  const clientMessage = "Draft two concise sentences about a lighthouse launch.";
+  const clientChatResponse = await fetch(`${appBaseUrl}/phantom-ai/chat`, {
+    method: "POST",
+    headers: auth(clientToken),
+    body: JSON.stringify({
+      message: clientMessage,
+      user_request: clientMessage,
+      prompt_integrity: promptIntegrity(clientMessage, "runtime-client-standard-message"),
+      task_type: "chat",
+      route_tier: "standard",
+      runtime_config: true,
+      runtime_surface: "phantombot",
+    }),
+  });
+  const clientChat = await clientChatResponse.json() as Record<string, any>;
+  assert.equal(clientChatResponse.ok, true, `Client runtime chat failed: HTTP ${clientChatResponse.status} ${JSON.stringify(clientChat)}`);
+  assert.equal(ollamaRequests.length, 2, "A workspace member's standard chat must invoke the organization's saved provider.");
+  assert.equal(ollamaRequests[1].model, "runtime-test:latest");
+  assert.equal(clientChat.model_id, "runtime-test:latest");
+  assert.equal(clientChat.ai_runtime.state, "real");
+  assert.equal(clientChat.ai_runtime.tenant_id, clientTenantId);
+  assert.equal(clientChat.ai_runtime.config_source, "saved");
+  assert.equal(clientChat.ai_runtime.requested_provider_id, "local_ollama");
+  assert.equal(clientChat.ai_runtime.responding_provider_id, "local_ollama");
+  assert.equal(clientChat.ai_runtime.responding_model_id, "runtime-test:latest");
+  assert.equal(clientChat.ai_runtime.provider_called, true);
+
   const crossOrgRead = await fetch(`${appBaseUrl}/phantom-ai/runtime/config?tenant_id=${tenantId}`, {
     headers: auth(clientToken),
   });
@@ -247,13 +297,14 @@ try {
   assert.equal(unavailable.ai_runtime.fallback_used, false);
   assert.equal(unavailable.fallback.all_failed, true);
   assert.match(String(unavailable.message.content), /openrouter|disabled|configured|unavailable/i);
-  assert.equal(ollamaRequests.length, 1, "A failed single-provider choice must not silently call local Ollama.");
+  assert.equal(ollamaRequests.length, 2, "A failed single-provider choice must not silently call local Ollama.");
 
   console.log(JSON.stringify({
     ok: true,
     suite: "ai-runtime-http",
     persisted_override: true,
     exact_model_called: "runtime-test:latest",
+    workspace_member_runtime_called: true,
     runtime_receipt: true,
     cross_org_isolation: true,
     unavailable_is_actionable: true,

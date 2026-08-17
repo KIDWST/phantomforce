@@ -11652,8 +11652,12 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     ? buildBrainAugmentedSummary(normalized, brainContext)
     : normalized.business_summary;
 
-  if (session.canManageAccess) {
-    if (/^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/i.test(normalized.user_request.trim())) {
+  // A saved organization runtime is an execution grant for that organization's
+  // chat lane, not a platform-admin grant. Every legitimate workspace member
+  // should be powered by the provider/model their owner selected, while
+  // platform-only greetings and Termina mission controls remain admin-gated.
+  if (session.canManageAccess || runtimeConfig) {
+    if (session.canManageAccess && /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/i.test(normalized.user_request.trim())) {
       return {
         ok: true,
         session,
@@ -11689,6 +11693,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       };
     }
 
+    if (session.canManageAccess) {
     /* ---- Termina mission gate --------------------------------------------
        NON-NEGOTIABLE: a Termina mission (real multi-agent coding agents,
        real API/token cost, real filesystem/git changes) must NEVER start
@@ -11802,6 +11807,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       /* A pending run already exists for this session but this particular
          message wasn't a clear yes — fall through to a normal answer
          instead of re-asking on every single turn. */
+    }
     }
 
     const preview = previewModelRouterFoundation(normalized, {

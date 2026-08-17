@@ -1,8 +1,31 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-07-18",
+  "lastUpdated": "2026-08-17",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
+    {
+      "id": "organization-ai-runtime-powers-member-chat",
+      "status": "active",
+      "title": "Saved organization provider choices power every member's Phantom",
+      "ownerDecision": "An organization owner can select the provider and exact model for PhantomForce, and that saved runtime must power standard member chat without granting platform-admin or Termina mission authority. Provider health and fallback state must remain truthful.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/index.ts",
+          "pattern": "if \\(session\\.canManageAccess \\|\\| runtimeConfig\\)",
+          "description": "A saved organization runtime enables its provider lane for legitimate workspace chat, independently of platform-admin status."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "if \\(session\\.canManageAccess\\) \\{[\\s\\S]{0,1800}Termina mission gate",
+          "description": "Termina mission controls remain explicitly nested behind platform-admin authority."
+        },
+        {
+          "file": "server/scripts/test-ai-runtime-http.ts",
+          "pattern": "workspace_member_runtime_called",
+          "description": "The HTTP regression proves a standard workspace-member request invokes the saved exact provider model."
+        }
+      ]
+    },
     {
       "id": "tenant-revenue-truth-no-synthetic-contacts",
       "status": "active",
