@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-08-17",
+  "branch": "codex/phantomstore-ai-products-20260817",
+  "head": "fb5814749ae20f184bd890a0ed5f14c4f76eb874",
+  "deployment": "not_deployed_local_preview",
+  "counts": {
+    "implementedBefore": 10,
+    "newlyImplemented": 271,
+    "implementedTotal": 281,
+    "partial": 0,
+    "deferred": 5119,
+    "blocked": 0,
+    "unmapped": 0,
+    "falseClaims": 0,
+    "globalRequirementsMapped": 120
+  },
+  "productBreakdown": {
+    "phantom-oracle": {
+      "name": "PHANTOM ORACLE",
+      "implementedBefore": 1,
+      "newlyImplemented": 25,
+      "deferred": 514,
+      "coreLoopModules": [
+        "Decision Canvas",
+        "Assumption Ledger",
+        "Scenario Graph",
+        "Sensitivity Explorer",
+        "Decision Journal",
+        "Executive Brief Builder"
+      ]
+    },
+    "phantom-chronicle": {
+      "name": "PHANTOM CHRONICLE",
+      "implementedBefore": 1,
+      "newlyImplemented": 25,
+      "deferred": 514,
+      "coreLoopModules": [
+        "Evidence Intake",
+        "Metadata Inspector",
+        "Timeline Builder",
+        "Contradiction Desk",
+        "Source Provenance",
+        "Chronology Report"
+      ]
+    },
+    "phantom-foundry": {
+      "name": "PHANTOM FOUNDRY",
+      "implementedBefore": 1,
+      "newlyImplemented": 27,
+      "deferred": 512,
+      "coreLoopModules": [
+        "Schema Studio",
+        "Scenario Recipe Builder",
+        "Generator Fleet",
+        "Coverage Matrix",
+        "Deduplication Lab",
+        "Dataset Versioning",
+        "Benchmark Runner",
+        "Export Registry"
+      ]
+    },
+    "phantom-twin": {
+      "name": "PHANTOM TWIN",
+      "implementedBefore": 1,
+      "newlyImplemented": 27,
+      "deferred": 512,
+      "coreLoopModules": [
+        "Process Mapper",
+        "Resource Catalog",
+        "Queue Simulator",
+        "Capacity Planner",
+        "Bottleneck Radar",
+        "What-if Sandbox",
+        "Twin Calibration",
+        "Scenario Export"
+      ]
+    },
+    "phantom-dealroom": {
+      "name": "PHANTOM DEALROOM",
+      "implementedBefore": 1,
+      "newlyImplemented": 28,
+      "deferred": 511,
+      "coreLoopModules": [
+        "Deal Map",
+        "Interest Matrix",
+        "BATNA Builder",
+        "Concession Ladder",
+        "Package Composer",
+        "Counterpart Simulator",
+        "Rehearsal Room",
+        "Commitment Ledger",
+        "Meeting Debrief"
+      ]
+    },
+    "phantom-blueprint": {
+      "name": "PHANTOM BLUEPRINT",
+      "implementedBefore": 1,
+      "newlyImplemented": 27,
+      "deferred": 512,
+      "coreLoopModules": [
+        "Requirements Compiler",
+        "Architecture Canvas",
+        "Component Registry",
+        "Data Contract Studio",
+        "API Designer",
+        "Test Blueprint",
+        "Change Impact Graph",
+        "Spec Exporter"
+      ]
+    },
+    "phantom-terrain": {
+      "name": "PHANTOM TERRAIN",
+      "implementedBefore": 1,
+      "newlyImplemented": 26,
+      "deferred": 513,
+      "coreLoopModules": [
+        "Layer Catalog",
+        "Site Scorer",
+        "Constraint Overlay",
+        "Candidate Compare",
+        "Weight Sensitivity",
+        "Data Freshness Monitor",
+        "Export Composer"
+      ]
+    },
+    "phantom-proof": {
+      "name": "PHANTOM PROOF",
+      "implementedBefore": 1,
+      "newlyImplemented": 29,
+      "deferred": 510,
+      "coreLoopModules": [
+        "Claim Decomposer",
+        "Evidence Board",
+        "Source Quality Lens",
+        "Support/Oppose Matrix",
+        "Citation Inspector",
+        "Freshness Watch",
+        "Circularity Detector",
+        "Reviewer Workflow",
+        "Proof Packet",
+        "Export Studio"
+      ]
+    },
+    "phantom-loom-dependency": {
+      "name": "PHANTOM LOOM",
+      "implementedBefore": 1,
+      "newlyImplemented": 29,
+      "deferred": 510,
+      "coreLoopModules": [
+        "Corpus Intake",
+        "Commitment Extractor",
+        "Dependency Graph",
+        "Contradiction Radar",
+        "Owner Map",
+        "Deadline Mesh",
+        "Change Impact",
+        "Source Trace",
+        "Revision Diff",
+        "Dependency Brief"
+      ]
+    },
+    "phantom-causal": {
+      "name": "PHANTOM CAUSAL",
+      "implementedBefore": 1,
+      "newlyImplemented": 28,
+      "deferred": 511,
+      "coreLoopModules": [
+        "Hypothesis Studio",
+        "Causal DAG Builder",
+        "Metric Registry",
+        "Power Planner",
+        "Pre-registration",
+        "Analysis Notebook",
+        "Sensitivity Checks",
+        "Experiment Library",
+        "Result Brief"
+      ]
+    }
+  },
+  "sharedFoundationBreakdown": {
+    "edit after save": 10,
+    "duplicate safely": 10,
+    "archive and restore": 10,
+    "delete under retention rules": 10,
+    "resume after browser refresh": 10,
+    "recover after worker retry": 10,
+    "compare two versions": 10,
+    "export deterministic package": 10,
+    "enforce read-only role": 10,
+    "reject cross-tenant access": 10,
+    "record audit event": 10,
+    "record analytics event": 10,
+    "show provenance": 10,
+    "show version history": 10,
+    "handle concurrent edit": 10,
+    "handle stale object version": 10,
+    "cancel a long-running job": 10,
+    "retry an idempotent mutation": 10,
+    "respect plan limit": 10,
+    "show actionable diagnostics": 10
+  },
+  "verification": {
+    "focusedAutomatedTests": 40,
+    "focusedPassing": 40,
+    "focusedBuildBytes": 47291,
+    "rootGates": "prisma_generate_build_typecheck_and_existing_phantomstore_tests_pass",
+    "browser": "all_10_desktop_core_loops_plus_oracle_chronicle_terrain_causal_at_390x844_zero_console_issues",
+    "accessibility": "automated_semantics_plus_documented_manual_pending",
+    "secretScan": "trufflehog_3.96.0_strict_zero_findings",
+    "productionDependencyAudit": "zero_known_vulnerabilities_after_compatible_fast_uri_patch",
+    "fullDevelopmentAudit": "25_inherited_findings_require_separate_major_toolchain_remediation",
+    "externalModelsActive": false,
+    "externalSpendUsd": 0
+  },
+  "naming": {
+    "internalKey": "phantom-loom-dependency",
+    "storeFacingName": "PHANTOM LOOM",
+    "finalPortfolioDecision": "unresolved"
+  },
+  "remainingBoundary": "All tickets not named implemented in REQUIREMENT_LEDGER.json remain deferred; production adapters, launch infrastructure and independent reviews remain outside this milestone."
+}

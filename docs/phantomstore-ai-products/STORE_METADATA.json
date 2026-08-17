@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "portfolio": "PHANTOMStore Domain Intelligence Lab",
+  "state": "milestone_2_local_preview",
+  "milestone": 2,
+  "sharedFoundation": "workspace_scoped_repository_identity_consent_job_trace_export_v1",
+  "commerceActive": false,
+  "products": [
+    {"id":"phantom-oracle","name":"PHANTOM ORACLE","category":"Decision Simulation & Strategy","tagline":"Turn consequential choices into transparent scenario simulations.","primaryModule":"Decision Canvas","artifact":"decision simulation","state":"milestone_2_local_preview","route":"/?product=phantom-oracle"},
+    {"id":"phantom-chronicle","name":"PHANTOM CHRONICLE","category":"Timeline Reconstruction & Evidence Intelligence","tagline":"Reconstruct what happened from scattered multimodal evidence.","primaryModule":"Evidence Intake","artifact":"source-linked chronology","state":"milestone_2_local_preview","route":"/?product=phantom-chronicle"},
+    {"id":"phantom-foundry","name":"PHANTOM FOUNDRY","category":"Synthetic Data & AI Benchmark Factory","tagline":"Manufacture high-quality synthetic datasets and benchmarks with traceable recipes.","primaryModule":"Schema Studio","artifact":"benchmark recipe","state":"milestone_2_local_preview","route":"/?product=phantom-foundry"},
+    {"id":"phantom-twin","name":"PHANTOM TWIN","category":"Operational Digital Twins","tagline":"Build a living digital twin of how work actually flows.","primaryModule":"Process Mapper","artifact":"operational twin","state":"milestone_2_local_preview","route":"/?product=phantom-twin"},
+    {"id":"phantom-dealroom","name":"PHANTOM DEALROOM","category":"Negotiation Intelligence","tagline":"Prepare, rehearse, and govern high-stakes negotiations.","primaryModule":"Deal Map","artifact":"negotiation plan","state":"milestone_2_local_preview","route":"/?product=phantom-dealroom"},
+    {"id":"phantom-blueprint","name":"PHANTOM BLUEPRINT","category":"System Specification Compiler","tagline":"Compile an idea into a buildable technical system specification.","primaryModule":"Requirements Compiler","artifact":"traceable system specification","state":"milestone_2_local_preview","route":"/?product=phantom-blueprint"},
+    {"id":"phantom-terrain","name":"PHANTOM TERRAIN","category":"Geospatial Site Intelligence","tagline":"Explain places, constraints, and site trade-offs on one intelligent map.","primaryModule":"Layer Catalog","artifact":"site comparison","state":"milestone_2_local_preview","route":"/?product=phantom-terrain"},
+    {"id":"phantom-proof","name":"PHANTOM PROOF","category":"Claim Verification & Provenance","tagline":"Turn important claims into inspectable evidence packets.","primaryModule":"Claim Decomposer","artifact":"proof packet","state":"milestone_2_local_preview","route":"/?product=phantom-proof"},
+    {"id":"phantom-loom-dependency","name":"PHANTOM LOOM","category":"Dependency & Contradiction Intelligence","tagline":"Reveal the hidden dependency fabric across documents and plans.","primaryModule":"Corpus Intake","artifact":"dependency graph","state":"milestone_2_local_preview","route":"/?product=phantom-loom-dependency","namingReviewRequired":true},
+    {"id":"phantom-causal","name":"PHANTOM CAUSAL","category":"Experiment & Causal Analysis Workbench","tagline":"Design better experiments and separate correlation from plausible causation.","primaryModule":"Hypothesis Studio","artifact":"experiment record","state":"milestone_2_local_preview","route":"/?product=phantom-causal"}
+  ],
+  "plans": ["Evaluation", "Professional", "Team"],
+  "trialDays": 14,
+  "portabilityDays": 30,
+  "truth": {"pricingPublished":false,"paymentsEnabled":false,"subscriptionsEnabled":false,"externalModelsEnabled":false,"publicDataConnectorsEnabled":false,"productionDeployment":false}
+}

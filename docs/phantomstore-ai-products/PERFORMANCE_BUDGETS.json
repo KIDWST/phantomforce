@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "scope": "single-process local preview",
+  "budgets": {
+    "totalStaticBytes": 180000,
+    "healthP95Ms": 100,
+    "catalogP95Ms": 200,
+    "deterministicAnalysisP95Ms": 500,
+    "requestBodyMaxBytes": 1000000,
+    "requestsPerTokenPerMinute": 120,
+    "maxMetrics": 1000,
+    "maxIdempotencyRecords": 1000
+  },
+  "caveat": "Latency values are local design budgets, not measured production SLOs."
+}

@@ -10,6 +10,8 @@ const registrySource = readFileSync(new URL("../server/src/customization/module-
 const profilesSource = readFileSync(new URL("../server/src/customization/workspace-profiles.ts", import.meta.url), "utf8");
 const backendSource = readFileSync(new URL("../server/src/phantom-ai/phantomstore.ts", import.meta.url), "utf8");
 const backendTestSource = readFileSync(new URL("../server/scripts/test-phantomstore.ts", import.meta.url), "utf8");
+const serverIndexSource = readFileSync(new URL("../server/src/index.ts", import.meta.url), "utf8");
+const aiBridgeSource = readFileSync(new URL("../server/src/phantom-ai/phantomstore-ai-products.ts", import.meta.url), "utf8");
 
 assert.match(appHtml, /phantomstore\.css/u, "App shell must load PhantomStore styles.");
 assert.match(mainSource, /renderPhantomStore/u, "Main app must import PhantomStore renderer.");
@@ -115,5 +117,39 @@ assert.match(profilesSource, /athlete:[\s\S]*enabledModules:[\s\S]*"phantomstore
 assert.match(profilesSource, /developer:[\s\S]*enabledModules:[\s\S]*"phantomstore"/u, "Developer workspaces should include PhantomStore by default.");
 assert.match(storeSource, /spotlightTimer = window\.setTimeout\([\s\S]*5000/u, "Featured products must rotate every five seconds.");
 assert.match(storeSource, /ps-workflow-match/u, "Featured products must show a visual workspace match.");
+
+const integratedProductIds = [
+  "phantom-oracle",
+  "phantom-chronicle",
+  "phantom-foundry",
+  "phantom-twin",
+  "phantom-dealroom",
+  "phantom-blueprint",
+  "phantom-terrain",
+  "phantom-proof",
+  "phantom-loom-dependency",
+  "phantom-causal",
+];
+assert.match(storeSource, /const AI_WORKSPACE_FALLBACK_PRODUCTS/u, "PhantomStore must keep all ten workspaces visible if catalog sync is temporarily offline.");
+for (const productId of integratedProductIds) {
+  assert.ok(storeSource.includes(productId), `${productId} must be visible in the PhantomStore UI.`);
+  assert.ok(backendSource.includes(`workspaceProductId: "${productId}"`), `${productId} must be a served PhantomStore catalog listing.`);
+}
+assert.match(backendSource, /const AI_WORKSPACE_PRODUCTS/u, "The served marketplace must seed the AI workspace collection.");
+assert.match(storeSource, /data-ps-launch-ai/u, "AI product cards must launch the integrated workspace instead of checkout.");
+assert.match(storeSource, /function renderAiHub\(\)/u, "PhantomStore must render an in-store AI workspace directory.");
+assert.match(storeSource, /function renderAiWorkspace\(\)/u, "PhantomStore must render the complete product workflow in place.");
+assert.match(storeSource, /Complete product workflow/u, "The in-store workspace must expose product input, analysis, and review as one workflow.");
+assert.match(storeSource, /\/api\/phantomstore\/ai-products/u, "The UI must load the authenticated integrated product service.");
+assert.match(serverIndexSource, /\/api\/phantomstore\/ai-products\/:productId\/consent/u, "The server must expose purpose-consent controls for integrated products.");
+assert.match(serverIndexSource, /\/api\/phantomstore\/ai-products\/:productId\/artifacts/u, "The server must persist integrated product artifacts.");
+assert.match(serverIndexSource, /\/api\/phantomstore\/ai-products\/artifacts\/:artifactId\/analyses/u, "The server must run integrated product analyses.");
+assert.match(serverIndexSource, /\/api\/phantomstore\/ai-products\/analyses\/:analysisId\/review/u, "The server must persist human review dispositions.");
+assert.match(aiBridgeSource, /@phantomforce\/phantomstore-ai-products\/platform/u, "The served bridge must reuse the tested product platform instead of duplicating product logic.");
+assert.match(aiBridgeSource, /createHash\("sha256"\)/u, "Integrated workspace actor and tenant identifiers must be pseudonymized at the product boundary.");
+assert.match(aiBridgeSource, /served_phantomstore_integrated_preview/u, "Product status must identify the served integrated deployment honestly.");
+for (const selector of [".ps-ai-hub", ".ps-ai-workspace", ".ps-ai-product-art", ".ps-ai-core", ".ps-ai-layout"]) {
+  assert.ok(storeCss.includes(selector), `${selector} integrated workspace style must be present.`);
+}
 
 console.log("PhantomStore UI and module wiring checks passed.");

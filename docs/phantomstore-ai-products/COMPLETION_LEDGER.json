@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-08-17",
+  "scope": "isolated local primary vertical slices",
+  "baselineCommit": "fb581474",
+  "branch": "codex/phantomstore-ai-products-20260817",
+  "deployment": {"state":"not_deployed","localPreviewImplemented":true,"productionClaim":false},
+  "requirements": {"ticketCount":5400,"implementedPrimaryTickets":10,"deferredTickets":5390,"globalRequirementsMapped":120,"source":"REQUIREMENT_LEDGER.json"},
+  "products": [
+    {"id":"phantom-oracle","name":"PHANTOM ORACLE","primaryModule":"Decision Canvas","state":"primary_vertical_slice_implemented"},
+    {"id":"phantom-chronicle","name":"PHANTOM CHRONICLE","primaryModule":"Evidence Intake","state":"primary_vertical_slice_implemented"},
+    {"id":"phantom-foundry","name":"PHANTOM FOUNDRY","primaryModule":"Schema Studio","state":"primary_vertical_slice_implemented"},
+    {"id":"phantom-twin","name":"PHANTOM TWIN","primaryModule":"Process Mapper","state":"primary_vertical_slice_implemented"},
+    {"id":"phantom-dealroom","name":"PHANTOM DEALROOM","primaryModule":"Deal Map","state":"primary_vertical_slice_implemented"},
+    {"id":"phantom-blueprint","name":"PHANTOM BLUEPRINT","primaryModule":"Requirements Compiler","state":"primary_vertical_slice_implemented"},
+    {"id":"phantom-terrain","name":"PHANTOM TERRAIN","primaryModule":"Layer Catalog","state":"primary_vertical_slice_implemented"},
+    {"id":"phantom-proof","name":"PHANTOM PROOF","primaryModule":"Claim Decomposer","state":"primary_vertical_slice_implemented"},
+    {"id":"phantom-loom-dependency","name":"PHANTOM LOOM","primaryModule":"Corpus Intake","state":"primary_vertical_slice_implemented","namingReviewRequired":true},
+    {"id":"phantom-causal","name":"PHANTOM CAUSAL","primaryModule":"Hypothesis Studio","state":"primary_vertical_slice_implemented"}
+  ],
+  "implemented": ["distinct catalog and object contracts","local migration and persistence","workspace/role/entitlement/flag checks","purpose consent and withdrawal","domain validation and provenance","ten deterministic calculators","formula/unit/input/rounding disclosure","durable job and zero-cost usage record","human review and source preservation","idempotency and optimistic revision","audit without raw content","portable export","duplicate/archive/restore/delete/recovery","responsive local UI","seeded reversible demos","automated contract/platform/API/accessibility tests","operations/model/data/risk/security/store documentation"],
+  "deferred": ["remaining 5390 ticket-bank behaviors","production identity and commerce","relational database and object storage","platform encryption and secret management","external model paths and evaluation","public-data/geospatial connectors","multimodal ingestion and file scanning","distributed queues and workers","production observability and incident response","backup and verified retention purge","notifications and third-party exports","independent legal/domain/security/privacy/accessibility review","CI and deployment configuration","production rollout and store publication"],
+  "verification": {"automatedTestsExpected":17,"automatedTestsPassing":17,"browserPlaytest":"passed_default_and_390x844","browserConsoleWarningsOrErrors":0}
+}

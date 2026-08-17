@@ -10,6 +10,7 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const root = await mkdtemp(join(tmpdir(), "phantomstore-"));
 process.env.PHANTOMFORCE_PHANTOMSTORE_PATH = join(root, "phantomstore.json");
+process.env.PHANTOMFORCE_PHANTOMSTORE_AI_PRODUCTS_PATH = join(root, "phantomstore-ai-products.json");
 process.env.NODE_ENV = "development";
 process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
@@ -28,6 +29,9 @@ try {
   assert(initial.catalog.length === 0, "A fresh store should ship no seeded tools.");
   assert(initial.products.some((product: { name?: string }) => product.name === "Termina"), "PhantomStore should ship PhantomForce products, including Termina.");
   assert(initial.products.some((product: { name?: string }) => product.name === "BeatForge"), "PhantomStore should list BeatForge instead of the internal PhantomForce OS workspace.");
+  const integratedProducts = initial.products.filter((product: { workspaceProductId?: string }) => Boolean(product.workspaceProductId));
+  assert(integratedProducts.length === 10, "PhantomStore should serve exactly ten integrated AI workspace listings.");
+  assert(integratedProducts.every((product: { buyLabel?: string }) => product.buyLabel === "Open workspace"), "Integrated AI products should launch in the store instead of routing to checkout.");
   assert(!initial.products.some((product: { id?: string }) => product.id === "product-phantomforce-os"), "PhantomForce OS must not be sold inside the store users are already using.");
   assert(initial.sellers.some((seller: { name?: string }) => seller.name === "PhantomForce"), "PhantomStore should include a PhantomForce seller profile.");
   assert(initial.products.every((product: { reviews?: unknown[] }) => Array.isArray(product.reviews)), "Product listings should carry product reviews.");
@@ -213,6 +217,43 @@ try {
   assert(ownerView.statusCode === 200 && ownerView.json().canModerate === true, "Platform admin sessions should receive moderation access via the route.");
   const devView = await app.inject({ method: "GET", url: "/api/phantomstore", headers: { Authorization: `Bearer ${devToken}` } });
   assert(devView.statusCode === 200 && devView.json().canModerate === false, "A free-plan client session should still be able to view the catalog, without moderation access.");
+  const aiWorkspaceView = await app.inject({ method: "GET", url: "/api/phantomstore/ai-products", headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(aiWorkspaceView.statusCode === 200 && aiWorkspaceView.json().products.length === 10, "The authenticated store route should expose all ten integrated AI products.");
+  assert(aiWorkspaceView.json().deployment === "served_phantomstore_integrated_preview", "The product service should report its real served integration state.");
+  const oracle = aiWorkspaceView.json().products.find((product: { id: string }) => product.id === "phantom-oracle");
+  assert(Boolean(oracle?.sample), "PHANTOM ORACLE should ship a usable in-store demo fixture.");
+  const consentRoute = await app.inject({
+    method: "POST",
+    url: "/api/phantomstore/ai-products/phantom-oracle/consent",
+    headers: { Authorization: `Bearer ${ownerToken}`, "Idempotency-Key": "oracle-route-review" },
+    payload: { status: "granted", purpose: "Test the integrated store decision workflow." },
+  });
+  assert(consentRoute.statusCode === 200 && consentRoute.json().consent.status === "granted", "The served product route should persist explicit purpose consent.");
+  const artifactRoute = await app.inject({
+    method: "POST",
+    url: "/api/phantomstore/ai-products/phantom-oracle/artifacts",
+    headers: { Authorization: `Bearer ${ownerToken}`, "Idempotency-Key": "oracle-route-artifact" },
+    payload: { fields: oracle.sample, evidenceNote: "Declared route-test fixture.", evidenceLabel: "PhantomStore integration test" },
+  });
+  assert(artifactRoute.statusCode === 200 && artifactRoute.json().artifact.productId === "phantom-oracle", "The served product route should persist a versioned Oracle artifact.");
+  const integratedArtifactId = artifactRoute.json().artifact.id as string;
+  const analysisRoute = await app.inject({
+    method: "POST",
+    url: `/api/phantomstore/ai-products/artifacts/${integratedArtifactId}/analyses`,
+    headers: { Authorization: `Bearer ${ownerToken}`, "Idempotency-Key": "oracle-route-analysis" },
+  });
+  assert(analysisRoute.statusCode === 200 && analysisRoute.json().analysis.status === "pending_review", "The served product route should run the Oracle core loop and require review.");
+  assert(analysisRoute.json().analysis.output.coreLoop.productId === "phantom-oracle" && analysisRoute.json().analysis.output.coreLoop.modules.length > 0, "The integrated analysis should expose its complete product-specific core loop.");
+  const integratedAnalysisId = analysisRoute.json().analysis.id as string;
+  const reviewRoute = await app.inject({
+    method: "POST",
+    url: `/api/phantomstore/ai-products/analyses/${integratedAnalysisId}/review`,
+    headers: { Authorization: `Bearer ${ownerToken}`, "Idempotency-Key": "oracle-route-review" },
+    payload: { decision: "accepted" },
+  });
+  assert(reviewRoute.statusCode === 200 && reviewRoute.json().analysis?.finalDisposition === "accepted", `The served product route should persist a human review disposition: ${reviewRoute.body}`);
+  const clientAiView = await app.inject({ method: "GET", url: "/api/phantomstore/ai-products", headers: { Authorization: `Bearer ${devToken}` } });
+  assert(clientAiView.statusCode === 200 && clientAiView.json().artifacts.length === 0, "Integrated product data must remain isolated between organizations.");
   const devSubmitBlocked = await app.inject({
     method: "POST", url: "/api/phantomstore/tools", headers: { Authorization: `Bearer ${devToken}` },
     payload: { name: "Route Tool", summary: "Submitted through the HTTP route.", description: "Proves the Fastify route wiring saves a tool end to end.", repoUrl: "https://example.test/route-tool", installMethod: "manual", submit: true },
@@ -283,7 +324,7 @@ try {
   assert(beatForgePreview.json().files_written === false && beatForgePreview.json().daw_mutated === false && beatForgePreview.json().audio_uploaded === false, "BeatForge preview must not write files, mutate the DAW, or upload audio.");
   await app.close();
 
-  console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, entitlementIdempotency: true, compatibilityChecks: true, uninstallPreservesData: true, routeAuth: true }));
+  console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, entitlementIdempotency: true, compatibilityChecks: true, uninstallPreservesData: true, routeAuth: true, integratedAiProducts: 10, integratedCoreLoop: true }));
 } finally {
   await rm(root, { recursive: true, force: true });
 }

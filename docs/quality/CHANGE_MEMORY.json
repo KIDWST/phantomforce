@@ -4,6 +4,46 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "phantomstore-ai-products-served-integration",
+      "status": "active",
+      "title": "The ten AI products live inside the served PhantomStore",
+      "ownerDecision": "PHANTOM ORACLE, CHRONICLE, FOUNDRY, TWIN, DEALROOM, BLUEPRINT, TERRAIN, PROOF, LOOM, and CAUSAL must appear in the actual PhantomStore catalog and open authenticated in-store workspaces. A local preview package or report does not satisfy this requirement. Each workspace must persist source artifacts, run its distinct deterministic core loop, and record human review through the served application.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/phantomstore.ts",
+          "pattern": "const AI_WORKSPACE_PRODUCTS[\\s\\S]*workspaceProductId:[\\s\\S]*phantom-oracle[\\s\\S]*workspaceProductId:[\\s\\S]*phantom-causal",
+          "description": "The served marketplace catalog contains the integrated AI workspace collection."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "\\/api\\/phantomstore\\/ai-products[\\s\\S]*\\/artifacts\\/:artifactId\\/analyses[\\s\\S]*\\/analyses\\/:analysisId\\/review",
+          "description": "The main authenticated server exposes listing, artifact, analysis, and review routes."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomstore-ai-products.ts",
+          "pattern": "@phantomforce\\/phantomstore-ai-products\\/platform[\\s\\S]*served_phantomstore_integrated_preview",
+          "description": "The served bridge reuses the tested product platform and truthfully reports integrated deployment."
+        },
+        {
+          "file": "app/js/phantomstore.js",
+          "pattern": "const AI_WORKSPACE_FALLBACK_PRODUCTS[\\s\\S]*data-ps-launch-ai[\\s\\S]*function renderAiWorkspace\\(\\)",
+          "description": "PhantomStore visibly lists and launches the integrated workspaces."
+        },
+        {
+          "file": "server/scripts/test-phantomstore.ts",
+          "pattern": "integratedAiProducts: 10[\\s\\S]*integratedCoreLoop: true",
+          "description": "The main server integration test protects all ten listings and the complete core loop."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "server/src/phantom-ai/phantomstore-ai-products.ts",
+          "pattern": "milestone_2_local_preview",
+          "description": "The served bridge cannot regress to a local-preview-only deployment state."
+        }
+      ]
+    },
+    {
       "id": "organization-ai-runtime-powers-member-chat",
       "status": "active",
       "title": "Saved organization provider choices power every member's Phantom",

@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-17T01:24:30.000-05:00",
+  "sourceLedger": "docs/phantomstore-ai-products/REQUIREMENT_LEDGER.json",
+  "deferredCount": 5390,
+  "countsByProduct": {
+    "PHANTOM BLUEPRINT": 539,
+    "PHANTOM CAUSAL": 539,
+    "PHANTOM CHRONICLE": 539,
+    "PHANTOM DEALROOM": 539,
+    "PHANTOM FOUNDRY": 539,
+    "PHANTOM LOOM": 539,
+    "PHANTOM ORACLE": 539,
+    "PHANTOM PROOF": 539,
+    "PHANTOM TERRAIN": 539,
+    "PHANTOM TWIN": 539
+  },
+  "countsByPriority": {
+    "P0_CORE_LOOP": 314,
+    "P0_SHARED_FOUNDATION": 3060,
+    "P1_ACCESSIBILITY": 360,
+    "P1_OPERATIONS": 1080,
+    "P1_PRODUCT_COMPLETION": 396,
+    "P3_OPTIONAL_OR_POST_LAUNCH": 180
+  },
+  "countsByDependencyClass": {
+    "ACCESSIBILITY": 360,
+    "AI_ANALYSIS_RELIABILITY": 360,
+    "DURABLE_JOBS": 360,
+    "ENTITLEMENTS": 180,
+    "OBSERVABILITY_OPERATIONS": 720,
+    "PERSISTENCE_LIFECYCLE": 900,
+    "PRODUCT_DOMAIN": 890,
+    "PROVENANCE_EXPORT": 360,
+    "SECURITY_PRIVACY": 720,
+    "VERSION_CONCURRENCY": 540
+  },
+  "countsByReleaseCriticality": {
+    "releaseCritical": 4814,
+    "notReleaseCritical": 576
+  },
+  "topSharedBlockers": [
+    {
+      "dependencyClass": "PERSISTENCE_LIFECYCLE",
+      "count": 900
+    },
+    {
+      "dependencyClass": "OBSERVABILITY_OPERATIONS",
+      "count": 720
+    },
+    {
+      "dependencyClass": "SECURITY_PRIVACY",
+      "count": 720
+    },
+    {
+      "dependencyClass": "VERSION_CONCURRENCY",
+      "count": 540
+    },
+    {
+      "dependencyClass": "AI_ANALYSIS_RELIABILITY",
+      "count": 360
+    },
+    {
+      "dependencyClass": "DURABLE_JOBS",
+      "count": 360
+    },
+    {
+      "dependencyClass": "PROVENANCE_EXPORT",
+      "count": 360
+    },
+    {
+      "dependencyClass": "ENTITLEMENTS",
+      "count": 180
+    }
+  ],
+  "topProductSpecificBlockers": [
+    {
+      "product": "PHANTOM BLUEPRINT",
+      "count": 125
+    },
+    {
+      "product": "PHANTOM CAUSAL",
+      "count": 125
+    },
+    {
+      "product": "PHANTOM CHRONICLE",
+      "count": 125
+    },
+    {
+      "product": "PHANTOM DEALROOM",
+      "count": 125
+    },
+    {
+      "product": "PHANTOM FOUNDRY",
+      "count": 125
+    },
+    {
+      "product": "PHANTOM LOOM",
+      "count": 125
+    },
+    {
+      "product": "PHANTOM ORACLE",
+      "count": 125
+    },
+    {
+      "product": "PHANTOM PROOF",
+      "count": 125
+    },
+    {
+      "product": "PHANTOM TERRAIN",
+      "count": 125
+    },
+    {
+      "product": "PHANTOM TWIN",
+      "count": 125
+    }
+  ]
+}

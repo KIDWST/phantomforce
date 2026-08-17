@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#090b10" />
+    <meta name="description" content="Local domain lab for ten governed PHANTOMStore AI products." />
+    <title>PHANTOMStore · Domain Intelligence Lab</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to domain workspace</a>
+    <div class="shell">
+      <aside class="rail" aria-label="PHANTOMStore AI product navigation">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div><p class="overline">PHANTOMSTORE</p><strong>DOMAIN LAB / 10</strong></div>
+        </div>
+        <p class="rail-copy">Ten different analytical systems. Every score exposes inputs, units, method, and provenance.</p>
+        <label class="search"><span>Find product</span><input id="product-search" type="search" autocomplete="off" placeholder="Oracle, Proof, Causal…" /></label>
+        <nav id="product-nav" aria-label="Exactly ten AI products"></nav>
+        <div class="service-state"><span class="service-dot" aria-hidden="true"></span><div><b id="service-label">Connecting</b><small>loopback · $0 provider spend</small></div></div>
+      </aside>
+
+      <main id="main" tabindex="-1">
+        <header class="topbar">
+          <button id="menu-button" class="button subtle mobile-only" type="button" aria-expanded="false" aria-controls="product-nav">Products</button>
+          <div><p class="overline">GOVERNED WORKSPACE</p><strong id="workspace-name">Loading domain lab…</strong></div>
+          <div class="top-actions">
+            <span id="portfolio-count" class="pill">10 fixed products</span>
+            <button id="theme-button" class="button subtle" type="button" aria-label="Switch color theme">Light</button>
+            <button id="refresh-button" class="button subtle" type="button">Refresh</button>
+          </div>
+        </header>
+
+        <div id="status-region" class="status-region" role="status" aria-live="polite"></div>
+
+        <section class="hero" aria-labelledby="product-title">
+          <div class="hero-copy"><p id="product-category" class="overline">LOADING DOMAIN</p><h1 id="product-title">Inspect the system, not a generic answer.</h1><p id="product-tagline"></p></div>
+          <div class="hero-facts" aria-label="Selected product state">
+            <div><small>ARTIFACTS</small><b id="artifact-count">0</b></div>
+            <div><small>ANALYSIS</small><b id="analysis-count">0</b></div>
+            <div><small>PROVIDER</small><b>local rules</b></div>
+            <div><small>SPEND</small><b>$0</b></div>
+          </div>
+        </section>
+
+        <section class="workspace-grid">
+          <article class="panel contract-panel" aria-labelledby="contract-title">
+            <div class="panel-head"><div><p class="overline">PRODUCT BOUNDARY</p><h2 id="contract-title">Domain contract</h2></div><span id="entitlement-badge" class="badge">checking</span></div>
+            <p id="product-promise" class="promise"></p>
+            <div class="boundary"><b>Will not do</b><p id="product-non-goals"></p></div>
+            <div class="module-focus"><small>PRIMARY MODULE</small><b id="primary-module"></b><p id="object-type"></p></div>
+            <details><summary>All twelve prescribed modules</summary><ol id="module-list" class="module-list"></ol></details>
+            <details><summary>Analysis contract</summary><div id="analysis-contract" class="details-copy"></div></details>
+          </article>
+
+          <article class="panel create-panel" aria-labelledby="create-title">
+            <div class="panel-head"><div><p class="overline">DOMAIN INPUT</p><h2 id="create-title">Create evidence-backed artifact</h2></div><span id="consent-badge" class="badge warning">consent needed</span></div>
+            <div id="consent-controls" class="consent"></div>
+            <form id="artifact-form">
+              <div id="dynamic-fields" class="form-grid"></div>
+              <label class="field full"><span>Provenance note <em>required</em></span><textarea name="evidenceNote" rows="3" maxlength="4000" required placeholder="Name the source, observation, assumption set, or measurement supporting this artifact."></textarea></label>
+              <label class="field full"><span>Evidence label</span><input name="evidenceLabel" maxlength="240" placeholder="Example: approved planning worksheet v3" /></label>
+              <div class="actions full"><button id="sample-button" class="button subtle" type="button">Load reversible demo</button><button id="clear-button" class="button subtle" type="button">Clear</button><button id="create-button" class="button primary" type="submit">Create artifact</button></div>
+            </form>
+          </article>
+
+          <article class="panel list-panel" aria-labelledby="artifacts-title">
+            <div class="panel-head"><div><p class="overline">VERSIONED OBJECTS</p><h2 id="artifacts-title">Artifacts</h2></div><span id="artifact-filter" class="badge">selected product</span></div>
+            <div id="artifact-list" class="artifact-list"></div>
+          </article>
+
+          <article class="panel analysis-panel" aria-labelledby="analysis-title">
+            <div class="panel-head"><div><p class="overline">CALCULATION + REVIEW</p><h2 id="analysis-title">Inspectable analysis</h2></div><span id="review-badge" class="badge">none selected</span></div>
+            <div id="analysis-workspace" class="analysis-workspace empty">
+              <div class="empty-symbol" aria-hidden="true"></div><h3>Select an artifact</h3><p>Run the product's deterministic domain method, inspect formulas and warnings, then accept, correct, or reject it.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="diagnostic-strip" aria-label="Local diagnostics and limitations">
+          <div><p class="overline">DIAGNOSTICS</p><b id="diagnostic-state">connecting</b></div>
+          <dl><div><dt>Schema</dt><dd id="schema-value">—</dd></div><div><dt>Pending review</dt><dd id="pending-value">—</dd></div><div><dt>External models</dt><dd>off</dd></div><div><dt>Provider spend</dt><dd>$0</dd></div></dl>
+          <p><b>Truth boundary:</b> this local preview calculates from user-entered evidence and assumptions. It does not fetch public data, train models, determine liability, control operations, contact counterparties, deploy infrastructure, track people, or establish causality.</p>
+        </section>
+      </main>
+    </div>
+    <noscript>This local domain lab requires JavaScript for its interactive workflow.</noscript>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

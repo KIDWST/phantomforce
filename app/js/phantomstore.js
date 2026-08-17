@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260817-152";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260817-153";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
@@ -48,6 +48,12 @@ const ui = {
   aiDrafts: [],
   aiDraftMessage: "",
   aiSavingDrafts: false,
+  aiProductId: "",
+  aiSnapshot: null,
+  aiLoading: false,
+  aiBusy: false,
+  aiMessage: "",
+  aiSelectedArtifactId: "",
 };
 
 // Local asset paths (e.g. /app/assets/...) are safe to render as-is; anything
@@ -71,7 +77,8 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in to load PhantomStore.", fallbackPrefix: "PhantomStore request failed" }));
+    const backendError = typeof payload?.error === "string" ? payload.error : payload?.error?.message;
+    throw new Error(friendlyBackendError(response.status, backendError, { authMessage: "Sign in to load PhantomStore.", fallbackPrefix: "PhantomStore request failed" }));
   }
   return payload;
 }
@@ -243,6 +250,19 @@ const SEEDED_REVIEWS = {
   seller: [{ id: "review-seller-local", authorName: "Launch desk", rating: 5, title: "Ships ambitious tools with buyer safety gates.", body: "The catalog is strongest when products have honest readiness notes, clear support paths, and visible review proof.", verified: true }],
 };
 
+const AI_WORKSPACE_FALLBACK_PRODUCTS = [
+  { id: "product-ai-oracle", workspaceProductId: "phantom-oracle", name: "PHANTOM ORACLE", summary: "Model consequential choices with transparent scenarios, assumptions, sensitivity, and a reviewable decision record.", accent: "#a986ff", tags: ["decision", "scenario", "strategy"], badges: ["In-store", "Deterministic", "Human review"] },
+  { id: "product-ai-chronicle", workspaceProductId: "phantom-chronicle", name: "PHANTOM CHRONICLE", summary: "Reconstruct source-linked timelines while preserving ranges, contradictions, observations, and inferences.", accent: "#ffb257", tags: ["timeline", "evidence", "chronology"], badges: ["Source-linked", "Contradiction-safe", "Reviewable"] },
+  { id: "product-ai-foundry", workspaceProductId: "phantom-foundry", name: "PHANTOM FOUNDRY", summary: "Create seeded synthetic evaluation fixtures with coverage, deduplication, versioning, and immutable benchmark digests.", accent: "#42d9f5", tags: ["synthetic data", "benchmark", "coverage"], badges: ["Seeded", "Synthetic labels", "Immutable digest"] },
+  { id: "product-ai-twin", workspaceProductId: "phantom-twin", name: "PHANTOM TWIN", summary: "Map resources and queues, simulate demand, expose bottlenecks, and retain modeled-versus-observed calibration truth.", accent: "#42e6a4", tags: ["operations", "simulation", "capacity"], badges: ["What-if", "Units visible", "No control plane"] },
+  { id: "product-ai-dealroom", workspaceProductId: "phantom-dealroom", name: "PHANTOM DEALROOM", summary: "Prepare interests, BATNA, concessions, packages, rehearsal, and human-confirmed commitments without covert inference.", accent: "#f3cb67", tags: ["negotiation", "batna", "commitments"], badges: ["Bounded rehearsal", "No outreach", "Human confirmation"] },
+  { id: "product-ai-blueprint", workspaceProductId: "phantom-blueprint", name: "PHANTOM BLUEPRINT", summary: "Compile requirements into components, acceptance criteria, data/API contracts, traceability, and change impact.", accent: "#8ac8ff", tags: ["requirements", "architecture", "openapi"], badges: ["Stable IDs", "Change impact", "Exportable"] },
+  { id: "product-ai-terrain", workspaceProductId: "phantom-terrain", name: "PHANTOM TERRAIN", summary: "Compare candidate sites with declared weights, constraints, freshness, sensitivity, and GeoJSON export.", accent: "#64d9bd", tags: ["geospatial", "site scoring", "geojson"], badges: ["Weights visible", "Freshness", "No tracking"] },
+  { id: "product-ai-proof", workspaceProductId: "phantom-proof", name: "PHANTOM PROOF", summary: "Decompose claims, classify source-linked evidence, inspect citation integrity and circularity, and preserve opposition.", accent: "#ff7a90", tags: ["claims", "evidence", "citations"], badges: ["Registered sources", "Opposition preserved", "No verdict"] },
+  { id: "product-ai-loom", workspaceProductId: "phantom-loom-dependency", name: "PHANTOM LOOM", summary: "Build a revision-aware graph of statements, commitments, dependencies, contradictions, owners, and deadlines.", accent: "#c29cff", tags: ["dependencies", "commitments", "change impact"], badges: ["Revision-aware", "Typed edges", "Source trace"] },
+  { id: "product-ai-causal", workspaceProductId: "phantom-causal", name: "PHANTOM CAUSAL", summary: "Register hypotheses and variables, draw a DAG, surface confounders, estimate power, and limit causal conclusions.", accent: "#d6f75b", tags: ["experiments", "causal dag", "confounders"], badges: ["DAG", "Power helper", "No false causality"] },
+];
+
 function localFallbackSnapshot() {
   const seller = {
     id: "seller-phantomforce",
@@ -400,6 +420,27 @@ function localFallbackSnapshot() {
       seller,
     },
   ];
+  products.push(...AI_WORKSPACE_FALLBACK_PRODUCTS.map((product) => ({
+    ...product,
+    sellerId: seller.id,
+    description: product.summary,
+    category: "AI Suite",
+    priceLabel: "Included preview",
+    buyLabel: "Open workspace",
+    buyUrl: "",
+    delivery: "In-store web workspace",
+    version: "0.2.0",
+    status: "available",
+    qualityNote: "Milestone 2 integrated preview. Live workspace actions reconnect through the authenticated PhantomStore service.",
+    imageUrl: "",
+    referenceImageUrl: "",
+    rating: 0,
+    reviewCount: 0,
+    featured: ["phantom-oracle", "phantom-proof", "phantom-causal"].includes(product.workspaceProductId),
+    reviews: [],
+    compatiblePlatforms: ["web"],
+    seller,
+  })));
   return {
     catalog: [],
     products,
@@ -436,6 +477,17 @@ function productInitials(product = {}) {
   return name.split(/\s+/u).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase() || "PF";
 }
 
+function workspaceProductArt(product = {}) {
+  if (!product.workspaceProductId) return "";
+  const module = String(product.workspaceProductId).replace(/^phantom-/, "").replaceAll("-", " ");
+  return `<div class="ps-ai-product-art" style="--ai-accent:${esc(product.accent || "#42e9ff")}" role="img" aria-label="${esc(product.name)} analytical workspace artwork">
+    <span>PHANTOMSTORE / AI WORKSPACE</span>
+    <b>${esc(productInitials(product))}</b>
+    <i>${esc(module)}</i>
+    <em aria-hidden="true"></em>
+  </div>`;
+}
+
 function productCard(product) {
   const seller = product.seller || {};
   const buyUrl = safeHref(product.buyUrl);
@@ -444,10 +496,11 @@ function productCard(product) {
   const imageUrl = safeAssetHref(product.imageUrl);
   const fallbackImageUrl = fallbackProductImage(product);
   const artUrl = imageUrl || fallbackImageUrl;
+  const workspaceArt = workspaceProductArt(product);
   const referenceUrl = safeAssetHref(product.referenceImageUrl);
   const owned = libraryEntry(product.id);
-  return `<article class="ps-product ${product.featured ? "is-featured" : ""}">
-    <div class="ps-product-media${imageUrl ? "" : " is-fallback"}">${artUrl ? `<img src="${esc(artUrl)}" alt="${esc(product.name)} key art" loading="lazy" />` : `<div class="ps-product-fallback"><span>${esc(productInitials(product))}</span><b>${esc(product.category || "PhantomStore")}</b></div>`}${referenceUrl ? `<span class="ps-media-note">${imageUrl ? "AI key art from the real product UI" : "Branded fallback until product art is connected"} · <a href="${esc(referenceUrl)}" target="_blank" rel="noopener noreferrer">View real UI</a></span>` : ""}</div>
+  return `<article class="ps-product ${product.featured ? "is-featured" : ""} ${product.workspaceProductId ? "is-ai-workspace" : ""}">
+    <div class="ps-product-media${imageUrl ? "" : " is-fallback"}">${workspaceArt || (artUrl ? `<img src="${esc(artUrl)}" alt="${esc(product.name)} key art" loading="lazy" />` : `<div class="ps-product-fallback"><span>${esc(productInitials(product))}</span><b>${esc(product.category || "PhantomStore")}</b></div>`)}${referenceUrl ? `<span class="ps-media-note">${imageUrl ? "AI key art from the real product UI" : "Branded fallback until product art is connected"} · <a href="${esc(referenceUrl)}" target="_blank" rel="noopener noreferrer">View real UI</a></span>` : ""}</div>
     <header>
       <div>
         <p class="ps-kicker">${esc(product.category)} / ${esc(product.delivery || "Digital delivery")}</p>
@@ -465,9 +518,11 @@ function productCard(product) {
     <div class="ps-tags">${(product.badges || product.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
     <small>${esc(product.qualityNote || "")}</small>
     <div class="ps-card-actions">
-      <button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>
+      ${product.workspaceProductId
+        ? `<button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}" ${available ? "" : "disabled"}>Open workspace</button>`
+        : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>`}
       ${owned ? `<button type="button" class="ps-secondary" data-ps-open-library="${esc(product.id)}">In your library</button>` : ""}
-      ${ui.snapshot?.canModerate && available && !owned ? `<button type="button" class="ps-secondary" data-ps-grant-test="${esc(product.id)}">Grant owner test access</button>` : ""}
+      ${ui.snapshot?.canModerate && available && !owned && !product.workspaceProductId ? `<button type="button" class="ps-secondary" data-ps-grant-test="${esc(product.id)}">Grant owner test access</button>` : ""}
       ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
     </div>
     ${ui.buyingProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
@@ -586,6 +641,7 @@ function storeSpotlight(product, products = []) {
   const artUrl = safeAssetHref(product.imageUrl) || fallbackProductImage(product);
   const buyUrl = safeHref(product.buyUrl);
   const match = productMatch(product);
+  const workspaceArt = workspaceProductArt(product);
   return `<section class="ps-spotlight" aria-label="Featured desktop product">
     <div class="ps-spotlight-copy">
       <div class="ps-spotlight-label"><p class="ps-kicker">FEATURED</p><span>Verified delivery</span></div>
@@ -602,13 +658,15 @@ function storeSpotlight(product, products = []) {
         <span><b>${esc(statusLabel(product.status))}</b><i>status</i></span>
       </div>
       <div class="ps-card-actions">
-        <button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${product.status === "available" ? "" : "disabled"}>${esc(product.buyLabel || "Buy now")}</button>
+        ${product.workspaceProductId
+          ? `<button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}" ${product.status === "available" ? "" : "disabled"}>Open workspace</button>`
+          : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${product.status === "available" ? "" : "disabled"}>${esc(product.buyLabel || "Buy now")}</button>`}
         ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
         <button type="button" class="ps-secondary" data-ps-tab-jump="library">View library</button>
       </div>
     </div>
     <div class="ps-spotlight-panel">
-      ${artUrl ? `<img src="${esc(artUrl)}" alt="${esc(product.name || "Product")} desktop product art" loading="lazy" />` : `<div class="ps-product-fallback"><span>${esc(productInitials(product))}</span><b>${esc(product.category || "Desktop App")}</b></div>`}
+      ${workspaceArt || (artUrl ? `<img src="${esc(artUrl)}" alt="${esc(product.name || "Product")} desktop product art" loading="lazy" />` : `<div class="ps-product-fallback"><span>${esc(productInitials(product))}</span><b>${esc(product.category || "Desktop App")}</b></div>`)}
       <div class="ps-spotlight-proof">
         ${(product.badges || product.tags || []).slice(0, 4).map((tag) => `<em>${esc(tag)}</em>`).join("")}
       </div>
@@ -878,6 +936,106 @@ function renderSubmissions() {
   </section>`;
 }
 
+function aiWorkspaceListings() {
+  return allProducts().filter((product) => product.workspaceProductId);
+}
+
+function selectedAiProduct() {
+  return (ui.aiSnapshot?.products || []).find((product) => product.id === ui.aiProductId) || null;
+}
+
+function selectedAiArtifact() {
+  const artifacts = (ui.aiSnapshot?.artifacts || []).filter((artifact) => artifact.productId === ui.aiProductId);
+  return artifacts.find((artifact) => artifact.id === ui.aiSelectedArtifactId) || artifacts[0] || null;
+}
+
+function latestAiAnalysis(artifactId) {
+  return (ui.aiSnapshot?.analyses || [])
+    .filter((analysis) => analysis.artifactId === artifactId)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0] || null;
+}
+
+function renderAiHub() {
+  const products = aiWorkspaceListings();
+  return `<section class="ps-ai-hub">
+    <header class="ps-ai-hub-head">
+      <div><p class="ps-kicker">TEN SERVED WORKSPACES</p><h2>Use the builds inside PhantomStore.</h2></div>
+      <span>${products.length} active</span>
+    </header>
+    <p class="ps-ai-hub-copy">These are working analytical products, not placeholder listings. Open one to grant purpose consent, create a source-linked artifact, run its product-specific deterministic core loop, inspect the calculation, and record a human review.</p>
+    <div class="ps-ai-hub-grid">${products.map((product) => `<article class="ps-ai-hub-card" style="--ai-accent:${esc(product.accent || "#42e9ff")}">
+      ${workspaceProductArt(product)}
+      <div><p class="ps-kicker">${esc(product.delivery || "IN-STORE WORKSPACE")}</p><h3>${esc(product.name)}</h3><p>${esc(product.summary)}</p></div>
+      <div class="ps-tags">${(product.badges || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
+      <button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}">Open ${esc(product.name.replace("PHANTOM ", ""))}</button>
+    </article>`).join("")}</div>
+  </section>`;
+}
+
+function renderAiFormField(definition) {
+  const required = definition.required ? "required" : "";
+  const help = definition.help ? `<small>${esc(definition.help)}</small>` : "";
+  const label = `${esc(definition.label)}${definition.required ? " *" : ""}`;
+  if (definition.type === "textarea") return `<label class="ps-ai-field is-wide"><span>${label}</span><textarea name="${esc(definition.id)}" rows="3" maxlength="12000" ${required}></textarea>${help}</label>`;
+  if (definition.type === "select") return `<label class="ps-ai-field"><span>${label}</span><select name="${esc(definition.id)}" ${required}>${(definition.options || []).map((option) => `<option value="${esc(option)}">${esc(option)}</option>`).join("")}</select>${help}</label>`;
+  return `<label class="ps-ai-field"><span>${label}</span><input name="${esc(definition.id)}" type="${esc(definition.type || "text")}" ${definition.type === "number" ? 'step="any"' : ""} ${required}/>${help}</label>`;
+}
+
+function renderAiTable(rows = []) {
+  if (!rows.length) return "";
+  const keys = [...new Set(rows.flatMap((row) => Object.keys(row || {})))];
+  return `<div class="ps-ai-table-wrap"><table><thead><tr>${keys.map((key) => `<th>${esc(statusLabel(key))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${keys.map((key) => `<td>${esc(typeof row[key] === "object" ? JSON.stringify(row[key]) : row[key])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+function renderAiCoreLoop(coreLoop = null) {
+  if (!coreLoop) return "";
+  const records = Object.entries(coreLoop).filter(([key]) => !["schemaVersion", "productId", "deterministic", "externalProviderUsed", "modules"].includes(key));
+  return `<section class="ps-ai-core"><header><div><p class="ps-kicker">MILESTONE 2 CORE LOOP</p><h3>Complete product workflow</h3></div><span>Deterministic · $0</span></header>
+    <div class="ps-ai-modules">${(coreLoop.modules || []).map((module) => `<em>${esc(module)}</em>`).join("")}</div>
+    <div class="ps-ai-records">${records.map(([key, value]) => `<details><summary>${esc(statusLabel(key))}</summary><pre>${esc(JSON.stringify(value, null, 2))}</pre></details>`).join("")}</div>
+  </section>`;
+}
+
+function renderAiAnalysis(product, artifact, analysis) {
+  if (!artifact) return `<div class="ps-ai-empty"><b>Select or create an artifact.</b><p>The product calculation stays unavailable until source input is persisted.</p></div>`;
+  const header = `<header class="ps-ai-selected-head"><div><p class="ps-kicker">${esc(product.artifactLabel)}</p><h3>${esc(artifact.title)}</h3><small>revision ${Number(artifact.revision || 1)} · ${esc(statusLabel(artifact.status))} · dependency ${esc(artifact.dependencyState || "fresh")}</small></div><button type="button" class="ps-secondary" data-ps-ai-export="${esc(artifact.id)}">Export JSON</button></header>`;
+  if (!analysis) return `${header}<div class="ps-ai-empty"><b>No analysis yet.</b><p>Run ${esc(product.primaryModule)} to calculate the product-specific core loop.</p><button type="button" class="ps-primary" data-ps-ai-analyze="${esc(artifact.id)}">Run ${esc(product.primaryModule)}</button></div>`;
+  if (analysis.status === "stale") return `${header}<div class="ps-ai-stale"><b>Previous analysis is stale.</b><p>${esc(analysis.staleReason || "The source changed.")} Recompute before review.</p><button type="button" class="ps-primary" data-ps-ai-analyze="${esc(artifact.id)}">Run updated analysis</button></div>`;
+  const output = analysis.output || {};
+  const metrics = (output.metrics || []).map((metric) => `<article><span>${esc(metric.name)}</span><b>${esc(metric.value)} ${esc(metric.unit)}</b><details><summary>Formula and inputs</summary><p>${esc(metric.formula)}</p><pre>${esc(JSON.stringify(metric.inputs, null, 2))}</pre></details></article>`).join("");
+  const review = analysis.status === "pending_review" ? `<div class="ps-ai-review"><label class="ps-ai-field is-wide"><span>Human correction (required only for Correct)</span><textarea data-ps-ai-correction rows="3" maxlength="4000"></textarea></label><div class="ps-card-actions"><button type="button" class="ps-primary" data-ps-ai-review="accepted" data-id="${esc(analysis.id)}">Accept</button><button type="button" class="ps-secondary" data-ps-ai-review="corrected" data-id="${esc(analysis.id)}">Correct and accept</button><button type="button" class="ps-secondary" data-ps-ai-review="rejected" data-id="${esc(analysis.id)}">Reject</button></div></div>` : `<div class="ps-ai-reviewed"><b>Human disposition: ${esc(statusLabel(analysis.finalDisposition || analysis.status))}</b><p>Source fields remain versioned separately from the review.</p></div>`;
+  return `${header}<div class="ps-ai-analysis-copy"><p>${esc(output.summary || "")}</p><div class="ps-ai-metrics">${metrics}</div><p><b>Method:</b> ${esc(output.method || "")}</p>${(output.warnings || []).length ? `<ul>${output.warnings.map((warning) => `<li>${esc(warning)}</li>`).join("")}</ul>` : ""}${renderAiTable(output.table || [])}${renderAiCoreLoop(output.coreLoop)}<small>Provider path: ${esc(analysis.providerPath || "deterministic-domain-v1")} · External model: no · Provider cost: $0 · Human review: required</small>${review}</div>`;
+}
+
+function renderAiWorkspace() {
+  if (ui.aiLoading) return `<div class="ps-loading"><i></i><b>Loading the PhantomStore AI workspace...</b></div>`;
+  if (!ui.aiSnapshot) return `<section class="ps-ai-workspace"><button type="button" class="ps-secondary" data-ps-ai-back>← AI Workspaces</button><div class="ps-error"><b>Workspace unavailable.</b><span>${esc(ui.aiMessage || "The authenticated AI workspace service did not respond.")}</span></div></section>`;
+  const product = selectedAiProduct();
+  if (!product) return `<section class="ps-ai-workspace"><button type="button" class="ps-secondary" data-ps-ai-back>← AI Workspaces</button>${emptyState("Product not found", "Choose one of the ten served AI workspaces.")}</section>`;
+  const consent = ui.aiSnapshot.workspace?.consent?.[product.id] || { status: "not_requested" };
+  const granted = consent.status === "granted";
+  const artifacts = (ui.aiSnapshot.artifacts || []).filter((artifact) => artifact.productId === product.id);
+  const artifact = selectedAiArtifact();
+  const analysis = artifact ? latestAiAnalysis(artifact.id) : null;
+  return `<section class="ps-ai-workspace" style="--ai-accent:${esc(product.accent || "#42e9ff")}">
+    <button type="button" class="ps-secondary ps-ai-back" data-ps-ai-back>← All AI workspaces</button>
+    <header class="ps-ai-workspace-hero"><div><p class="ps-kicker">${esc(product.category)}</p><h2>${esc(product.name)}</h2><p>${esc(product.tagline)}</p></div><div><span>${artifacts.length} artifacts</span><span>${(ui.aiSnapshot.analyses || []).filter((item) => item.productId === product.id).length} analyses</span><span>$0 provider spend</span></div></header>
+    ${ui.aiMessage ? `<div class="ps-ai-message" role="status">${esc(ui.aiMessage)}</div>` : ""}
+    <div class="ps-ai-consent ${granted ? "is-granted" : ""}"><div><b>${granted ? "Purpose consent granted" : "Purpose consent required"}</b><p>${granted ? `Retained for ${Number(consent.retentionDays || 30)} days. Withdrawal restricts dependent artifacts.` : "This workspace stores the fields and provenance you explicitly submit. No external model or data provider is called."}</p></div>${granted ? `<button type="button" class="ps-secondary" data-ps-ai-consent="withdrawn">Withdraw</button>` : `<button type="button" class="ps-primary" data-ps-ai-consent="granted">Grant 30-day consent</button>`}</div>
+    <div class="ps-ai-layout">
+      <form class="ps-ai-create" data-ps-ai-form>
+        <header><div><p class="ps-kicker">${esc(product.primaryModule)}</p><h3>Create ${esc(product.artifactLabel.toLowerCase())}</h3></div><span>${granted ? "Ready" : "Locked"}</span></header>
+        <div class="ps-ai-fields">${(product.fields || []).map(renderAiFormField).join("")}</div>
+        <label class="ps-ai-field is-wide"><span>Provenance note *</span><textarea name="evidenceNote" rows="3" maxlength="4000" required></textarea></label>
+        <label class="ps-ai-field is-wide"><span>Evidence label</span><input name="evidenceLabel" maxlength="240" /></label>
+        <div class="ps-card-actions"><button type="button" class="ps-secondary" data-ps-ai-sample ${granted ? "" : "disabled"}>Load product demo</button><button type="submit" class="ps-primary" ${granted && !ui.aiBusy ? "" : "disabled"}>${ui.aiBusy ? "Working..." : "Create artifact"}</button></div>
+      </form>
+      <aside class="ps-ai-artifacts"><header><div><p class="ps-kicker">VERSIONED OBJECTS</p><h3>Artifacts</h3></div><span>${artifacts.length}</span></header>${artifacts.length ? artifacts.map((item) => `<button type="button" class="${item.id === artifact?.id ? "is-active" : ""}" data-ps-ai-artifact="${esc(item.id)}"><b>${esc(item.title)}</b><span>revision ${Number(item.revision || 1)} · ${esc(statusLabel(item.status))}</span></button>`).join("") : `<p>No saved artifacts yet.</p>`}</aside>
+    </div>
+    <section class="ps-ai-analysis"><header class="ps-section-head"><div><p class="ps-kicker">CALCULATION + HUMAN REVIEW</p><h2>Inspectable analysis</h2></div><span>${analysis ? esc(statusLabel(analysis.status)) : "not run"}</span></header>${renderAiAnalysis(product, artifact, analysis)}</section>
+  </section>`;
+}
+
 function renderContent() {
   if (ui.loading) return `<div class="ps-loading"><i></i><b>Loading PhantomStore...</b></div>`;
   if (ui.error) return `<div class="ps-error"><b>PhantomStore is not available.</b><span>${esc(ui.error)}</span><button type="button" data-ps-refresh>Try again</button></div>`;
@@ -885,6 +1043,8 @@ function renderContent() {
   if (ui.tab === "library") return renderLibrary();
   if (ui.tab === "submit") return renderSubmit();
   if (ui.tab === "review") return renderSubmissions();
+  if (ui.tab === "ai") return renderAiHub();
+  if (ui.tab === "lab") return renderAiWorkspace();
   return renderDiscover();
 }
 
@@ -904,7 +1064,7 @@ function render() {
       </div>
     </header>
     <nav class="ps-tabs" aria-label="PhantomStore sections">
-      ${[["discover", "Discover"], ["sellers", "Sellers"], ["library", "Library"], ["submit", "Submit"], ["review", ui.snapshot?.canModerate ? "Review" : "My tools"]].map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-ps-tab="${id}">${label}</button>`).join("")}
+      ${[["discover", "Discover"], ["ai", "AI Workspaces"], ["sellers", "Sellers"], ["library", "Library"], ["submit", "Submit"], ["review", ui.snapshot?.canModerate ? "Review" : "My tools"]].map(([id, label]) => `<button type="button" class="${ui.tab === id || (id === "ai" && ui.tab === "lab") ? "is-active" : ""}" data-ps-tab="${id}">${label}</button>`).join("")}
     </nav>
     ${renderContent()}
   </section>`;
@@ -1091,6 +1251,150 @@ async function copyInstall(id) {
   render();
 }
 
+async function loadAiWorkspace() {
+  ui.aiLoading = true;
+  ui.aiMessage = "Loading the authenticated product workspace...";
+  render();
+  try {
+    ui.aiSnapshot = await api("/api/phantomstore/ai-products");
+    const artifacts = (ui.aiSnapshot?.artifacts || []).filter((artifact) => artifact.productId === ui.aiProductId);
+    if (!artifacts.some((artifact) => artifact.id === ui.aiSelectedArtifactId)) ui.aiSelectedArtifactId = artifacts[0]?.id || "";
+    ui.aiMessage = "";
+  } catch (error) {
+    ui.aiSnapshot = null;
+    ui.aiMessage = error instanceof Error ? error.message : "The AI workspace could not be loaded.";
+  } finally {
+    ui.aiLoading = false;
+    render();
+  }
+}
+
+async function openAiWorkspace(productId) {
+  ui.aiProductId = productId;
+  ui.aiSelectedArtifactId = "";
+  ui.aiMessage = "";
+  ui.tab = "lab";
+  await loadAiWorkspace();
+}
+
+async function changeAiConsent(status) {
+  ui.aiBusy = true;
+  ui.aiMessage = status === "granted" ? "Recording purpose consent..." : "Withdrawing consent and restricting dependencies...";
+  render();
+  try {
+    await api(`/api/phantomstore/ai-products/${encodeURIComponent(ui.aiProductId)}/consent`, {
+      method: "POST",
+      body: JSON.stringify({ status, purpose: "Create, calculate, review, export, and delete source-linked PhantomStore AI product artifacts.", retentionDays: 30 }),
+    });
+    await loadAiWorkspace();
+    ui.aiMessage = status === "granted" ? "Purpose consent granted." : "Consent withdrawn; dependent artifacts are restricted.";
+  } catch (error) {
+    ui.aiMessage = error instanceof Error ? error.message : "Consent could not be changed.";
+  } finally {
+    ui.aiBusy = false;
+    render();
+  }
+}
+
+function loadAiProductSample() {
+  const product = selectedAiProduct();
+  const form = mountedRoot?.querySelector("[data-ps-ai-form]");
+  if (!product || !form) return;
+  Object.entries(product.sample || {}).forEach(([name, value]) => { if (form.elements[name]) form.elements[name].value = value; });
+  form.elements.evidenceNote.value = `Reversible ${product.name} in-store demo fixture. Values are declared user inputs, not external facts.`;
+  form.elements.evidenceLabel.value = "PhantomStore integrated demo fixture";
+  ui.aiMessage = "Demo loaded. Nothing is saved until Create artifact is selected.";
+  const status = mountedRoot.querySelector(".ps-ai-message");
+  if (status) status.textContent = ui.aiMessage;
+}
+
+async function createAiArtifact(form) {
+  const product = selectedAiProduct();
+  if (!product) return;
+  const data = new FormData(form);
+  const fields = Object.fromEntries((product.fields || []).map((definition) => [definition.id, data.get(definition.id)]));
+  const evidenceNote = data.get("evidenceNote");
+  const evidenceLabel = data.get("evidenceLabel");
+  ui.aiBusy = true;
+  ui.aiMessage = "Persisting the versioned source artifact...";
+  render();
+  try {
+    const result = await api(`/api/phantomstore/ai-products/${encodeURIComponent(product.id)}/artifacts`, {
+      method: "POST",
+      headers: { "Idempotency-Key": `artifact:${crypto.randomUUID()}` },
+      body: JSON.stringify({ fields, evidenceNote, evidenceLabel }),
+    });
+    ui.aiSelectedArtifactId = result.artifact.id;
+    await loadAiWorkspace();
+    ui.aiMessage = `${product.artifactLabel} created in the served PhantomStore workspace.`;
+  } catch (error) {
+    ui.aiMessage = error instanceof Error ? error.message : "The artifact could not be created.";
+  } finally {
+    ui.aiBusy = false;
+    render();
+  }
+}
+
+async function runAiAnalysis(artifactId) {
+  ui.aiBusy = true;
+  ui.aiMessage = "Running the durable deterministic product job...";
+  render();
+  try {
+    await api(`/api/phantomstore/ai-products/artifacts/${encodeURIComponent(artifactId)}/analyses`, {
+      method: "POST",
+      headers: { "Idempotency-Key": `analysis:${crypto.randomUUID()}` },
+      body: "{}",
+    });
+    ui.aiSelectedArtifactId = artifactId;
+    await loadAiWorkspace();
+    ui.aiMessage = "Core-loop analysis completed and is awaiting human review.";
+  } catch (error) {
+    ui.aiMessage = error instanceof Error ? error.message : "Analysis could not be completed.";
+  } finally {
+    ui.aiBusy = false;
+    render();
+  }
+}
+
+async function reviewAiAnalysis(analysisId, decision) {
+  const correction = mountedRoot?.querySelector("[data-ps-ai-correction]")?.value || "";
+  ui.aiBusy = true;
+  ui.aiMessage = "Recording the human disposition...";
+  render();
+  try {
+    await api(`/api/phantomstore/ai-products/analyses/${encodeURIComponent(analysisId)}/review`, {
+      method: "POST",
+      headers: { "Idempotency-Key": `review:${crypto.randomUUID()}` },
+      body: JSON.stringify({ decision, correction }),
+    });
+    await loadAiWorkspace();
+    ui.aiMessage = `Analysis ${decision}. Source fields remain separately versioned.`;
+  } catch (error) {
+    ui.aiMessage = error instanceof Error ? error.message : "Review could not be recorded.";
+  } finally {
+    ui.aiBusy = false;
+    render();
+  }
+}
+
+async function exportAiArtifact(artifactId) {
+  try {
+    const response = await fetch(`/api/phantomstore/ai-products/artifacts/${encodeURIComponent(artifactId)}/export`, { headers: authHeaders() });
+    if (!response.ok) throw new Error("The source-linked export could not be created.");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `phantomstore-ai-${artifactId}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    ui.aiMessage = "Portable source-linked JSON export created.";
+  } catch (error) {
+    ui.aiMessage = error instanceof Error ? error.message : "Export failed.";
+  }
+  render();
+}
+
 function bind() {
   mountedRoot.querySelectorAll("[data-ps-tab]").forEach((button) => {
     button.onclick = () => { ui.tab = button.dataset.psTab || "discover"; ui.message = ""; if (ui.tab !== "submit") ui.editingToolId = ""; render(); };
@@ -1148,6 +1452,9 @@ function bind() {
   mountedRoot.querySelectorAll("[data-ps-buy]").forEach((button) => {
     button.onclick = () => recordBuy(button.dataset.psBuy || "");
   });
+  mountedRoot.querySelectorAll("[data-ps-launch-ai]").forEach((button) => {
+    button.onclick = () => openAiWorkspace(button.dataset.psLaunchAi || "");
+  });
   mountedRoot.querySelectorAll("[data-ps-grant-test]").forEach((button) => {
     button.onclick = () => grantOwnerTestAccess(button.dataset.psGrantTest || "");
   });
@@ -1163,6 +1470,25 @@ function bind() {
   mountedRoot.querySelectorAll("[data-ps-moderate]").forEach((button) => {
     button.onclick = () => moderate(button.dataset.id || "", button.dataset.psModerate || "");
   });
+  mountedRoot.querySelector("[data-ps-ai-back]")?.addEventListener("click", () => { ui.tab = "ai"; ui.aiMessage = ""; render(); });
+  mountedRoot.querySelectorAll("[data-ps-ai-consent]").forEach((button) => {
+    button.onclick = () => changeAiConsent(button.dataset.psAiConsent || "granted");
+  });
+  mountedRoot.querySelector("[data-ps-ai-sample]")?.addEventListener("click", loadAiProductSample);
+  mountedRoot.querySelectorAll("[data-ps-ai-artifact]").forEach((button) => {
+    button.onclick = () => { ui.aiSelectedArtifactId = button.dataset.psAiArtifact || ""; ui.aiMessage = ""; render(); };
+  });
+  mountedRoot.querySelectorAll("[data-ps-ai-analyze]").forEach((button) => {
+    button.onclick = () => runAiAnalysis(button.dataset.psAiAnalyze || "");
+  });
+  mountedRoot.querySelectorAll("[data-ps-ai-review]").forEach((button) => {
+    button.onclick = () => reviewAiAnalysis(button.dataset.id || "", button.dataset.psAiReview || "accepted");
+  });
+  mountedRoot.querySelectorAll("[data-ps-ai-export]").forEach((button) => {
+    button.onclick = () => exportAiArtifact(button.dataset.psAiExport || "");
+  });
+  const aiForm = mountedRoot.querySelector("[data-ps-ai-form]");
+  if (aiForm) aiForm.onsubmit = (event) => { event.preventDefault(); createAiArtifact(aiForm); };
   const form = mountedRoot.querySelector("[data-ps-tool-form]");
   if (form) {
     form.onsubmit = (event) => {

@@ -350,6 +350,18 @@ import {
   submitPhantomStoreTool,
   updatePhantomStoreTool,
 } from "./phantom-ai/phantomstore.js";
+import {
+  archiveIntegratedAiProductArtifact,
+  createIntegratedAiProductArtifact,
+  deleteIntegratedAiProductArtifact,
+  exportIntegratedAiProductArtifact,
+  getIntegratedAiProductsSnapshot,
+  integratedAiProductError,
+  reviewIntegratedAiProductAnalysis,
+  runIntegratedAiProductAnalysis,
+  setIntegratedAiProductConsent,
+  updateIntegratedAiProductArtifact,
+} from "./phantom-ai/phantomstore-ai-products.js";
 import { buildBeatForgePreview } from "./phantom-ai/beatforge.js";
 import {
   inspectPhantomPlayProduction,
@@ -6386,6 +6398,115 @@ app.get("/api/phantomstore", async (request, reply) => {
   if (!session) return reply;
   const query = (request.query ?? {}) as { tenant_id?: unknown };
   return { ok: true, session, ...(await getPhantomStoreSnapshot(session, { tenantId: query.tenant_id })) };
+});
+
+function sendIntegratedAiProductError(reply: FastifyReply, error: unknown) {
+  const failure = integratedAiProductError(error);
+  return reply.code(failure.status).send(failure.body);
+}
+
+function integratedIdempotencyKey(request: FastifyRequest) {
+  return String(request.headers["idempotency-key"] || "").slice(0, 180);
+}
+
+app.get("/api/phantomstore/ai-products", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  try {
+    return { ok: true, session, ...(await getIntegratedAiProductsSnapshot(session)) };
+  } catch (error) {
+    return sendIntegratedAiProductError(reply, error);
+  }
+});
+
+app.post("/api/phantomstore/ai-products/:productId/consent", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { productId?: string };
+  try {
+    const consent = await setIntegratedAiProductConsent(session, String(params.productId || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>);
+    return { ok: true, session, consent };
+  } catch (error) {
+    return sendIntegratedAiProductError(reply, error);
+  }
+});
+
+app.post("/api/phantomstore/ai-products/:productId/artifacts", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { productId?: string };
+  try {
+    return { ok: true, session, ...(await createIntegratedAiProductArtifact(session, String(params.productId || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>, integratedIdempotencyKey(request))) };
+  } catch (error) {
+    return sendIntegratedAiProductError(reply, error);
+  }
+});
+
+app.patch("/api/phantomstore/ai-products/artifacts/:artifactId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { artifactId?: string };
+  try {
+    return { ok: true, session, ...(await updateIntegratedAiProductArtifact(session, String(params.artifactId || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>, integratedIdempotencyKey(request))) };
+  } catch (error) {
+    return sendIntegratedAiProductError(reply, error);
+  }
+});
+
+app.post("/api/phantomstore/ai-products/artifacts/:artifactId/analyses", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { artifactId?: string };
+  try {
+    return { ok: true, session, ...(await runIntegratedAiProductAnalysis(session, String(params.artifactId || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>, integratedIdempotencyKey(request))) };
+  } catch (error) {
+    return sendIntegratedAiProductError(reply, error);
+  }
+});
+
+app.post("/api/phantomstore/ai-products/analyses/:analysisId/review", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { analysisId?: string };
+  try {
+    return { ok: true, session, ...(await reviewIntegratedAiProductAnalysis(session, String(params.analysisId || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>, integratedIdempotencyKey(request))) };
+  } catch (error) {
+    return sendIntegratedAiProductError(reply, error);
+  }
+});
+
+app.post("/api/phantomstore/ai-products/artifacts/:artifactId/archive", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { artifactId?: string };
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  try {
+    return { ok: true, session, ...(await archiveIntegratedAiProductArtifact(session, String(params.artifactId || "").slice(0, 180), body.restore === true)) };
+  } catch (error) {
+    return sendIntegratedAiProductError(reply, error);
+  }
+});
+
+app.delete("/api/phantomstore/ai-products/artifacts/:artifactId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { artifactId?: string };
+  try {
+    return { ok: true, session, ...(await deleteIntegratedAiProductArtifact(session, String(params.artifactId || "").slice(0, 180), String(request.headers["x-confirm-delete"] || ""))) };
+  } catch (error) {
+    return sendIntegratedAiProductError(reply, error);
+  }
+});
+
+app.get("/api/phantomstore/ai-products/artifacts/:artifactId/export", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { artifactId?: string };
+  try {
+    return await exportIntegratedAiProductArtifact(session, String(params.artifactId || "").slice(0, 180));
+  } catch (error) {
+    return sendIntegratedAiProductError(reply, error);
+  }
 });
 
 app.post("/api/phantomstore/tools", async (request, reply) => {
