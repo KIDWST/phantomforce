@@ -23,6 +23,16 @@
           "file": "server/scripts/test-ai-runtime-http.ts",
           "pattern": "workspace_member_runtime_called",
           "description": "The HTTP regression proves a standard workspace-member request invokes the saved exact provider model."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "requestedModelIds\\?\\.\\[providerId\\]",
+          "description": "Fallback resolves the model saved for the provider being attempted instead of leaking the primary provider's model ID across lanes."
+        },
+        {
+          "file": "server/scripts/test-ai-runtime-http.ts",
+          "pattern": "provider_specific_fallback_model_called",
+          "description": "The HTTP regression proves fallback invokes the responding provider with that provider's exact saved model."
         }
       ]
     },

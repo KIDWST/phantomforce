@@ -4430,6 +4430,7 @@ type AdminPhantomAiChatContext = {
   executionMode: "approval" | "auto";
   requestedModel?: string;
   requestedModelId?: string | null;
+  requestedModelIds?: Partial<Record<AdminPhantomAiProviderId, string>>;
   routeTier?: AdminPhantomAiRouteTier;
   maxProviderMs?: number | null;
 };
@@ -4664,7 +4665,13 @@ async function runAdminPhantomAiChatWithFallback(
   for (const candidate of order) {
     providerId = candidate;
     const startedAt = Date.now();
-    result = await callAdminPhantomAiProviderSafe(providerId, ctx);
+    const providerModelId = ctx.requestedModelIds?.[providerId]
+      ?? (providerId === requestedPrimaryProviderId ? ctx.requestedModelId : null);
+    result = await callAdminPhantomAiProviderSafe(providerId, {
+      ...ctx,
+      requestedModel: providerModelId || (providerId === requestedPrimaryProviderId ? ctx.requestedModel : undefined),
+      requestedModelId: providerModelId,
+    });
     const usable = isAdminPhantomAiResultUsable(result as { status: string });
     const latencyMs = Date.now() - startedAt;
     if (usable) recordAdminProviderSuccess(providerId, latencyMs);
@@ -11512,6 +11519,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       approvalRequired: false,
       executionMode: adminExecutionMode,
       requestedModelId: actionFreeModelId,
+      requestedModelIds: runtimeConfig?.models,
       routeTier: adminRouteTier,
       maxProviderMs,
     }, runtimeConfig ? allowedAdminProviders : ["local_ollama"], { allowFallback: runtimeConfig ? allowProviderFallback : false });
@@ -11845,6 +11853,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       approvalRequired,
       executionMode: adminExecutionMode,
       requestedModelId,
+      requestedModelIds: runtimeConfig?.models,
       routeTier: adminRouteTier,
       maxProviderMs,
     }, allowedAdminProviders, { allowFallback: allowProviderFallback });

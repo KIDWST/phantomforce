@@ -239,6 +239,50 @@ try {
   assert.equal(clientChat.ai_runtime.responding_model_id, "runtime-test:latest");
   assert.equal(clientChat.ai_runtime.provider_called, true);
 
+  const saveFallbackResponse = await fetch(`${appBaseUrl}/phantom-ai/runtime/config`, {
+    method: "PUT",
+    headers: auth(adminToken),
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      expected_version: localConfig.config.version,
+      mode: "smart",
+      primary_provider_id: "openrouter_glm",
+      allowed_provider_ids: ["openrouter_glm", "local_ollama"],
+      models,
+      fallback_enabled: true,
+    }),
+  });
+  assert.equal(saveFallbackResponse.ok, true);
+  const fallbackConfig = await saveFallbackResponse.json() as Record<string, any>;
+
+  const fallbackMessage = "Write a short lighthouse launch line.";
+  const fallbackResponse = await fetch(`${appBaseUrl}/phantom-ai/chat`, {
+    method: "POST",
+    headers: auth(adminToken),
+    body: JSON.stringify({
+      message: fallbackMessage,
+      user_request: fallbackMessage,
+      prompt_integrity: promptIntegrity(fallbackMessage, "runtime-provider-model-fallback"),
+      tenant_id: tenantId,
+      business_name: "Runtime Test",
+      actor_user_id: "runtime-test",
+      task_type: "chat",
+      route_tier: "standard",
+      runtime_config: true,
+      runtime_surface: "prompt_outcome",
+    }),
+  });
+  const fallback = await fallbackResponse.json() as Record<string, any>;
+  assert.equal(fallbackResponse.ok, true, `Provider-model fallback failed: HTTP ${fallbackResponse.status} ${JSON.stringify(fallback)}`);
+  assert.equal(ollamaRequests.length, 3);
+  assert.equal(ollamaRequests[2].model, "runtime-test:latest", "Fallback must use the responding provider's saved model, not the primary provider's model.");
+  assert.equal(fallback.ai_runtime.requested_provider_id, "openrouter_glm");
+  assert.equal(fallback.ai_runtime.requested_model_id, "openrouter/auto");
+  assert.equal(fallback.ai_runtime.responding_provider_id, "local_ollama");
+  assert.equal(fallback.ai_runtime.responding_model_id, "runtime-test:latest");
+  assert.equal(fallback.ai_runtime.fallback_used, true);
+  assert.equal(fallback.ai_runtime.state, "real");
+
   const crossOrgRead = await fetch(`${appBaseUrl}/phantom-ai/runtime/config?tenant_id=${tenantId}`, {
     headers: auth(clientToken),
   });
@@ -262,7 +306,7 @@ try {
     headers: auth(adminToken),
     body: JSON.stringify({
       tenant_id: tenantId,
-      expected_version: localConfig.config.version,
+      expected_version: fallbackConfig.config.version,
       mode: "single",
       primary_provider_id: "openrouter_glm",
       allowed_provider_ids: ["openrouter_glm"],
@@ -297,7 +341,7 @@ try {
   assert.equal(unavailable.ai_runtime.fallback_used, false);
   assert.equal(unavailable.fallback.all_failed, true);
   assert.match(String(unavailable.message.content), /openrouter|disabled|configured|unavailable/i);
-  assert.equal(ollamaRequests.length, 2, "A failed single-provider choice must not silently call local Ollama.");
+  assert.equal(ollamaRequests.length, 3, "A failed single-provider choice must not silently call local Ollama.");
 
   console.log(JSON.stringify({
     ok: true,
@@ -305,6 +349,7 @@ try {
     persisted_override: true,
     exact_model_called: "runtime-test:latest",
     workspace_member_runtime_called: true,
+    provider_specific_fallback_model_called: true,
     runtime_receipt: true,
     cross_org_isolation: true,
     unavailable_is_actionable: true,
