@@ -63,6 +63,21 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **PhantomPlay native studio + truthful AI/connect runtime (2026-08-17)** —
+  product commit `423c88e1`, browser build `phantom-live-20260817-152`.
+  PhantomPlay now ships the native Dioxus studio, Unreal/Unity/Panda3D project
+  surfaces, production registries, discovery, AI-edit contracts, native mods,
+  and four V11R15 Unreal Shipping candidates whose candidate and installed
+  gameplay captures passed 4/4 visual gates. PhantomForce adds organization-
+  scoped provider/model choice across auto, local, Codex, Claude, OpenRouter,
+  and ChatGPT lanes; one-click customer connection initiation; truthful runtime
+  state; stronger conversational continuity; and a corrected mobile PhantomBot
+  composer. Release-critical passed 31/31, responsive Chrome passed 60/60,
+  database/auth passed 57 API checks plus the 139-turn two-organization browser
+  journey, strict history scanning found 0 verified/unknown secrets, and the
+  canonical UI/API health checks reported this commit. Installed PhantomPlay
+  `0.3.0` and V11R15 have a recoverable backup at
+  `C:\Users\jorda\Documents\Codex\backups\phantomplay-v11r15-20260817-145647`.
 - **Confirmation exceptions + corrected membership (2026-07-19)** — server
   commit `e15d6dc5`, browser build `phantom-live-20260719-45` (the build was
   advanced by Jordan's preserved gold admin navigation commit). Phantom now

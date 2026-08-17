@@ -39,8 +39,10 @@ packages/Source.zip
 __pycache__/
 *.pyc
 
-# Server local runtime state (JSON-file DB fallback, security-scan state)
+# Server local runtime state (JSON-file DB fallback, security-scan state,
+# generated media and PhantomFlow storage)
 server/.local/
+server/storage/
 
 # Hermes ledger (business activity log — never commit) and monthly scan state
 .phantom/

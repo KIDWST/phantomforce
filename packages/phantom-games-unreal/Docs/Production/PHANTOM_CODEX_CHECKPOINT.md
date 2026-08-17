@@ -2,7 +2,7 @@
 
 ## State
 
-- Repository release branch: `agent/finish-phantomplay-upgrades-release` (release commit pending at checkpoint write time).
+- Product release commit: `423c88e1dbdaa7b27dc03cbc4211a5816b6cf95b` on `main`.
 - Exact Unreal project: `packages/phantom-games-unreal/PhantomGames.uproject`.
 - Engine used for production work: Unreal Engine 5.8.1 at `H:\UE_5.8`.
 - Status: four V11R15 Windows Shipping candidates passed the automated visual gate; the promoted installed build set also passed 4/4.
