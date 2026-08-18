@@ -13,7 +13,8 @@ const backendTestSource = readFileSync(new URL("../server/scripts/test-phantomst
 const serverIndexSource = readFileSync(new URL("../server/src/index.ts", import.meta.url), "utf8");
 const aiBridgeSource = readFileSync(new URL("../server/src/phantom-ai/phantomstore-ai-products.ts", import.meta.url), "utf8");
 
-assert.match(appHtml, /phantomstore\.css/u, "App shell must load PhantomStore styles.");
+assert.doesNotMatch(appHtml, /<link rel="stylesheet"[^>]*phantomstore\.css/u, "PhantomStore styles must not inflate every initial page load.");
+assert.match(mainSource, /phantomstore:\s*\["\/app\/phantomstore\.css\?v=phantom-live-[^"]+"\]/u, "Opening PhantomStore must load its workspace styles automatically.");
 assert.match(mainSource, /renderPhantomStore/u, "Main app must import PhantomStore renderer.");
 assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"PhantomStore",\s*icon:\s*"spark",\s*ws:\s*"phantomstore"\s*\}/u, "Sidebar must expose PhantomStore as its own workspace.");
 assert.match(mainSource, /phantomstore:\s*\{\s*title:\s*"PhantomStore"[\s\S]*render:\s*\(body\)\s*=>\s*renderPhantomStore\(body/u, "Workspace registry must render the PhantomStore screen.");

@@ -1514,6 +1514,159 @@
           "description": "The app cannot regress to a build before the desktop/web PhantomHunter split."
         }
       ]
+    },
+    {
+      "id": "admin-pages-preloaded-green-black-ui-floor",
+      "status": "active",
+      "title": "Admin pages use one fast black and Phantom-green visual system",
+      "ownerDecision": "Global admin styles are applied before boot, while workspace-only styles load automatically when their route opens so initial paint stays inside the performance budget. Page modules remain in the static import graph with eager hints for primary surfaces. The admin shell, navigation state, page intelligence, shared controls, and Planner use black, graphite, and Phantom green. Purple and blue are not admin accent colors. Planner must retain a real responsive card, metric, week-board, and side-panel layout instead of collapsing to raw document flow.",
+      "requiredPatterns": [
+        {
+          "file": "app/index.html",
+          "pattern": "theme-color\" content=\"#020705\"[\\s\\S]*\\.boot-fallback[\\s\\S]*rgba\\(24, 242, 143[\\s\\S]*data-admin-page-style[^>]*phantom\\.css[\\s\\S]*data-admin-page-style[^>]*admin-next\\.css",
+          "description": "The initial loading state is black and green, then the document applies the global base and final unified styles before boot."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "WORKSPACE_STYLE_BUNDLES[\\s\\S]*phantomstore\\.css[\\s\\S]*creator-studio\\.css[\\s\\S]*phantomhunter\\.css[\\s\\S]*ensureWorkspaceStyles",
+          "description": "Workspace-only styles load automatically on route entry instead of inflating every initial page load."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "rel=\"modulepreload\" href=\"/app/js/planner\\.js[\\s\\S]*rel=\"modulepreload\" href=\"/app/js/phantomai\\.js[\\s\\S]*rel=\"modulepreload\" href=\"/app/js/phantomhunter\\.js[\\s\\S]*rel=\"modulepreload\" href=\"/app/js/medialab\\.js",
+          "description": "Primary page modules receive eager fetch and parse hints."
+        },
+        {
+          "file": "app/admin-next.css",
+          "pattern": "--pf-black: #020705[\\s\\S]*--pf-green: #18f28f[\\s\\S]*\\.os-primary-nav button::after[\\s\\S]*var\\(--pf-green\\)[\\s\\S]*\\.page-worker",
+          "description": "The final shell authority defines and applies the black and Phantom-green brand."
+        },
+        {
+          "file": "app/admin-next.css",
+          "pattern": "\\.planner-hero[\\s\\S]*\\.planner-metrics[\\s\\S]*\\.planner-grid[\\s\\S]*\\.planner-card[\\s\\S]*\\.planner-days[\\s\\S]*@media \\(max-width: 760px\\)",
+          "description": "Planner keeps its structured desktop and compact responsive presentation."
+        },
+        {
+          "file": "scripts/test-admin-ui-system.mjs",
+          "pattern": "requiredStyles[\\s\\S]*requiredModuleHints[\\s\\S]*Planner presentation must style[\\s\\S]*retired purple/blue palette",
+          "description": "A dedicated regression test protects page preload, Planner layout, and brand color rules."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/admin-next.css",
+          "pattern": "purple|violet|indigo|blue|#(?:5b4cff|b44bf0|7c6cff|4f8dff|6da4ff|74a9ff)|rgba\\((?:91,\\s*76,\\s*255|124,\\s*108,\\s*255|79,\\s*141,\\s*255)",
+          "flags": "im",
+          "description": "The final admin visual authority cannot reintroduce the retired purple or blue accent families."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "<script type=\"module\" src=\"/app/js/main\\.js[^\"]*\"></script>[\\s\\S]*data-admin-page-style",
+          "description": "Admin page styles cannot move after the application boot module."
+        }
+      ]
+    },
+    {
+      "id": "phantombot-next-level-mission-workspace-floor",
+      "status": "active",
+      "title": "PhantomBot is a mission workspace, not a disposable chat",
+      "ownerDecision": "PhantomBot is the flagship green-and-black AI operating workspace. Every persistent session uses one continuous composer for questions, building, research, media, and operations; the product infers the right route from each message and current conversation instead of asking the user to choose a working mode. Sessions expose live state, context and output counts, approval posture, and safe context-derived next moves. Users can search full transcripts, pin, rename, export, or non-destructively archive sessions. External operations remain approval-gated, while suggested follow-ups never auto-execute.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "data-phantombot-mission-hud[\\s\\S]*data-phantombot-hud-approval[\\s\\S]*Ask a question or describe what you want done[\\s\\S]*data-phantombot-session-menu",
+          "description": "The shell exposes one universal composer, a mission HUD, and persistent session controls."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "const UNIFIED_STARTERS[\\s\\S]*function inferredNextMoves[\\s\\S]*task\\.messages\\.flatMap[\\s\\S]*function paintSessionHud[\\s\\S]*const outbound = composeMessage\\(prompt, attachments\\)",
+          "description": "A single composer preserves the exact request, searches the full transcript, and infers contextual next moves automatically."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "function saveSessionName[\\s\\S]*function archiveActiveTask[\\s\\S]*function exportActiveTask[\\s\\S]*function nextMovesHtml",
+          "description": "Persistent work can be organized, exported, archived, and continued through suggested next moves."
+        },
+        {
+          "file": "app/phantombot-next.css",
+          "pattern": "--pbot-bg: #020705[\\s\\S]*--pbot-live: #18f28f[\\s\\S]*\\.phantombot-mission-hud[\\s\\S]*\\.phantombot-session-menu[\\s\\S]*@media \\(max-width: 760px\\)",
+          "description": "The dedicated visual authority provides a responsive, modern black and Phantom-green mission workspace."
+        },
+        {
+          "file": "scripts/test-phantombot-next-level.mjs",
+          "pattern": "data-phantombot-mission-hud[\\s\\S]*full transcript[\\s\\S]*contextual next moves[\\s\\S]*reduced-motion",
+          "description": "A dedicated regression test protects the full flagship behavior and presentation contract."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "data-phantombot-mode(?:\\s|=|>)|PhantomBot working mode",
+          "description": "The user cannot be asked to switch between Answer, Build, Research, or Operate."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "WORK_MODES|applyWorkingMode|task\\.mode|phantombotMode|PhantomBot working mode",
+          "description": "Session state and outbound prompts cannot carry a user-selected working mode."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "data-phantombot-next[^\\n]{0,220}(?:requestSubmit|submitPrompt)",
+          "description": "A suggested next move can prepare the composer but cannot silently execute itself."
+        },
+        {
+          "file": "app/phantombot-next.css",
+          "pattern": "phantombot-modebar|purple|violet|indigo|blue|#(?:8d7cf8|c9c1ff|cec7ff|5b4cff|7c6cff|4f8dff)",
+          "flags": "im",
+          "description": "The PhantomBot visual authority cannot regress to the retired accent families."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "phantom-live-20260817-15[0-7]\"[^>]*phantombot-next\\.css",
+          "description": "The mission workspace stylesheet cannot ship behind the upgraded cache identity."
+        }
+      ]
+    },
+    {
+      "id": "phantombot-automatic-media-bridge-floor",
+      "status": "active",
+      "title": "PhantomBot automatically routes media through the real subscription bridges",
+      "ownerDecision": "On web and desktop, PhantomBot must intercept image and video creation requests before any text model can refuse them. Still images route automatically through the authenticated ChatGPT Bridge and return real imported assets. Videos route automatically through the authenticated Higgsfield lane as a cost-verified draft, with the paid render explicitly approved in Media Lab. Every prompt is preserved before the bridge call. If a bridge needs reconnection, PhantomBot opens the preserved request instead of claiming that media generation is unsupported or fabricating an output.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/command.js",
+          "pattern": "MEDIA_PROMPT_INTENT_KEY = \"pf\\.medialab\\.promptIntent\\.v1\"[\\s\\S]*export function mediaGenerationRequest[\\s\\S]*async function dispatchPhantomMedia[\\s\\S]*chatgpt-image/generate[\\s\\S]*media-lab/creative/draft[\\s\\S]*const mediaRequest = mediaGenerationRequest\\(text\\)",
+          "description": "PhantomBot preserves and dispatches media requests before ordinary chat routing."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "runHiggsfieldCliDraft[\\s\\S]*\"generate\", \"cost\"[\\s\\S]*tool_lane: \"higgsfield_cli_cost\"[\\s\\S]*paid_job_called: false[\\s\\S]*explicit_confirmation_required: \"RUN_MEDIA_PAID_JOB\"",
+          "description": "Higgsfield authenticates and prices the exact draft without spending credits; the actual paid render remains approval-gated."
+        },
+        {
+          "file": "packages/phantombot-desktop/src/main.cjs",
+          "pattern": "http://127\\.0\\.0\\.1:5190/app/index\\.html[\\s\\S]*https://admin\\.phantomforce\\.online/app/index\\.html",
+          "description": "Desktop uses the same application and automatic media router as web."
+        },
+        {
+          "file": "scripts/test-phantombot-media-bridges.mjs",
+          "pattern": "Media dispatch must run before any text-model request[\\s\\S]*Every media request must be persisted[\\s\\S]*shared web/desktop routing",
+          "description": "A dedicated regression test protects provider mapping, prompt preservation, truthful recovery, and desktop parity."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/command.js",
+          "pattern": "unable to generate|cannot generate|can't generate",
+          "flags": "i",
+          "description": "PhantomBot cannot collapse a preserved media request into a generic text-model capability refusal."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "tool_lane: \"higgsfield_cli_cost\"[\\s\\S]{0,800}paid_job_called: true",
+          "description": "The automatic draft lane cannot silently spend Higgsfield credits."
+        }
+      ]
     }
   ]
 }

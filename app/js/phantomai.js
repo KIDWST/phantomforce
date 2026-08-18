@@ -14,22 +14,22 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260817-156";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260817-156";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260817-156";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260817-156";
-import { esc } from "./workspaces.js?v=phantom-live-20260817-156";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260817-156";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260817-156";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260817-156";
-import { setCompanionState } from "./companion.js?v=phantom-live-20260817-156";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260817-156";
-import { getOperatorInfrastructureStatus, getOperatorSettings } from "./settings.js?v=phantom-live-20260817-156";
+} from "./store.js?v=phantom-live-20260817-158";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260817-158";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260817-158";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260817-158";
+import { esc } from "./workspaces.js?v=phantom-live-20260817-158";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260817-158";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260817-158";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260817-158";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260817-158";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260817-158";
+import { getOperatorInfrastructureStatus, getOperatorSettings } from "./settings.js?v=phantom-live-20260817-158";
 import {
   buildPromptIntegrityEnvelope,
   MAX_PROMPT_CHARS,
   promptSizeError,
-} from "./prompt-integrity.js?v=phantom-live-20260817-156";
+} from "./prompt-integrity.js?v=phantom-live-20260817-158";
 
 const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -38,6 +38,39 @@ const MAX_MESSAGES = 80;
 const NEW_TASK_TITLE = "New session";
 const INTERRUPTED_REPLY = "This response was interrupted before it finished. Retry the message when you are ready.";
 const ACP_TERMINAL_STATES = new Set(["completed", "denied", "failed", "cancelled", "blocked"]);
+const UNIFIED_STARTERS = Object.freeze([
+  "Show me what needs attention today",
+  "Build the highest-impact improvement in this workspace",
+  "Research my market and recommend the best move",
+  "Coordinate this week’s highest-priority work",
+]);
+
+const NEXT_MOVES = Object.freeze({
+  answer: [
+    ["Make it actionable", "Turn that into a short action plan with the first step ready to do."],
+    ["Challenge it", "Challenge that answer, identify the weakest assumption, and improve the recommendation."],
+  ],
+  build: [
+    ["Verify the result", "Verify the work end to end and show me the proof that it works."],
+    ["Polish it", "Take the completed work one level higher in clarity, quality, and finish."],
+  ],
+  research: [
+    ["Compare options", "Compare the strongest options side by side and recommend one."],
+    ["Decision brief", "Turn this research into a concise decision brief with evidence, risks, and a recommendation."],
+  ],
+  operate: [
+    ["Show approval gates", "Show every approval gate, the exact decision needed, and what remains safe before approval."],
+    ["Prepare next action", "Prepare the next safe action and leave anything external ready for my approval."],
+  ],
+});
+
+function inferredNextMoves(task, message) {
+  const text = `${task.messages.at(-1)?.q || ""} ${message?.say || ""}`;
+  if (/\b(?:build|create|implement|fix|repair|refactor|code|website|app|deliverable|deploy|publish)\b/i.test(text)) return NEXT_MOVES.build;
+  if (/\b(?:research|compare|evidence|market|competitor|investigate|source|analysis)\b/i.test(text)) return NEXT_MOVES.research;
+  if (/\b(?:operate|coordinate|schedule|send|post|invoice|approval|workflow|automation|campaign)\b/i.test(text)) return NEXT_MOVES.operate;
+  return NEXT_MOVES.answer;
+}
 
 function selectedBrainIdentity() {
   const settings = getOperatorSettings();
@@ -349,7 +382,12 @@ function taskRowHtml(task) {
 function paintTaskRail() {
   if (!rootEl) return;
   const search = cleanText(rootEl.querySelector("[data-phantombot-session-search]")?.value || "", 120).toLowerCase().trim();
-  const visibleTasks = taskState.tasks.filter((task) => !task.archived && (!search || task.title.toLowerCase().includes(search)));
+  const visibleTasks = taskState.tasks.filter((task) => {
+    if (task.archived) return false;
+    if (!search) return true;
+    const searchable = [task.title, ...task.messages.flatMap((message) => [message.q, message.say])].join(" ").toLowerCase();
+    return searchable.includes(search);
+  });
   const pinned = visibleTasks.filter((task) => task.pinned);
   const recent = visibleTasks.filter((task) => !task.pinned);
   const pinnedList = rootEl.querySelector("[data-phantombot-pinned-list]");
@@ -370,6 +408,7 @@ function paintTaskRail() {
   if (contextTitle) contextTitle.textContent = title;
   const effort = rootEl.querySelector("[data-phantombot-effort]");
   if (effort) effort.value = activeTask().effort || "instant";
+  paintSessionHud();
   paintDetailDrawer();
 }
 
@@ -400,6 +439,54 @@ function taskArtifacts(task) {
 
 function latestOperator(task) {
   return [...task.messages].reverse().find((message) => message.operator)?.operator || null;
+}
+
+function taskContextCount(task) {
+  return task.messages.reduce((total, message) => total
+    + (message.attachments?.length || 0)
+    + (message.cards?.length || 0)
+    + (message.media?.length || 0), task.messages.length ? 1 : 0);
+}
+
+function sessionState(task, operator) {
+  if (runningRequest?.taskId === task.id) return { id: "working", label: "Working" };
+  if (operator?.state === "awaiting_approval") return { id: "approval", label: "Approval needed" };
+  if (["failed", "blocked"].includes(operator?.state)) return { id: "attention", label: "Needs attention" };
+  if (task.messages.some((message) => message.error)) return { id: "attention", label: "Recovered" };
+  if (task.messages.length) return { id: "ready", label: "Ready to continue" };
+  return { id: "ready", label: "Ready" };
+}
+
+function paintSessionHud() {
+  if (!rootEl) return;
+  const task = activeTask();
+  const operator = latestOperator(task);
+  const artifacts = taskArtifacts(task);
+  const approval = operator?.state === "awaiting_approval";
+  const state = sessionState(task, operator);
+  const setText = (selector, value) => rootEl.querySelectorAll(selector).forEach((node) => { node.textContent = String(value); });
+  rootEl.dataset.sessionState = state.id;
+  delete rootEl.dataset.workMode;
+  setText("[data-phantombot-hud-title]", task.title || NEW_TASK_TITLE);
+  setText("[data-phantombot-hud-subtitle]", `Adapts automatically · ${wsName(currentWs()) || "workspace"} context ready`);
+  setText("[data-phantombot-hud-turns]", task.messages.length);
+  setText("[data-phantombot-hud-context]", taskContextCount(task));
+  setText("[data-phantombot-hud-artifacts]", artifacts.length);
+  setText("[data-phantombot-hud-approval]", approval ? "Waiting" : "Clear");
+  const stateNode = rootEl.querySelector("[data-phantombot-hud-state]");
+  if (stateNode) {
+    stateNode.dataset.state = state.id;
+    const label = stateNode.childNodes[stateNode.childNodes.length - 1];
+    if (label?.nodeType === Node.TEXT_NODE) label.textContent = state.label;
+    else stateNode.append(document.createTextNode(state.label));
+  }
+  const nameInput = rootEl.querySelector("[data-phantombot-session-name]");
+  if (nameInput && document.activeElement !== nameInput) nameInput.value = task.title || NEW_TASK_TITLE;
+  const pin = rootEl.querySelector("[data-phantombot-pin-active]");
+  if (pin) {
+    pin.setAttribute("aria-pressed", task.pinned ? "true" : "false");
+    pin.innerHTML = `<span>${task.pinned ? "◆" : "◇"}</span> ${task.pinned ? "Pinned" : "Pin"}`;
+  }
 }
 
 function detailEmpty(title, copy) {
@@ -476,6 +563,7 @@ function closeDetailDrawer() {
 }
 
 function startNewTask() {
+  closeSessionMenu();
   const task = createTask();
   taskState.tasks.unshift(task);
   taskState.tasks = taskState.tasks.slice(0, MAX_TASKS);
@@ -494,6 +582,7 @@ function startNewTask() {
 
 function activateTask(id) {
   if (!taskState.tasks.some((task) => task.id === id)) return;
+  closeSessionMenu();
   taskState.activeId = id;
   persistTaskState();
   activatePhantomAiTab("chat");
@@ -513,7 +602,102 @@ function toggleTaskPin(id) {
   paintTaskRail();
 }
 
+function openSessionMenu() {
+  const menu = rootEl?.querySelector("[data-phantombot-session-menu]");
+  const name = rootEl?.querySelector("[data-phantombot-session-name]");
+  if (!menu) return;
+  menu.hidden = false;
+  if (name) {
+    name.value = activeTask().title || NEW_TASK_TITLE;
+    requestAnimationFrame(() => {
+      name.focus();
+      name.select();
+    });
+  }
+}
+
+function closeSessionMenu() {
+  const menu = rootEl?.querySelector("[data-phantombot-session-menu]");
+  if (menu) menu.hidden = true;
+}
+
+function saveSessionName() {
+  const input = rootEl?.querySelector("[data-phantombot-session-name]");
+  const title = cleanText(input?.value || "", 72).replace(/\s+/g, " ").trim();
+  if (!title) {
+    setComposerStatus("Give this session a name first", "error");
+    input?.focus();
+    return;
+  }
+  const task = activeTask();
+  task.title = title;
+  task.updatedAt = new Date().toISOString();
+  persistTaskState();
+  closeSessionMenu();
+  paintTaskRail();
+  setComposerStatus("Session name saved", "live");
+}
+
+function archiveActiveTask() {
+  const task = activeTask();
+  if (runningRequest?.taskId === task.id) {
+    setComposerStatus("Stop the active response before archiving this session", "error", 3600);
+    return;
+  }
+  task.archived = true;
+  task.updatedAt = new Date().toISOString();
+  let next = taskState.tasks.find((item) => !item.archived && item.id !== task.id);
+  if (!next) {
+    next = createTask();
+    taskState.tasks.unshift(next);
+  }
+  taskState.activeId = next.id;
+  sessionStartedAt = Date.now();
+  persistTaskState();
+  closeSessionMenu();
+  paintTaskRail();
+  chatBindings?.paint(true);
+  setComposerStatus("Session archived", "live");
+}
+
+function exportActiveTask() {
+  const task = activeTask();
+  const artifacts = taskArtifacts(task);
+  const turns = task.messages.map((message, index) => [
+    `## ${index + 1}. You`,
+    message.q,
+    "",
+    "### PhantomBot",
+    message.say || "Response incomplete",
+  ].join("\n")).join("\n\n");
+  const artifactLines = artifacts.length
+    ? artifacts.map((artifact) => `- ${artifact.kind}: ${artifact.title}${artifact.detail ? ` — ${artifact.detail}` : ""}`).join("\n")
+    : "- No saved outputs";
+  const brief = [
+    `# ${task.title || NEW_TASK_TITLE}`,
+    "",
+    `- Workspace: ${wsName(currentWs()) || "PhantomForce"}`,
+    `- Updated: ${task.updatedAt}`,
+    `- Turns: ${task.messages.length}`,
+    "",
+    "## Outputs",
+    artifactLines,
+    "",
+    turns || "No conversation turns yet.",
+  ].join("\n");
+  const blob = new Blob([brief], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${(task.title || "phantombot-session").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "phantombot-session"}.md`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  closeSessionMenu();
+  setComposerStatus("Session brief exported", "live");
+}
+
 function branchTaskAt(messageIndex) {
+  closeSessionMenu();
   const source = activeTask();
   const index = Math.max(0, Math.min(source.messages.length - 1, Number(messageIndex)));
   const now = new Date().toISOString();
@@ -612,12 +796,6 @@ function chatMediaHtml(media = {}) {
 }
 
 function emptyStateHtml() {
-  const suggestions = [
-    "Research my market and show the opportunity",
-    "Build and publish a website",
-    "Create a campaign image",
-    "Review today’s numbers and act on them",
-  ];
   return `
     <section class="phantombot-empty">
       <div class="phantombot-presence" data-phantombot-presence>
@@ -627,8 +805,9 @@ function emptyStateHtml() {
         <span class="phantombot-presence-ring" aria-hidden="true"></span>
       </div>
       <h1>What are we working on?</h1>
+      <span>Ask a question or describe the outcome. PhantomBot chooses the right path automatically.</span>
       <div class="phantombot-starters">
-        ${suggestions.map((prompt) => `<button type="button" data-phantombot-prompt="${esc(prompt)}">${esc(prompt)}<i>↗</i></button>`).join("")}
+        ${UNIFIED_STARTERS.map((prompt) => `<button type="button" data-phantombot-prompt="${esc(prompt)}">${esc(prompt)}<i>↗</i></button>`).join("")}
       </div>
     </section>`;
 }
@@ -862,6 +1041,16 @@ async function watchOperatorMessage(task, message, paint, stream = null) {
   }
 }
 
+function nextMovesHtml(message, messageIndex) {
+  const task = activeTask();
+  if (messageIndex !== task.messages.length - 1 || message.pending || message.error || !message.say) return "";
+  const nextMoves = inferredNextMoves(task, message);
+  return `<nav class="phantombot-next-moves" aria-label="Recommended next moves">
+    <span>Keep moving</span>
+    ${nextMoves.map(([label, prompt]) => `<button type="button" data-phantombot-next="${esc(prompt)}"><b>${esc(label)}</b><i>↗</i></button>`).join("")}
+  </nav>`;
+}
+
 function exchangeHtml(message, messageIndex) {
   return `
     <section class="phantombot-exchange" data-message-id="${esc(message.id)}">
@@ -877,6 +1066,7 @@ function exchangeHtml(message, messageIndex) {
         </div>
       </article>
       ${assistantTurnHtml(message, messageIndex)}
+      ${nextMovesHtml(message, messageIndex)}
     </section>`;
 }
 
@@ -903,6 +1093,7 @@ function setBusy(busy) {
     status.hidden = !busy;
     status.textContent = busy ? "PhantomBot is working…" : "";
   }
+  paintSessionHud();
 }
 
 function setComposerStatus(message, tone = "info", timeoutMs = 2400) {
@@ -1270,7 +1461,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260817-156")
+  import("./brain.js?v=phantom-live-20260817-158")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }
@@ -1361,6 +1552,39 @@ function bindRootActions(root) {
 
     if (button.matches("[data-phantombot-new-task]")) {
       startNewTask();
+      return;
+    }
+    if (button.dataset.phantombotNext) {
+      activatePhantomAiTab("chat");
+      if (chatBindings?.input) {
+        chatBindings.input.value = button.dataset.phantombotNext;
+        chatBindings.resize();
+        chatBindings.input.focus();
+      }
+      return;
+    }
+    if (button.matches("[data-phantombot-pin-active]")) {
+      toggleTaskPin(activeTask().id);
+      return;
+    }
+    if (button.matches("[data-phantombot-manage-session]")) {
+      openSessionMenu();
+      return;
+    }
+    if (button.matches("[data-phantombot-close-session-menu]")) {
+      closeSessionMenu();
+      return;
+    }
+    if (button.matches("[data-phantombot-save-session-name]")) {
+      saveSessionName();
+      return;
+    }
+    if (button.matches("[data-phantombot-export-session]")) {
+      exportActiveTask();
+      return;
+    }
+    if (button.matches("[data-phantombot-archive-session]")) {
+      archiveActiveTask();
       return;
     }
     if (button.dataset.phantombotPin) {
@@ -1588,6 +1812,12 @@ function bindRootActions(root) {
     paintDetailDrawer();
     setComposerStatus(`${effort.replace(/^./, (value) => value.toUpperCase())} effort selected`);
   });
+  root.addEventListener("keydown", (event) => {
+    if (event.target.matches("[data-phantombot-session-name]") && event.key === "Enter" && !event.isComposing) {
+      event.preventDefault();
+      saveSessionName();
+    }
+  });
 }
 
 function bindKeyboardShortcuts() {
@@ -1601,6 +1831,7 @@ function bindKeyboardShortcuts() {
     }
     if (event.key === "Escape") {
       closeDetailDrawer();
+      closeSessionMenu();
       rootEl.classList.remove("is-rail-open");
       rootEl.querySelectorAll("[data-phantombot-rail-toggle]").forEach((button) => button.setAttribute("aria-expanded", "false"));
       const menu = rootEl.querySelector("[data-phantombot-model-menu]");

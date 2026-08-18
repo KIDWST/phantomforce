@@ -1194,6 +1194,13 @@ html[data-org-color-mode="light"] .pp-game-art img{
 .pp-game-grid-full .pp-game-actions .pp-support{grid-column:2;flex:none}
 .pp-game-grid-full .pp-game-actions .pp-devsandbox-card-open{grid-column:3}
 .pp-game-grid-full .pp-game-actions .pp-devsandbox-code-open{grid-column:4}
+@media(max-width:480px){
+  .pp-game-grid-full .pp-game-actions{grid-template-columns:minmax(0,1fr) auto auto;gap:6px}
+  .pp-game-grid-full .pp-game-actions .pp-play{grid-column:1/-1}
+  .pp-game-grid-full .pp-game-actions .pp-support{grid-column:1}
+  .pp-game-grid-full .pp-game-actions .pp-devsandbox-card-open{grid-column:2}
+  .pp-game-grid-full .pp-game-actions .pp-devsandbox-code-open{grid-column:3}
+}
 .pp-leaderboard{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:13px;background:linear-gradient(145deg,#05120ef5,#020807fa)}
 .pp-leaderboard ol{display:grid;gap:7px;margin:0;padding:0;list-style:none}
 .pp-leaderboard li{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:9px;align-items:center;min-height:38px;padding:8px 10px;border:1px solid #ffffff0c;border-radius:10px;background:#ffffff05}

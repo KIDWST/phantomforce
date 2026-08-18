@@ -8,7 +8,10 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
-const apiOrigin = process.env.PHANTOMFORCE_RESPONSIVE_API_ORIGIN || "http://127.0.0.1:5190";
+/* Responsive QA must not inherit whichever real account system happens to be
+   running on the developer machine. An explicit override can exercise a live
+   API, while the default keeps the local owner shortcut deterministic. */
+const apiOrigin = process.env.PHANTOMFORCE_RESPONSIVE_API_ORIGIN || "http://127.0.0.1:1";
 const chromeCandidates = [
   process.env.CHROME_PATH,
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -585,7 +588,7 @@ function auditPage() {
       brokenMedia: productMedia.filter((media) => {
         const rect = media.getBoundingClientRect();
         const img = media.querySelector("img");
-        const fallback = media.querySelector(".ps-product-fallback");
+        const fallback = media.querySelector(".ps-product-fallback, .ps-ai-product-art");
         const style = img ? getComputedStyle(img) : null;
         return rect.width < 120 || rect.height < 60 || (!img && !fallback) || (style && (style.objectFit !== "contain" || style.transform !== "none"));
       }).map(elementSummary).slice(0, 5),

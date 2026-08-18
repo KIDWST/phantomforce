@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +11,7 @@ const command = process.env.TRUFFLEHOG_BIN || localBinary;
 const outputPath = resolve(root, "run-evidence", `trufflehog-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`);
 const requestedResults = argValue("--results") || process.env.TRUFFLEHOG_RESULTS || "verified";
 const scanTarget = argValue("--target") || ".";
+const historyScan = process.argv.includes("--history");
 
 function argValue(name) {
   const inline = process.argv.find((arg) => arg.startsWith(`${name}=`));
@@ -28,9 +29,24 @@ function safeJson(value) {
   }));
 }
 
+function gitHistorySource() {
+  const result = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd: resolve(root, scanTarget),
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0 || !result.stdout.trim()) {
+    throw new Error(`Unable to resolve the repository history store: ${String(result.stderr || "git rev-parse failed").trim()}`);
+  }
+  const repositoryRoot = dirname(resolve(result.stdout.trim())).replaceAll("\\", "/");
+  return `file://${repositoryRoot}`;
+}
+
+const sourceArgs = historyScan
+  ? ["git", gitHistorySource()]
+  : ["filesystem", scanTarget];
 const args = [
-  "filesystem",
-  scanTarget,
+  ...sourceArgs,
   "--json",
   "--no-update",
   "--fail",
@@ -89,9 +105,11 @@ child.on("close", (code) => {
   if (scanErrors.trim()) {
     console.error(scanErrors.replace(/[A-Za-z0-9_./+=:-]{24,}/g, "[redacted]").trim());
   }
+  const scannerFailed = /"level":"error"|git clone failed|error running scan/i.test(scanErrors);
   console.log(JSON.stringify({
-    ok: findings === 0,
+    ok: findings === 0 && !scannerFailed,
     scanner: "trufflehog",
+    source: historyScan ? "git-history" : "filesystem",
     results: requestedResults,
     findings,
     sanitizedReport: outputPath,
@@ -100,5 +118,5 @@ child.on("close", (code) => {
      scan with no matching results when --fail is enabled. Findings are still
      authoritative from JSON output; 183 remains the documented finding
      status, while codes above 1 remain scanner failures. */
-  process.exit(findings > 0 ? 183 : (code && code > 1 && code !== 183 ? code : 0));
+  process.exit(scannerFailed ? (code && code > 1 ? code : 2) : (findings > 0 ? 183 : (code && code > 1 && code !== 183 ? code : 0)));
 });

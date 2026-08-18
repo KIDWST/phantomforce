@@ -1,0 +1,912 @@
+/* PhantomBot mission workspace
+   A dedicated, source-loaded surface for the flagship operator. */
+
+html[data-command-os="2040"] .phantombot-os {
+  --pbot-bg: #020705;
+  --pbot-panel: #06100b;
+  --pbot-panel-2: #091710;
+  --pbot-panel-3: #0c1d15;
+  --pbot-hover: rgba(24, 242, 143, .075);
+  --pbot-line: rgba(153, 196, 174, .14);
+  --pbot-line-strong: rgba(24, 242, 143, .34);
+  --pbot-text: #edf8f2;
+  --pbot-muted: #95aa9f;
+  --pbot-faint: #66786f;
+  --pbot-live: #18f28f;
+  --pbot-brain: #18f28f;
+  --pbot-warn: #ffc968;
+  --pbot-danger: #ff697f;
+  grid-template-columns: 276px minmax(0, 1fr);
+  background:
+    radial-gradient(circle at 72% 0%, rgba(24, 242, 143, .055), transparent 34%),
+    var(--pbot-bg);
+}
+
+html[data-command-os="2040"] .phantombot-os.is-rail-right {
+  grid-template-columns: minmax(0, 1fr) 276px;
+}
+
+html[data-command-os="2040"] .phantombot-taskrail {
+  background: linear-gradient(180deg, #050d09 0%, #030906 100%);
+  box-shadow: 14px 0 34px rgba(0, 0, 0, .2);
+}
+
+html[data-command-os="2040"] .phantombot-brand {
+  min-height: 54px;
+  padding: 9px 13px 7px;
+}
+
+html[data-command-os="2040"] .phantombot-brand-mark {
+  flex-basis: 31px;
+  width: 31px;
+  height: 31px;
+  border: 1px solid rgba(24, 242, 143, .22);
+  border-radius: 9px;
+  background: rgba(24, 242, 143, .07);
+  box-shadow: inset 0 0 18px rgba(24, 242, 143, .05);
+}
+
+html[data-command-os="2040"] .phantombot-brand-mark img {
+  width: 23px;
+  height: 23px;
+}
+
+html[data-command-os="2040"] .phantombot-brand b {
+  font-size: 13px;
+  letter-spacing: -.02em;
+}
+
+html[data-command-os="2040"] .phantombot-brand small {
+  margin-top: 2px;
+  color: var(--pbot-muted);
+  font-size: 8px;
+  letter-spacing: .08em;
+}
+
+html[data-command-os="2040"] .phantombot-window-tools {
+  flex-basis: 34px;
+  padding-inline: 10px;
+}
+
+html[data-command-os="2040"] .phantombot-desktop-nav {
+  gap: 3px;
+  padding: 10px;
+}
+
+html[data-command-os="2040"] .phantombot-desktop-nav button {
+  min-height: 36px;
+  padding: 7px 9px;
+  border-radius: 7px;
+}
+
+html[data-command-os="2040"] .phantombot-desktop-nav button.is-primary {
+  border-color: rgba(24, 242, 143, .25);
+  background: linear-gradient(135deg, rgba(24, 242, 143, .12), rgba(24, 242, 143, .04));
+}
+
+html[data-command-os="2040"] .phantombot-desktop-nav button b {
+  font-size: 11px;
+}
+
+html[data-command-os="2040"] .phantombot-desktop-nav button kbd,
+html[data-command-os="2040"] .phantombot-task-section > p {
+  font-size: 8px;
+}
+
+html[data-command-os="2040"] .phantombot-session-search {
+  min-height: 36px;
+  margin: 2px 10px 10px;
+  padding-inline: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .025);
+}
+
+html[data-command-os="2040"] .phantombot-session-search:focus-within {
+  border-color: var(--pbot-line-strong);
+  box-shadow: 0 0 0 3px rgba(24, 242, 143, .055);
+}
+
+html[data-command-os="2040"] .phantombot-session-search input {
+  font-size: 11px;
+}
+
+html[data-command-os="2040"] .phantombot-task-section {
+  padding-inline: 9px;
+}
+
+html[data-command-os="2040"] .phantombot-task-section > p {
+  min-height: 24px;
+  margin-inline: 6px;
+  color: var(--pbot-faint);
+  letter-spacing: .13em;
+}
+
+html[data-command-os="2040"] .phantombot-pin-hint {
+  min-height: 38px;
+  padding: 7px 10px;
+  font-size: 9px;
+}
+
+html[data-command-os="2040"] .phantombot-task-list {
+  gap: 3px;
+}
+
+html[data-command-os="2040"] .phantombot-task-row {
+  grid-template-columns: minmax(0, 1fr) 28px;
+  min-height: 43px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+html[data-command-os="2040"] .phantombot-task-row:hover,
+html[data-command-os="2040"] .phantombot-task-row.is-active {
+  background: rgba(24, 242, 143, .065);
+}
+
+html[data-command-os="2040"] .phantombot-task-row.is-active {
+  border-color: rgba(24, 242, 143, .14);
+  box-shadow: inset 2px 0 var(--pbot-live), 0 8px 24px rgba(0, 0, 0, .16);
+}
+
+html[data-command-os="2040"] .phantombot-task {
+  min-height: 41px;
+  padding: 7px 9px;
+}
+
+html[data-command-os="2040"] .phantombot-task span {
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+html[data-command-os="2040"] .phantombot-task small {
+  margin-top: 2px;
+  font-size: 8px;
+}
+
+html[data-command-os="2040"] .phantombot-task em {
+  display: inline-flex;
+  width: max-content;
+  margin-top: 4px;
+  padding: 2px 5px;
+  border: 1px solid rgba(24, 242, 143, .13);
+  border-radius: 999px;
+  background: rgba(24, 242, 143, .045);
+  color: #8bdcb6;
+  font: 600 7px/1.15 "Spline Sans Mono", monospace;
+  font-style: normal;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+html[data-command-os="2040"] .phantombot-task-pin[aria-pressed="true"] {
+  color: var(--pbot-live);
+}
+
+html[data-command-os="2040"] .phantombot-profile-row {
+  flex-basis: 54px;
+  grid-template-columns: 32px minmax(0, 1fr) 28px;
+  padding: 7px 11px;
+}
+
+html[data-command-os="2040"] .phantombot-profile-avatar {
+  width: 30px;
+  height: 30px;
+  border-color: rgba(24, 242, 143, .28);
+  background: rgba(24, 242, 143, .08);
+  color: #9ff7ca;
+  font-size: 10px;
+}
+
+html[data-command-os="2040"] .phantombot-profile-row b {
+  font-size: 10px;
+}
+
+html[data-command-os="2040"] .phantombot-profile-row small {
+  font-size: 8px;
+}
+
+html[data-command-os="2040"] .phantombot-stage {
+  background: transparent;
+}
+
+html[data-command-os="2040"] .phantombot-stage::before {
+  opacity: .08;
+  mix-blend-mode: screen;
+}
+
+html[data-command-os="2040"] .phantombot-titlebar {
+  flex-basis: 44px;
+  min-height: 44px;
+  padding-inline: 10px;
+  border-bottom-color: rgba(153, 196, 174, .1);
+  background: rgba(2, 7, 5, .94);
+}
+
+html[data-command-os="2040"] .phantombot-work-tab {
+  height: 43px;
+  padding-inline: 12px;
+}
+
+html[data-command-os="2040"] .phantombot-work-tab b {
+  font-size: 10px;
+}
+
+html[data-command-os="2040"] .phantombot-mission-hud {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(210px, 1fr) auto auto;
+  align-items: center;
+  gap: 22px;
+  min-height: 78px;
+  margin: 10px 14px 0;
+  padding: 12px 14px;
+  overflow: hidden;
+  border: 1px solid rgba(24, 242, 143, .15);
+  border-radius: 12px;
+  background:
+    linear-gradient(115deg, rgba(24, 242, 143, .08), transparent 44%),
+    rgba(5, 14, 9, .91);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025), 0 14px 40px rgba(0, 0, 0, .16);
+  backdrop-filter: blur(18px);
+}
+
+html[data-command-os="2040"] .phantombot-mission-hud::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--pbot-live);
+  box-shadow: 0 0 18px rgba(24, 242, 143, .7);
+  content: "";
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity > span {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: 6px;
+  color: #99efc4;
+  font: 650 8px/1.3 "Spline Sans Mono", monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity > span i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pbot-live);
+  box-shadow: 0 0 10px rgba(24, 242, 143, .75);
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity > span[data-state="working"] i {
+  animation: phantombot-next-pulse 1.1s ease-in-out infinite;
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity > span[data-state="approval"] {
+  color: var(--pbot-warn);
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity > span[data-state="approval"] i {
+  background: var(--pbot-warn);
+  box-shadow: 0 0 10px rgba(255, 201, 104, .62);
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity > span[data-state="attention"] {
+  color: #ff9cab;
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity > span[data-state="attention"] i {
+  background: var(--pbot-danger);
+  box-shadow: 0 0 10px rgba(255, 105, 127, .58);
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity > b {
+  overflow: hidden;
+  color: var(--pbot-text);
+  font-size: 15px;
+  font-weight: 670;
+  letter-spacing: -.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-command-os="2040"] .phantombot-mission-identity > small {
+  overflow: hidden;
+  color: var(--pbot-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-command-os="2040"] .phantombot-mission-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(54px, auto));
+  gap: 0;
+  margin: 0;
+}
+
+html[data-command-os="2040"] .phantombot-mission-metrics > div {
+  display: grid;
+  min-width: 58px;
+  gap: 2px;
+  padding: 2px 12px;
+  border-left: 1px solid var(--pbot-line);
+}
+
+html[data-command-os="2040"] .phantombot-mission-metrics dt {
+  color: var(--pbot-faint);
+  font: 600 7px/1.2 "Spline Sans Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+html[data-command-os="2040"] .phantombot-mission-metrics dd {
+  margin: 0;
+  color: var(--pbot-text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+html[data-command-os="2040"] .phantombot-mission-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+html[data-command-os="2040"] .phantombot-mission-actions button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .02);
+  color: var(--pbot-muted);
+  cursor: pointer;
+  font-size: 9px;
+}
+
+html[data-command-os="2040"] .phantombot-mission-actions button:hover,
+html[data-command-os="2040"] .phantombot-mission-actions button[aria-pressed="true"] {
+  border-color: var(--pbot-line-strong);
+  background: var(--pbot-hover);
+  color: var(--pbot-text);
+}
+
+html[data-command-os="2040"] .phantombot-mission-actions button span {
+  color: var(--pbot-live);
+}
+
+html[data-command-os="2040"] .phantombot-stage > .phantomai-pane[data-phantomai-pane="chat"] {
+  min-height: 0;
+}
+
+html[data-command-os="2040"] .phantombot-stage .phantomai-chat-log {
+  padding: 28px max(22px, calc((100% - 860px) / 2)) 150px;
+}
+
+html[data-command-os="2040"] .phantombot-empty {
+  padding: 10px 0 154px;
+}
+
+html[data-command-os="2040"] .phantombot-empty > h1 {
+  max-width: 23ch;
+  font-size: clamp(25px, 3.1vw, 38px);
+  letter-spacing: -.045em;
+}
+
+html[data-command-os="2040"] .phantombot-empty > span {
+  max-width: 570px;
+  margin-top: 9px;
+  color: var(--pbot-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+html[data-command-os="2040"] .phantombot-starters {
+  width: min(680px, 100%);
+  gap: 8px;
+}
+
+html[data-command-os="2040"] .phantombot-starters button {
+  min-height: 48px;
+  padding: 10px 12px;
+  border-color: rgba(153, 196, 174, .14);
+  border-radius: 9px;
+  background: rgba(7, 17, 11, .74);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+html[data-command-os="2040"] .phantombot-starters button:hover {
+  border-color: rgba(24, 242, 143, .34);
+  background: rgba(24, 242, 143, .065);
+  transform: translateY(-1px);
+}
+
+html[data-command-os="2040"] .phantombot-exchange {
+  width: min(850px, 100%);
+}
+
+html[data-command-os="2040"] .phantombot-turn .phantomai-chat-user,
+html[data-command-os="2040"] .phantombot-turn .phantomai-chat-reply {
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+html[data-command-os="2040"] .phantomai-rich-text code {
+  background: rgba(24, 242, 143, .09);
+  color: #adf4d0;
+}
+
+html[data-command-os="2040"] .phantombot-code {
+  border-radius: 9px;
+  background: #020705;
+}
+
+html[data-command-os="2040"] .phantombot-code pre {
+  color: #d4e6dc;
+  font-size: 10px;
+}
+
+html[data-command-os="2040"] .phantombot-next-moves {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 11px 0 0 32px;
+}
+
+html[data-command-os="2040"] .phantombot-next-moves::before {
+  grid-column: 1 / -1;
+  color: var(--pbot-faint);
+  content: "RECOMMENDED NEXT MOVES";
+  font: 650 7px/1 "Spline Sans Mono", monospace;
+  letter-spacing: .13em;
+}
+
+html[data-command-os="2040"] .phantombot-next-moves > span {
+  display: none;
+}
+
+html[data-command-os="2040"] .phantombot-next-moves button {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  padding: 7px 10px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .018);
+  color: var(--pbot-muted);
+  cursor: pointer;
+  font-size: 9px;
+  text-align: left;
+}
+
+html[data-command-os="2040"] .phantombot-next-moves button::after {
+  color: var(--pbot-live);
+  content: "→";
+  font-size: 12px;
+}
+
+html[data-command-os="2040"] .phantombot-next-moves button:hover {
+  border-color: var(--pbot-line-strong);
+  background: var(--pbot-hover);
+  color: var(--pbot-text);
+}
+
+html[data-command-os="2040"] .phantombot-stage .phantomai-chat-form {
+  right: max(14px, calc((100% - 850px) / 2));
+  bottom: 14px;
+  left: max(14px, calc((100% - 850px) / 2));
+  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 5px 8px;
+  min-height: 94px;
+  padding: 9px 10px;
+  border-color: rgba(24, 242, 143, .28);
+  border-radius: 12px;
+  background: rgba(4, 12, 8, .97);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, .5), inset 0 1px rgba(255, 255, 255, .025);
+}
+
+html[data-command-os="2040"] .phantombot-stage .phantomai-chat-form:focus-within {
+  border-color: rgba(24, 242, 143, .58);
+  box-shadow: 0 20px 54px rgba(0, 0, 0, .5), 0 0 0 3px rgba(24, 242, 143, .045);
+}
+
+html[data-command-os="2040"] .phantombot-stage .phantomai-attach {
+  grid-column: 1;
+  grid-row: 1;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+}
+
+html[data-command-os="2040"] .phantombot-stage .phantomai-attach:hover {
+  background: var(--pbot-hover);
+  color: var(--pbot-live);
+}
+
+html[data-command-os="2040"] .phantombot-stage .phantomai-chat-input {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 36px;
+  max-height: 132px;
+  padding: 7px 3px;
+  color: var(--pbot-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+html[data-command-os="2040"] .phantombot-stage .phantomai-chat-input::placeholder {
+  color: #71847a;
+}
+
+html[data-command-os="2040"] .phantombot-composer-foot {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-height: 31px;
+}
+
+html[data-command-os="2040"] .phantombot-composer-controls button,
+html[data-command-os="2040"] .phantombot-composer-controls label {
+  height: 28px;
+  min-width: 28px;
+  border-radius: 6px;
+}
+
+html[data-command-os="2040"] .phantombot-composer-controls [data-phantombot-model] span,
+html[data-command-os="2040"] .phantombot-composer-controls select {
+  font-size: 9px;
+}
+
+html[data-command-os="2040"] .phantombot-send {
+  flex-basis: 32px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(24, 242, 143, .55);
+  border-radius: 8px;
+  background: var(--pbot-live);
+  color: #001f10;
+  box-shadow: 0 0 20px rgba(24, 242, 143, .18);
+}
+
+html[data-command-os="2040"] .phantombot-send:hover {
+  background: #61f8b4;
+  transform: translateY(-1px);
+}
+
+html[data-command-os="2040"] .phantombot-model-menu {
+  right: max(14px, calc((100% - 850px) / 2));
+  bottom: 118px;
+  width: min(300px, calc(100% - 28px));
+  border-color: var(--pbot-line-strong);
+  border-radius: 10px;
+  background: #07120c;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu {
+  position: absolute;
+  z-index: 24;
+  right: max(14px, calc((100% - 850px) / 2));
+  bottom: 118px;
+  display: grid;
+  width: min(390px, calc(100% - 28px));
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--pbot-line-strong);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #091710, #050d09);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .58);
+  color: var(--pbot-text);
+}
+
+html[data-command-os="2040"] .phantombot-session-menu[hidden] {
+  display: none;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu header > div {
+  display: grid;
+  gap: 3px;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu header span,
+html[data-command-os="2040"] .phantombot-session-menu label > span {
+  color: #83cfa9;
+  font: 650 8px/1.2 "Spline Sans Mono", monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu header b {
+  font-size: 14px;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu header > button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pbot-muted);
+  cursor: pointer;
+  font-size: 17px;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu label {
+  display: grid;
+  gap: 6px;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 8px;
+  outline: 0;
+  background: rgba(0, 0, 0, .22);
+  color: var(--pbot-text);
+  font-size: 11px;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu input:focus {
+  border-color: var(--pbot-line-strong);
+  box-shadow: 0 0 0 3px rgba(24, 242, 143, .055);
+}
+
+html[data-command-os="2040"] .phantombot-session-menu > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu > div button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--pbot-line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .025);
+  color: var(--pbot-muted);
+  cursor: pointer;
+  font-size: 9px;
+}
+
+html[data-command-os="2040"] .phantombot-session-menu > div button:hover,
+html[data-command-os="2040"] .phantombot-session-menu > div button.is-primary {
+  border-color: var(--pbot-line-strong);
+  background: rgba(24, 242, 143, .09);
+  color: var(--pbot-text);
+}
+
+html[data-command-os="2040"] .phantombot-session-menu > p {
+  margin: 0;
+  color: var(--pbot-faint);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+html[data-command-os="2040"] .phantombot-context-drawer {
+  border-left-color: rgba(24, 242, 143, .22);
+  background: rgba(4, 12, 8, .98);
+  box-shadow: -24px 0 64px rgba(0, 0, 0, .42);
+}
+
+html[data-command-os="2040"] .phantombot-context-drawer > nav button.is-active,
+html[data-command-os="2040"] .phantombot-detail-timeline button:hover,
+html[data-command-os="2040"] .phantombot-detail-artifacts button:hover {
+  border-color: rgba(24, 242, 143, .28);
+  background: rgba(24, 242, 143, .065);
+  color: var(--pbot-text);
+}
+
+html[data-command-os="2040"] .phantombot-detail-timeline button > i,
+html[data-command-os="2040"] .phantombot-detail-steps > li > i {
+  background: var(--pbot-live);
+  box-shadow: 0 0 9px rgba(24, 242, 143, .45);
+}
+
+html[data-command-os="2040"] .phantombot-runtime-bar {
+  min-height: 30px;
+  border-top-color: rgba(153, 196, 174, .1);
+  background: rgba(2, 7, 5, .97);
+}
+
+html[data-command-os="2040"] .phantombot-runtime-bar button,
+html[data-command-os="2040"] .phantombot-runtime-bar > span {
+  font-size: 8px;
+}
+
+html[data-command-os="2040"] .phantombot-os[data-busy] .phantombot-runtime-bar [data-phantombot-runtime] i {
+  background: var(--pbot-live);
+  box-shadow: 0 0 9px rgba(24, 242, 143, .62);
+}
+
+html[data-command-os="2040"] .phantombot-composer-status[data-tone="live"] {
+  border-color: rgba(24, 242, 143, .32);
+  background: #07150e;
+  color: #aaf2cf;
+}
+
+html[data-command-os="2040"] .phantombot-composer-status[data-tone="error"] {
+  border-color: rgba(255, 105, 127, .38);
+  background: #1a0a0d;
+  color: #ff9cab;
+}
+
+@keyframes phantombot-next-pulse {
+  0%, 100% { opacity: .42; transform: scale(.86); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 1180px) {
+  html[data-command-os="2040"] .phantombot-os,
+  html[data-command-os="2040"] .phantombot-os.is-rail-right {
+    grid-template-columns: 248px minmax(0, 1fr);
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-hud {
+    grid-template-columns: minmax(180px, 1fr) auto;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-actions {
+    display: none;
+  }
+}
+
+/* Match the compact task-rail breakpoint owned by command-os.css. Keeping
+   these breakpoints aligned prevents the later theme layer from restoring a
+   248px desktop grid while the rail is already an off-canvas drawer. */
+@media (max-width: 1100px) {
+  html[data-command-os="2040"] .phantombot-os,
+  html[data-command-os="2040"] .phantombot-os.is-rail-right {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-command-os="2040"] .phantombot-taskrail,
+  html[data-command-os="2040"] .phantombot-os.is-rail-right .phantombot-taskrail {
+    width: min(280px, 86vw);
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-metrics > div {
+    padding-inline: 9px;
+  }
+}
+
+@media (max-width: 760px) {
+  html[data-command-os="2040"] .phantombot-titlebar {
+    flex-basis: 42px;
+    min-height: 42px;
+  }
+
+  html[data-command-os="2040"] .phantombot-work-tab {
+    height: 41px;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-hud {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 64px;
+    margin: 7px 8px 0;
+    padding: 9px 11px;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-identity > b {
+    font-size: 13px;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-metrics {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-metrics > div {
+    min-width: 0;
+    padding: 4px 8px 0;
+  }
+
+  html[data-command-os="2040"] .phantombot-stage .phantomai-chat-log {
+    padding: 18px 11px calc(210px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html[data-command-os="2040"] .phantombot-next-moves {
+    grid-template-columns: 1fr;
+    margin-left: 32px;
+  }
+
+  html[data-command-os="2040"] .phantombot-stage .phantomai-chat-form {
+    right: 7px;
+    bottom: calc(7px + env(safe-area-inset-bottom, 0px));
+    left: 7px;
+    min-height: 106px;
+  }
+
+  html[data-command-os="2040"] .phantombot-model-menu,
+  html[data-command-os="2040"] .phantombot-session-menu {
+    right: 7px;
+    bottom: calc(126px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html[data-command-os="2040"] .phantombot-context-drawer {
+    top: 42px;
+    bottom: 30px;
+  }
+}
+
+@media (max-width: 540px) {
+  html[data-command-os="2040"] .phantombot-work-tab:nth-of-type(3),
+  html[data-command-os="2040"] .phantombot-work-tab:nth-of-type(4),
+  html[data-command-os="2040"] .phantombot-title-actions [data-phantombot-open-timeline] {
+    display: none;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-hud {
+    gap: 7px;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-identity > small {
+    font-size: 8px;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-metrics > div {
+    padding-inline: 5px;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-metrics > div:first-child {
+    border-left: 0;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-metrics dt {
+    font-size: 6px;
+  }
+
+  html[data-command-os="2040"] .phantombot-mission-metrics dd {
+    font-size: 10px;
+  }
+
+  html[data-command-os="2040"] .phantombot-empty > h1 {
+    font-size: 25px;
+  }
+
+  html[data-command-os="2040"] .phantombot-composer-controls [data-phantombot-model] {
+    max-width: 108px;
+  }
+
+  html[data-command-os="2040"] .phantombot-session-menu {
+    width: calc(100% - 14px);
+  }
+
+  html[data-command-os="2040"] .phantombot-session-menu > div button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-command-os="2040"] .phantombot-mission-identity > span[data-state="working"] i {
+    animation: none;
+  }
+
+  html[data-command-os="2040"] .phantombot-starters button,
+  html[data-command-os="2040"] .phantombot-send {
+    transition: none;
+  }
+}

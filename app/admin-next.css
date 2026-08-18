@@ -1,0 +1,665 @@
+/* PhantomForce Admin Next
+   Final admin-wide visual authority. Product/game canvases keep their own art,
+   while the operating shell, controls, cards, and planner share one brand. */
+
+:root {
+  --pf-black: #020705;
+  --pf-ink: #effff7;
+  --pf-muted: #86a095;
+  --pf-faint: #52675e;
+  --pf-green: #18f28f;
+  --pf-green-2: #0fc978;
+  --pf-green-3: #08784b;
+  --pf-line: rgba(93, 255, 177, .14);
+  --pf-line-strong: rgba(83, 255, 169, .32);
+  --pf-panel: rgba(5, 14, 10, .94);
+  --pf-panel-raised: rgba(8, 21, 15, .96);
+  --pf-glow: rgba(24, 242, 143, .14);
+}
+
+html[data-command-os="2040"] {
+  background: var(--pf-black);
+  color-scheme: dark;
+  accent-color: var(--pf-green);
+  scrollbar-color: rgba(24, 242, 143, .55) #030907;
+}
+
+html[data-command-os="2040"] body,
+html[data-command-os="2040"] .phantom.command-os-enabled,
+html[data-command-os="2040"] .app-main,
+html[data-command-os="2040"] .command-os-enabled .console.console-workspace {
+  background-color: var(--pf-black) !important;
+  color: var(--pf-ink);
+}
+
+.phantom.command-os-enabled {
+  --neon: var(--pf-green);
+  --neon-2: var(--pf-green-2);
+  --ink: var(--pf-ink);
+  --dim: var(--pf-muted);
+  --dim-2: #a4b8af;
+  --bg: var(--pf-black);
+  --glass: var(--pf-panel);
+  --glass-2: var(--pf-panel-raised);
+  --line: var(--pf-line);
+  --line-strong: var(--pf-line-strong);
+}
+
+html[data-command-os="2040"] ::selection {
+  background: rgba(24, 242, 143, .28);
+  color: #f6fff9;
+}
+
+html[data-command-os="2040"] * {
+  scrollbar-color: rgba(24, 242, 143, .45) rgba(3, 9, 7, .88);
+}
+
+html[data-command-os="2040"] *::-webkit-scrollbar { width: 9px; height: 9px; }
+html[data-command-os="2040"] *::-webkit-scrollbar-track { background: rgba(3, 9, 7, .88); }
+html[data-command-os="2040"] *::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(3, 9, 7, .88);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(24, 242, 143, .72), rgba(15, 201, 120, .38));
+}
+
+html[data-command-os="2040"] .command-os-enabled :focus-visible {
+  outline: 2px solid rgba(24, 242, 143, .82) !important;
+  outline-offset: 3px;
+}
+
+/* Command rail */
+html[data-command-os="2040"] .os-command-rail {
+  border-bottom-color: var(--pf-line) !important;
+  background:
+    linear-gradient(90deg, rgba(24, 242, 143, .035), transparent 25%, transparent 75%, rgba(24, 242, 143, .025)),
+    rgba(2, 8, 5, .96) !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .3), inset 0 -1px rgba(24, 242, 143, .045) !important;
+}
+
+html[data-command-os="2040"] .os-identity {
+  border-right-color: var(--pf-line) !important;
+}
+
+html[data-command-os="2040"] .os-identity-name,
+html[data-command-os="2040"] .os-profile b { color: var(--pf-ink) !important; }
+html[data-command-os="2040"] .os-identity-sub { color: #6f8a7e !important; }
+
+html[data-command-os="2040"] .os-primary-nav button {
+  color: #748c81 !important;
+}
+
+html[data-command-os="2040"] .os-primary-nav button:hover {
+  background: rgba(24, 242, 143, .035) !important;
+  color: #c7ddd2 !important;
+}
+
+html[data-command-os="2040"] .os-primary-nav button::after {
+  height: 2px !important;
+  background: linear-gradient(90deg, transparent, var(--pf-green), transparent) !important;
+  box-shadow: 0 0 16px rgba(24, 242, 143, .68) !important;
+}
+
+html[data-command-os="2040"] .os-primary-nav button.is-active,
+html[data-command-os="2040"] .os-primary-nav button[aria-current="page"] {
+  background: linear-gradient(180deg, rgba(24, 242, 143, .055), rgba(24, 242, 143, .012)) !important;
+  color: var(--pf-ink) !important;
+}
+
+html[data-command-os="2040"] :where(.os-rail-action, .os-profile, .cmdk-open) {
+  border-color: var(--pf-line) !important;
+  background-color: rgba(7, 18, 13, .78) !important;
+}
+
+html[data-command-os="2040"] :where(.os-rail-action, .os-profile, .cmdk-open):hover {
+  border-color: var(--pf-line-strong) !important;
+  background-color: rgba(12, 32, 22, .88) !important;
+  color: var(--pf-ink) !important;
+}
+
+/* Workspace frame */
+html[data-command-os="2040"] .command-os-enabled .workspace-page {
+  overflow: hidden;
+  border: 1px solid var(--pf-line) !important;
+  border-radius: 22px !important;
+  background:
+    radial-gradient(circle at 86% -15%, rgba(24, 242, 143, .055), transparent 32%),
+    linear-gradient(180deg, rgba(7, 18, 13, .98), rgba(3, 10, 7, .985)) !important;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 255, 255, .025) !important;
+}
+
+html[data-command-os="2040"] .command-os-enabled .workspace-page-head {
+  position: relative;
+  border-bottom-color: var(--pf-line) !important;
+  background: linear-gradient(90deg, rgba(24, 242, 143, .045), transparent 28%) !important;
+}
+
+html[data-command-os="2040"] .command-os-enabled .workspace-page-head::before {
+  content: "";
+  position: absolute;
+  top: 24%;
+  bottom: 24%;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--pf-green);
+  box-shadow: 0 0 18px rgba(24, 242, 143, .65);
+}
+
+html[data-command-os="2040"] .command-os-enabled .workspace-page-kicker {
+  color: var(--pf-green) !important;
+  letter-spacing: .18em !important;
+}
+
+html[data-command-os="2040"] .command-os-enabled .workspace-page h1,
+html[data-command-os="2040"] .command-os-enabled .workspace-page h2,
+html[data-command-os="2040"] .command-os-enabled .workspace-page h3 {
+  color: var(--pf-ink) !important;
+  text-wrap: balance;
+}
+
+html[data-command-os="2040"] .command-os-enabled .workspace-page :where(input, textarea, select) {
+  border-color: var(--pf-line) !important;
+  background: rgba(2, 9, 6, .82) !important;
+  color: var(--pf-ink) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025) !important;
+}
+
+html[data-command-os="2040"] .command-os-enabled .workspace-page :where(input, textarea, select):focus {
+  border-color: rgba(24, 242, 143, .6) !important;
+  box-shadow: 0 0 0 3px rgba(24, 242, 143, .08), inset 0 1px rgba(255, 255, 255, .025) !important;
+}
+
+html[data-command-os="2040"] .command-os-enabled .workspace-page :where(input, textarea)::placeholder {
+  color: rgba(145, 174, 160, .62) !important;
+}
+
+/* Shared controls and materials */
+html[data-command-os="2040"] .command-os-enabled :where(.btn-primary, .workspace-page .primary, .workspace-page button[data-primary]) {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, var(--pf-green), var(--pf-green-2)) !important;
+  color: #021109 !important;
+  box-shadow: 0 10px 28px rgba(24, 242, 143, .15) !important;
+}
+
+html[data-command-os="2040"] .command-os-enabled :where(.btn-primary, .workspace-page .primary, .workspace-page button[data-primary]):hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px rgba(24, 242, 143, .22) !important;
+}
+
+html[data-command-os="2040"] .command-os-enabled .btn-quiet {
+  border-color: var(--pf-line) !important;
+  background: rgba(8, 22, 15, .72) !important;
+  color: #a7beb3 !important;
+}
+
+html[data-command-os="2040"] .command-os-enabled .btn-quiet:hover {
+  border-color: var(--pf-line-strong) !important;
+  background: rgba(15, 45, 30, .72) !important;
+  color: var(--pf-ink) !important;
+}
+
+html[data-command-os="2040"] .workspace-page :where(
+  [class$="-card"],
+  [class*="-card "],
+  [class$="-panel"],
+  [class*="-panel "]
+) {
+  border-color: var(--pf-line);
+}
+
+html[data-command-os="2040"] .workspace-page :where(
+  [class$="-tab"],
+  [class*="-tab "]
+).is-active,
+html[data-command-os="2040"] .workspace-page [role="tab"][aria-selected="true"] {
+  border-color: rgba(24, 242, 143, .32) !important;
+  background: rgba(24, 242, 143, .09) !important;
+  color: var(--pf-green) !important;
+  box-shadow: inset 0 -1px rgba(24, 242, 143, .48) !important;
+}
+
+/* Page intelligence: black glass and Phantom green only. */
+html[data-command-os="2040"] .page-worker {
+  width: min(100%, 1780px);
+  margin: 0 auto 20px;
+  padding: clamp(16px, 1.35vw, 24px);
+  border: 1px solid rgba(24, 242, 143, .22) !important;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 8% -35%, rgba(24, 242, 143, .18), transparent 38%),
+    linear-gradient(135deg, rgba(8, 25, 16, .96), rgba(3, 11, 7, .985)) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .035), 0 22px 70px rgba(0, 0, 0, .32) !important;
+}
+
+html[data-command-os="2040"] .page-worker::before {
+  background:
+    linear-gradient(90deg, transparent, rgba(24, 242, 143, .25), transparent),
+    repeating-linear-gradient(90deg, rgba(24, 242, 143, .07) 0 1px, transparent 1px 52px) !important;
+}
+
+html[data-command-os="2040"] .page-worker::after {
+  background: linear-gradient(90deg, transparent, rgba(24, 242, 143, .82), transparent) !important;
+}
+
+html[data-command-os="2040"] .page-worker-copy p { color: var(--pf-green) !important; }
+html[data-command-os="2040"] .page-worker-copy h3 {
+  color: var(--pf-ink) !important;
+  text-shadow: 0 0 24px rgba(24, 242, 143, .12) !important;
+}
+html[data-command-os="2040"] .page-worker-copy span { color: var(--pf-muted) !important; }
+
+html[data-command-os="2040"] .page-worker-form textarea {
+  border-color: rgba(24, 242, 143, .2) !important;
+  background:
+    radial-gradient(circle at 8% -20%, rgba(24, 242, 143, .095), transparent 40%),
+    rgba(2, 9, 6, .92) !important;
+  color: var(--pf-ink) !important;
+}
+
+html[data-command-os="2040"] .page-worker-form textarea:focus {
+  border-color: rgba(24, 242, 143, .7) !important;
+  box-shadow: 0 0 0 3px rgba(24, 242, 143, .075), 0 0 30px rgba(24, 242, 143, .1) !important;
+}
+
+html[data-command-os="2040"] .page-worker-form button {
+  background: linear-gradient(135deg, var(--pf-green), var(--pf-green-2)) !important;
+  color: #011108 !important;
+  box-shadow: 0 10px 30px rgba(24, 242, 143, .18) !important;
+}
+
+html[data-command-os="2040"] .page-worker-output {
+  border-color: var(--pf-line-strong) !important;
+  background: rgba(3, 13, 8, .96) !important;
+}
+
+/* Planner */
+.workspace-page[data-workspace-page="planner"] .workspace-page-body {
+  padding: clamp(18px, 2vw, 34px) !important;
+}
+
+.planner {
+  display: grid;
+  gap: 20px;
+  width: min(100%, 1780px);
+  margin: 0 auto;
+  color: var(--pf-ink);
+}
+
+.planner * { box-sizing: border-box; }
+
+.planner-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(280px, .82fr) minmax(540px, 1.18fr);
+  align-items: center;
+  gap: clamp(22px, 3vw, 58px);
+  min-height: 210px;
+  padding: clamp(24px, 2.5vw, 44px);
+  border: 1px solid var(--pf-line-strong);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 86% 18%, rgba(24, 242, 143, .12), transparent 28%),
+    linear-gradient(125deg, rgba(8, 30, 19, .98), rgba(3, 11, 7, .98) 58%);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .04), 0 24px 70px rgba(0, 0, 0, .3);
+}
+
+.planner-hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(24, 242, 143, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 242, 143, .035) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(90deg, transparent, #000 55%, #000);
+}
+
+.planner-hero > div:first-child { min-width: 0; }
+.planner-hero > div:first-child > p,
+.planner-card-head p {
+  margin: 0 0 8px;
+  color: var(--pf-green);
+  font: 700 9px/1.2 "Spline Sans Mono", ui-monospace, monospace;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+}
+
+.planner-hero h2 {
+  max-width: 17ch;
+  margin: 0;
+  font: 700 clamp(30px, 3vw, 52px)/.98 "Bricolage Grotesque", sans-serif;
+  letter-spacing: -.045em;
+}
+
+.planner-hero > div:first-child > span {
+  display: block;
+  max-width: 62ch;
+  margin-top: 16px;
+  color: var(--pf-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.planner-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(118px, 1fr));
+  gap: 10px;
+}
+
+.planner-metrics > span {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 120px;
+  padding: 18px;
+  border: 1px solid var(--pf-line);
+  border-radius: 16px;
+  background: rgba(3, 12, 8, .72);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025);
+}
+
+.planner-metrics b {
+  color: var(--pf-ink);
+  font: 700 clamp(25px, 2vw, 36px)/1 "Bricolage Grotesque", sans-serif;
+}
+
+.planner-metrics i {
+  margin-top: 11px;
+  color: #b9cec4;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.planner-metrics em {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--pf-faint);
+  font-size: 9px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(340px, .65fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.planner-main,
+.planner-side {
+  display: grid;
+  min-width: 0;
+  gap: 20px;
+}
+
+.planner-card {
+  min-width: 0;
+  padding: clamp(18px, 1.7vw, 28px);
+  border: 1px solid var(--pf-line) !important;
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(8, 21, 15, .96), rgba(3, 11, 7, .975)) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .028), 0 18px 48px rgba(0, 0, 0, .22);
+}
+
+.planner-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.planner-card-head > div { min-width: 0; }
+.planner-card-head h3 {
+  margin: 0;
+  font-size: clamp(17px, 1.35vw, 23px);
+  line-height: 1.12;
+}
+
+.planner-brief-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.planner-brief-list > button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  min-height: 70px;
+  padding: 14px;
+  border: 1px solid var(--pf-line);
+  border-radius: 13px;
+  background: rgba(2, 10, 6, .7);
+  color: var(--pf-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.planner-brief-list > button:hover {
+  border-color: var(--pf-line-strong);
+  background: rgba(15, 48, 31, .48);
+  transform: translateY(-1px);
+}
+
+.planner-brief-list > button b {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(24, 242, 143, .1);
+  color: var(--pf-green);
+  font: 700 8px "Spline Sans Mono", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.planner-brief-list > button span {
+  color: #c4d7ce;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.planner-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.planner-day {
+  overflow: hidden;
+  min-width: 0;
+  min-height: 164px;
+  border: 1px solid var(--pf-line);
+  border-radius: 14px;
+  background: rgba(2, 10, 6, .68);
+}
+
+.planner-day.is-today {
+  border-color: rgba(24, 242, 143, .52);
+  background: linear-gradient(180deg, rgba(24, 242, 143, .075), rgba(2, 10, 6, .78));
+  box-shadow: inset 0 2px var(--pf-green), 0 0 24px rgba(24, 242, 143, .06);
+}
+
+.planner-day header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-bottom: 1px solid var(--pf-line);
+}
+
+.planner-day header b {
+  color: #9cb3a8;
+  font: 700 9px "Spline Sans Mono", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.planner-day header span {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .035);
+  color: var(--pf-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.planner-day > div { display: grid; gap: 7px; padding: 10px; }
+.planner-day > div p {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 8px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .025);
+  color: #afc4ba;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.planner-day > div p b {
+  color: var(--pf-green);
+  font: 700 7px "Spline Sans Mono", monospace;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.planner-day > div i {
+  padding: 8px 2px;
+  color: #52675e;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.planner-auto-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.planner-auto-card,
+.planner-prep-list article,
+.planner-item {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid var(--pf-line);
+  border-radius: 14px;
+  background: rgba(2, 10, 6, .67);
+}
+.planner-auto-card.is-on { box-shadow: inset 2px 0 var(--pf-green); }
+.planner-auto-card.is-off { opacity: .75; }
+.planner-auto-card > div { display: grid; gap: 5px; }
+.planner-auto-card small,
+.planner-prep-list small,
+.planner-item small {
+  color: var(--pf-green);
+  font: 700 8px "Spline Sans Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.planner-auto-card b,
+.planner-prep-list b,
+.planner-item b { color: var(--pf-ink); font-size: 13px; }
+.planner-auto-card p,
+.planner-prep-list p,
+.planner-item p { margin: 0; color: var(--pf-muted); font-size: 11px; line-height: 1.5; }
+.planner-auto-card ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.planner-auto-card li { color: #9eb4aa; font-size: 10px; line-height: 1.4; }
+.planner-auto-card li::before { content: "·"; margin-right: 7px; color: var(--pf-green); }
+.planner-auto-card > em {
+  color: #678074;
+  font: 600 8px "Spline Sans Mono", monospace;
+  font-style: normal;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.planner-prep-list,
+.planner-item-list { display: grid; gap: 10px; }
+.planner-prep-list article > div,
+.planner-item-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.planner-item.is-done { opacity: .62; }
+.planner-item.is-done b { text-decoration: line-through; }
+
+.planner-add form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.planner-add label {
+  display: grid;
+  gap: 6px;
+  color: #8fa79c;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.planner-add :where(input, select, textarea) {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 10px;
+  background: rgba(2, 9, 6, .82);
+  color: var(--pf-ink);
+  font: 500 12px "Instrument Sans", sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.planner-add textarea { min-height: 90px; resize: vertical; }
+.planner-wide { grid-column: 1 / -1; }
+.planner-add .btn-primary { grid-column: 1 / -1; min-height: 44px; }
+.planner-empty { margin: 0; padding: 16px; color: var(--pf-muted); font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 1380px) {
+  .planner-hero { grid-template-columns: minmax(260px, .75fr) minmax(440px, 1.25fr); }
+  .planner-metrics { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+  .planner-metrics > span { min-height: 96px; }
+  .planner-grid { grid-template-columns: minmax(0, 1.4fr) minmax(300px, .6fr); }
+  .planner-days { grid-template-columns: repeat(4, minmax(125px, 1fr)); }
+}
+
+@media (max-width: 1040px) {
+  .planner-hero { grid-template-columns: 1fr; }
+  .planner-hero h2 { max-width: 22ch; }
+  .planner-grid { grid-template-columns: 1fr; }
+  .planner-side { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .planner-side > .planner-card:first-child { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .workspace-page[data-workspace-page="planner"] .workspace-page-body { padding: 12px !important; }
+  .planner { gap: 12px; }
+  .planner-hero { min-height: 0; padding: 20px; border-radius: 18px; }
+  .planner-hero h2 { font-size: clamp(28px, 9vw, 39px); }
+  .planner-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .planner-metrics > span { min-height: 88px; padding: 13px; }
+  .planner-card { padding: 16px; border-radius: 16px; }
+  .planner-card-head { align-items: flex-start; flex-direction: column; }
+  .planner-brief-list,
+  .planner-auto-grid,
+  .planner-side,
+  .planner-add form { grid-template-columns: 1fr; }
+  .planner-side > .planner-card:first-child,
+  .planner-wide,
+  .planner-add .btn-primary { grid-column: auto; }
+  .planner-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-command-os="2040"] .page-worker { width: 100%; }
+}
+
+@media (max-width: 440px) {
+  .planner-metrics,
+  .planner-days { grid-template-columns: 1fr; }
+  .planner-day { min-height: 118px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-command-os="2040"] .page-worker::before { animation: none !important; }
+  html[data-command-os="2040"] .command-os-enabled :where(button, a) { transition: none !important; }
+}

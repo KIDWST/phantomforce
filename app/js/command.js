@@ -11,13 +11,13 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
-  getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260817-156";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260817-156";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260817-156";
-import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260817-156";
-import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260817-156";
-import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260817-156";
+  getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, workspaceStorageSetItem, wsName,
+} from "./store.js?v=phantom-live-20260817-158";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260817-158";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260817-158";
+import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260817-158";
+import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260817-158";
+import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260817-158";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -61,6 +61,202 @@ function card(kicker, name, body, actions = [], meta = "") {
 }
 const openAction = (label, ws) => ({ label, open: ws });
 const signedMoney = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmtMoney(value);
+
+/* PhantomBot media requests must never fall through to a text-only model.
+   Media Lab already owns the provider contract: ChatGPT Bridge for stills,
+   Higgsfield for video. Keep the same contract here so the web app and the
+   Electron desktop shell (which loads this app) behave identically. */
+const MEDIA_PROMPT_INTENT_KEY = "pf.medialab.promptIntent.v1";
+const MEDIA_QUESTION_SIGNAL = /^\s*(?:how|why|what|where|when|explain|tell me about)\b/i;
+const MEDIA_PRODUCT_BUILD_SIGNAL = /\b(?:create|build|make|design)\s+(?:(?:me|us)\s+)?(?:an?\s+)?(?:website|web\s?page|landing\s+page|site|app|store|deck|presentation|document)\b/i;
+const IMAGE_NOUN = "(?:image|photo|picture|graphic|thumbnail|poster|banner|ad\\s+creative|cover\\s+art|logo|artwork|illustration)";
+const VIDEO_NOUN = "(?:video|reel|clip|animation|motion\\s+graphic|short\\s+film|film)";
+const MEDIA_DIRECT_REQUEST = new RegExp(
+  `\\b(?:generate|create|make|design|render|produce|draw|illustrate|animate|edit|enhance|restyle|give)\\s+` +
+  `(?:(?:me|us)\\s+)?(?:(?:an?|the|some|my|our|this|that)\\s+)?(?:[a-z0-9-]+\\s+){0,5}(?:${IMAGE_NOUN}|${VIDEO_NOUN})\\b`,
+  "i",
+);
+const MEDIA_WANT_REQUEST = new RegExp(
+  `\\b(?:i|we)\\s+(?:want|need|would\\s+like)\\s+(?:(?:an?|the|some|my|our)\\s+)?(?:[a-z0-9-]+\\s+){0,4}(?:${IMAGE_NOUN}|${VIDEO_NOUN})\\b`,
+  "i",
+);
+const MEDIA_SHORTHAND_REQUEST = new RegExp(`^\\s*(?:an?\\s+)?(?:${IMAGE_NOUN}|${VIDEO_NOUN})\\s+(?:of|for|showing|featuring|about)\\b`, "i");
+const IMAGE_SIGNAL = new RegExp(`\\b${IMAGE_NOUN}\\b`, "i");
+const VIDEO_SIGNAL = new RegExp(`\\b${VIDEO_NOUN}\\b`, "i");
+
+function cleanPhantomBotMediaPrompt(raw = "") {
+  return String(raw || "")
+    .replace(/\n\n\[PhantomBot working mode:[\s\S]*?\]\s*$/i, "")
+    .trim()
+    .slice(0, 3000);
+}
+
+function mediaAspectRatio(text, modality) {
+  const exact = String(text || "").match(/\b(9:16|16:9|1:1|4:5|3:2)\b/);
+  if (exact) return exact[1];
+  if (/\b(?:vertical|portrait|story|stories)\b/i.test(text)) return "9:16";
+  if (/\b(?:wide|widescreen|landscape|youtube)\b/i.test(text)) return "16:9";
+  if (/\b(?:square|instagram\s+post)\b/i.test(text)) return "1:1";
+  return modality === "video" ? "9:16" : "1:1";
+}
+
+function mediaOutputCount(text) {
+  const digit = String(text || "").match(/\b([1-4])\s+(?:images?|photos?|pictures?|graphics?|thumbnails?|posters?|banners?|logos?|illustrations?)\b/i);
+  if (digit) return Number(digit[1]);
+  const word = String(text || "").match(/\b(one|two|three|four)\s+(?:images?|photos?|pictures?|graphics?|thumbnails?|posters?|banners?|logos?|illustrations?)\b/i);
+  return word ? ({ one: 1, two: 2, three: 3, four: 4 }[word[1].toLowerCase()] || 1) : 1;
+}
+
+function mediaVideoModel(text) {
+  if (/\bkling\b/i.test(text)) return "kling3_0";
+  if (/\bsoul\b/i.test(text)) return "soul_v2";
+  if (/\bmarketing\s+studio\b/i.test(text)) return "marketing_studio_video";
+  if (/\bseedance\s*(?:2(?:\.0)?\s*)?pro\b/i.test(text)) return "seedance_2_0_pro";
+  return "seedance_2_0";
+}
+
+export function mediaGenerationRequest(raw = "") {
+  const prompt = cleanPhantomBotMediaPrompt(raw);
+  if (!prompt || MEDIA_QUESTION_SIGNAL.test(prompt) || MEDIA_PRODUCT_BUILD_SIGNAL.test(prompt)) return null;
+  const requested = MEDIA_DIRECT_REQUEST.test(prompt) || MEDIA_WANT_REQUEST.test(prompt) || MEDIA_SHORTHAND_REQUEST.test(prompt);
+  if (!requested) return null;
+  const hasImage = IMAGE_SIGNAL.test(prompt);
+  const hasVideo = VIDEO_SIGNAL.test(prompt);
+  const modality = hasVideo || (/\banimate\b/i.test(prompt) && hasImage) ? "video" : hasImage ? "image" : null;
+  if (!modality) return null;
+  const seconds = Number(String(prompt).match(/\b(\d{1,2})\s*(?:-\s*)?(?:seconds?|secs?|s)\b/i)?.[1] || 12);
+  const quality = /\b(?:high\s+quality|highest\s+quality|best\s+quality|hd|uhd|4k|1080p|2k)\b/i.test(prompt) ? "high" : "standard";
+  return {
+    modality,
+    prompt,
+    aspect: mediaAspectRatio(prompt, modality),
+    count: modality === "image" ? mediaOutputCount(prompt) : 1,
+    quality,
+    duration: Math.max(2, Math.min(30, Number.isFinite(seconds) ? seconds : 12)),
+    model: modality === "video" ? mediaVideoModel(prompt) : "chatgpt_image",
+  };
+}
+
+function preserveMediaPrompt(spec) {
+  workspaceStorageSetItem(MEDIA_PROMPT_INTENT_KEY, JSON.stringify({
+    prompt: spec.prompt,
+    modality: spec.modality,
+    source: "PhantomBot",
+    createdAt: new Date().toISOString(),
+  }));
+}
+
+function phantomMediaHeaders() {
+  const token = typeof session?.token === "function" ? session.token() : "";
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function postPhantomMedia(path, body, timeoutMs) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: phantomMediaHeaders(),
+      body: JSON.stringify(body),
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    const payload = await response.json().catch(() => ({}));
+    return { ok: response.ok && payload?.ok === true, status: response.status, payload };
+  } catch (error) {
+    return { ok: false, status: 0, payload: {}, reason: error?.name === "AbortError" ? "timeout" : "offline" };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function dispatchPhantomMedia(spec, settings, intent) {
+  preserveMediaPrompt(spec);
+  if (typeof fetch !== "function") {
+    return shapeResponse({
+      say: `Your ${spec.modality} request is saved in Media Lab. Open it when the bridge is available and press Generate; the full prompt is already loaded.`,
+      cards: [card("Request preserved", `${spec.modality === "video" ? "Higgsfield video" : "ChatGPT image"} brief saved`, spec.prompt, [openAction("Open Media Lab", "media")], "No prompt data was lost")],
+      media: [], open: "media", intent,
+    }, settings);
+  }
+
+  if (spec.modality === "image") {
+    const result = await postPhantomMedia("/phantom-ai/media-lab/chatgpt-image/generate", {
+      tenant_id: currentTenantId(),
+      prompt: spec.prompt,
+      original_prompt: spec.prompt,
+      model: spec.model,
+      aspect_ratio: spec.aspect,
+      count: spec.count,
+      quality: spec.quality,
+      reference_image: "",
+    }, 12 * 60_000);
+    const assets = (Array.isArray(result.payload?.assets) ? result.payload.assets : [])
+      .map((asset, index) => ({
+        type: "image",
+        url: asset?.url || asset?.image_url || asset?.src || "",
+        title: `ChatGPT image ${index + 1}`,
+        provider: "ChatGPT Bridge",
+        source: "PhantomBot",
+        status: "saved",
+        saved: true,
+        meta: { ...(asset?.meta || {}), prompt: spec.prompt, aspect: spec.aspect, quality: spec.quality },
+      }))
+      .filter((asset) => asset.url);
+    if (result.ok && assets.length) {
+      return shapeResponse({
+        say: `Done — ChatGPT Bridge generated ${assets.length} image${assets.length === 1 ? "" : "s"} and saved ${assets.length === 1 ? "it" : "them"} to your Media library.`,
+        cards: [card("ChatGPT Bridge", "Image generation complete", `${spec.aspect} · ${spec.quality} quality`, [openAction("Open Media Lab", "media")], "Higgsfield was not called")],
+        media: assets, open: null, intent,
+      }, settings);
+    }
+    const reconnect = result.status === 401
+      ? "Sign in to PhantomForce, then retry from Media Lab."
+      : result.status === 403
+        ? "Media Lab access needs to be enabled for this workspace."
+        : "Refresh the signed-in ChatGPT Bridge session, then retry from Media Lab.";
+    return shapeResponse({
+      say: `Your image request is preserved in Media Lab. ${reconnect} The full prompt is already loaded, so nothing needs to be retyped.`,
+      cards: [card("ChatGPT Bridge", "Image request safely preserved", spec.prompt, [openAction("Open Media Lab", "media"), openAction("Connection settings", "settings")], "No substitute image was fabricated")],
+      media: [], open: "media", intent,
+    }, settings);
+  }
+
+  const result = await postPhantomMedia("/phantom-ai/media-lab/creative/draft", {
+    tenant_id: currentTenantId(),
+    prompt: spec.prompt,
+    mode: "video",
+    model: spec.model,
+    duration: String(spec.duration),
+    aspect_ratio: spec.aspect,
+    resolution: spec.quality === "high" ? "1080p" : "720p",
+    media_role: "video",
+    product_url: "",
+    generate_audio: "",
+  }, 180_000);
+  if (result.ok && result.payload?.draft) {
+    const credits = Number(result.payload.draft?.estimated_credits);
+    const estimate = Number.isFinite(credits) ? ` · estimated ${credits} Higgsfield credits` : "";
+    return shapeResponse({
+      say: `Higgsfield received the video request automatically. The verified draft is ready in Media Lab${estimate}; approve the paid render there when you are ready.`,
+      cards: [card("Higgsfield", "Video draft ready", `${spec.duration}s · ${spec.aspect} · ${spec.model}${estimate}`, [openAction("Review and render", "media")], "Draft verified · paid render not started")],
+      media: [], open: "media", intent,
+    }, settings);
+  }
+  const reconnect = result.status === 401
+    ? "Sign in to PhantomForce, then retry from Media Lab."
+    : result.status === 403
+      ? "Media Lab access needs to be enabled for this workspace."
+      : "Reconnect the Higgsfield bridge, then retry from Media Lab.";
+  return shapeResponse({
+    say: `Your video request is preserved in Media Lab. ${reconnect} The full prompt and render settings are already loaded, and no credits were spent.`,
+    cards: [card("Higgsfield", "Video request safely preserved", spec.prompt, [openAction("Open Media Lab", "media"), openAction("Connection settings", "settings")], "No credits spent · no fake render")],
+    media: [], open: "media", intent,
+  }, settings);
+}
 
 function loadRuntimeAiSettings() {
   /* brainMode defaults to "api" (Connected): the server walks a real
@@ -1782,6 +1978,15 @@ export async function handleSmartCommand(raw, options = {}) {
   const text = (raw || "").trim();
   const intent = classifyPhantomIntent(text);
   const settings = loadRuntimeAiSettings();
+
+  /* Media generation is a first-class action, not a chat question. Dispatch
+     it before Hermes text routing so no text-only provider can answer with a
+     capability refusal. dispatchPhantomMedia always returns a preserved,
+     retryable result even when a bridge needs attention. */
+  const mediaRequest = mediaGenerationRequest(text);
+  if (mediaRequest) {
+    return dispatchPhantomMedia(mediaRequest, settings, intent);
+  }
 
   if (intent.primaryIntent === "run_agent") {
     return runAgentFromChat(text, intent);

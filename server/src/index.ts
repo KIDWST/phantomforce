@@ -1,6 +1,6 @@
 import "./load-env.js";
 
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 
 import cors from "@fastify/cors";
 import fastifyWebsocket from "@fastify/websocket";
@@ -1106,6 +1106,98 @@ async function runHiggsfieldMcpDraft(params: Record<string, unknown>): Promise<
   } catch (error) {
     return { ok: false, error: `operator lane error: ${String(error instanceof Error ? error.message : error).slice(0, 160)}` };
   }
+}
+
+const HIGGSFIELD_VIDEO_DRAFT_MODELS = new Set([
+  "seedance_2_0",
+  "seedance_2_0_pro",
+  "kling3_0",
+  "soul_v2",
+  "cinema",
+  "cast",
+  "location",
+  "marketing_studio_video",
+]);
+
+function higgsfieldCliInvocation(args: string[]): { command: string; args: string[] } | null {
+  const configured = String(process.env.HIGGSFIELD_CLI_PATH || process.env.HIGGSFIELD_CLI_JS || "").trim();
+  const localAppData = String(process.env.LOCALAPPDATA || "").trim();
+  const bundledScript = localAppData
+    ? join(localAppData, "hermes", "node", "node_modules", "@higgsfield", "cli", "bin", "higgsfield.js")
+    : "";
+  const script = [configured, bundledScript].find((candidate) => candidate && candidate.toLowerCase().endsWith(".js") && existsSync(candidate));
+  if (script) {
+    const bundledNode = resolve(dirname(script), "../../../..", process.platform === "win32" ? "node.exe" : "node");
+    return { command: existsSync(bundledNode) ? bundledNode : process.execPath, args: [script, ...args] };
+  }
+  if (configured && existsSync(configured) && !/\.(?:cmd|bat|ps1)$/i.test(configured)) {
+    return { command: configured, args };
+  }
+  return process.platform === "win32" ? null : { command: "higgsfield", args };
+}
+
+async function runHiggsfieldCli(args: string[], timeoutMs = 60_000): Promise<
+  { ok: true; stdout: string } | { ok: false; error: string }
+> {
+  const invocation = higgsfieldCliInvocation(args);
+  if (!invocation) return { ok: false, error: "higgsfield_cli_not_found" };
+  return new Promise((resolveResult) => {
+    execFile(invocation.command, invocation.args, {
+      encoding: "utf8",
+      timeout: timeoutMs,
+      windowsHide: true,
+      maxBuffer: 2 * 1024 * 1024,
+    }, (error, stdout, stderr) => {
+      if (error) {
+        const detail = String(stderr || stdout || error.message || "higgsfield_cli_failed").replace(/\s+/g, " ").slice(0, 180);
+        resolveResult({ ok: false, error: detail || "higgsfield_cli_failed" });
+        return;
+      }
+      resolveResult({ ok: true, stdout: String(stdout || "") });
+    });
+  });
+}
+
+/* A Higgsfield cost estimate is the safe bridge-backed draft: it validates
+   the authenticated CLI, model, and render parameters without creating a job
+   or spending credits. The actual paid generation remains in Media Lab. */
+async function runHiggsfieldCliDraft(params: Record<string, unknown>): Promise<
+  { ok: true; draft: Record<string, unknown> } | { ok: false; error: string }
+> {
+  const mode = String(params.mode || "video");
+  if (!['video', 'marketing'].includes(mode)) return { ok: false, error: "higgsfield_cli_draft_is_video_only" };
+  const requestedModel = String(params.model || "seedance_2_0").trim();
+  const model = HIGGSFIELD_VIDEO_DRAFT_MODELS.has(requestedModel) ? requestedModel : "seedance_2_0";
+  const durationNumber = Number(params.duration || 12);
+  const duration = String(Math.max(2, Math.min(30, Number.isFinite(durationNumber) ? durationNumber : 12)));
+  const aspectRatio = ["9:16", "16:9", "1:1", "4:5"].includes(String(params.aspect_ratio)) ? String(params.aspect_ratio) : "9:16";
+  const resolution = ["480p", "720p", "1080p", "2k", "4k"].includes(String(params.resolution)) ? String(params.resolution) : "720p";
+  const result = await runHiggsfieldCli([
+    "generate", "cost", model,
+    "--prompt", String(params.prompt || "").slice(0, 3000),
+    "--aspect_ratio", aspectRatio,
+    "--resolution", resolution,
+    "--duration", duration,
+    "--json",
+    "--no-color",
+  ]);
+  if (!result.ok) return result;
+  const receipt = extractFirstJsonObject(result.stdout);
+  const credits = Number(receipt?.credits);
+  if (!receipt || !Number.isFinite(credits)) return { ok: false, error: "higgsfield_cli_returned_no_cost_receipt" };
+  return {
+    ok: true,
+    draft: {
+      id: `hf-draft-${randomUUID()}`,
+      status: "estimated",
+      tool: "higgsfield_cli_cost",
+      model,
+      estimated_credits: credits,
+      duration,
+      aspect_ratio: aspectRatio,
+      resolution,
+    },
+  };
 }
 
 async function callPhantomCut(pathname: string, init?: RequestInit): Promise<PhantomCutBridgeResult> {
@@ -10975,6 +11067,26 @@ async function handleMediaLabCreativeDraft(request: FastifyRequest, reply: Fasti
       };
     }
     lanesTried.push({ lane: "mcp_cli", error: mcp.error });
+
+    const cliDraft = await runHiggsfieldCliDraft(parsed.data);
+    if (cliDraft.ok) {
+      return {
+        ok: true,
+        provider: "cinematic",
+        commercial_provider: true,
+        action: "draft_only",
+        tool_lane: "higgsfield_cli_cost",
+        draft: cliDraft.draft,
+        safety: {
+          paid_job_called: false,
+          upload_performed: false,
+          run_endpoint_exposed: false,
+          explicit_confirmation_required: "RUN_MEDIA_PAID_JOB",
+          note: "Higgsfield authenticated the model and estimated the render cost. Paid rendering remains separately approved in Media Lab.",
+        },
+      };
+    }
+    lanesTried.push({ lane: "higgsfield_cli_cost", error: cliDraft.error });
   }
 
   if (toolMode !== "mcp_cli") {
