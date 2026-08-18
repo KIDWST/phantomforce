@@ -11,6 +11,7 @@ import {
 } from "@phantomforce/phantomstore-ai-products/platform";
 
 import type { AccessSession } from "../access/session.js";
+import { getPhantomStoreWorkspaceProductAccessMap } from "./phantomstore.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
@@ -54,57 +55,60 @@ async function integratedPlatform() {
 async function ensureWorkspace(session: AccessSession) {
   const platform = await integratedPlatform();
   const identity = mappedSession(session);
-  const existing = platform.document?.workspaces?.[identity.workspaceId];
-  if (!existing || existing.members?.[identity.actorId] !== identity.role) {
-    await platform.mutate((document) => {
-      const timestamp = new Date().toISOString();
-      const entitlements = Object.fromEntries(PRODUCT_IDS.map((id) => [id, { status: "active", plan: "phantomstore_included", grantedAt: timestamp }]));
-      const flags = Object.fromEntries(PRODUCT_IDS.map((id) => [id, {
-        enabled: true,
-        analysisEnabled: true,
-        jobsEnabled: true,
-        expensiveOperationsEnabled: true,
-        externalProvidersEnabled: false,
-        rollout: "integrated_preview",
-        analysisPath: "deterministic-domain-v1",
-      }]));
-      const consent = Object.fromEntries(PRODUCT_IDS.map((id) => [id, { status: "not_requested", updatedAt: timestamp }]));
-      const workspace = document.workspaces[identity.workspaceId] || {
-        id: identity.workspaceId,
-        name: `${identity.displayName} workspace`,
-        members: {},
-        entitlements,
-        flags,
-        consent,
-        planLimits: { artifactsPerProduct: 500, analysesPerProduct: 1000, concurrentJobs: 5 },
-      };
-      workspace.members[identity.actorId] = identity.role;
-      workspace.entitlements = { ...entitlements, ...(workspace.entitlements || {}) };
-      workspace.flags = { ...flags, ...(workspace.flags || {}) };
-      workspace.consent = { ...consent, ...(workspace.consent || {}) };
-      document.workspaces[identity.workspaceId] = workspace;
-      return true;
-    });
-  }
+  const access = await getPhantomStoreWorkspaceProductAccessMap(session);
+  await platform.mutate((document) => {
+    const timestamp = new Date().toISOString();
+    const entitlements = Object.fromEntries(PRODUCT_IDS.map((id) => {
+      const paid = access[id];
+      return [id, paid?.active
+        ? { status: "active", plan: "phantomstore_paid_account", purchaseProductId: paid.productId, grantedAt: paid.entitlement?.grantedAt || timestamp }
+        : { status: "expired", plan: "purchase_required", purchaseProductId: paid?.productId || null, grantedAt: null }];
+    }));
+    const flags = Object.fromEntries(PRODUCT_IDS.map((id) => [id, {
+      enabled: Boolean(access[id]?.active),
+      analysisEnabled: Boolean(access[id]?.active),
+      jobsEnabled: Boolean(access[id]?.active),
+      expensiveOperationsEnabled: Boolean(access[id]?.active),
+      externalProvidersEnabled: false,
+      rollout: "paid_account_release",
+      analysisPath: "deterministic-domain-v1",
+    }]));
+    const consent = Object.fromEntries(PRODUCT_IDS.map((id) => [id, { status: "not_requested", updatedAt: timestamp }]));
+    const workspace = document.workspaces[identity.workspaceId] || {
+      id: identity.workspaceId,
+      name: `${identity.displayName} workspace`,
+      members: {},
+      entitlements,
+      flags,
+      consent,
+      planLimits: { artifactsPerProduct: 500, analysesPerProduct: 1000, concurrentJobs: 5 },
+    };
+    workspace.members[identity.actorId] = identity.role;
+    workspace.entitlements = entitlements;
+    workspace.flags = { ...(workspace.flags || {}), ...flags };
+    workspace.consent = { ...consent, ...(workspace.consent || {}) };
+    document.workspaces[identity.workspaceId] = workspace;
+    return true;
+  });
   return { platform, identity };
 }
 
 function integratedSnapshot(snapshot: Record<string, any>) {
   return {
     ...snapshot,
-    deployment: "served_phantomstore_integrated_preview",
+    deployment: "served_phantomstore_paid_account_release",
     products: (snapshot.products || []).map((product: Record<string, any>) => ({
       ...product,
       store: {
         ...(product.store || {}),
-        state: "milestone_2_integrated_preview",
+        state: "paid_account_product",
         route: `/app/index.html#phantomstore/${product.id}`,
-        commerceActive: false,
+        commerceActive: true,
       },
     })),
     diagnostics: {
       ...(snapshot.diagnostics || {}),
-      deployment: "served_phantomstore_integrated_preview",
+      deployment: "served_phantomstore_paid_account_release",
       externalModelsActive: false,
       externalSpendUsd: 0,
     },

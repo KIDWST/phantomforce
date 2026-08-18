@@ -123,13 +123,108 @@ export const PRODUCTS = Object.freeze([
   }
 ]);
 
+const PRODUCT_EXPERIENCE = Object.freeze({
+  "phantom-oracle": {
+    storeProductId: "product-ai-oracle", priceUsd: 39, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-oracle-cover-v3.png?v=20260817",
+    cockpitLabel: "Scenario command table", actionLabel: "Simulate decision",
+    useCases: [
+      { id: "market-entry", title: "Market entry decision", audience: "Founders + strategy", summary: "Compare launch paths under downside, delay, and capital constraints.", outcome: "A ranked option set with assumptions, sensitivity, and trigger conditions." },
+      { id: "vendor-selection", title: "Vendor selection", audience: "Operations + procurement", summary: "Score competing vendors without hiding trade-offs or uncertainty.", outcome: "A reviewable selection brief and assumption ledger." },
+      { id: "capital-allocation", title: "Capital allocation", audience: "Finance + operators", summary: "Stress-test where limited budget creates the strongest resilient return.", outcome: "An uncertainty-adjusted allocation recommendation." },
+    ],
+  },
+  "phantom-chronicle": {
+    storeProductId: "product-ai-chronicle", priceUsd: 29, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-chronicle-cover-v3.png?v=20260817",
+    cockpitLabel: "Evidence timeline desk", actionLabel: "Reconstruct timeline",
+    useCases: [
+      { id: "incident-review", title: "Incident reconstruction", audience: "Risk + operations", summary: "Align logs, statements, media, and gaps into one source-linked chronology.", outcome: "A defensible timeline that separates observation from inference." },
+      { id: "claims-file", title: "Claims file review", audience: "Claims + legal ops", summary: "Expose conflicting dates and missing evidence before a case moves forward.", outcome: "A contradiction register and gap-focused chronology." },
+      { id: "documentary-research", title: "Documentary research", audience: "Journalists + producers", summary: "Turn a scattered research corpus into an inspectable story timeline.", outcome: "A provenance-preserving chronology ready for editorial review." },
+    ],
+  },
+  "phantom-foundry": {
+    storeProductId: "product-ai-foundry", priceUsd: 49, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-foundry-cover-v3.png?v=20260817",
+    cockpitLabel: "Benchmark fabrication line", actionLabel: "Forge benchmark",
+    useCases: [
+      { id: "intent-eval", title: "Intent-classification eval", audience: "AI product teams", summary: "Build balanced, seeded fixtures for routine, ambiguous, and high-risk intents.", outcome: "A versioned benchmark recipe with coverage and hard-case targets." },
+      { id: "regression-suite", title: "Model regression suite", audience: "ML + QA", summary: "Freeze representative behaviors before a prompt or model migration.", outcome: "A reproducible regression pack with an immutable digest." },
+      { id: "safety-slices", title: "Safety slice factory", audience: "Trust + safety", summary: "Plan difficult evaluation slices without calling synthetic data ground truth.", outcome: "A traceable adversarial fixture plan and bias-slice matrix." },
+    ],
+  },
+  "phantom-twin": {
+    storeProductId: "product-ai-twin", priceUsd: 49, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-twin-cover-v3.png?v=20260817",
+    cockpitLabel: "Operations twin floor", actionLabel: "Run capacity twin",
+    useCases: [
+      { id: "service-capacity", title: "Service capacity planning", audience: "Service operators", summary: "Model queues, staffing, throughput, and SLA pressure before changing shifts.", outcome: "A bottleneck map and quantified capacity scenario." },
+      { id: "warehouse-flow", title: "Warehouse flow", audience: "Logistics teams", summary: "Locate the step that limits intake, inspection, cataloging, or fulfillment.", outcome: "A throughput model with explicit units and constraints." },
+      { id: "support-queues", title: "Support queue design", audience: "Support leaders", summary: "Test routing and staffing changes against real demand assumptions.", outcome: "A reviewable what-if plan with modeled-versus-observed calibration." },
+    ],
+  },
+  "phantom-dealroom": {
+    storeProductId: "product-ai-dealroom", priceUsd: 39, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-dealroom-cover-v3.png?v=20260817",
+    cockpitLabel: "Negotiation strategy room", actionLabel: "Compare packages",
+    useCases: [
+      { id: "enterprise-renewal", title: "Enterprise renewal", audience: "Sales + account teams", summary: "Prepare packages, reservation points, concessions, and commitment boundaries.", outcome: "A balanced package strategy and rehearsal brief." },
+      { id: "supplier-negotiation", title: "Supplier negotiation", audience: "Procurement", summary: "Map interests and trade terms without covert inference or coercion.", outcome: "A governed concession ladder and BATNA plan." },
+      { id: "partnership-terms", title: "Partnership terms", audience: "Founders + partnerships", summary: "Compare structures that trade economics, control, speed, and risk.", outcome: "A decision-ready package matrix and commitment ledger." },
+    ],
+  },
+  "phantom-blueprint": {
+    storeProductId: "product-ai-blueprint", priceUsd: 39, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-blueprint-cover-v3.png?v=20260817",
+    cockpitLabel: "System architecture compiler", actionLabel: "Compile specification",
+    useCases: [
+      { id: "saas-mvp", title: "SaaS MVP architecture", audience: "Technical founders", summary: "Turn a product brief into traceable components, contracts, risks, and tests.", outcome: "A buildable system specification with stable requirement IDs." },
+      { id: "integration-design", title: "Integration design", audience: "Platform teams", summary: "Define API boundaries, data contracts, failure modes, and acceptance tests.", outcome: "An inspectable integration blueprint and change-impact graph." },
+      { id: "agency-handoff", title: "Agency build handoff", audience: "Agencies + clients", summary: "Convert ambiguous scope into testable work packages before development begins.", outcome: "A shared source of truth for scope, architecture, and acceptance." },
+    ],
+  },
+  "phantom-terrain": {
+    storeProductId: "product-ai-terrain", priceUsd: 39, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-terrain-cover-v3.png?v=20260817",
+    cockpitLabel: "Geospatial decision map", actionLabel: "Score candidate sites",
+    useCases: [
+      { id: "retail-site", title: "Retail site comparison", audience: "Retail planners", summary: "Balance access, demand, operating fit, and constraint freshness across candidates.", outcome: "A transparent site ranking with sensitivity and GeoJSON." },
+      { id: "field-depot", title: "Field depot placement", audience: "Field operations", summary: "Compare response coverage and resilience without tracking individuals.", outcome: "A weighted location package with declared constraints." },
+      { id: "event-location", title: "Event location planning", audience: "Event operators", summary: "Inspect access, capacity, neighborhood constraints, and contingency fit.", outcome: "A reusable site brief and constraint overlay." },
+    ],
+  },
+  "phantom-proof": {
+    storeProductId: "product-ai-proof", priceUsd: 29, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-proof-cover-v3.png?v=20260817",
+    cockpitLabel: "Evidence verification chamber", actionLabel: "Build proof packet",
+    useCases: [
+      { id: "executive-claim", title: "Executive claim check", audience: "Leadership + analysts", summary: "Test a consequential claim against supporting, opposing, and contextual evidence.", outcome: "A caveated proof packet without a manufactured truth verdict." },
+      { id: "content-fact-check", title: "Content fact-check", audience: "Editorial + content", summary: "Decompose copy into atomic claims and expose citation weakness before publishing.", outcome: "A reviewer-ready evidence board and source-quality ledger." },
+      { id: "policy-research", title: "Policy evidence review", audience: "Research + policy", summary: "Preserve disagreement, freshness, and circular citations across a source set.", outcome: "An inspectable support/oppose matrix with uncertainty intact." },
+    ],
+  },
+  "phantom-loom-dependency": {
+    storeProductId: "product-ai-loom", priceUsd: 39, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-loom-cover-v3.png?v=20260817",
+    cockpitLabel: "Dependency intelligence loom", actionLabel: "Weave dependency graph",
+    useCases: [
+      { id: "program-plan", title: "Cross-team program plan", audience: "Program leaders", summary: "Reveal commitments, owners, deadlines, blockers, and conflicting source statements.", outcome: "A revision-aware dependency graph and risk-thread brief." },
+      { id: "compliance-change", title: "Compliance change impact", audience: "Compliance + product", summary: "Trace which systems and commitments move when a policy source changes.", outcome: "A source-linked impact map with confirmed and inferred edges separated." },
+      { id: "construction-deps", title: "Construction dependencies", audience: "Project planners", summary: "Connect approvals, materials, crews, milestones, and contradictory plan revisions.", outcome: "A deadline mesh and contradiction register." },
+    ],
+  },
+  "phantom-causal": {
+    storeProductId: "product-ai-causal", priceUsd: 39, imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-causal-cover-v3.png?v=20260817",
+    cockpitLabel: "Experiment design laboratory", actionLabel: "Inspect causal effect",
+    useCases: [
+      { id: "conversion-test", title: "Conversion experiment", audience: "Growth + product", summary: "Register a hypothesis, treatment, outcome, sample, and known confounders.", outcome: "A power-aware experiment brief with bounded conclusions." },
+      { id: "operations-pilot", title: "Operations pilot", audience: "Operations analysts", summary: "Separate observed improvement from staffing, seasonality, and selection effects.", outcome: "A causal DAG and reviewer-ready effect estimate." },
+      { id: "feature-rollout", title: "Feature rollout analysis", audience: "Product analytics", summary: "Audit whether a measured lift survives exposure bias and confounding.", outcome: "A transparent causal analysis plan without false certainty." },
+    ],
+  },
+});
+
 export const PRODUCT_IDS = Object.freeze(PRODUCTS.map((product) => product.id));
 export const productById = (id) => PRODUCTS.find((product) => product.id === id) || null;
 
 export function publicProduct(product) {
+  const experience = PRODUCT_EXPERIENCE[product.id] || {};
   return {
     ...product,
-    store: { state: "milestone_2_local_preview", route: `/?product=${product.id}`, plans: ["Evaluation", "Professional", "Team"], commerceActive: false, trialDays: 14, portabilityDays: 30 },
+    ...experience,
+    store: { state: "paid_account_product", productId: experience.storeProductId || null, route: `/app/index.html#phantomstore/${product.id}`, priceUsd: experience.priceUsd || null, currency: "USD", ownership: "account", commerceActive: true, portabilityDays: 30 },
     analysisContract: {
       taskId: product.taskId,
       inputSchema: product.fields.map(({ id, type, required }) => ({ id, type, required })),

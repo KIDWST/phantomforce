@@ -11,6 +11,12 @@ export type AiProductDefinition = {
   modules: string[];
   fields: Array<{ id: string; label: string; type: string; help?: string; options?: string[]; required: boolean }>;
   sample: Record<string, string>;
+  storeProductId?: string;
+  priceUsd?: number;
+  imageUrl?: string;
+  cockpitLabel?: string;
+  actionLabel?: string;
+  useCases?: Array<{ id: string; title: string; audience: string; summary: string; outcome: string }>;
   [key: string]: unknown;
 };
 

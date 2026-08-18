@@ -7,7 +7,7 @@
       "id": "phantomstore-ai-products-served-integration",
       "status": "active",
       "title": "The ten AI products live inside the served PhantomStore",
-      "ownerDecision": "PHANTOM ORACLE, CHRONICLE, FOUNDRY, TWIN, DEALROOM, BLUEPRINT, TERRAIN, PROOF, LOOM, and CAUSAL must appear in the actual PhantomStore catalog and open authenticated in-store workspaces. A local preview package or report does not satisfy this requirement. Each workspace must persist source artifacts, run its distinct deterministic core loop, and record human review through the served application.",
+      "ownerDecision": "PHANTOM ORACLE, CHRONICLE, FOUNDRY, TWIN, DEALROOM, BLUEPRINT, TERRAIN, PROOF, LOOM, and CAUSAL must appear in the actual PhantomStore catalog as paid products that unlock for the verified purchasing account on desktop and web. A local preview package, route shortcut, or automatic grant does not satisfy this requirement. Each workspace must persist source artifacts, run its distinct deterministic core loop, and record human review through the served application.",
       "requiredPatterns": [
         {
           "file": "server/src/phantom-ai/phantomstore.ts",
@@ -21,8 +21,18 @@
         },
         {
           "file": "server/src/phantom-ai/phantomstore-ai-products.ts",
-          "pattern": "@phantomforce\\/phantomstore-ai-products\\/platform[\\s\\S]*served_phantomstore_integrated_preview",
-          "description": "The served bridge reuses the tested product platform and truthfully reports integrated deployment."
+          "pattern": "@phantomforce\\/phantomstore-ai-products\\/platform[\\s\\S]*served_phantomstore_paid_account_release",
+          "description": "The served bridge reuses the tested product platform and truthfully reports the paid account deployment."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomstore-ai-products.ts",
+          "pattern": "getPhantomStoreWorkspaceProductAccessMap[\\s\\S]*plan: \"purchase_required\"",
+          "description": "Workspace access synchronizes from account ownership and fails closed when the product has not been purchased."
+        },
+        {
+          "file": "server/src/commerce/stripe-product-checkout.ts",
+          "pattern": "mode: \"payment\"[\\s\\S]*payment_status !== \"paid\"[\\s\\S]*fulfillPhantomStoreProductPurchase",
+          "description": "One-time checkout grants account ownership only after Stripe verifies a paid session."
         },
         {
           "file": "app/js/phantomstore.js",

@@ -165,6 +165,7 @@ import {
   processVerifiedStripeWebhook,
   verifyStripeWebhook,
 } from "./access/stripe-billing.js";
+import { createStripeProductCheckoutSession, getStripeProductCheckoutStatus } from "./commerce/stripe-product-checkout.js";
 import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
@@ -6680,6 +6681,44 @@ app.post("/api/phantomstore/products/:id/buy", async (request, reply) => {
   const params = request.params as { id?: string };
   const result = params.id ? await recordPhantomStoreProductBuyClick(session, params.id.slice(0, 180)) : null;
   return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Product listing was not found." });
+});
+
+app.get("/api/phantomstore/checkout/stripe", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const status = getStripeProductCheckoutStatus();
+  return {
+    ok: true,
+    checkout: {
+      provider: status.provider,
+      mode: status.mode,
+      productionReady: status.productionReady,
+      ownership: status.ownership,
+      products: status.products.map(({ productId, configured }) => ({ productId, configured })),
+      reason: status.reason,
+    },
+  };
+});
+
+app.post("/api/phantomstore/products/:id/checkout-session", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const productId = String(params.id || "").slice(0, 180);
+  try {
+    const intent = await recordPhantomStoreProductBuyClick(session, productId);
+    if (!intent) return reply.code(404).send({ ok: false, error: "Product listing was not found." });
+    const checkout = await createStripeProductCheckoutSession({
+      session,
+      productId,
+      headers: request.headers as Record<string, unknown>,
+    });
+    return { ok: true, session, buyClicks: intent.buyClicks, ...checkout };
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code || "stripe_product_checkout_failed") : "stripe_product_checkout_failed";
+    const status = code.includes("not_configured") || code.includes("price_not_configured") ? 503 : code === "product_checkout_not_available" ? 404 : 400;
+    return reply.code(status).send({ ok: false, error: code, message: error instanceof Error ? error.message : "Secure product checkout could not start." });
+  }
 });
 
 app.post("/api/phantomstore/products/:id/entitlements", async (request, reply) => {

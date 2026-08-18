@@ -38,6 +38,7 @@ const ui = {
   installToolId: "",
   installMessage: "",
   buyingProductId: "",
+  buyNoticeProductId: "",
   buyMessage: "",
   lifecycleProductId: "",
   lifecycleMessage: "",
@@ -54,6 +55,7 @@ const ui = {
   aiBusy: false,
   aiMessage: "",
   aiSelectedArtifactId: "",
+  aiUseCaseId: "",
 };
 
 // Local asset paths (e.g. /app/assets/...) are safe to render as-is; anything
@@ -77,8 +79,11 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const backendError = typeof payload?.error === "string" ? payload.error : payload?.error?.message;
-    throw new Error(friendlyBackendError(response.status, backendError, { authMessage: "Sign in to load PhantomStore.", fallbackPrefix: "PhantomStore request failed" }));
+    const backendError = payload?.message || (typeof payload?.error === "string" ? payload.error : payload?.error?.message);
+    const message = path.includes("/checkout-session") && backendError
+      ? backendError
+      : friendlyBackendError(response.status, backendError, { authMessage: "Sign in to load PhantomStore.", fallbackPrefix: "PhantomStore request failed" });
+    throw new Error(message);
   }
   return payload;
 }
@@ -135,6 +140,14 @@ async function hydrate() {
   render();
   try {
     ui.snapshot = presentSnapshot(await api(`/api/phantomstore?tenant_id=${encodeURIComponent(currentTenantId())}`));
+    const purchaseState = new URLSearchParams(window.location.search).get("store_purchase");
+    if (purchaseState === "success") {
+      ui.tab = "library";
+      ui.message = "Payment returned successfully. Your signed Stripe receipt is being verified; refresh if the new app is not visible yet.";
+    } else if (purchaseState === "cancelled") {
+      ui.tab = "ai";
+      ui.message = "Checkout was cancelled. No entitlement was granted.";
+    }
   } catch (error) {
     ui.error = "";
     ui.message = error instanceof Error
@@ -262,6 +275,19 @@ const AI_WORKSPACE_FALLBACK_PRODUCTS = [
   { id: "product-ai-loom", workspaceProductId: "phantom-loom-dependency", name: "PHANTOM LOOM", summary: "Build a revision-aware graph of statements, commitments, dependencies, contradictions, owners, and deadlines.", accent: "#c29cff", tags: ["dependencies", "commitments", "change impact"], badges: ["Revision-aware", "Typed edges", "Source trace"] },
   { id: "product-ai-causal", workspaceProductId: "phantom-causal", name: "PHANTOM CAUSAL", summary: "Register hypotheses and variables, draw a DAG, surface confounders, estimate power, and limit causal conclusions.", accent: "#d6f75b", tags: ["experiments", "causal dag", "confounders"], badges: ["DAG", "Power helper", "No false causality"] },
 ];
+
+const AI_WORKSPACE_FALLBACK_COMMERCE = {
+  "product-ai-oracle": { priceLabel: "$39 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-oracle-cover-v3.png?v=20260817" },
+  "product-ai-chronicle": { priceLabel: "$29 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-chronicle-cover-v3.png?v=20260817" },
+  "product-ai-foundry": { priceLabel: "$49 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-foundry-cover-v3.png?v=20260817" },
+  "product-ai-twin": { priceLabel: "$49 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-twin-cover-v3.png?v=20260817" },
+  "product-ai-dealroom": { priceLabel: "$39 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-dealroom-cover-v3.png?v=20260817" },
+  "product-ai-blueprint": { priceLabel: "$39 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-blueprint-cover-v3.png?v=20260817" },
+  "product-ai-terrain": { priceLabel: "$39 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-terrain-cover-v3.png?v=20260817" },
+  "product-ai-proof": { priceLabel: "$29 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-proof-cover-v3.png?v=20260817" },
+  "product-ai-loom": { priceLabel: "$39 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-loom-cover-v3.png?v=20260817" },
+  "product-ai-causal": { priceLabel: "$39 one-time", imageUrl: "/app/assets/phantomstore/ai-workspaces/phantom-causal-cover-v3.png?v=20260817" },
+};
 
 function localFallbackSnapshot() {
   const seller = {
@@ -422,17 +448,16 @@ function localFallbackSnapshot() {
   ];
   products.push(...AI_WORKSPACE_FALLBACK_PRODUCTS.map((product) => ({
     ...product,
+    ...(AI_WORKSPACE_FALLBACK_COMMERCE[product.id] || {}),
     sellerId: seller.id,
     description: product.summary,
     category: "AI Suite",
-    priceLabel: "Included preview",
-    buyLabel: "Open workspace",
+    buyLabel: "Buy & unlock",
     buyUrl: "",
-    delivery: "In-store web workspace",
-    version: "0.2.0",
+    delivery: "Instant account unlock · desktop + web",
+    version: "1.0.0",
     status: "available",
-    qualityNote: "Milestone 2 integrated preview. Live workspace actions reconnect through the authenticated PhantomStore service.",
-    imageUrl: "",
+    qualityNote: "Sign in to start secure checkout. Access unlocks only after verified payment.",
     referenceImageUrl: "",
     rating: 0,
     reviewCount: 0,
@@ -467,6 +492,10 @@ function libraryEntry(productId) {
   return (ui.snapshot?.library || []).find((entry) => entry?.product?.id === productId) || null;
 }
 
+function hasActiveProductAccess(productId) {
+  return libraryEntry(productId)?.entitlement?.status === "active";
+}
+
 function fallbackProductImage(product = {}) {
   const haystack = `${product.name || ""} ${product.summary || ""} ${product.description || ""} ${product.category || ""}`.trim();
   return PRODUCT_ART_FALLBACKS.find(([pattern]) => pattern.test(haystack))?.[1] || "";
@@ -480,7 +509,9 @@ function productInitials(product = {}) {
 function workspaceProductArt(product = {}) {
   if (!product.workspaceProductId) return "";
   const module = String(product.workspaceProductId).replace(/^phantom-/, "").replaceAll("-", " ");
-  return `<div class="ps-ai-product-art" style="--ai-accent:${esc(product.accent || "#42e9ff")}" role="img" aria-label="${esc(product.name)} analytical workspace artwork">
+  const imageUrl = safeAssetHref(product.imageUrl);
+  return `<div class="ps-ai-product-art ${imageUrl ? "has-cover" : ""}" style="--ai-accent:${esc(product.accent || "#42e9ff")}" role="img" aria-label="${esc(product.name)} analytical workspace artwork">
+    ${imageUrl ? `<img src="${esc(imageUrl)}" alt="" loading="lazy" />` : ""}
     <span>PHANTOMSTORE / AI WORKSPACE</span>
     <b>${esc(productInitials(product))}</b>
     <i>${esc(module)}</i>
@@ -499,6 +530,7 @@ function productCard(product) {
   const workspaceArt = workspaceProductArt(product);
   const referenceUrl = safeAssetHref(product.referenceImageUrl);
   const owned = libraryEntry(product.id);
+  const activeAccess = owned?.entitlement?.status === "active";
   return `<article class="ps-product ${product.featured ? "is-featured" : ""} ${product.workspaceProductId ? "is-ai-workspace" : ""}">
     <div class="ps-product-media${imageUrl ? "" : " is-fallback"}">${workspaceArt || (artUrl ? `<img src="${esc(artUrl)}" alt="${esc(product.name)} key art" loading="lazy" />` : `<div class="ps-product-fallback"><span>${esc(productInitials(product))}</span><b>${esc(product.category || "PhantomStore")}</b></div>`)}${referenceUrl ? `<span class="ps-media-note">${imageUrl ? "AI key art from the real product UI" : "Branded fallback until product art is connected"} · <a href="${esc(referenceUrl)}" target="_blank" rel="noopener noreferrer">View real UI</a></span>` : ""}</div>
     <header>
@@ -519,13 +551,15 @@ function productCard(product) {
     <small>${esc(product.qualityNote || "")}</small>
     <div class="ps-card-actions">
       ${product.workspaceProductId
-        ? `<button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}" ${available ? "" : "disabled"}>Open workspace</button>`
+        ? activeAccess
+          ? `<button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}" ${available ? "" : "disabled"}>Open owned app</button>`
+          : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Opening secure checkout…" : "Buy & unlock"}</button>`
         : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>`}
       ${owned ? `<button type="button" class="ps-secondary" data-ps-open-library="${esc(product.id)}">In your library</button>` : ""}
       ${ui.snapshot?.canModerate && available && !owned && !product.workspaceProductId ? `<button type="button" class="ps-secondary" data-ps-grant-test="${esc(product.id)}">Grant owner test access</button>` : ""}
       ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
     </div>
-    ${ui.buyingProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
+    ${ui.buyNoticeProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
     ${reviewList(product.reviews || [])}
   </article>`;
 }
@@ -556,9 +590,10 @@ function libraryCard(entry) {
     ${!active ? `<p class="ps-library-note">Your files are preserved. Restore the entitlement to use this product again.</p>` : ""}
     ${active && !compatible ? `<p class="ps-library-note">This release supports ${(product.compatiblePlatforms || []).map(esc).join(", ") || "no connected platform"}; this device reports ${esc(platform)}.</p>` : ""}
     <div class="ps-card-actions">
-      ${active && compatible && !installed ? `<button type="button" class="ps-primary" data-ps-lifecycle="${uninstalled ? "restore" : "install"}" data-id="${esc(product.id)}" data-platform="${esc(actionPlatform)}" ${busy ? "disabled" : ""}>${busy ? "Working…" : uninstalled ? "Restore install" : "Mark installed"}</button>` : ""}
-      ${active && installed && product.updateAvailable ? `<button type="button" class="ps-primary" data-ps-lifecycle="update" data-id="${esc(product.id)}" data-platform="${esc(actionPlatform)}" ${busy ? "disabled" : ""}>Update to ${esc(product.version)}</button>` : ""}
-      ${active && installed ? `<button type="button" class="ps-secondary" data-ps-lifecycle="uninstall" data-id="${esc(product.id)}" data-platform="${esc(actionPlatform)}" ${busy ? "disabled" : ""}>Uninstall, keep data</button>` : ""}
+      ${active && product.workspaceProductId ? `<button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}">Open ${esc(product.name || "app")}</button>` : ""}
+      ${active && !product.workspaceProductId && compatible && !installed ? `<button type="button" class="ps-primary" data-ps-lifecycle="${uninstalled ? "restore" : "install"}" data-id="${esc(product.id)}" data-platform="${esc(actionPlatform)}" ${busy ? "disabled" : ""}>${busy ? "Working…" : uninstalled ? "Restore install" : "Mark installed"}</button>` : ""}
+      ${active && !product.workspaceProductId && installed && product.updateAvailable ? `<button type="button" class="ps-primary" data-ps-lifecycle="update" data-id="${esc(product.id)}" data-platform="${esc(actionPlatform)}" ${busy ? "disabled" : ""}>Update to ${esc(product.version)}</button>` : ""}
+      ${active && !product.workspaceProductId && installed ? `<button type="button" class="ps-secondary" data-ps-lifecycle="uninstall" data-id="${esc(product.id)}" data-platform="${esc(actionPlatform)}" ${busy ? "disabled" : ""}>Uninstall, keep data</button>` : ""}
     </div>
     ${ui.lifecycleProductId === product.id && ui.lifecycleMessage ? `<p class="ps-library-note">${esc(ui.lifecycleMessage)}</p>` : ""}
   </article>`;
@@ -642,6 +677,7 @@ function storeSpotlight(product, products = []) {
   const buyUrl = safeHref(product.buyUrl);
   const match = productMatch(product);
   const workspaceArt = workspaceProductArt(product);
+  const activeAccess = hasActiveProductAccess(product.id);
   return `<section class="ps-spotlight" aria-label="Featured desktop product">
     <div class="ps-spotlight-copy">
       <div class="ps-spotlight-label"><p class="ps-kicker">FEATURED</p><span>Verified delivery</span></div>
@@ -659,7 +695,9 @@ function storeSpotlight(product, products = []) {
       </div>
       <div class="ps-card-actions">
         ${product.workspaceProductId
-          ? `<button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}" ${product.status === "available" ? "" : "disabled"}>Open workspace</button>`
+          ? activeAccess
+            ? `<button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}" ${product.status === "available" ? "" : "disabled"}>Open owned app</button>`
+            : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${product.status === "available" ? "" : "disabled"}>Buy & unlock</button>`
           : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${product.status === "available" ? "" : "disabled"}>${esc(product.buyLabel || "Buy now")}</button>`}
         ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
         <button type="button" class="ps-secondary" data-ps-tab-jump="library">View library</button>
@@ -955,20 +993,35 @@ function latestAiAnalysis(artifactId) {
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0] || null;
 }
 
+function selectedAiUseCase(product = selectedAiProduct()) {
+  const useCases = Array.isArray(product?.useCases) ? product.useCases : [];
+  return useCases.find((useCase) => useCase.id === ui.aiUseCaseId) || useCases[0] || null;
+}
+
+function renderAiHubCard(product) {
+  const active = hasActiveProductAccess(product.id);
+  const useCases = Array.isArray(product.useCases) ? product.useCases : [];
+  return `<article class="ps-ai-hub-card ${active ? "is-owned" : "is-locked"}" style="--ai-accent:${esc(product.accent || "#42e9ff")}">
+    ${workspaceProductArt(product)}
+    <div class="ps-ai-hub-card-copy"><p class="ps-kicker">${active ? "OWNED ACCOUNT APP" : esc(product.priceLabel || "PAID LICENSE")}</p><h3>${esc(product.name)}</h3><p>${esc(product.summary)}</p></div>
+    <div class="ps-ai-usecase-strip">${useCases.slice(0, 3).map((useCase) => `<span><b>${esc(useCase.title)}</b><small>${esc(useCase.audience)}</small></span>`).join("")}</div>
+    <div class="ps-tags">${(product.badges || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
+    ${active
+      ? `<button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}">Open ${esc(product.name.replace("PHANTOM ", ""))}</button>`
+      : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}">${ui.buyingProductId === product.id ? "Opening secure checkout…" : `Buy once · ${esc(product.priceLabel || "unlock")}`}</button>`}
+    ${ui.buyNoticeProductId === product.id && ui.buyMessage ? `<div class="ps-buy-note">${esc(ui.buyMessage)}</div>` : ""}
+  </article>`;
+}
+
 function renderAiHub() {
   const products = aiWorkspaceListings();
   return `<section class="ps-ai-hub">
     <header class="ps-ai-hub-head">
-      <div><p class="ps-kicker">TEN SERVED WORKSPACES</p><h2>Use the builds inside PhantomStore.</h2></div>
-      <span>${products.length} active</span>
+      <div><p class="ps-kicker">TEN ACCOUNT-OWNED APPLICATIONS</p><h2>Buy once. Unlock on desktop and web.</h2></div>
+      <span>${products.filter((product) => hasActiveProductAccess(product.id)).length} owned / ${products.length}</span>
     </header>
-    <p class="ps-ai-hub-copy">These are working analytical products, not placeholder listings. Open one to grant purpose consent, create a source-linked artifact, run its product-specific deterministic core loop, inspect the calculation, and record a human review.</p>
-    <div class="ps-ai-hub-grid">${products.map((product) => `<article class="ps-ai-hub-card" style="--ai-accent:${esc(product.accent || "#42e9ff")}">
-      ${workspaceProductArt(product)}
-      <div><p class="ps-kicker">${esc(product.delivery || "IN-STORE WORKSPACE")}</p><h3>${esc(product.name)}</h3><p>${esc(product.summary)}</p></div>
-      <div class="ps-tags">${(product.badges || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
-      <button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}">Open ${esc(product.name.replace("PHANTOM ", ""))}</button>
-    </article>`).join("")}</div>
+    <p class="ps-ai-hub-copy">Every product has its own operational cockpit, real use-case workflows, private versioned work, inspectable calculations, and a permanent account library. Workspace APIs reject access until a verified purchase entitlement is active.</p>
+    <div class="ps-ai-hub-grid">${products.map(renderAiHubCard).join("")}</div>
   </section>`;
 }
 
@@ -994,6 +1047,32 @@ function renderAiCoreLoop(coreLoop = null) {
     <div class="ps-ai-modules">${(coreLoop.modules || []).map((module) => `<em>${esc(module)}</em>`).join("")}</div>
     <div class="ps-ai-records">${records.map(([key, value]) => `<details><summary>${esc(statusLabel(key))}</summary><pre>${esc(JSON.stringify(value, null, 2))}</pre></details>`).join("")}</div>
   </section>`;
+}
+
+function renderAiCockpit(product, artifact, analysis) {
+  const useCase = selectedAiUseCase(product);
+  const cover = safeAssetHref(product.imageUrl);
+  const modules = (product.modules || []).slice(0, 7);
+  const metric = analysis?.output?.metrics?.[0] || null;
+  return `<section class="ps-ai-cockpit">
+    <div class="ps-ai-cockpit-cover">${cover ? `<img src="${esc(cover)}" alt="${esc(product.name)} custom product cover" />` : workspaceProductArt({ ...product, workspaceProductId: product.id })}<span>ACCOUNT LICENSE ACTIVE</span></div>
+    <div class="ps-ai-cockpit-main">
+      <header><div><p class="ps-kicker">${esc(product.cockpitLabel || "PRODUCT COMMAND DECK")}</p><h3>${esc(useCase?.title || product.primaryModule)}</h3><p>${esc(useCase?.summary || product.promise || product.tagline)}</p></div><b>${analysis ? esc(statusLabel(analysis.status)) : artifact ? "ready to analyze" : "new mission"}</b></header>
+      <div class="ps-ai-pipeline">${modules.map((module, index) => `<span class="${index === 0 || artifact ? "is-live" : ""}"><i>${String(index + 1).padStart(2, "0")}</i><b>${esc(module)}</b></span>`).join("")}</div>
+      <div class="ps-ai-cockpit-stats">
+        <span><small>Mission outcome</small><b>${esc(useCase?.outcome || product.artifactLabel)}</b></span>
+        <span><small>Primary signal</small><b>${metric ? `${esc(metric.value)} ${esc(metric.unit)}` : esc(product.metricName || "Awaiting inputs")}</b></span>
+        <span><small>Evidence posture</small><b>Source-linked · human reviewed</b></span>
+      </div>
+    </div>
+  </section>`;
+}
+
+function renderAiUseCases(product) {
+  const useCases = Array.isArray(product.useCases) ? product.useCases : [];
+  if (!useCases.length) return "";
+  const active = selectedAiUseCase(product);
+  return `<section class="ps-ai-usecases"><header><div><p class="ps-kicker">MISSION LAUNCHPAD</p><h3>Choose a real workflow</h3></div><span>${useCases.length} playbooks</span></header><div>${useCases.map((useCase) => `<button type="button" class="${active?.id === useCase.id ? "is-active" : ""}" data-ps-ai-use-case="${esc(useCase.id)}"><small>${esc(useCase.audience)}</small><b>${esc(useCase.title)}</b><span>${esc(useCase.summary)}</span><em>${esc(useCase.outcome)}</em></button>`).join("")}</div></section>`;
 }
 
 function renderAiAnalysis(product, artifact, analysis) {
@@ -1022,9 +1101,11 @@ function renderAiWorkspace() {
     <header class="ps-ai-workspace-hero"><div><p class="ps-kicker">${esc(product.category)}</p><h2>${esc(product.name)}</h2><p>${esc(product.tagline)}</p></div><div><span>${artifacts.length} artifacts</span><span>${(ui.aiSnapshot.analyses || []).filter((item) => item.productId === product.id).length} analyses</span><span>$0 provider spend</span></div></header>
     ${ui.aiMessage ? `<div class="ps-ai-message" role="status">${esc(ui.aiMessage)}</div>` : ""}
     <div class="ps-ai-consent ${granted ? "is-granted" : ""}"><div><b>${granted ? "Purpose consent granted" : "Purpose consent required"}</b><p>${granted ? `Retained for ${Number(consent.retentionDays || 30)} days. Withdrawal restricts dependent artifacts.` : "This workspace stores the fields and provenance you explicitly submit. No external model or data provider is called."}</p></div>${granted ? `<button type="button" class="ps-secondary" data-ps-ai-consent="withdrawn">Withdraw</button>` : `<button type="button" class="ps-primary" data-ps-ai-consent="granted">Grant 30-day consent</button>`}</div>
+    ${renderAiUseCases(product)}
+    ${renderAiCockpit(product, artifact, analysis)}
     <div class="ps-ai-layout">
       <form class="ps-ai-create" data-ps-ai-form>
-        <header><div><p class="ps-kicker">${esc(product.primaryModule)}</p><h3>Create ${esc(product.artifactLabel.toLowerCase())}</h3></div><span>${granted ? "Ready" : "Locked"}</span></header>
+        <header><div><p class="ps-kicker">${esc(product.primaryModule)}</p><h3>${esc(product.actionLabel || `Create ${product.artifactLabel.toLowerCase()}`)}</h3></div><span>${granted ? "Ready" : "Locked"}</span></header>
         <div class="ps-ai-fields">${(product.fields || []).map(renderAiFormField).join("")}</div>
         <label class="ps-ai-field is-wide"><span>Provenance note *</span><textarea name="evidenceNote" rows="3" maxlength="4000" required></textarea></label>
         <label class="ps-ai-field is-wide"><span>Evidence label</span><input name="evidenceLabel" maxlength="240" /></label>
@@ -1066,6 +1147,7 @@ function render() {
     <nav class="ps-tabs" aria-label="PhantomStore sections">
       ${[["discover", "Discover"], ["ai", "AI Workspaces"], ["sellers", "Sellers"], ["library", "Library"], ["submit", "Submit"], ["review", ui.snapshot?.canModerate ? "Review" : "My tools"]].map(([id, label]) => `<button type="button" class="${ui.tab === id || (id === "ai" && ui.tab === "lab") ? "is-active" : ""}" data-ps-tab="${id}">${label}</button>`).join("")}
     </nav>
+    ${ui.message ? `<div class="ps-store-message" role="status">${esc(ui.message)}</div>` : ""}
     ${renderContent()}
   </section>`;
   bind();
@@ -1162,6 +1244,7 @@ async function recordInstall(id) {
 
 async function recordBuy(id) {
   ui.buyingProductId = id;
+  ui.buyNoticeProductId = id;
   ui.buyMessage = "Preparing checkout...";
   render();
   if (ui.snapshot?.readOnlyFallback) {
@@ -1169,18 +1252,30 @@ async function recordBuy(id) {
     const url = safeHref(product?.buyUrl);
     ui.buyMessage = url ? "Opening the product page from the local catalog." : "This product is not ready for purchase yet.";
     if (url) window.open(url, "_blank", "noopener,noreferrer");
+    ui.buyingProductId = "";
     render();
     return;
   }
   try {
-    const result = await api(`/api/phantomstore/products/${encodeURIComponent(id)}/buy`, { method: "POST" });
     const product = ui.snapshot?.products?.find((item) => item.id === id);
+    const result = product?.workspaceProductId
+      ? await api(`/api/phantomstore/products/${encodeURIComponent(id)}/checkout-session`, { method: "POST" })
+      : await api(`/api/phantomstore/products/${encodeURIComponent(id)}/buy`, { method: "POST" });
     if (product) product.buyClicks = result.buyClicks;
-    ui.buyMessage = result.checkout?.note || "Purchase intent recorded.";
-    const url = safeHref(result.checkout?.url);
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    if (product?.workspaceProductId) {
+      ui.buyMessage = "Secure Stripe Checkout is ready. Access unlocks only after its signed paid webhook returns.";
+      const checkoutUrl = safeHref(result.checkoutUrl);
+      if (!checkoutUrl) throw new Error("Secure checkout did not return a destination. No purchase was made.");
+      window.location.assign(checkoutUrl);
+    } else {
+      ui.buyMessage = result.checkout?.note || "Purchase intent recorded.";
+      const url = safeHref(result.checkout?.url);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      ui.buyingProductId = "";
+    }
   } catch (error) {
     ui.buyMessage = error instanceof Error ? error.message : "Checkout could not be prepared.";
+    ui.buyingProductId = "";
   }
   render();
 }
@@ -1257,6 +1352,8 @@ async function loadAiWorkspace() {
   render();
   try {
     ui.aiSnapshot = await api("/api/phantomstore/ai-products");
+    const product = selectedAiProduct();
+    if (product && !(product.useCases || []).some((useCase) => useCase.id === ui.aiUseCaseId)) ui.aiUseCaseId = product.useCases?.[0]?.id || "";
     const artifacts = (ui.aiSnapshot?.artifacts || []).filter((artifact) => artifact.productId === ui.aiProductId);
     if (!artifacts.some((artifact) => artifact.id === ui.aiSelectedArtifactId)) ui.aiSelectedArtifactId = artifacts[0]?.id || "";
     ui.aiMessage = "";
@@ -1270,7 +1367,17 @@ async function loadAiWorkspace() {
 }
 
 async function openAiWorkspace(productId) {
+  const listing = aiWorkspaceListings().find((product) => product.workspaceProductId === productId);
+  if (!listing || !hasActiveProductAccess(listing.id)) {
+    ui.tab = "ai";
+    ui.buyingProductId = "";
+    ui.buyNoticeProductId = listing?.id || "";
+    ui.buyMessage = "Purchase this product to unlock it for your account on desktop and web.";
+    render();
+    return;
+  }
   ui.aiProductId = productId;
+  ui.aiUseCaseId = "";
   ui.aiSelectedArtifactId = "";
   ui.aiMessage = "";
   ui.tab = "lab";
@@ -1298,12 +1405,13 @@ async function changeAiConsent(status) {
 
 function loadAiProductSample() {
   const product = selectedAiProduct();
+  const useCase = selectedAiUseCase(product);
   const form = mountedRoot?.querySelector("[data-ps-ai-form]");
   if (!product || !form) return;
   Object.entries(product.sample || {}).forEach(([name, value]) => { if (form.elements[name]) form.elements[name].value = value; });
   form.elements.evidenceNote.value = `Reversible ${product.name} in-store demo fixture. Values are declared user inputs, not external facts.`;
-  form.elements.evidenceLabel.value = "PhantomStore integrated demo fixture";
-  ui.aiMessage = "Demo loaded. Nothing is saved until Create artifact is selected.";
+  form.elements.evidenceLabel.value = useCase ? `${useCase.title} demo fixture` : "PhantomStore integrated demo fixture";
+  ui.aiMessage = `${useCase?.title || "Product"} demo loaded. Nothing is saved until Create artifact is selected.`;
   const status = mountedRoot.querySelector(".ps-ai-message");
   if (status) status.textContent = ui.aiMessage;
 }
@@ -1475,6 +1583,9 @@ function bind() {
     button.onclick = () => changeAiConsent(button.dataset.psAiConsent || "granted");
   });
   mountedRoot.querySelector("[data-ps-ai-sample]")?.addEventListener("click", loadAiProductSample);
+  mountedRoot.querySelectorAll("[data-ps-ai-use-case]").forEach((button) => {
+    button.onclick = () => { ui.aiUseCaseId = button.dataset.psAiUseCase || ""; ui.aiMessage = "Playbook selected. Load the product demo or enter your own source-backed inputs."; render(); };
+  });
   mountedRoot.querySelectorAll("[data-ps-ai-artifact]").forEach((button) => {
     button.onclick = () => { ui.aiSelectedArtifactId = button.dataset.psAiArtifact || ""; ui.aiMessage = ""; render(); };
   });

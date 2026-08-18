@@ -12,6 +12,7 @@ const backendSource = readFileSync(new URL("../server/src/phantom-ai/phantomstor
 const backendTestSource = readFileSync(new URL("../server/scripts/test-phantomstore.ts", import.meta.url), "utf8");
 const serverIndexSource = readFileSync(new URL("../server/src/index.ts", import.meta.url), "utf8");
 const aiBridgeSource = readFileSync(new URL("../server/src/phantom-ai/phantomstore-ai-products.ts", import.meta.url), "utf8");
+const stripeProductCheckoutSource = readFileSync(new URL("../server/src/commerce/stripe-product-checkout.ts", import.meta.url), "utf8");
 
 assert.doesNotMatch(appHtml, /<link rel="stylesheet"[^>]*phantomstore\.css/u, "PhantomStore styles must not inflate every initial page load.");
 assert.match(mainSource, /phantomstore:\s*\["\/app\/phantomstore\.css\?v=phantom-live-[^"]+"\]/u, "Opening PhantomStore must load its workspace styles automatically.");
@@ -137,7 +138,8 @@ for (const productId of integratedProductIds) {
   assert.ok(backendSource.includes(`workspaceProductId: "${productId}"`), `${productId} must be a served PhantomStore catalog listing.`);
 }
 assert.match(backendSource, /const AI_WORKSPACE_PRODUCTS/u, "The served marketplace must seed the AI workspace collection.");
-assert.match(storeSource, /data-ps-launch-ai/u, "AI product cards must launch the integrated workspace instead of checkout.");
+assert.match(storeSource, /hasActiveProductAccess/u, "AI product cards must distinguish owned access from locked checkout.");
+assert.match(storeSource, /Buy & unlock/u, "Unowned AI applications must present paid account unlocks.");
 assert.match(storeSource, /function renderAiHub\(\)/u, "PhantomStore must render an in-store AI workspace directory.");
 assert.match(storeSource, /function renderAiWorkspace\(\)/u, "PhantomStore must render the complete product workflow in place.");
 assert.match(storeSource, /Complete product workflow/u, "The in-store workspace must expose product input, analysis, and review as one workflow.");
@@ -148,8 +150,12 @@ assert.match(serverIndexSource, /\/api\/phantomstore\/ai-products\/artifacts\/:a
 assert.match(serverIndexSource, /\/api\/phantomstore\/ai-products\/analyses\/:analysisId\/review/u, "The server must persist human review dispositions.");
 assert.match(aiBridgeSource, /@phantomforce\/phantomstore-ai-products\/platform/u, "The served bridge must reuse the tested product platform instead of duplicating product logic.");
 assert.match(aiBridgeSource, /createHash\("sha256"\)/u, "Integrated workspace actor and tenant identifiers must be pseudonymized at the product boundary.");
-assert.match(aiBridgeSource, /served_phantomstore_integrated_preview/u, "Product status must identify the served integrated deployment honestly.");
-for (const selector of [".ps-ai-hub", ".ps-ai-workspace", ".ps-ai-product-art", ".ps-ai-core", ".ps-ai-layout"]) {
+assert.match(aiBridgeSource, /served_phantomstore_paid_account_release/u, "Product status must identify the paid account release honestly.");
+assert.match(aiBridgeSource, /getPhantomStoreWorkspaceProductAccessMap/u, "Every product workspace request must synchronize server-owned purchase entitlements.");
+assert.ok(serverIndexSource.includes('/api/phantomstore/products/:id/checkout-session'), "PhantomStore must expose secure one-time product Checkout Sessions.");
+assert.match(stripeProductCheckoutSource, /payment_status !== "paid"/u, "Unpaid Checkout events must never grant account ownership.");
+assert.match(stripeProductCheckoutSource, /fulfillPhantomStoreProductPurchase/u, "Signed paid Checkout events must fulfill the durable marketplace entitlement.");
+for (const selector of [".ps-ai-hub", ".ps-ai-workspace", ".ps-ai-product-art", ".ps-ai-core", ".ps-ai-layout", ".ps-ai-usecases", ".ps-ai-cockpit"]) {
   assert.ok(storeCss.includes(selector), `${selector} integrated workspace style must be present.`);
 }
 

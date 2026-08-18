@@ -24,6 +24,7 @@ const devB: AccessSession = { id: "dev-b", userId: "dev-b", label: "Developer B"
 
 try {
   const store = await import("../src/phantom-ai/phantomstore.js");
+  const stripeProducts = await import("../src/commerce/stripe-product-checkout.js");
 
   const initial = await store.getPhantomStoreSnapshot(devA);
   assert(initial.catalog.length === 0, "A fresh store should ship no seeded tools.");
@@ -31,7 +32,17 @@ try {
   assert(initial.products.some((product: { name?: string }) => product.name === "BeatForge"), "PhantomStore should list BeatForge instead of the internal PhantomForce OS workspace.");
   const integratedProducts = initial.products.filter((product: { workspaceProductId?: string }) => Boolean(product.workspaceProductId));
   assert(integratedProducts.length === 10, "PhantomStore should serve exactly ten integrated AI workspace listings.");
-  assert(integratedProducts.every((product: { buyLabel?: string }) => product.buyLabel === "Open workspace"), "Integrated AI products should launch in the store instead of routing to checkout.");
+  assert(integratedProducts.every((product: { buyLabel?: string; priceLabel?: string; imageUrl?: string; useCases?: unknown[] }) => product.buyLabel === "Buy & unlock" && /one-time/u.test(product.priceLabel || "") && /ai-workspaces/u.test(product.imageUrl || "") && (product.useCases?.length || 0) >= 3), "Every AI product should be paid and ship custom art plus real use cases.");
+  assert(initial.library.length === 0, "AI workspaces must not be silently unlocked for a new account.");
+  const unpaid = await stripeProducts.processVerifiedStripeProductCheckout({ type: "checkout.session.completed", data: { object: { id: "cs_unpaid_proof", payment_status: "unpaid", metadata: { phantomforce_purchase_type: "phantomstore_product", phantomforce_product_id: "product-ai-proof", phantomforce_tenant_id: "unpaid-account", phantomforce_actor_id: "unpaid-user" } } } } as any);
+  assert(unpaid?.outcome === "payment_pending", "An unpaid Checkout session must never create ownership.");
+  const suiteBuyer: AccessSession = { id: "suite-user", userId: "suite-user", label: "Suite buyer", role: "client", canManageAccess: false, orgId: "suite-account", orgRole: "member" };
+  for (const product of integratedProducts as Array<{ id: string }>) {
+    const result = await stripeProducts.processVerifiedStripeProductCheckout({ type: "checkout.session.completed", data: { object: { id: `cs_paid_${product.id}`, payment_status: "paid", metadata: { phantomforce_purchase_type: "phantomstore_product", phantomforce_product_id: product.id, phantomforce_tenant_id: "suite-account", phantomforce_actor_id: "suite-user" } } } } as any);
+    assert(result?.outcome === "entitlement_granted", `${product.id} should unlock from its own verified paid Checkout receipt.`);
+  }
+  const suiteAccess = await store.getPhantomStoreWorkspaceProductAccessMap(suiteBuyer);
+  assert(Object.values(suiteAccess).filter((entry) => entry.active).length === 10, "All ten paid products must map to durable account access.");
   assert(!initial.products.some((product: { id?: string }) => product.id === "product-phantomforce-os"), "PhantomForce OS must not be sold inside the store users are already using.");
   assert(initial.sellers.some((seller: { name?: string }) => seller.name === "PhantomForce"), "PhantomStore should include a PhantomForce seller profile.");
   assert(initial.products.every((product: { reviews?: unknown[] }) => Array.isArray(product.reviews)), "Product listings should carry product reviews.");
@@ -217,9 +228,21 @@ try {
   assert(ownerView.statusCode === 200 && ownerView.json().canModerate === true, "Platform admin sessions should receive moderation access via the route.");
   const devView = await app.inject({ method: "GET", url: "/api/phantomstore", headers: { Authorization: `Bearer ${devToken}` } });
   assert(devView.statusCode === 200 && devView.json().canModerate === false, "A free-plan client session should still be able to view the catalog, without moderation access.");
+  const lockedAiWorkspaceView = await app.inject({ method: "GET", url: "/api/phantomstore/ai-products", headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(lockedAiWorkspaceView.statusCode === 200 && lockedAiWorkspaceView.json().products.length === 0, "A signed-in account without a purchase must receive no runnable AI products.");
+  const lockedConsent = await app.inject({ method: "POST", url: "/api/phantomstore/ai-products/phantom-oracle/consent", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { status: "granted", purpose: "Unauthorized attempt" } });
+  assert(lockedConsent.statusCode === 403 && lockedConsent.json().error.code === "ENTITLEMENT_REQUIRED", "Direct workspace API calls must fail closed before purchase.");
+  const paidEvent = {
+    type: "checkout.session.completed",
+    data: { object: { id: "cs_paid_oracle_owner", payment_status: "paid", metadata: { phantomforce_purchase_type: "phantomstore_product", phantomforce_product_id: "product-ai-oracle", phantomforce_tenant_id: "admin-jordan", phantomforce_actor_id: "admin-jordan" } } },
+  } as any;
+  const paidFulfillment = await stripeProducts.processVerifiedStripeProductCheckout(paidEvent);
+  assert(paidFulfillment?.outcome === "entitlement_granted", "A verified paid Stripe event should unlock exactly the purchased product.");
+  const repeatedFulfillment = await stripeProducts.processVerifiedStripeProductCheckout(paidEvent);
+  assert(repeatedFulfillment?.duplicate === true, "Replaying a paid Checkout event must be idempotent.");
   const aiWorkspaceView = await app.inject({ method: "GET", url: "/api/phantomstore/ai-products", headers: { Authorization: `Bearer ${ownerToken}` } });
-  assert(aiWorkspaceView.statusCode === 200 && aiWorkspaceView.json().products.length === 10, "The authenticated store route should expose all ten integrated AI products.");
-  assert(aiWorkspaceView.json().deployment === "served_phantomstore_integrated_preview", "The product service should report its real served integration state.");
+  assert(aiWorkspaceView.statusCode === 200 && aiWorkspaceView.json().products.length === 1, "The authenticated product service should expose only account-owned AI products.");
+  assert(aiWorkspaceView.json().deployment === "served_phantomstore_paid_account_release", "The product service should report its paid account release state.");
   const oracle = aiWorkspaceView.json().products.find((product: { id: string }) => product.id === "phantom-oracle");
   assert(Boolean(oracle?.sample), "PHANTOM ORACLE should ship a usable in-store demo fixture.");
   const consentRoute = await app.inject({
@@ -253,7 +276,7 @@ try {
   });
   assert(reviewRoute.statusCode === 200 && reviewRoute.json().analysis?.finalDisposition === "accepted", `The served product route should persist a human review disposition: ${reviewRoute.body}`);
   const clientAiView = await app.inject({ method: "GET", url: "/api/phantomstore/ai-products", headers: { Authorization: `Bearer ${devToken}` } });
-  assert(clientAiView.statusCode === 200 && clientAiView.json().artifacts.length === 0, "Integrated product data must remain isolated between organizations.");
+  assert(clientAiView.statusCode === 200 && clientAiView.json().products.length === 0 && clientAiView.json().artifacts.length === 0, "Unpurchased products and integrated data must remain locked and isolated between accounts.");
   const devSubmitBlocked = await app.inject({
     method: "POST", url: "/api/phantomstore/tools", headers: { Authorization: `Bearer ${devToken}` },
     payload: { name: "Route Tool", summary: "Submitted through the HTTP route.", description: "Proves the Fastify route wiring saves a tool end to end.", repoUrl: "https://example.test/route-tool", installMethod: "manual", submit: true },
@@ -324,7 +347,7 @@ try {
   assert(beatForgePreview.json().files_written === false && beatForgePreview.json().daw_mutated === false && beatForgePreview.json().audio_uploaded === false, "BeatForge preview must not write files, mutate the DAW, or upload audio.");
   await app.close();
 
-  console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, entitlementIdempotency: true, compatibilityChecks: true, uninstallPreservesData: true, routeAuth: true, integratedAiProducts: 10, integratedCoreLoop: true }));
+  console.log(JSON.stringify({ ok: true, tenantIsolation: true, validationEnforced: true, moderationGated: true, catalogFiltered: true, installClicksTracked: true, entitlementIdempotency: true, paidWebhookFulfillment: true, unpurchasedApiLocked: true, compatibilityChecks: true, uninstallPreservesData: true, routeAuth: true, integratedAiProducts: 10, integratedCoreLoop: true }));
 } finally {
   await rm(root, { recursive: true, force: true });
 }

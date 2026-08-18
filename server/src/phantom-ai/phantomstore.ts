@@ -19,6 +19,8 @@ import { copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/pr
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { PRODUCTS as AI_PRODUCT_DEFINITIONS, publicProduct as publicAiProduct } from "@phantomforce/phantomstore-ai-products/catalog";
+
 import type { AccessSession } from "../access/session.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -148,6 +150,9 @@ export type PhantomStoreProduct = {
   compatiblePlatforms: PhantomStorePlatform[];
   workspaceProductId?: string;
   accent?: string;
+  cockpitLabel?: string;
+  actionLabel?: string;
+  useCases?: Array<{ id: string; title: string; audience: string; summary: string; outcome: string }>;
 };
 
 export type PhantomStorePlatform = "windows-x64" | "linux-x64" | "macos-arm64" | "web";
@@ -423,7 +428,7 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-oracle", sellerId: "seller-phantomforce", workspaceProductId: "phantom-oracle", name: "PHANTOM ORACLE",
     summary: "Model consequential choices with transparent scenarios, assumptions, sensitivity, and a reviewable decision record.",
     description: "A served PhantomStore decision workspace for comparing declared options without presenting forecasts as facts.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. Deterministic analysis, source provenance, and human review are active; production model providers remain off.",
     imageUrl: "", referenceImageUrl: "", tags: ["decision", "scenario", "strategy", "sensitivity"], badges: ["In-store", "Deterministic", "Human review"],
     rating: 0, reviewCount: 0, featured: true, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#a986ff",
@@ -432,7 +437,7 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-chronicle", sellerId: "seller-phantomforce", workspaceProductId: "phantom-chronicle", name: "PHANTOM CHRONICLE",
     summary: "Reconstruct source-linked timelines while preserving ranges, contradictions, observations, and inferences.",
     description: "An evidence chronology workspace that keeps conflicting source times visible and avoids liability conclusions.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. Source-linked chronology and contradiction handling are active; multimodal ingestion remains a later gate.",
     imageUrl: "", referenceImageUrl: "", tags: ["timeline", "evidence", "chronology", "provenance"], badges: ["Source-linked", "Contradiction-safe", "Reviewable"],
     rating: 0, reviewCount: 0, featured: false, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#ffb257",
@@ -441,7 +446,7 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-foundry", sellerId: "seller-phantomforce", workspaceProductId: "phantom-foundry", name: "PHANTOM FOUNDRY",
     summary: "Create seeded synthetic evaluation fixtures with coverage, deduplication, versioning, and immutable benchmark digests.",
     description: "A deterministic benchmark factory that labels synthetic data and never promotes generated fixtures to ground truth.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. Seeded local fixture generation and benchmark records are active; external generation fleets remain off.",
     imageUrl: "", referenceImageUrl: "", tags: ["synthetic data", "benchmark", "coverage", "dataset"], badges: ["Seeded", "Synthetic labels", "Immutable digest"],
     rating: 0, reviewCount: 0, featured: false, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#42d9f5",
@@ -450,7 +455,7 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-twin", sellerId: "seller-phantomforce", workspaceProductId: "phantom-twin", name: "PHANTOM TWIN",
     summary: "Map resources and queues, simulate demand, expose bottlenecks, and retain modeled-versus-observed calibration truth.",
     description: "An operational digital-twin workspace with deterministic fluid-queue scenarios and explicit units.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. Capacity and what-if modeling are active; no physical machinery or employee control is connected.",
     imageUrl: "", referenceImageUrl: "", tags: ["operations", "simulation", "capacity", "queues"], badges: ["What-if", "Units visible", "No control plane"],
     rating: 0, reviewCount: 0, featured: false, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#42e6a4",
@@ -459,7 +464,7 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-dealroom", sellerId: "seller-phantomforce", workspaceProductId: "phantom-dealroom", name: "PHANTOM DEALROOM",
     summary: "Prepare interests, BATNA, concessions, packages, rehearsal, and human-confirmed commitments without covert inference.",
     description: "A bounded negotiation workspace that keeps proposed counterpart assumptions separate from confirmed facts.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. Package comparison and scripted rehearsal are active; outreach, recording, coercion, and impersonation are not.",
     imageUrl: "", referenceImageUrl: "", tags: ["negotiation", "batna", "concessions", "commitments"], badges: ["Bounded rehearsal", "No outreach", "Human confirmation"],
     rating: 0, reviewCount: 0, featured: false, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#f3cb67",
@@ -468,7 +473,7 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-blueprint", sellerId: "seller-phantomforce", workspaceProductId: "phantom-blueprint", name: "PHANTOM BLUEPRINT",
     summary: "Compile requirements into components, acceptance criteria, data/API contracts, traceability, and change impact.",
     description: "A traceable specification workspace with stable IDs, orphan detection, and an inspectable OpenAPI subset.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. Specification compilation is active; silent infrastructure deployment and architecture sign-off are not.",
     imageUrl: "", referenceImageUrl: "", tags: ["requirements", "architecture", "openapi", "traceability"], badges: ["Stable IDs", "Change impact", "Exportable"],
     rating: 0, reviewCount: 0, featured: false, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#8ac8ff",
@@ -477,7 +482,7 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-terrain", sellerId: "seller-phantomforce", workspaceProductId: "phantom-terrain", name: "PHANTOM TERRAIN",
     summary: "Compare candidate sites with declared weights, constraints, freshness, sensitivity, and GeoJSON export.",
     description: "A geospatial decision workspace that scores user-supplied site data without live tracking or military targeting.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. Transparent scoring and GeoJSON export are active; live map feeds and individual tracking are off.",
     imageUrl: "", referenceImageUrl: "", tags: ["geospatial", "site scoring", "constraints", "geojson"], badges: ["Weights visible", "Freshness", "No tracking"],
     rating: 0, reviewCount: 0, featured: false, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#64d9bd",
@@ -486,7 +491,7 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-proof", sellerId: "seller-phantomforce", workspaceProductId: "phantom-proof", name: "PHANTOM PROOF",
     summary: "Decompose claims, classify source-linked evidence, inspect citation integrity and circularity, and preserve opposition.",
     description: "A proof-packet workspace that requires registered sources and refuses to manufacture a truth verdict.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. Evidence classification and citation integrity are active; fabricated citations and automated verdicts are prohibited.",
     imageUrl: "", referenceImageUrl: "", tags: ["claims", "evidence", "citations", "source quality"], badges: ["Registered sources", "Opposition preserved", "No verdict"],
     rating: 0, reviewCount: 0, featured: true, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#ff7a90",
@@ -495,7 +500,7 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-loom", sellerId: "seller-phantomforce", workspaceProductId: "phantom-loom-dependency", name: "PHANTOM LOOM",
     summary: "Build a revision-aware graph of statements, commitments, dependencies, contradictions, owners, and deadlines.",
     description: "A dependency intelligence workspace that distinguishes confirmed relationships from inferred ones and preserves source changes.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. Dependency and change-impact records are active; the public naming collision decision remains open.",
     imageUrl: "", referenceImageUrl: "", tags: ["dependencies", "commitments", "contradictions", "change impact"], badges: ["Revision-aware", "Typed edges", "Source trace"],
     rating: 0, reviewCount: 0, featured: false, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#c29cff",
@@ -504,12 +509,30 @@ const AI_WORKSPACE_PRODUCTS: PhantomStoreProduct[] = [
     id: "product-ai-causal", sellerId: "seller-phantomforce", workspaceProductId: "phantom-causal", name: "PHANTOM CAUSAL",
     summary: "Register hypotheses and variables, draw a DAG, surface confounders, estimate power, and limit causal conclusions.",
     description: "An experiment workspace that keeps observational correlation separate from proven causality.",
-    category: "AI Suite", priceLabel: "Included preview", buyLabel: "Open workspace", buyUrl: "", delivery: "In-store web workspace", version: "0.2.0", status: "available",
+    category: "AI Suite", priceLabel: "Paid license", buyLabel: "Buy & unlock", buyUrl: "", delivery: "Instant account unlock · desktop + web", version: "1.0.0", status: "available",
     qualityNote: "Milestone 2 integrated preview. DAG, metric, power, and result fixtures are active; medical guidance and automatic causal claims are not.",
     imageUrl: "", referenceImageUrl: "", tags: ["experiments", "causal dag", "power", "confounders"], badges: ["DAG", "Power helper", "No false causality"],
     rating: 0, reviewCount: 0, featured: true, updatedAt: "2026-08-17T00:00:00.000Z", reviews: [], compatiblePlatforms: ["web"], accent: "#d6f75b",
   },
 ];
+
+const aiProductDefinitions = new Map(AI_PRODUCT_DEFINITIONS.map((definition) => [definition.id, publicAiProduct(definition)]));
+for (const product of AI_WORKSPACE_PRODUCTS) {
+  const definition = aiProductDefinitions.get(product.workspaceProductId || "") as Record<string, unknown> | undefined;
+  const priceUsd = Number(definition?.priceUsd || 0);
+  product.priceLabel = priceUsd > 0 ? `$${priceUsd} one-time` : "Paid license";
+  product.buyLabel = "Buy & unlock";
+  product.delivery = "Instant account unlock · desktop + web";
+  product.version = "1.0.0";
+  product.imageUrl = String(definition?.imageUrl || "");
+  product.cockpitLabel = String(definition?.cockpitLabel || "AI product workspace");
+  product.actionLabel = String(definition?.actionLabel || "Run workspace");
+  product.useCases = Array.isArray(definition?.useCases)
+    ? definition.useCases as PhantomStoreProduct["useCases"]
+    : [];
+  product.badges = ["Paid account license", "Desktop + web", "Private workspace"];
+  product.qualityNote = "Production workspace with server-enforced account ownership, versioned artifacts, inspectable analysis, human review, and export.";
+}
 
 SEEDED_PRODUCTS.push(...AI_WORKSPACE_PRODUCTS);
 SEEDED_SELLERS[0].productCount = SEEDED_PRODUCTS.length;
@@ -859,12 +882,27 @@ export async function grantPhantomStoreProductEntitlement(session: AccessSession
   if (!session.canManageAccess && session.isSuperAdmin !== true) {
     throw new Error("Marketplace entitlement administration is required.");
   }
-  const product = productForLifecycle(productId);
-  if (!product || product.status !== "available") throw new Error("That product is not available for entitlement.");
   const tenantId = tenantIdFor(session, input.tenantId);
   const actorId = clean(input.actorId, 120) || actorIdFor(session);
   const purchaseReference = clean(input.purchaseReference, 180);
   if (!purchaseReference) throw new Error("A verified purchase reference is required.");
+  return fulfillPhantomStoreProductPurchase({ tenantId, actorId, productId, purchaseReference });
+}
+
+export async function fulfillPhantomStoreProductPurchase(input: {
+  tenantId: string;
+  actorId: string;
+  productId: string;
+  purchaseReference: string;
+}) {
+  const tenantId = clean(input.tenantId, 100);
+  const actorId = clean(input.actorId, 120);
+  const productId = clean(input.productId, 180);
+  const purchaseReference = clean(input.purchaseReference, 180);
+  if (!tenantId || !actorId) throw new Error("A verified account identity is required.");
+  if (!purchaseReference) throw new Error("A verified purchase reference is required.");
+  const product = productForLifecycle(productId);
+  if (!product || product.status !== "available") throw new Error("That product is not available for entitlement.");
   const store = await readStore();
   const existingReference = store.entitlements.find((entry) => entry.purchaseReference === purchaseReference);
   if (existingReference) {
@@ -901,6 +939,34 @@ export async function grantPhantomStoreProductEntitlement(session: AccessSession
   store.entitlements.push(entitlement);
   await writeStore(store);
   return { entitlement, idempotent: false, restored: false };
+}
+
+export async function getPhantomStoreWorkspaceProductAccess(session: AccessSession, workspaceProductId: string) {
+  const product = SEEDED_PRODUCTS.find((entry) => entry.workspaceProductId === workspaceProductId) || null;
+  if (!product) return { product: null, entitlement: null, active: false };
+  const tenantId = tenantIdFor(session);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const entitlement = store.entitlements.find((entry) =>
+    entry.tenantId === tenantId
+    && entry.actorId === actorId
+    && entry.productId === product.id
+  ) || null;
+  return { product, entitlement, active: entitlement?.status === "active" };
+}
+
+export async function getPhantomStoreWorkspaceProductAccessMap(session: AccessSession) {
+  const tenantId = tenantIdFor(session);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  return Object.fromEntries(AI_WORKSPACE_PRODUCTS.map((product) => {
+    const entitlement = store.entitlements.find((entry) =>
+      entry.tenantId === tenantId
+      && entry.actorId === actorId
+      && entry.productId === product.id
+    ) || null;
+    return [product.workspaceProductId || product.id, { productId: product.id, entitlement, active: entitlement?.status === "active" }];
+  }));
 }
 
 export async function revokePhantomStoreProductEntitlement(session: AccessSession, productId: string, input: Record<string, unknown>) {

@@ -671,8 +671,9 @@ html[data-org-color-mode="light"] .ps-spotlight-panel{
   .ps-workflow-match polyline { animation: none; }
 }
 
-/* Integrated Milestone 2 AI workspaces. These live inside PhantomStore and use
-   the authenticated server API; they are not the isolated package preview. */
+/* Paid account-owned AI applications. The same responsive surface is served
+   by the browser and desktop shell; server entitlements remain authoritative. */
+.ps-store-message { margin:0 0 12px; padding:11px 13px; border:1px solid rgba(65,255,161,.24); border-radius:8px; background:rgba(65,255,161,.055); color:#cceadd; font-weight:750; }
 .ps-ai-product-art {
   position: relative;
   display: grid;
@@ -701,6 +702,11 @@ html[data-org-color-mode="light"] .ps-spotlight-panel{
 .ps-ai-product-art > b { align-self:center; color:#f2fff8; font:900 clamp(54px,8vw,88px)/.8 "Manrope",sans-serif; letter-spacing:-.08em; text-shadow:0 0 30px color-mix(in srgb,var(--ai-accent) 55%,transparent); }
 .ps-ai-product-art > i { color:#c8d8d1; font:700 10px "Spline Sans Mono",monospace; text-transform:uppercase; }
 .ps-ai-product-art > em { position:absolute; right:-28px; bottom:-55px; width:150px; height:150px; border:18px solid color-mix(in srgb,var(--ai-accent) 36%,transparent); border-radius:50%; box-shadow:0 0 45px color-mix(in srgb,var(--ai-accent) 18%,transparent); }
+.ps-ai-product-art.has-cover { background:#020404; box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ai-accent) 18%,transparent); }
+.ps-ai-product-art.has-cover::before { z-index:1; opacity:1; background:linear-gradient(180deg,rgba(2,4,4,.08),rgba(2,4,4,.05) 46%,rgba(2,4,4,.92)); mask-image:none; }
+.ps-ai-product-art.has-cover > img { position:absolute; inset:0; z-index:0; width:100%; height:100%; object-fit:cover; }
+.ps-ai-product-art.has-cover > b { justify-self:start; align-self:end; margin-bottom:15px; padding:6px 8px; border:1px solid color-mix(in srgb,var(--ai-accent) 45%,transparent); border-radius:5px; background:rgba(0,0,0,.54); font:900 17px/1 "Manrope",sans-serif; letter-spacing:-.04em; backdrop-filter:blur(8px); }
+.ps-ai-product-art.has-cover > em { display:none; }
 .ps-product.is-ai-workspace { border-color:color-mix(in srgb,var(--ai-accent,#42e9ff) 20%,var(--line)); }
 .ps-product.is-ai-workspace .ps-product-media { background:#020403; }
 .ps-ai-hub { display:grid; gap:16px; }
@@ -721,11 +727,18 @@ html[data-org-color-mode="light"] .ps-spotlight-panel{
 }
 .ps-ai-hub-copy { max-width:900px; margin:0; color:var(--ps-soft); line-height:1.65; }
 .ps-ai-hub-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.ps-ai-hub-card { display:grid; grid-template-columns:minmax(170px,.7fr) 1.3fr; gap:14px; padding:12px; border:1px solid color-mix(in srgb,var(--ai-accent) 24%,var(--line)); border-radius:8px; background:linear-gradient(145deg,rgba(255,255,255,.025),rgba(0,0,0,.14)); }
-.ps-ai-hub-card .ps-ai-product-art { grid-row:1 / span 3; min-height:220px; }
+.ps-ai-hub-card { display:grid; grid-template-columns:minmax(190px,.78fr) 1.22fr; gap:14px; padding:12px; border:1px solid color-mix(in srgb,var(--ai-accent) 24%,var(--line)); border-radius:10px; background:linear-gradient(145deg,rgba(255,255,255,.025),rgba(0,0,0,.14)); transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+.ps-ai-hub-card:hover { transform:translateY(-2px); border-color:color-mix(in srgb,var(--ai-accent) 52%,var(--line)); box-shadow:0 18px 42px rgba(0,0,0,.26); }
+.ps-ai-hub-card.is-owned { box-shadow:inset 0 2px 0 color-mix(in srgb,var(--ai-accent) 55%,transparent); }
+.ps-ai-hub-card .ps-ai-product-art { grid-row:1 / span 5; min-height:260px; }
 .ps-ai-hub-card h3 { margin:4px 0 8px; color:var(--ink); font-size:22px; }
 .ps-ai-hub-card p { margin:0; color:var(--ps-soft); line-height:1.5; }
 .ps-ai-hub-card > button { align-self:end; justify-self:start; }
+.ps-ai-usecase-strip { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.ps-ai-usecase-strip span { min-width:0; padding:8px; border:1px solid rgba(255,255,255,.075); border-radius:6px; background:rgba(0,0,0,.16); }
+.ps-ai-usecase-strip b,.ps-ai-usecase-strip small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ps-ai-usecase-strip b { color:#deebe5; font-size:9px; }
+.ps-ai-usecase-strip small { margin-top:3px; color:var(--ps-dim); font-size:8px; }
 .ps-ai-workspace { display:grid; gap:14px; }
 .ps-ai-back { justify-self:start; }
 .ps-ai-workspace-hero { padding:18px; border:1px solid color-mix(in srgb,var(--ai-accent) 30%,var(--line)); border-radius:8px; background:radial-gradient(circle at 80% 10%,color-mix(in srgb,var(--ai-accent) 16%,transparent),transparent 40%),rgba(255,255,255,.018); }
@@ -738,6 +751,38 @@ html[data-org-color-mode="light"] .ps-spotlight-panel{
 .ps-ai-consent b,.ps-ai-stale b,.ps-ai-reviewed b { color:var(--ink); }
 .ps-ai-consent p,.ps-ai-stale p,.ps-ai-reviewed p { margin:4px 0 0; }
 .ps-ai-consent.is-granted { border-color:rgba(65,255,161,.25); }
+.ps-ai-usecases { display:grid; gap:10px; padding:14px; border:1px solid color-mix(in srgb,var(--ai-accent) 22%,var(--line)); border-radius:9px; background:rgba(255,255,255,.014); }
+.ps-ai-usecases > header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.ps-ai-usecases h3 { margin:3px 0 0; color:var(--ink); }
+.ps-ai-usecases > header > span { color:var(--ai-accent); font:800 8px "Spline Sans Mono",monospace; text-transform:uppercase; }
+.ps-ai-usecases > div { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.ps-ai-usecases button { display:grid; gap:6px; padding:12px; border:1px solid rgba(255,255,255,.085); border-radius:8px; background:rgba(0,0,0,.18); color:var(--ps-soft); text-align:left; cursor:pointer; transition:border-color .16s ease,background .16s ease,transform .16s ease; }
+.ps-ai-usecases button:hover,.ps-ai-usecases button.is-active { border-color:var(--ai-accent); background:color-mix(in srgb,var(--ai-accent) 7%,rgba(0,0,0,.22)); transform:translateY(-1px); }
+.ps-ai-usecases button small { color:var(--ai-accent); font:800 8px "Spline Sans Mono",monospace; text-transform:uppercase; }
+.ps-ai-usecases button b { color:var(--ink); font-size:14px; }
+.ps-ai-usecases button span { line-height:1.45; }
+.ps-ai-usecases button em { color:#bdd0c7; font-size:9px; font-style:normal; }
+.ps-ai-cockpit { display:grid; grid-template-columns:minmax(240px,.62fr) minmax(0,1.38fr); min-height:330px; overflow:hidden; border:1px solid color-mix(in srgb,var(--ai-accent) 38%,var(--line)); border-radius:10px; background:radial-gradient(circle at 76% 0,color-mix(in srgb,var(--ai-accent) 11%,transparent),transparent 40%),#040706; box-shadow:0 22px 55px rgba(0,0,0,.24); }
+.ps-ai-cockpit-cover { position:relative; min-height:260px; overflow:hidden; background:#020403; }
+.ps-ai-cockpit-cover::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent 55%,#040706),linear-gradient(0deg,rgba(4,7,6,.8),transparent 42%); }
+.ps-ai-cockpit-cover > img { width:100%; height:100%; object-fit:cover; }
+.ps-ai-cockpit-cover > span { position:absolute; z-index:2; left:14px; bottom:14px; padding:6px 8px; border:1px solid rgba(65,255,161,.32); border-radius:999px; background:rgba(0,0,0,.55); color:var(--neon); font:800 8px "Spline Sans Mono",monospace; letter-spacing:.08em; backdrop-filter:blur(8px); }
+.ps-ai-cockpit-main { display:grid; align-content:space-between; gap:18px; padding:20px; }
+.ps-ai-cockpit-main > header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.ps-ai-cockpit-main h3 { margin:4px 0 7px; color:var(--ink); font-size:clamp(22px,3vw,36px); letter-spacing:-.035em; }
+.ps-ai-cockpit-main header p { max-width:650px; margin:0; color:var(--ps-soft); line-height:1.55; }
+.ps-ai-cockpit-main header > b { flex:0 0 auto; padding:6px 8px; border:1px solid color-mix(in srgb,var(--ai-accent) 32%,transparent); border-radius:999px; color:var(--ai-accent); font:800 8px "Spline Sans Mono",monospace; text-transform:uppercase; }
+.ps-ai-pipeline { display:flex; align-items:stretch; gap:5px; overflow:auto hidden; padding-bottom:4px; }
+.ps-ai-pipeline span { position:relative; flex:1 0 92px; display:grid; gap:5px; min-height:66px; padding:9px; border:1px solid rgba(255,255,255,.07); border-radius:6px; background:rgba(255,255,255,.015); }
+.ps-ai-pipeline span:not(:last-child)::after { content:""; position:absolute; top:50%; right:-6px; width:7px; height:1px; background:var(--ai-accent); }
+.ps-ai-pipeline span.is-live { border-color:color-mix(in srgb,var(--ai-accent) 30%,var(--line)); background:color-mix(in srgb,var(--ai-accent) 5%,rgba(0,0,0,.1)); }
+.ps-ai-pipeline i { color:var(--ai-accent); font:800 8px "Spline Sans Mono",monospace; font-style:normal; }
+.ps-ai-pipeline b { align-self:end; color:#d9e7e0; font-size:9px; }
+.ps-ai-cockpit-stats { display:grid; grid-template-columns:1.2fr .65fr .75fr; gap:7px; }
+.ps-ai-cockpit-stats span { padding:10px; border-top:1px solid color-mix(in srgb,var(--ai-accent) 28%,var(--line)); background:rgba(0,0,0,.14); }
+.ps-ai-cockpit-stats small,.ps-ai-cockpit-stats b { display:block; }
+.ps-ai-cockpit-stats small { color:var(--ps-dim); font:800 8px "Spline Sans Mono",monospace; text-transform:uppercase; }
+.ps-ai-cockpit-stats b { margin-top:6px; color:#dfece6; font-size:10px; line-height:1.35; }
 .ps-ai-layout { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(250px,.65fr); gap:12px; align-items:start; }
 .ps-ai-create,.ps-ai-artifacts,.ps-ai-analysis { padding:14px; border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.018); }
 .ps-ai-create h3,.ps-ai-artifacts h3,.ps-ai-core h3,.ps-ai-selected-head h3 { margin:3px 0 0; color:var(--ink); }
@@ -781,11 +826,18 @@ html[data-org-color-mode="light"] .ps-spotlight-panel{
 @media(max-width:900px){
   .ps-ai-hub-grid,.ps-ai-layout { grid-template-columns:1fr; }
   .ps-ai-hub-card { grid-template-columns:minmax(150px,.55fr) 1.45fr; }
+  .ps-ai-cockpit { grid-template-columns:1fr; }
+  .ps-ai-cockpit-cover { max-height:320px; }
+  .ps-ai-cockpit-cover::after { background:linear-gradient(0deg,#040706,transparent 45%); }
 }
 @media(max-width:640px){
   .ps-ai-hub-card { grid-template-columns:1fr; }
   .ps-ai-hub-card .ps-ai-product-art { grid-row:auto; min-height:175px; }
   .ps-ai-fields { grid-template-columns:1fr; }
+  .ps-ai-usecases > div,.ps-ai-cockpit-stats { grid-template-columns:1fr; }
+  .ps-ai-usecase-strip { grid-template-columns:1fr; }
+  .ps-ai-usecase-strip span:nth-child(n+3) { display:none; }
+  .ps-ai-cockpit-main > header { flex-direction:column; }
   .ps-ai-workspace-hero,.ps-ai-consent,.ps-ai-selected-head { align-items:flex-start; flex-direction:column; }
   .ps-ai-workspace-hero > div:last-child { justify-content:flex-start; }
   .ps-ai-workspace { margin-inline:-4px; }

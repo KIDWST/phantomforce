@@ -11,6 +11,7 @@ import { assignOrgPlan, planDefinition } from "./entitlements.js";
 import { prisma } from "./prisma-runtime.js";
 import { ADMIN_PUBLIC_URL, CLIENT_PUBLIC_URL, publicHostFromHeaders, publicHostScope } from "./public-hosts.js";
 import { recordOrgAuditEvent } from "./user-accounts.js";
+import { hasConfiguredStripeProductPrices, processVerifiedStripeProductCheckout } from "../commerce/stripe-product-checkout.js";
 
 export type StripeBillingInterval = "month" | "year";
 
@@ -70,7 +71,8 @@ function configuredForCheckout(config = stripeConfig()) {
 }
 
 function configuredForWebhooks(config = stripeConfig()) {
-  return configuredForCheckout(config) && config.webhookSecret.startsWith("whsec_");
+  const credentialsReady = config.enabled && config.secretKey.startsWith("sk_") && config.webhookSecret.startsWith("whsec_");
+  return credentialsReady && (configuredPricePlanKeys(config).length > 0 || hasConfiguredStripeProductPrices());
 }
 
 function shortProviderId(value: string | null | undefined) {
@@ -487,6 +489,8 @@ async function recoverSubscriptionFromStripe(subscriptionId: string) {
 }
 
 export async function processVerifiedStripeWebhook(event: Stripe.Event, rawBody: Buffer) {
+  const productCheckout = await processVerifiedStripeProductCheckout(event);
+  if (productCheckout) return productCheckout;
   const received = await beginWebhookEvent(event, rawBody);
   if (received.duplicate) return { ok: true as const, duplicate: true, outcome: "already_processed" };
 
