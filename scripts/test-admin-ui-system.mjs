@@ -31,7 +31,7 @@ for (const file of requiredStyles) {
 
 for (const file of ["phantomstore.css", "creator-studio.css", "phantomhunter.css", "phantomhunter-connect.css"]) {
   assert.doesNotMatch(index, new RegExp(`<link rel="stylesheet"[^>]*href="/app/${file.replaceAll(".", "\\.")}`), `${file} must stay off the initial shell.`);
-  assert.match(main, new RegExp(`/${file.replaceAll(".", "\\.")}\\?v=phantom-live-20260817-158`), `${file} must remain available through the workspace style loader.`);
+  assert.match(main, new RegExp(`/${file.replaceAll(".", "\\.")}\\?v=phantom-live-20260817-159`), `${file} must remain available through the workspace style loader.`);
 }
 
 const adminCssPosition = index.indexOf("/app/admin-next.css");

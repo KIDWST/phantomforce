@@ -1622,7 +1622,7 @@
         },
         {
           "file": "app/index.html",
-          "pattern": "phantom-live-20260817-15[0-7]\"[^>]*phantombot-next\\.css",
+          "pattern": "phantom-live-20260817-15[0-8]\"[^>]*phantombot-next\\.css",
           "description": "The mission workspace stylesheet cannot ship behind the upgraded cache identity."
         }
       ]
