@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-08-18",
+  "lastUpdated": "2026-08-19",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
@@ -204,7 +204,7 @@
       "requiredPatterns": [
         {
           "file": "AGENTS.md",
-          "pattern": "phantomforce-live-social-analytics-20260712",
+          "pattern": "phantomforce-current",
           "description": "AGENTS documents the canonical editing checkout."
         },
         {
@@ -1894,6 +1894,36 @@
           "file": "app/js/connection-center.js",
           "pattern": "Connection requested\\. Nothing else is needed from you",
           "description": "The connection center cannot claim success before a real broker and provider authorization exist."
+        }
+      ]
+    },
+    {
+      "id": "phantomplay-direct-model-control-floor",
+      "status": "active",
+      "title": "PhantomPlay exposes direct model control where AI edits run",
+      "ownerDecision": "The native PhantomPlay AI pane must show both the provider route and an explicit model dropdown at the point of action. It may offer automatic routing, but it cannot silently hide the selected model in a separate Settings tab. The chosen model persists and is the model sent with the active-file edit. Live OpenRouter and installed Ollama catalogs enrich the picker without blocking fallback choices.",
+      "requiredPatterns": [
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "span \\{ \"AI ROUTE\" \\}[\\s\\S]{0,2600}aria_label: \"AI model\"[\\s\\S]{0,1200}save_studio_settings\\(&ai_provider\\(\\), &model\\)",
+          "description": "The AI pane presents the route and model controls together and persists the exact model selection."
+        },
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "request_ai_edit\\([\\s\\S]{0,600}provider,[\\s\\S]{0,120}model",
+          "description": "The active-file edit request receives the provider and model currently selected in the AI pane."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "\\/api\\/phantomplay\\/ai-models[\\s\\S]{0,3000}getLocalOllamaStatus[\\s\\S]{0,5000}fetchOpenRouterModelsForPhantomPlay",
+          "description": "The native picker can resolve current installed Ollama models and the live OpenRouter catalog with safe fallbacks."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "Settings model:",
+          "description": "The AI pane cannot regress to a read-only label that sends the user elsewhere to discover or change the model."
         }
       ]
     }

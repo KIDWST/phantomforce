@@ -2,7 +2,7 @@ Continue the finite PhantomForce Seven-Day Evolution task from the durable
 checkpoint. This is a normal scheduled task, not an active Codex goal.
 
 Work only in:
-C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712
+C:\Users\jorda\Documents\Codex\worktrees\phantomforce-current
 
 Before acting:
 

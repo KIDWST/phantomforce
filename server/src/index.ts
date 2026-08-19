@@ -7520,11 +7520,140 @@ registerPhantomPlayDevRooms(app);
 
 app.get("/api/phantomplay/devroom/stats", async () => ({ ok: true, ...devRoomStats() }));
 
-app.post("/api/phantomplay/ai-edit", { bodyLimit: 4 * 1024 * 1024 }, async (request, reply) => {
+type PhantomPlayAiModelOption = { id: string; name: string };
+type PhantomPlayAiProviderId = "auto" | "codex" | "claude" | "openrouter" | "local";
+
+const PHANTOMPLAY_OPENROUTER_MODELS_ENDPOINT = "https://openrouter.ai/api/v1/models";
+const PHANTOMPLAY_AI_MODEL_FALLBACKS: Record<PhantomPlayAiProviderId, PhantomPlayAiModelOption[]> = {
+  auto: [{ id: "", name: "Automatic model routing" }],
+  codex: [
+    { id: "", name: "Codex default" },
+    { id: "gpt-5-codex", name: "GPT-5 Codex" },
+    { id: "gpt-5", name: "GPT-5" },
+  ],
+  claude: [
+    { id: "", name: "Claude default" },
+    { id: "sonnet", name: "Claude Sonnet" },
+    { id: "opus", name: "Claude Opus" },
+  ],
+  openrouter: [
+    { id: "z-ai/glm-5.2", name: "GLM 5.2" },
+    { id: "openrouter/free", name: "OpenRouter Free Router" },
+    { id: "anthropic/claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
+    { id: "google/gemini-3-pro", name: "Gemini 3 Pro" },
+    { id: "deepseek/deepseek-chat-v3.1", name: "DeepSeek V3.1" },
+    { id: "qwen/qwen3-coder", name: "Qwen3 Coder" },
+  ],
+  local: [
+    { id: "", name: "Auto local model" },
+    { id: "llama3.1", name: "llama3.1" },
+    { id: "qwen2.5-coder", name: "qwen2.5-coder" },
+    { id: "deepseek-coder", name: "deepseek-coder" },
+  ],
+};
+
+function normalizePhantomPlayAiProvider(value: unknown): PhantomPlayAiProviderId {
+  return value === "codex" || value === "claude" || value === "openrouter" || value === "local" ? value : "auto";
+}
+
+function phantomPlayDesktopLocalAllowed(requestIp: string) {
   const desktopEditEnabled = ["127.0.0.1", "localhost", "::1"].includes(host.trim().toLowerCase())
     || process.env.PHANTOMPLAY_DESKTOP_AI_EDIT_ENABLED === "true";
+  return desktopEditEnabled && ["127.0.0.1", "::1"].includes(requestIp);
+}
+
+function openRouterDesktopConfigured() {
+  return process.env.PHANTOM_LIVE_PROVIDERS_ENABLED === "true"
+    && process.env.PHANTOM_OPENROUTER_TRANSPORT_ENABLED === "true"
+    && Boolean(process.env.OPENROUTER_API_KEY?.trim());
+}
+
+function parseOpenRouterModels(value: unknown): PhantomPlayAiModelOption[] {
+  if (!value || typeof value !== "object") return [];
+  const data = (value as Record<string, unknown>).data;
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((item): PhantomPlayAiModelOption | null => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const id = typeof record.id === "string" ? record.id.trim() : "";
+      if (!id) return null;
+      const name = typeof record.name === "string" && record.name.trim() ? record.name.trim() : id;
+      return { id, name };
+    })
+    .filter((item): item is PhantomPlayAiModelOption => Boolean(item))
+    .slice(0, 500);
+}
+
+async function fetchOpenRouterModelsForPhantomPlay() {
+  const headers: Record<string, string> = {};
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6500);
+  try {
+    const response = await fetch(PHANTOMPLAY_OPENROUTER_MODELS_ENDPOINT, {
+      headers,
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`OpenRouter models returned HTTP ${response.status}`);
+    return parseOpenRouterModels(await response.json());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+app.get("/api/phantomplay/ai-models", async (request, reply) => {
   const requestIp = request.ip.replace(/^::ffff:/u, "");
-  if (!desktopEditEnabled || !["127.0.0.1", "::1"].includes(requestIp)) {
+  if (!phantomPlayDesktopLocalAllowed(requestIp)) {
+    return reply.code(404).send({ ok: false, error: "phantomplay_desktop_ai_models_unavailable" });
+  }
+  const query = (request.query ?? {}) as { provider?: unknown };
+  const provider = normalizePhantomPlayAiProvider(query.provider);
+  const fallback = PHANTOMPLAY_AI_MODEL_FALLBACKS[provider];
+  if (provider === "local") {
+    const ollama = await getLocalOllamaStatus();
+    const installed = ollama.models.map((model) => ({ id: model, name: model }));
+    return {
+      ok: true,
+      provider,
+      configured: ollama.ok,
+      dynamic: installed.length > 0,
+      models: installed.length ? [{ id: "", name: "Auto local model" }, ...installed] : fallback,
+      error: ollama.ok ? undefined : ollama.error,
+    };
+  }
+  if (provider !== "openrouter") {
+    return { ok: true, provider, configured: true, dynamic: false, models: fallback };
+  }
+  if (!openRouterDesktopConfigured()) {
+    return {
+      ok: true,
+      provider,
+      configured: false,
+      dynamic: false,
+      models: fallback,
+      error: "Needs OpenRouter API key and live transport enabled.",
+    };
+  }
+  try {
+    const models = await fetchOpenRouterModelsForPhantomPlay();
+    return { ok: true, provider, configured: true, dynamic: models.length > 0, models: models.length ? models : fallback };
+  } catch (error) {
+    return {
+      ok: true,
+      provider,
+      configured: false,
+      dynamic: false,
+      models: fallback,
+      error: error instanceof Error ? error.message : "OpenRouter model list could not be loaded.",
+    };
+  }
+});
+
+app.post("/api/phantomplay/ai-edit", { bodyLimit: 4 * 1024 * 1024 }, async (request, reply) => {
+  const requestIp = request.ip.replace(/^::ffff:/u, "");
+  if (!phantomPlayDesktopLocalAllowed(requestIp)) {
     return reply.code(404).send({ ok: false, error: "phantomplay_desktop_ai_edit_unavailable" });
   }
   const body = (request.body ?? {}) as Record<string, unknown>;

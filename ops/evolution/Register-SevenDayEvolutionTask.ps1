@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $taskName = "PhantomForce Seven-Day Evolution"
-$repoRoot = "C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712"
+$repoRoot = "C:\Users\jorda\Documents\Codex\worktrees\phantomforce-current"
 $vbsPath = Join-Path $repoRoot "ops\evolution\Run-SevenDayEvolutionHidden.vbs"
 if (-not (Test-Path -LiteralPath $vbsPath)) {
   throw "Hidden evolution runner is missing: $vbsPath"

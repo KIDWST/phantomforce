@@ -9,7 +9,7 @@
   "cycle": 1,
   "authoritative_branch": "main",
   "authoritative_remote": "https://github.com/KIDWST/phantomforce.git",
-  "edit_checkout": "C:\\Users\\jorda\\Documents\\Codex\\worktrees\\phantomforce-live-social-analytics-20260712",
+  "edit_checkout": "C:\\Users\\jorda\\Documents\\Codex\\worktrees\\phantomforce-current",
   "deployment_checkout": "C:\\Users\\jorda\\Documents\\Codex\\deployments\\phantomforce-live",
   "latest_stable_commit": "c23bf05d44943bea0df55aad133180d638a7ccdc",
   "last_known_good_commit": "c23bf05d44943bea0df55aad133180d638a7ccdc",

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$RepoRoot = "C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712"
+  [string]$RepoRoot = "C:\Users\jorda\Documents\Codex\worktrees\phantomforce-current"
 )
 
 $ErrorActionPreference = "Stop"
@@ -58,6 +58,9 @@ $endpoints = @(
 $requiredHealthy = @($endpoints | Where-Object { $_.required -and -not $_.ok }).Count -eq 0
 $valid = $branch -eq "main" -and
   $originUrl -eq "https://github.com/KIDWST/phantomforce.git" -and
+  [int]$counts[0] -eq 0 -and
+  [int]$counts[1] -eq 0 -and
+  [string]::IsNullOrWhiteSpace($porcelain) -and
   $requiredHealthy
 
 $result = [ordered]@{

@@ -18,7 +18,7 @@
 ## Source of truth
 - The canonical repo is **`github.com/KIDWST/phantomforce`**, branch **`main`**.
 - The canonical Windows editing checkout is
-  `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712`.
+  `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-current`.
   The machine serving **`admin.phantomforce.online`**, **`app.phantomforce.online`**,
   and **`127.0.0.1:5177`** uses the clean deployment checkout at
   `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live`. The scheduled

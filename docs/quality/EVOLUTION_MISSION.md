@@ -40,7 +40,7 @@ Do not create duplicate records. Extend these sources:
 - Remote: `https://github.com/KIDWST/phantomforce.git`
 - Production branch: `main`
 - Edit checkout:
-  `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712`
+  `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-current`
 - Served checkout:
   `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live`
 - Local app: `http://127.0.0.1:5177/app/index.html`

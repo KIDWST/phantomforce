@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$RepoRoot = "C:\Users\jorda\Documents\Codex\worktrees\phantomforce-live-social-analytics-20260712",
+  [string]$RepoRoot = "C:\Users\jorda\Documents\Codex\worktrees\phantomforce-current",
   [switch]$PreflightOnly
 )
 

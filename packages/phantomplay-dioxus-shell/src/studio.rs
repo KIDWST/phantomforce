@@ -2,9 +2,10 @@ use super::studio_icons::{
     Activity, Bot, Bug, Check, CircleAlert, CirclePlay, CodeXml, Columns2, Cpu, Eye, EyeOff,
     FileCode, Files, FolderOpen, FolderPlus, Gauge, HardDrive, Import, Keyboard, Maximize2,
     Minimize2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Puzzle, Radio,
-    RefreshCw, Save, Search, Star, WandSparkles, Wifi, WifiOff,
+    RefreshCw, Save, Search, Settings2, Star, WandSparkles, Wifi, WifiOff,
 };
 use super::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, PartialEq)]
 enum WorkspaceView {
@@ -19,6 +20,231 @@ enum ToolTab {
     Runtime,
     Mods,
     Network,
+    Settings,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct StudioSettings {
+    ai_provider: String,
+    ai_model: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct AiModelOption {
+    id: String,
+    name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+struct AiModelsResponseBody {
+    ok: bool,
+    configured: Option<bool>,
+    dynamic: Option<bool>,
+    models: Option<Vec<AiModelOption>>,
+    error: Option<String>,
+}
+
+struct AiModelsOutput {
+    models: Vec<AiModelOption>,
+    configured: bool,
+    dynamic: bool,
+    error: Option<String>,
+}
+
+impl Default for StudioSettings {
+    fn default() -> Self {
+        Self {
+            ai_provider: "auto".to_string(),
+            ai_model: String::new(),
+        }
+    }
+}
+
+fn normalize_ai_provider(value: &str) -> String {
+    match value {
+        "codex" | "claude" | "openrouter" | "local" => value.to_string(),
+        _ => "auto".to_string(),
+    }
+}
+
+fn studio_settings_path() -> PathBuf {
+    phantomplay_data_root().join("studio-settings.json")
+}
+
+fn normalize_studio_settings(settings: StudioSettings) -> StudioSettings {
+    let ai_provider = normalize_ai_provider(&settings.ai_provider);
+    StudioSettings {
+        ai_model: settings.ai_model.trim().to_string(),
+        ai_provider,
+    }
+}
+
+fn load_studio_settings() -> StudioSettings {
+    fs::read_to_string(studio_settings_path())
+        .ok()
+        .and_then(|raw| serde_json::from_str::<StudioSettings>(&raw).ok())
+        .map(normalize_studio_settings)
+        .unwrap_or_default()
+}
+
+fn save_studio_settings(provider: &str, model: &str) {
+    let settings = StudioSettings {
+        ai_provider: normalize_ai_provider(provider),
+        ai_model: model.trim().to_string(),
+    };
+    let root = phantomplay_data_root();
+    let _ = fs::create_dir_all(&root);
+    if let Ok(bytes) = serde_json::to_vec_pretty(&settings) {
+        let _ = fs::write(root.join("studio-settings.json"), bytes);
+    }
+}
+
+fn model_option(id: &str, name: &str) -> AiModelOption {
+    AiModelOption {
+        id: id.to_string(),
+        name: name.to_string(),
+    }
+}
+
+fn fallback_ai_model_options(provider: &str) -> Vec<AiModelOption> {
+    match provider {
+        "codex" => vec![
+            model_option("", "Codex default"),
+            model_option("gpt-5-codex", "GPT-5 Codex"),
+            model_option("gpt-5", "GPT-5"),
+        ],
+        "claude" => vec![
+            model_option("", "Claude default"),
+            model_option("sonnet", "Claude Sonnet"),
+            model_option("opus", "Claude Opus"),
+        ],
+        "openrouter" => vec![
+            model_option("z-ai/glm-5.2", "GLM 5.2"),
+            model_option("openrouter/free", "OpenRouter Free Router"),
+            model_option("anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5"),
+            model_option("google/gemini-3-pro", "Gemini 3 Pro"),
+            model_option("deepseek/deepseek-chat-v3.1", "DeepSeek V3.1"),
+            model_option("qwen/qwen3-coder", "Qwen3 Coder"),
+        ],
+        "local" => vec![
+            model_option("", "Auto local model"),
+            model_option("llama3.1", "llama3.1"),
+            model_option("qwen2.5-coder", "qwen2.5-coder"),
+            model_option("deepseek-coder", "deepseek-coder"),
+        ],
+        _ => vec![model_option("", "Automatic model routing")],
+    }
+}
+
+fn default_ai_model_for_provider(provider: &str) -> String {
+    fallback_ai_model_options(provider)
+        .into_iter()
+        .find(|option| !option.id.is_empty())
+        .map(|option| option.id)
+        .unwrap_or_default()
+}
+
+fn ai_model_dropdown_options(
+    mut options: Vec<AiModelOption>,
+    selected_model: &str,
+) -> Vec<AiModelOption> {
+    let selected_model = selected_model.trim();
+    if !selected_model.is_empty() && !options.iter().any(|option| option.id == selected_model) {
+        options.insert(
+            0,
+            model_option(selected_model, &format!("Saved model: {selected_model}")),
+        );
+    }
+    if options.is_empty() {
+        options.push(model_option("", "Provider default"));
+    }
+    options
+}
+
+fn ai_model_label(options: &[AiModelOption], model: &str) -> String {
+    if model.trim().is_empty() {
+        return "Provider default".to_string();
+    }
+    options
+        .iter()
+        .find(|option| option.id == model)
+        .map(|option| option.name.clone())
+        .unwrap_or_else(|| model.to_string())
+}
+
+fn ai_route_status_text(
+    provider: &str,
+    model: &str,
+    options: &[AiModelOption],
+    configured: Option<bool>,
+    loading: bool,
+    error: &Option<String>,
+) -> String {
+    if configured == Some(false) {
+        return "Needs configuration".to_string();
+    }
+    if loading {
+        return "Refreshing model list...".to_string();
+    }
+    if error.is_some() && provider == "openrouter" {
+        return "Needs configuration".to_string();
+    }
+    if provider == "auto" {
+        return "Automatic route will choose the model".to_string();
+    }
+    format!("Selected model: {}", ai_model_label(options, model))
+}
+
+async fn request_ai_models(provider: String) -> AiModelsOutput {
+    let fallback = fallback_ai_model_options(&provider);
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(6))
+        .build()
+    {
+        Ok(client) => client,
+        Err(error) => {
+            return AiModelsOutput {
+                models: fallback,
+                configured: false,
+                dynamic: false,
+                error: Some(error.to_string()),
+            };
+        }
+    };
+    let response = client
+        .get(format!(
+            "{}/api/phantomplay/ai-models?provider={provider}",
+            phantomplay_api_origin()
+        ))
+        .send()
+        .await;
+    let Ok(response) = response else {
+        return AiModelsOutput {
+            models: fallback,
+            configured: false,
+            dynamic: false,
+            error: Some("Local model service unavailable".to_string()),
+        };
+    };
+    let parsed = response.json::<AiModelsResponseBody>().await;
+    let Ok(parsed) = parsed else {
+        return AiModelsOutput {
+            models: fallback,
+            configured: false,
+            dynamic: false,
+            error: Some("Local model service returned unreadable data".to_string()),
+        };
+    };
+    let mut models = parsed.models.unwrap_or_default();
+    if models.is_empty() {
+        models = fallback;
+    }
+    AiModelsOutput {
+        models,
+        configured: parsed.configured.unwrap_or(parsed.ok),
+        dynamic: parsed.dynamic.unwrap_or(false),
+        error: parsed.error,
+    }
 }
 
 fn preferred_file_index(files: &[(PathBuf, String)]) -> Option<usize> {
@@ -320,6 +546,9 @@ fn import_zip_game_project(source: &Path) -> Result<String, String> {
 
 #[component]
 pub(crate) fn Studio() -> Element {
+    let initial_settings = load_studio_settings();
+    let initial_ai_provider = normalize_ai_provider(&initial_settings.ai_provider);
+    let initial_ai_model = initial_settings.ai_model.trim().to_string();
     let mut games = use_signal(list_games);
     let mut selected_game = use_signal(|| None::<usize>);
     let mut files = use_signal(Vec::<(PathBuf, String)>::new);
@@ -346,8 +575,16 @@ pub(crate) fn Studio() -> Element {
 
     let mut ai_instruction = use_signal(String::new);
     let mut ai_busy = use_signal(|| false);
-    let mut ai_provider = use_signal(|| "auto".to_string());
-    let mut ai_model = use_signal(String::new);
+    let mut ai_provider = use_signal(move || initial_ai_provider.clone());
+    let mut ai_model = use_signal(move || initial_ai_model.clone());
+    let mut ai_model_options = use_signal({
+        let provider = initial_settings.ai_provider.clone();
+        move || fallback_ai_model_options(&provider)
+    });
+    let mut ai_models_loading = use_signal(|| false);
+    let mut ai_models_configured = use_signal(|| None::<bool>);
+    let mut ai_models_dynamic = use_signal(|| false);
+    let mut ai_models_error = use_signal(|| None::<String>);
     let mut api_online = use_signal(|| None::<bool>);
 
     let mut mods_game_id = use_signal(String::new);
@@ -359,6 +596,27 @@ pub(crate) fn Studio() -> Element {
     use_effect(move || {
         spawn(async move {
             api_online.set(Some(check_api_health().await));
+        });
+    });
+
+    use_effect(move || {
+        let provider = ai_provider();
+        ai_model_options.set(fallback_ai_model_options(&provider));
+        ai_models_loading.set(true);
+        ai_models_configured.set(None);
+        ai_models_dynamic.set(false);
+        ai_models_error.set(None);
+        let requested_provider = provider.clone();
+        spawn(async move {
+            let output = request_ai_models(provider).await;
+            if ai_provider() != requested_provider {
+                return;
+            }
+            ai_model_options.set(output.models);
+            ai_models_configured.set(Some(output.configured));
+            ai_models_dynamic.set(output.dynamic);
+            ai_models_error.set(output.error);
+            ai_models_loading.set(false);
         });
     });
 
@@ -1220,6 +1478,13 @@ pub(crate) fn Studio() -> Element {
                             Radio { size: 15 }
                             span { "Room" }
                         }
+                        button {
+                            class: if tool_tab() == ToolTab::Settings { "is-active" } else { "" },
+                            title: "Settings",
+                            onclick: move |_| tool_tab.set(ToolTab::Settings),
+                            Settings2 { size: 15 }
+                            span { "Settings" }
+                        }
                     }
 
                     section {
@@ -1258,8 +1523,15 @@ pub(crate) fn Studio() -> Element {
                             label { class: "prompt-field",
                                 span { "AI ROUTE" }
                                 select {
+                                    aria_label: "AI route",
                                     value: "{ai_provider}",
-                                    onchange: move |event| ai_provider.set(event.value()),
+                                    onchange: move |event| {
+                                        let provider = normalize_ai_provider(&event.value());
+                                        let model = default_ai_model_for_provider(&provider);
+                                        ai_provider.set(provider.clone());
+                                        ai_model.set(model.clone());
+                                        save_studio_settings(&provider, &model);
+                                    },
                                     option { value: "auto", "Auto — best available" }
                                     option { value: "codex", "Codex" }
                                     option { value: "claude", "Claude" }
@@ -1268,12 +1540,36 @@ pub(crate) fn Studio() -> Element {
                                 }
                             }
                             label { class: "prompt-field",
-                                span { "MODEL (OPTIONAL)" }
-                                input {
-                                    r#type: "text",
-                                    placeholder: "Provider default",
+                                span { "MODEL" }
+                                select {
+                                    aria_label: "AI model",
                                     value: "{ai_model}",
-                                    oninput: move |event| ai_model.set(event.value()),
+                                    onchange: move |event| {
+                                        let model = event.value();
+                                        ai_model.set(model.clone());
+                                        save_studio_settings(&ai_provider(), &model);
+                                    },
+                                    for option in ai_model_dropdown_options(ai_model_options(), &ai_model()) {
+                                        option { value: "{option.id}", "{option.name}" }
+                                    }
+                                }
+                            }
+                            div {
+                                class: if ai_models_configured() == Some(false)
+                                    || (ai_models_error().is_some() && ai_provider() == "openrouter") {
+                                    "ai-config-note needs-config"
+                                } else {
+                                    "ai-config-note"
+                                },
+                                span {
+                                    {ai_route_status_text(
+                                        &ai_provider(),
+                                        &ai_model(),
+                                        &ai_model_options(),
+                                        ai_models_configured(),
+                                        ai_models_loading(),
+                                        &ai_models_error(),
+                                    )}
                                 }
                             }
                         }
@@ -1580,6 +1876,100 @@ pub(crate) fn Studio() -> Element {
                         }
                         div { class: "devroom-frame",
                             DevRoomFrame {}
+                        }
+                    }
+
+                    section {
+                        class: if tool_tab() == ToolTab::Settings {
+                            "tool-pane settings-pane is-active"
+                        } else {
+                            "tool-pane settings-pane"
+                        },
+                        div { class: "tool-header",
+                            div { class: "tool-header-icon is-settings",
+                                Settings2 { size: 18 }
+                            }
+                            div {
+                                span { "SETTINGS" }
+                                strong { "AI model routing" }
+                                p { "Choose the route and exact model here or directly in the AI pane." }
+                            }
+                        }
+                        div { class: "tool-section-label",
+                            span { "MODEL CONFIG" }
+                            small {
+                                if ai_models_dynamic() {
+                                    "Live catalog"
+                                } else if ai_models_loading() {
+                                    "Refreshing"
+                                } else {
+                                    "Saved locally"
+                                }
+                            }
+                        }
+                        label { class: "prompt-field settings-field",
+                            span { "AI ROUTE" }
+                            select {
+                                value: "{ai_provider}",
+                                onchange: move |event| {
+                                    let provider = normalize_ai_provider(&event.value());
+                                    let model = default_ai_model_for_provider(&provider);
+                                    ai_provider.set(provider.clone());
+                                    ai_model.set(model.clone());
+                                    save_studio_settings(&provider, &model);
+                                },
+                                option { value: "auto", "Auto — best available" }
+                                option { value: "codex", "Codex" }
+                                option { value: "claude", "Claude" }
+                                option { value: "openrouter", "OpenRouter" }
+                                option { value: "local", "Local Ollama" }
+                            }
+                        }
+                        label { class: "prompt-field settings-field",
+                            span { "MODEL" }
+                            select {
+                                value: "{ai_model}",
+                                onchange: move |event| {
+                                    let model = event.value();
+                                    ai_model.set(model.clone());
+                                    save_studio_settings(&ai_provider(), &model);
+                                },
+                                for option in ai_model_dropdown_options(ai_model_options(), &ai_model()) {
+                                    option { value: "{option.id}", "{option.name}" }
+                                }
+                            }
+                        }
+                        div {
+                            class: if ai_models_configured() == Some(false)
+                                || (ai_models_error().is_some() && ai_provider() == "openrouter") {
+                                "settings-config-state needs-config"
+                            } else {
+                                "settings-config-state"
+                            },
+                            span { class: "state-dot" }
+                            div {
+                                strong {
+                                    {ai_route_status_text(
+                                        &ai_provider(),
+                                        &ai_model(),
+                                        &ai_model_options(),
+                                        ai_models_configured(),
+                                        ai_models_loading(),
+                                        &ai_models_error(),
+                                    )}
+                                }
+                                small {
+                                    if let Some(error) = ai_models_error() {
+                                        "{error}"
+                                    } else if ai_models_dynamic() {
+                                        "Models loaded from the provider catalog."
+                                    } else if ai_provider() == "openrouter" {
+                                        "Set OpenRouter transport and API key to refresh the live catalog."
+                                    } else {
+                                        "This selection is saved for Phantom AI edits."
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -2432,7 +2822,7 @@ const STUDIO_STYLE: &str = r#"
     }
     .tool-tabs {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         border-bottom: 1px solid var(--line-soft);
         background: #0b0f14;
     }
@@ -2496,6 +2886,10 @@ const STUDIO_STYLE: &str = r#"
     .tool-header-icon.is-network {
         border-color: rgba(89, 242, 170, 0.34);
         color: var(--mint);
+    }
+    .tool-header-icon.is-settings {
+        border-color: rgba(134, 226, 244, 0.34);
+        color: var(--cyan);
     }
     .tool-header > div:last-child { min-width: 0; }
     .tool-header strong {
@@ -2604,13 +2998,13 @@ const STUDIO_STYLE: &str = r#"
     .prompt-field > span { display: block; margin-bottom: 7px; }
     .ai-route-controls {
         display: grid;
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
         gap: 7px;
         margin-top: 12px;
     }
     .ai-route-controls .prompt-field { margin-top: 0; }
     .ai-route-controls select,
-    .ai-route-controls input {
+    .settings-field select {
         width: 100%;
         height: 34px;
         border: 1px solid #2a3340;
@@ -2622,9 +3016,62 @@ const STUDIO_STYLE: &str = r#"
         font: 10px "Cascadia Code", Consolas, monospace;
     }
     .ai-route-controls select:focus,
-    .ai-route-controls input:focus {
+    .settings-field select:focus {
         border-color: rgba(169, 156, 255, 0.68);
         box-shadow: 0 0 0 3px rgba(169, 156, 255, 0.08);
+    }
+    .settings-field select:disabled {
+        opacity: 0.62;
+        cursor: wait;
+    }
+    .ai-config-note {
+        display: flex;
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+        min-height: 15px;
+        color: #5f6975;
+        font: 8px "Cascadia Code", Consolas, monospace;
+        letter-spacing: 0;
+        text-transform: uppercase;
+    }
+    .ai-config-note.needs-config {
+        color: var(--amber);
+    }
+    .settings-config-state {
+        display: grid;
+        grid-template-columns: 8px minmax(0, 1fr);
+        gap: 8px;
+        margin-top: 14px;
+        padding: 11px;
+        border: 1px solid rgba(86, 199, 255, 0.2);
+        border-radius: 7px;
+        background: rgba(86, 199, 255, 0.035);
+    }
+    .settings-config-state .state-dot {
+        grid-row: 1 / 3;
+        background: var(--cyan);
+        box-shadow: 0 0 8px rgba(86, 199, 255, 0.45);
+    }
+    .settings-config-state strong {
+        display: block;
+        color: #ccd6df;
+        font-size: 10px;
+        font-weight: 740;
+    }
+    .settings-config-state small {
+        display: block;
+        margin-top: 3px;
+        color: #66717d;
+        font-size: 9px;
+        line-height: 1.35;
+    }
+    .settings-config-state.needs-config {
+        border-color: rgba(255, 190, 104, 0.28);
+        background: rgba(255, 190, 104, 0.045);
+    }
+    .settings-config-state.needs-config .state-dot {
+        background: var(--amber);
+        box-shadow: 0 0 8px rgba(255, 190, 104, 0.38);
     }
     .ai-instruction {
         width: 100%;
@@ -3013,6 +3460,8 @@ const STUDIO_STYLE: &str = r#"
         .project-copy p { display: none; }
         .workspace-chip:not(.is-renderer) { display: none; }
         .tool-pane { padding: 14px; }
+        .ai-route-controls { grid-template-columns: 1fr; }
+        .ai-config-note { grid-column: auto; }
         .ai-presets button span { display: none; }
         .split-workspace {
             grid-template-columns: 1fr;
@@ -3052,6 +3501,27 @@ mod tests {
             .expect("clock should be available")
             .as_nanos();
         std::env::temp_dir().join(format!("phantomplay-{name}-{stamp}"))
+    }
+
+    #[test]
+    fn model_dropdown_keeps_the_selected_model_visible() {
+        let options = vec![model_option("model-a", "Model A")];
+        let visible = ai_model_dropdown_options(options, "model-b");
+
+        assert_eq!(
+            visible.first().map(|option| option.id.as_str()),
+            Some("model-b")
+        );
+        assert!(visible.iter().any(|option| option.id == "model-a"));
+    }
+
+    #[test]
+    fn route_status_names_the_model_selected_in_the_ai_pane() {
+        let options = vec![model_option("model-a", "Model A")];
+        let status =
+            ai_route_status_text("openrouter", "model-a", &options, Some(true), false, &None);
+
+        assert_eq!(status, "Selected model: Model A");
     }
 
     #[test]
