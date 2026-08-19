@@ -117,11 +117,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <!-- Global shell styles load before boot. Workspace-only bundles are loaded
-         by main.js when that workspace opens so first paint stays bounded. -->
+    <!-- Global shell styles load before boot. Every workspace-only bundle is
+         downloaded up front, then main.js applies it atomically when its page opens. -->
     <link rel="stylesheet" data-admin-page-style href="/app/phantom.css?v=phantom-live-20260819-167" />
-    <link rel="stylesheet" data-admin-page-style href="/app/phantomplay.css?v=phantom-live-20260819-167" />
-    <link rel="stylesheet" data-admin-page-style href="/app/phantomplay-v2.css?v=phantom-live-20260819-167" />
     <link rel="stylesheet" data-admin-page-style href="/app/competitor-intelligence.css?v=phantom-live-20260819-167" />
     <link rel="stylesheet" data-admin-page-style href="/app/orggraph.css?v=phantom-live-20260819-167" />
     <link rel="stylesheet" data-admin-page-style href="/app/phantom-skin.css?v=phantom-live-20260819-167" />
@@ -130,6 +128,12 @@
     <link rel="stylesheet" data-admin-page-style href="/app/workspace-mobile-integrity.css?v=phantom-live-20260819-167" />
     <link rel="stylesheet" data-admin-page-style href="/app/phantombot-next.css?v=phantom-live-20260819-167" />
     <link rel="stylesheet" data-admin-page-style href="/app/admin-next.css?v=phantom-live-20260819-167" />
+    <link rel="preload" as="style" data-workspace-style-preload href="/app/phantomplay.css?v=phantom-live-20260819-167" />
+    <link rel="preload" as="style" data-workspace-style-preload href="/app/phantomplay-v2.css?v=phantom-live-20260819-167" />
+    <link rel="preload" as="style" data-workspace-style-preload href="/app/phantomstore.css?v=phantom-live-20260819-167" />
+    <link rel="preload" as="style" data-workspace-style-preload href="/app/creator-studio.css?v=phantom-live-20260819-167" />
+    <link rel="preload" as="style" data-workspace-style-preload href="/app/phantomhunter.css?v=phantom-live-20260819-167" />
+    <link rel="preload" as="style" data-workspace-style-preload href="/app/phantomhunter-connect.css?v=phantom-live-20260819-167" />
 
     <!-- Main statically imports every page module; these high-traffic hints move
          their fetch/parse work ahead of authentication and first navigation. -->

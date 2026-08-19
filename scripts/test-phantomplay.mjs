@@ -69,7 +69,9 @@ assert.match(main, /renderPhantomPlay/u, "The workspace must use the PhantomPlay
 assert.match(read("../app/js/customization.js"), /phantomplay[\s\S]*forceEnabled: true[\s\S]*accessMode: "entire_organization"[\s\S]*if \(moduleId === "phantomplay"\) return true;/u, "PhantomPlay nav access must stay organization-wide instead of preserving selected-member locks.");
 assert.match(main, /sessionId:\s*kind === "admin" \? "admin-jordan" : "client-sports-demo"/u, "Local UI tests must obtain a real protected demo session when the local backend is available.");
 assert.match(main, /phantomplay:\s*\[[\s\S]*?phantomplay\.css\?v=phantom-live-[\s\S]*?phantomplay-v2\.css\?v=phantom-live-/u, "Both PhantomPlay stylesheets must load through the guarded workspace bundle.");
-assert.doesNotMatch(index, /phantomplay(?:-v2)?\.css\?v=phantom-live-/u, "PhantomPlay page-only styles must stay out of the initial shell payload.");
+assert.match(index, /<link rel="preload" as="style"[^>]*href="\/app\/phantomplay\.css\?v=phantom-live-/u, "PhantomPlay styles must be downloaded before first navigation.");
+assert.match(index, /<link rel="preload" as="style"[^>]*href="\/app\/phantomplay-v2\.css\?v=phantom-live-/u, "PhantomPlay V2 styles must be downloaded before first navigation.");
+assert.doesNotMatch(index, /<link rel="stylesheet"[^>]*href="\/app\/phantomplay(?:-v2)?\.css\?v=phantom-live-/u, "PhantomPlay page-only styles must stay isolated from the initial shell cascade.");
 assert.match(module, /tab:\s*"library"/u, "Default PhantomPlay must open straight to the game library.");
 assert.match(serverCatalog, /"phantom-ages":\s*artUrl\("phantom-ages-cover\.svg"\)/u, "Server catalog must map Phantom Ages cover art.");
 assert.match(flagshipCatalog, /id:\s*"phantom-ages"[\s\S]*title:\s*"Phantom Ages"[\s\S]*launchUrl:\s*unrealPlayerUrl\("phantom-ages"\)/u, "The signed-in catalog must route Phantom Ages to the canonical Unreal player.");
