@@ -70,6 +70,16 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Phantom Rumble 3.0: Overdrive (2026-08-19)** — browser build
+  `phantom-live-20260819-171`. Rebuilt held SMASH into a real keyboard, touch,
+  and gamepad charge/release seam that arms four-impact WALLBREAKER ricochet
+  physics across fences, floors, ceilings, and platforms. Added Overdrive,
+  adaptive procedural music, layered combat SFX, hit-stop, camera punch,
+  shockwaves, feathers, debris, arena scars, upgraded bot heavy attacks,
+  responsive mobile controls, and custom chicken-ninja store artwork. The
+  release-critical suite passed 32/32, visual gates passed phone and desktop,
+  and the installed `PhantomPlay.exe` gate loaded `3.0.0-overdrive` and executed
+  the live ricochet/VFX engine through the native security wrapper.
 - **PhantomPlay Windows identity repair (2026-08-19)** — native shell `0.3.2`.
   Embedded the Phantom icon and PhantomForce version identity into the executable,
   added a dedicated Windows taskbar icon path, and branded the NSIS installer,
