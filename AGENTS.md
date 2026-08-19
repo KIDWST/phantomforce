@@ -70,6 +70,18 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Unified PhantomBot workspace polish (2026-08-18)** — product release commit
+  `903a518e`, browser build `phantom-live-20260817-161`. PhantomBot now uses one
+  intent-adaptive composer with a real organization-wide model picker for
+  automatic, local, Codex, Claude, ChatGPT Bridge, and OpenRouter runtimes;
+  exposes truthful availability before selection; restores archived sessions;
+  preserves attachments across retry; and adds modal focus containment and
+  restoration across the session, context, model, and compact-navigation
+  surfaces. The release-critical suite passed 31/31, responsive Chrome passed
+  60/60, PhantomBot desktop passed 17/17, change memory passed 275 live checks,
+  strict repository-history scanning found 0 verified/unknown secrets, and the
+  canonical UI, Hermes, sync manifest, and public build all agree on this
+  release.
 - **PhantomPlay native studio + truthful AI/connect runtime (2026-08-17)** —
   product commit `423c88e1`, browser build `phantom-live-20260817-152`.
   PhantomPlay now ships the native Dioxus studio, Unreal/Unity/Panda3D project
