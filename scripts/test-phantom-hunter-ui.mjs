@@ -13,11 +13,11 @@ const [index, main, hunter, css] = await Promise.all([
   readFile(resolve(root, "app/phantomhunter.css"), "utf8"),
 ]);
 
-assert(index.includes('phantom-live-20260817-156'), "Index must carry the PhantomHunter build identity.");
+assert(index.includes('phantom-live-20260817-162'), "Index must carry the PhantomHunter build identity.");
 assert(index.includes('data-nav-id="phantomhunter"'), "The operating rail must expose PhantomHunter.");
 assert(main.includes('renderPhantomHunter') && main.includes('id: "phantomhunter"'), "Main routing must register the PhantomHunter workspace.");
-assert(main.includes('/app/phantomhunter.css?v=phantom-live-20260817-156'), "The workspace must load its cache-busted visual system.");
-assert(hunter.includes('import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260817-156"'), "PhantomHunter must use the shared authenticated session contract.");
+assert(main.includes('/app/phantomhunter.css?v=phantom-live-20260817-162'), "The workspace must load its cache-busted visual system.");
+assert(hunter.includes('import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260817-162"'), "PhantomHunter must use the shared authenticated session contract.");
 assert(hunter.includes("const token = session.token();"), "Every PhantomHunter request must read the current in-memory browser-session token.");
 assert(!hunter.includes("phantomforce_access_token"), "PhantomHunter must not read obsolete private token keys.");
 for (const engine of ["Betterleaks", "TruffleHog", "KeyHunter"]) {
@@ -36,7 +36,7 @@ assert(css.includes(".hunter-web-shell") && css.includes(".hunter-web-finding") 
 
 console.log(JSON.stringify({
   ok: true,
-  build: "phantom-live-20260817-156",
+  build: "phantom-live-20260817-162",
   firstClassRoute: true,
   boundRepositoryOnly: true,
   arbitraryTargetIntake: false,
