@@ -22,7 +22,11 @@ import {
 import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260817-164";
 import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260817-164";
 import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260817-164";
-import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260817-164";
+import {
+  assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud,
+  uploadAsset, patchAsset, assetLifecycle,
+  listLocalAssets, refreshLocalAssets, localAssetBlobUrl,
+} from "./orgs.js?v=phantom-live-20260817-164";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1395,9 +1399,9 @@ const NAV_TABS = [
   ["pending", "Pending"],
   ["library", "Media Pool"],
   ["edit", "Edit"],
+  ["assets", "Assets"],
 ];
 const NAV_DRAWERS = [
-  ["assets", "Assets", "image"],
   ["templates", "Templates", "layout"],
   ["history", "History", "clock"],
   ["engine", "Engine", "cpu"],
@@ -1415,6 +1419,25 @@ const localAssetsState = {
   message: "",
   viewHash: "",
 };
+const assetCatalogueState = {
+  queryKey: "",
+  loadingKey: "",
+  cloud: [],
+  local: [],
+  browserLocal: [],
+  search: "",
+  kind: "all",
+  source: "all",
+  view: "library",
+  sort: "newest",
+  display: "grid",
+  selected: new Set(),
+  detailKey: "",
+  message: "",
+  localMessage: "",
+  upload: { active: false, done: 0, total: 0, failed: [] },
+};
+let assetCatalogueFetchSeq = 0;
 /* test/diagnostics hook: how much of the local-assets panel came from cache */
 const mlLocalStats = { paintedFromCache: false, thumbCacheHits: 0 };
 if (typeof window !== "undefined") window.__mlLocalStats = mlLocalStats;
@@ -1426,7 +1449,6 @@ const LOCAL_ASSETS_CACHE_KEY = "pf.medialab.localAssets.cache.v1";
 const LOCAL_ASSETS_CACHE_MAX_ENTRIES = 24;
 const LOCAL_ASSETS_CACHE_BUDGET = 50_000; // ~50KB of serialized listings
 let localAssetsFetchSeq = 0;
-let localAssetsDrawerSynced = false; // one background refresh per drawer open
 /* the Edit tab shows local assets inline (no separate drawer needed to start
    editing) — filtered to whatever the current editor context wants */
 let mlInlineAssetsSyncedKind = null;
@@ -1523,7 +1545,6 @@ export function renderMediaStudio(el, opts = {}) {
   const cfg = loadCfg();
   hydratePendingJobs(el, opts);
   if (session.tab === "briefs") session.tab = "pending";
-  if (activeDrawer !== "assets") localAssetsDrawerSynced = false;
   if (session.tab !== "edit") mlInlineAssetsSyncedKind = null;
   /* while a local-asset drag is live, the tab buttons stand in as drop targets
      for surfaces that only exist on their own tab */
@@ -1538,7 +1559,6 @@ export function renderMediaStudio(el, opts = {}) {
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
           ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}"${tabDropAttrs(id)}>${label}${id === "library" && mlPoolCount ? ` · ${mlPoolCount}` : ""}${id === "pending" && pendingJobs.length ? ` · ${pendingJobs.length}` : ""}</button>`).join("")}
         </nav>
-        <button class="ml-asset-open ${activeDrawer === "assets" ? "is-active" : ""}" data-ml-drawer-open="assets" type="button">${svgIc("image")} Assets</button>
         <button class="ml-settings-gear ${activeDrawer === "settings" ? "is-active" : ""}" data-ml-open-local-settings type="button" title="Media Lab settings" aria-label="Media Lab settings">${svgIc("gear")}</button>
       </div>
       <div class="ml-body" data-ml-body></div>
@@ -1556,49 +1576,18 @@ export function renderMediaStudio(el, opts = {}) {
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body, cfg, opts, el));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderMediaPool(body, cfg, opts, el);
+  else if (session.tab === "assets") renderAssetCatalogue(body, cfg, opts, el);
 }
 
 /* ---- drawers: Templates / History / Engine / Settings — local Media Lab only ---- */
 function drawerHtml(kind, cfg, esc, opts) {
-  const titleFor = { assets: "Local Assets", templates: "Templates", history: "History", engine: "Engine", settings: "Media Lab settings" };
+  const titleFor = { templates: "Templates", history: "History", engine: "Engine", settings: "Media Lab settings" };
   return `
     <div class="ml-drawer-backdrop" data-ml-drawer-backdrop></div>
     <aside class="ml-drawer" role="dialog" aria-label="${titleFor[kind]}">
       <header class="ml-drawer-head"><b>${titleFor[kind]}</b><button class="ml-drawer-x" data-ml-drawer-close aria-label="Close">${svgIc("close")}</button></header>
-      <div class="ml-drawer-body">${kind === "assets" ? localAssetsDrawerHtml(esc) : kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : kind === "settings" ? mediaSettingsDrawerHtml(cfg, esc) : engineDrawerHtml(cfg, esc)}</div>
+      <div class="ml-drawer-body">${kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : kind === "settings" ? mediaSettingsDrawerHtml(cfg, esc) : engineDrawerHtml(cfg, esc)}</div>
     </aside>`;
-}
-function localAssetsDrawerHtml(esc) {
-  const s = localAssetsState;
-  const kinds = [
-    ["all", "All"],
-    ["image", "Images"],
-    ["video", "Video"],
-    ["project", "Projects"],
-    ["archive", "Archives"],
-    ["folder", "Templates"],
-  ];
-  return `
-    <p class="ml-drawer-note">Your local media library on this PC. Nothing is uploaded to Asset Cloud; files stay on this machine and are only pulled into the editor when you choose one.</p>
-    <div class="ml-asset-controls">
-      <input class="ml-text-in" data-ml-local-search placeholder="Search local assets..." value="${esc(s.search)}"/>
-      <button class="ml-generate ml-ghost ml-inline" data-ml-local-refresh type="button">${svgIc("spark")} Refresh</button>
-    </div>
-    <div class="ml-chips ml-chips-wrap ml-local-kinds">
-      ${kinds.map(([id, label]) => `<button type="button" class="${s.kind === id ? "is-on" : ""}" data-ml-local-kind="${id}">${label}</button>`).join("")}
-    </div>
-    <div class="ml-local-summary">
-      <b>${s.loading ? "Indexing..." : `${s.count || 0} assets indexed`}</b>
-      <span>${esc(s.rootLabel || "Local library")} ${s.source ? `· ${esc(s.source)}` : ""}</span>
-    </div>
-    ${s.message ? `<p class="ml-drawer-note ml-local-message">${esc(s.message)}</p>` : ""}
-    <div class="ml-local-assets" data-ml-local-assets>
-      ${s.loading
-        ? `<div class="ml-local-empty">Scanning local assets...</div>`
-        : s.assets.length
-          ? s.assets.map((asset) => localAssetCardHtml(asset, esc)).join("")
-          : `<div class="ml-local-empty">No local assets match that search.</div>`}
-    </div>`;
 }
 function localAssetCardHtml(asset, esc) {
   const canUse = asset.kind === "image" && (!!asset.has_preview || !!asset.previewable);
@@ -1792,9 +1781,493 @@ async function loadLocalAssetsForDrawer(el, opts, refresh = false) {
   // background refresh repaints only when the data actually changed, and only
   // while something is actually showing it — the drawer or the Edit tab's
   // inline picker (which has no separate "open" state to gate on)
-  const visible = activeDrawer === "assets"
+  const visible = session.tab === "assets"
+    || activeDrawer === "assets"
     || (session.tab === "edit" && (!session.editMode || (session.editMode === "photo" && !session.edit)));
   if (visible && localAssetsState.viewHash !== localAssetsSnapshotHash()) paintLocalAssets(el, opts);
+}
+
+/* ---- Assets workspace ---------------------------------------------------
+   One catalogue over three honest sources:
+   - Asset Cloud: permanent, tenant-scoped uploads with lifecycle controls.
+   - Local library: read-only files indexed by the local PhantomForce server.
+   - Media Pool: generated/saved work already available to this workspace.
+   Local files are never copied to Asset Cloud until the user chooses Import. */
+const CATALOGUE_UPLOAD_LIMIT = 12 * 1024 * 1024;
+const CATALOGUE_ACCEPT = [
+  "image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml",
+  "video/mp4", "video/webm", "video/quicktime",
+  "audio/mpeg", "audio/wav", "audio/ogg", "audio/webm",
+].join(",");
+
+function assetCatalogueQueryKey() {
+  const s = assetCatalogueState;
+  return JSON.stringify([currentTenantId(), s.search.trim().toLowerCase(), s.kind, s.source, s.view, s.sort]);
+}
+function catalogueKind(value = "") {
+  const kind = String(value || "").toLowerCase();
+  return kind === "video" ? "video" : kind === "audio" ? "audio" : "image";
+}
+function cataloguePoolRows() {
+  if (assetCatalogueState.view !== "library" || !["all", "pool"].includes(assetCatalogueState.source)) return [];
+  return loadContentAssets().map((asset) => ({
+    key: `pool:${asset.id}`,
+    id: asset.id,
+    sourceType: "pool",
+    sourceLabel: "Media Pool",
+    kind: catalogueKind(asset.type),
+    title: asset.title || asset.prompt || "Media Pool asset",
+    originalName: asset.title || "Media Pool asset",
+    mimeType: asset.type === "video" ? "video/webm" : asset.type === "audio" ? "audio/mpeg" : "image/webp",
+    sizeBytes: 0,
+    sizeLabel: "Saved in workspace",
+    tags: ["media-pool"],
+    createdAt: asset.createdAt || 0,
+    updatedAt: asset.createdAt || 0,
+    previewUrl: contentAssetDisplayUrl(asset),
+    readOnly: true,
+  })).filter((row) => !!row.previewUrl);
+}
+function catalogueRows({ ignoreKind = false } = {}) {
+  const cloud = assetCatalogueState.cloud.map((asset) => ({
+    ...asset,
+    key: `cloud:${asset.id}`,
+    sourceType: "cloud",
+    sourceLabel: asset.brand ? "Brand asset" : "Asset Cloud",
+    kind: catalogueKind(asset.kind),
+    originalName: asset.originalName || asset.title,
+    sizeLabel: formatCatalogueBytes(Number(asset.sizeBytes) || 0),
+    readOnly: false,
+  }));
+  const indexedLocal = assetCatalogueState.local.map((asset) => ({
+        ...asset,
+        key: `local:${asset.id}`,
+        sourceType: "local",
+        sourceLabel: assetCatalogueState.localRootLabel || "Local library",
+        kind: catalogueKind(asset.kind),
+        originalName: asset.name || asset.title,
+        mimeType: asset.mime,
+        sizeBytes: Number(asset.size_bytes) || 0,
+        sizeLabel: asset.size_label || formatCatalogueBytes(Number(asset.size_bytes) || 0),
+        createdAt: asset.updated_at || 0,
+        updatedAt: asset.updated_at || 0,
+        readOnly: true,
+      }));
+  const local = assetCatalogueState.view === "library" && ["all", "local"].includes(assetCatalogueState.source)
+    ? [...assetCatalogueState.browserLocal, ...indexedLocal]
+    : [];
+  const query = assetCatalogueState.search.trim().toLowerCase();
+  const rows = [...cloud, ...local, ...cataloguePoolRows()].filter((row) => {
+    if (!ignoreKind && assetCatalogueState.kind !== "all" && row.kind !== assetCatalogueState.kind) return false;
+    if (assetCatalogueState.source !== "all" && row.sourceType !== assetCatalogueState.source) return false;
+    if (!query) return true;
+    return [row.title, row.originalName, row.sourceLabel, ...(row.tags || [])].join(" ").toLowerCase().includes(query);
+  });
+  const time = (row) => Date.parse(row.updatedAt || row.createdAt || 0) || Number(row.updatedAt || row.createdAt) || 0;
+  rows.sort((a, b) => assetCatalogueState.sort === "oldest" ? time(a) - time(b)
+    : assetCatalogueState.sort === "name" ? String(a.title).localeCompare(String(b.title))
+    : assetCatalogueState.sort === "largest" ? (b.sizeBytes || 0) - (a.sizeBytes || 0)
+    : time(b) - time(a));
+  return rows;
+}
+function formatCatalogueBytes(bytes = 0) {
+  if (!bytes) return "Size unavailable";
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 0 : 1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+function catalogueRow(key) {
+  return catalogueRows().find((row) => row.key === key) || null;
+}
+function catalogueMediaIcon(kind) {
+  return kind === "video" ? svgIc("film") : kind === "audio" ? svgIc("music") : svgIc("image");
+}
+function catalogueDate(row) {
+  const stamp = Date.parse(row.updatedAt || row.createdAt || 0) || Number(row.updatedAt || row.createdAt) || 0;
+  return stamp ? new Date(stamp).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "Date unavailable";
+}
+function catalogueAssetCard(row, esc) {
+  const selected = assetCatalogueState.selected.has(row.key);
+  const detail = assetCatalogueState.detailKey === row.key;
+  return `<article class="ml-catalog-card ${selected ? "is-selected" : ""} ${detail ? "is-active" : ""}" data-catalog-card="${esc(row.key)}">
+    <label class="ml-catalog-check" title="Select ${esc(row.title)}"><input type="checkbox" data-catalog-select="${esc(row.key)}" ${selected ? "checked" : ""}/><span></span></label>
+    <button class="ml-catalog-preview" type="button" data-catalog-open="${esc(row.key)}" aria-label="Open details for ${esc(row.title)}">
+      <span data-catalog-thumb="${esc(row.key)}">${catalogueMediaIcon(row.kind)}</span>
+      ${row.kind !== "image" ? `<i>${row.kind === "video" ? "Video" : "Audio"}</i>` : ""}
+    </button>
+    <div class="ml-catalog-card-copy">
+      <button type="button" data-catalog-open="${esc(row.key)}"><b>${esc(row.title || row.originalName)}</b></button>
+      <span>${esc(row.sourceLabel)} · ${esc(row.sizeLabel || "Size unavailable")}</span>
+      <i>${esc(catalogueDate(row))}</i>
+    </div>
+    ${row.sourceType === "cloud" ? `<button class="ml-catalog-favorite ${row.favorite ? "is-on" : ""}" type="button" data-catalog-favorite="${esc(row.key)}" title="${row.favorite ? "Remove from favorites" : "Add to favorites"}">${svgIc("heart")}</button>` : ""}
+  </article>`;
+}
+function catalogueDetailHtml(row, esc) {
+  if (!row) return `<div class="ml-catalog-detail-empty">${svgIc("image")}<b>Select an asset</b><span>Preview it, inspect metadata, or send it into Create and Edit.</span></div>`;
+  const tags = (row.tags || []).join(", ");
+  const dimensions = row.width && row.height ? `${row.width} x ${row.height}` : "Dimensions unavailable";
+  const canEdit = row.kind === "image" || row.kind === "video";
+  return `<div class="ml-catalog-detail-head"><div><span>${esc(row.sourceLabel)}</span><h3>${esc(row.title || row.originalName)}</h3></div><button type="button" data-catalog-close-detail aria-label="Close details">${svgIc("close")}</button></div>
+    <div class="ml-catalog-detail-preview" data-catalog-detail-preview="${esc(row.key)}">${catalogueMediaIcon(row.kind)}</div>
+    <dl class="ml-catalog-meta">
+      <div><dt>Type</dt><dd>${esc(row.kind)}</dd></div>
+      <div><dt>Size</dt><dd>${esc(row.sizeLabel || "Unavailable")}</dd></div>
+      <div><dt>${row.kind === "image" ? "Frame" : "Updated"}</dt><dd>${esc(row.kind === "image" ? dimensions : catalogueDate(row))}</dd></div>
+      <div><dt>Source</dt><dd>${esc(row.sourceLabel)}</dd></div>
+    </dl>
+    ${row.sourceType === "cloud" ? `<form class="ml-catalog-meta-form" data-catalog-meta-form="${esc(row.key)}">
+      <label><span>Name</span><input name="title" value="${esc(row.title || "")}" maxlength="200"/></label>
+      <label><span>Tags</span><input name="tags" value="${esc(tags)}" placeholder="campaign, logo, product"/></label>
+      <button type="submit">${svgIc("check")} Save details</button>
+    </form>` : `<div class="ml-catalog-readonly"><b>${row.sourceType === "local" ? "Local, read-only" : "Workspace source"}</b><span>${row.sourceType === "local" ? "Import it to Asset Cloud to rename, tag, favorite, archive, or share it across the organization." : "This item remains managed by Media Pool."}</span></div>`}
+    <div class="ml-catalog-detail-actions">
+      ${canEdit ? `<button type="button" data-catalog-edit="${esc(row.key)}">${svgIc("edit")} Edit</button>` : ""}
+      ${row.kind === "image" ? `<button type="button" data-catalog-reference="${esc(row.key)}">${svgIc("target")} Use in Create</button>` : ""}
+      <button type="button" data-catalog-download="${esc(row.key)}">${svgIc("download")} Download</button>
+      ${row.sourceType === "local" ? `<button type="button" class="is-primary" data-catalog-import="${esc(row.key)}">${svgIc("upload")} Import</button>` : ""}
+      ${row.sourceType === "cloud" && assetCatalogueState.view === "library" ? `<button type="button" data-catalog-lifecycle="archive" data-key="${esc(row.key)}">${svgIc("archive")} Archive</button><button type="button" class="is-danger" data-catalog-lifecycle="trash" data-key="${esc(row.key)}">${svgIc("trash")} Trash</button>` : ""}
+      ${row.sourceType === "cloud" && assetCatalogueState.view === "archived" ? `<button type="button" data-catalog-lifecycle="unarchive" data-key="${esc(row.key)}">${svgIc("refresh")} Restore to library</button>` : ""}
+      ${row.sourceType === "cloud" && assetCatalogueState.view === "trash" ? `<button type="button" data-catalog-lifecycle="restore" data-key="${esc(row.key)}">${svgIc("refresh")} Restore</button>` : ""}
+    </div>`;
+}
+function assetCatalogueHtml(esc) {
+  const allKindRows = catalogueRows({ ignoreKind: true });
+  const rows = catalogueRows();
+  const detail = catalogueRow(assetCatalogueState.detailKey);
+  const counts = allKindRows.reduce((memo, row) => ({ ...memo, [row.kind]: (memo[row.kind] || 0) + 1 }), {});
+  const selected = [...assetCatalogueState.selected].map(catalogueRow).filter(Boolean);
+  const upload = assetCatalogueState.upload;
+  const loading = !!assetCatalogueState.loadingKey;
+  return `<div class="ml-asset-catalogue ${assetCatalogueState.display === "list" ? "is-list" : ""}" data-ml-catalog-drop>
+    <header class="ml-catalog-command">
+      <div><span>Workspace library</span><h2>Asset Catalogue</h2><p>Upload, organize, preview, and reuse your photos, video, and audio from one place.</p></div>
+      <div class="ml-catalog-command-actions">
+        <button type="button" data-catalog-upload>${svgIc("upload")} Upload files</button>
+        <button type="button" data-catalog-sync>${svgIc("folder")} Sync a folder</button>
+        <button type="button" data-catalog-refresh title="Refresh cloud and local libraries">${svgIc("refresh")} Refresh</button>
+      </div>
+      <input type="file" hidden multiple accept="${CATALOGUE_ACCEPT}" data-catalog-upload-input/>
+      <input type="file" hidden multiple webkitdirectory directory accept="${CATALOGUE_ACCEPT}" data-catalog-folder-input/>
+    </header>
+    ${upload.active || upload.total ? `<div class="ml-catalog-upload-status ${upload.failed.length ? "has-errors" : ""}"><span>${upload.active ? "Importing" : "Import complete"}</span><b>${upload.done}/${upload.total}</b><i style="--progress:${upload.total ? Math.round((upload.done / upload.total) * 100) : 0}%"></i>${upload.failed.length ? `<em>${upload.failed.length} skipped or failed</em>` : ""}</div>` : ""}
+    ${assetCatalogueState.message ? `<div class="ml-catalog-notice">${esc(assetCatalogueState.message)}</div>` : ""}
+    <div class="ml-catalog-stats" role="group" aria-label="Asset type filters">
+      ${[["all", allKindRows.length, "All assets"], ["image", counts.image || 0, "Images"], ["video", counts.video || 0, "Video"], ["audio", counts.audio || 0, "Audio"]].map(([kind, count, label]) => `<button type="button" data-catalog-kind="${kind}" class="${assetCatalogueState.kind === kind ? "is-on" : ""}"><span>${label}</span><b>${count}</b></button>`).join("")}
+    </div>
+    <div class="ml-catalog-toolbar">
+      <label class="ml-catalog-search">${svgIc("search")}<input type="search" data-catalog-search value="${esc(assetCatalogueState.search)}" placeholder="Search names, tags, and sources"/></label>
+      <select data-catalog-sort aria-label="Sort assets"><option value="newest" ${assetCatalogueState.sort === "newest" ? "selected" : ""}>Newest</option><option value="oldest" ${assetCatalogueState.sort === "oldest" ? "selected" : ""}>Oldest</option><option value="name" ${assetCatalogueState.sort === "name" ? "selected" : ""}>Name</option><option value="largest" ${assetCatalogueState.sort === "largest" ? "selected" : ""}>Largest</option></select>
+      <div class="ml-catalog-view" role="group" aria-label="Catalogue layout"><button type="button" data-catalog-display="grid" class="${assetCatalogueState.display === "grid" ? "is-on" : ""}" title="Grid view">${svgIc("grid")}</button><button type="button" data-catalog-display="list" class="${assetCatalogueState.display === "list" ? "is-on" : ""}" title="List view">${svgIc("list")}</button></div>
+    </div>
+    <div class="ml-catalog-layout">
+      <aside class="ml-catalog-filters" aria-label="Asset filters">
+        <section><b>Location</b>${[["all", "Everything"], ["cloud", "Asset Cloud"], ["local", "Local PC"], ["pool", "Media Pool"]].map(([id, label]) => `<button type="button" data-catalog-source="${id}" class="${assetCatalogueState.source === id ? "is-on" : ""}"><span>${label}</span>${id === "local" && assetCatalogueState.localRootLabel ? `<i>${esc(assetCatalogueState.localRootLabel)}</i>` : ""}</button>`).join("")}</section>
+        <section><b>Status</b>${[["library", "Library"], ["favorites", "Favorites"], ["archived", "Archived"], ["trash", "Trash"]].map(([id, label]) => `<button type="button" data-catalog-view="${id}" class="${assetCatalogueState.view === id ? "is-on" : ""}">${label}</button>`).join("")}</section>
+        <p>${assetCatalogueState.localMessage ? esc(assetCatalogueState.localMessage) : "Local files stay on this PC until you import them."}</p>
+      </aside>
+      <main class="ml-catalog-results">
+        <div class="ml-catalog-results-head"><div><b>${loading ? "Updating catalogue" : `${rows.length} asset${rows.length === 1 ? "" : "s"}`}</b><span>${assetCatalogueState.view === "library" ? "Ready to use" : assetCatalogueState.view}</span></div>${selected.length ? `<div class="ml-catalog-bulk"><b>${selected.length} selected</b><button type="button" data-catalog-clear-selection>Clear</button>${selected.some((row) => row.sourceType === "cloud") ? `<button type="button" data-catalog-bulk-favorite>${svgIc("heart")} Favorite</button><button type="button" data-catalog-bulk-trash>${svgIc("trash")} Trash</button>` : ""}</div>` : ""}</div>
+        ${loading && !rows.length ? `<div class="ml-catalog-empty is-loading"><i></i><b>Loading your assets</b><span>Connecting Asset Cloud, Media Pool, and the local library.</span></div>` : rows.length ? `<div class="ml-catalog-grid">${rows.map((row) => catalogueAssetCard(row, esc)).join("")}</div>` : `<div class="ml-catalog-empty">${svgIc("image")}<b>No assets match this view</b><span>Upload files, sync a local folder, or clear the current filters.</span><button type="button" data-catalog-upload>Upload files</button></div>`}
+      </main>
+      <aside class="ml-catalog-detail ${detail ? "is-open" : ""}" aria-label="Asset details">${catalogueDetailHtml(detail, esc)}</aside>
+    </div>
+  </div>`;
+}
+async function loadAssetCatalogue(root, opts, force = false) {
+  const key = assetCatalogueQueryKey();
+  if (!force && assetCatalogueState.queryKey === key) return;
+  const seq = ++assetCatalogueFetchSeq;
+  assetCatalogueState.loadingKey = key;
+  if (root?.isConnected) renderMediaStudio(root, opts);
+  const cloudQuery = {
+    view: assetCatalogueState.view,
+    sort: assetCatalogueState.sort,
+    search: assetCatalogueState.search || undefined,
+    limit: 120,
+  };
+  const localQuery = {
+    kind: "all",
+    search: assetCatalogueState.search || undefined,
+    limit: 120,
+  };
+  const [cloudResult, localResult] = await Promise.all([
+    assetsAvailable() && ["all", "cloud"].includes(assetCatalogueState.source)
+      ? listAssets(cloudQuery).catch(() => ({ assets: [] }))
+      : Promise.resolve({ assets: [] }),
+    assetCatalogueState.view === "library" && ["all", "local"].includes(assetCatalogueState.source)
+      ? listLocalAssets(localQuery).catch(() => ({ ok: false, assets: [], count: 0 }))
+      : Promise.resolve({ ok: true, assets: [], count: 0 }),
+  ]);
+  if (seq !== assetCatalogueFetchSeq) return;
+  assetCatalogueState.cloud = (cloudResult.assets || []).filter((asset) => ["image", "video", "audio"].includes(String(asset.kind || "")));
+  assetCatalogueState.local = localResult.assets || [];
+  assetCatalogueState.localRootLabel = localResult.root_label || "Local library";
+  const selectedFolderCount = assetCatalogueState.browserLocal.length;
+  const indexedCount = localResult.count || assetCatalogueState.local.length || 0;
+  assetCatalogueState.localMessage = localResult.ok === false
+    ? (selectedFolderCount
+      ? `${selectedFolderCount} selected-folder file${selectedFolderCount === 1 ? " is" : "s are"} available for this session.`
+      : (localResult.detail || "Connect a local library in the desktop server to browse large files without uploading them."))
+    : selectedFolderCount
+      ? `${selectedFolderCount} selected-folder file${selectedFolderCount === 1 ? "" : "s"} and ${indexedCount} server-indexed file${indexedCount === 1 ? "" : "s"} available.`
+      : `${indexedCount} file${indexedCount === 1 ? "" : "s"} indexed on this PC.`;
+  assetCatalogueState.queryKey = key;
+  assetCatalogueState.loadingKey = "";
+  assetCatalogueState.selected = new Set([...assetCatalogueState.selected].filter((item) => catalogueRow(item)));
+  if (!catalogueRow(assetCatalogueState.detailKey)) assetCatalogueState.detailKey = "";
+  if (root?.isConnected) renderMediaStudio(root, opts);
+}
+function renderAssetCatalogue(body, cfg, opts, root) {
+  const esc = opts.esc || ((value) => String(value));
+  body.innerHTML = assetCatalogueHtml(esc);
+  wireAssetCatalogue(body, root, opts);
+  hydrateAssetCataloguePreviews(body);
+  const key = assetCatalogueQueryKey();
+  if (assetCatalogueState.queryKey !== key && assetCatalogueState.loadingKey !== key) {
+    queueMicrotask(() => loadAssetCatalogue(root, opts));
+  }
+}
+function resetAssetCatalogueQuery(root, opts) {
+  assetCatalogueState.queryKey = "";
+  assetCatalogueState.detailKey = "";
+  assetCatalogueState.selected = new Set();
+  renderMediaStudio(root, opts);
+}
+async function catalogueUrl(row, preferThumbnail = false) {
+  if (!row) return null;
+  if (row.previewUrl) return row.previewUrl;
+  if (row.sourceType === "cloud") return assetBlobUrl(row.id, preferThumbnail && row.kind === "image" ? "thumbnail" : "file");
+  if (row.sourceType === "local") return localAssetBlobUrl(row.id);
+  return null;
+}
+function paintCataloguePreview(node, row, url, detail = false) {
+  if (!node || !url) return;
+  if (row.kind === "video") node.innerHTML = `<video src="${url}" muted playsinline ${detail ? "controls autoplay" : "preload=\"metadata\""}></video>`;
+  else if (row.kind === "audio") node.innerHTML = detail ? `<div class="ml-catalog-audio-art">${svgIc("music")}</div><audio src="${url}" controls preload="metadata"></audio>` : `<div class="ml-catalog-audio-art">${svgIc("music")}</div>`;
+  else node.innerHTML = `<img src="${url}" alt=""/>`;
+}
+async function hydrateAssetCataloguePreviews(body) {
+  const cards = [...body.querySelectorAll("[data-catalog-thumb]")].slice(0, 36);
+  let next = 0;
+  const worker = async () => {
+    while (next < cards.length) {
+      const node = cards[next++];
+      const row = catalogueRow(node.dataset.catalogThumb);
+      if (!row || row.kind === "audio") continue;
+      if (row.sourceType === "cloud" && row.kind !== "image") continue;
+      const url = await catalogueUrl(row, row.kind === "image");
+      if (node.isConnected && url) paintCataloguePreview(node, row, url, false);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, cards.length) }, () => worker()));
+  const detailNode = body.querySelector("[data-catalog-detail-preview]");
+  const detailRow = detailNode ? catalogueRow(detailNode.dataset.catalogDetailPreview) : null;
+  if (detailNode && detailRow) {
+    const url = await catalogueUrl(detailRow);
+    if (detailNode.isConnected && url) paintCataloguePreview(detailNode, detailRow, url, true);
+  }
+}
+function fileAsDataUrl(file) {
+  return new Promise((resolveP, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolveP(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("file_read_failed"));
+    reader.readAsDataURL(file);
+  });
+}
+function supportedCatalogueFile(file) {
+  const mime = String(file.type || "").toLowerCase();
+  if (CATALOGUE_ACCEPT.split(",").includes(mime)) return true;
+  return /\.(png|jpe?g|webp|gif|svg|mp4|webm|mov|mp3|wav|ogg)$/i.test(String(file.name || ""));
+}
+async function uploadCatalogueFiles(files, root, opts, source = "upload") {
+  const candidates = [...(files || [])].filter((file) => file && file.size > 0);
+  if (!candidates.length) return;
+  if (!assetsAvailable()) {
+    assetCatalogueState.message = "Choose a business workspace before importing files to Asset Cloud. You can still sync a local folder without uploading it.";
+    renderMediaStudio(root, opts);
+    return;
+  }
+  const picked = candidates.slice(0, 250);
+  const accepted = picked.filter(supportedCatalogueFile);
+  const unsupported = picked.filter((file) => !supportedCatalogueFile(file)).map((file) => file.name);
+  assetCatalogueState.upload = { active: true, done: unsupported.length, total: picked.length, failed: unsupported };
+  assetCatalogueState.message = candidates.length > 250 ? "The first 250 files were queued. Upload additional files in a second pass." : "";
+  renderMediaStudio(root, opts);
+  for (const file of accepted) {
+    if (file.size > CATALOGUE_UPLOAD_LIMIT) {
+      assetCatalogueState.upload.failed.push(`${file.name} (over 12 MB)`);
+      assetCatalogueState.upload.done += 1;
+      renderMediaStudio(root, opts);
+      continue;
+    }
+    try {
+      const dataUrl = await fileAsDataUrl(file);
+      const kind = catalogueKind(file.type.split("/")[0]);
+      const result = await uploadAsset(dataUrl, file.name, { source, tags: ["media-lab", kind], onDuplicate: "skip" });
+      if (!result.ok) assetCatalogueState.upload.failed.push(file.name);
+    } catch {
+      assetCatalogueState.upload.failed.push(file.name);
+    }
+    assetCatalogueState.upload.done += 1;
+    renderMediaStudio(root, opts);
+  }
+  assetCatalogueState.upload.done = picked.length;
+  assetCatalogueState.upload.active = false;
+  assetCatalogueState.message = assetCatalogueState.upload.failed.length
+    ? `${assetCatalogueState.upload.failed.length} file${assetCatalogueState.upload.failed.length === 1 ? " was" : "s were"} skipped. Supported media up to 12 MB imports to Asset Cloud; larger files remain available through the local library.`
+    : `${picked.length} asset${picked.length === 1 ? "" : "s"} imported to Asset Cloud.`;
+  resetAssetCatalogueQuery(root, opts, true);
+}
+function syncCatalogueFolder(files, root, opts) {
+  const candidates = [...(files || [])].filter((file) => file && file.size > 0 && supportedCatalogueFile(file));
+  const picked = candidates.slice(0, 500);
+  for (const row of assetCatalogueState.browserLocal) {
+    if (row.previewUrl?.startsWith?.("blob:")) URL.revokeObjectURL(row.previewUrl);
+  }
+  assetCatalogueState.browserLocal = picked.map((file, index) => {
+    const folder = String(file.webkitRelativePath || "").split("/")[0] || "Selected folder";
+    const kind = catalogueKind(String(file.type || "").split("/")[0] || (/\.(mp4|webm|mov)$/i.test(file.name) ? "video" : /\.(mp3|wav|ogg)$/i.test(file.name) ? "audio" : "image"));
+    return {
+      key: `local:browser-${index}-${file.lastModified}-${file.size}`,
+      id: `browser-${index}-${file.lastModified}-${file.size}`,
+      sourceType: "local",
+      sourceLabel: folder,
+      kind,
+      title: file.name.replace(/\.[^.]+$/, ""),
+      originalName: file.name,
+      mimeType: file.type || (kind === "video" ? "video/mp4" : kind === "audio" ? "audio/mpeg" : "image/png"),
+      sizeBytes: file.size,
+      sizeLabel: formatCatalogueBytes(file.size),
+      tags: ["local", "folder-sync", kind],
+      createdAt: file.lastModified || Date.now(),
+      updatedAt: file.lastModified || Date.now(),
+      previewUrl: URL.createObjectURL(file),
+      browserFile: file,
+      readOnly: true,
+    };
+  });
+  assetCatalogueState.source = "local";
+  assetCatalogueState.view = "library";
+  assetCatalogueState.message = picked.length
+    ? `${picked.length} file${picked.length === 1 ? "" : "s"} synced from the selected folder for this session. Large media stays on this PC until you choose Import.`
+    : "No supported photo, video, or audio files were found in that folder.";
+  assetCatalogueState.localMessage = picked.length ? "Selected folder is synced for this session; server-indexed files remain available too." : assetCatalogueState.localMessage;
+  assetCatalogueState.queryKey = "";
+  renderMediaStudio(root, opts);
+}
+async function importCatalogueRow(row, root, opts) {
+  const url = await catalogueUrl(row);
+  if (!url) return opts.notify?.("Asset Catalogue", "That local file could not be opened for import.");
+  try {
+    const blob = await fetch(url).then((response) => response.blob());
+    if (blob.size > CATALOGUE_UPLOAD_LIMIT) {
+      opts.notify?.("Asset Catalogue", "That file is over 12 MB. Keep it in the indexed local library for editing without copying it to Asset Cloud.");
+      return;
+    }
+    const file = new File([blob], row.originalName || row.title || "asset", { type: row.mimeType || blob.type });
+    await uploadCatalogueFiles([file], root, opts, "local-import");
+  } catch {
+    opts.notify?.("Asset Catalogue", "The local file could not be imported.");
+  }
+}
+async function openCatalogueRow(row, mode, root, opts) {
+  const url = await catalogueUrl(row);
+  if (!url) return opts.notify?.("Asset Catalogue", "That asset is not available in this session.");
+  if (mode === "reference") {
+    if (row.kind !== "image") return;
+    genState.ref = url;
+    session.tab = "generate";
+    opts.notify?.("Media Lab", `using ${row.title} as the shot reference.`);
+  } else if (mode === "edit") {
+    if (!["image", "video"].includes(row.kind)) return;
+    session.edit = { url, type: row.kind, id: row.key };
+    session.tab = "edit";
+    resetEdit();
+    opts.notify?.("Media Lab", `opened ${row.title} in the editor.`);
+  } else if (mode === "download") {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = row.originalName || row.title || "phantomforce-asset";
+    document.body.appendChild(link); link.click(); link.remove();
+  }
+  if (row.sourceType === "cloud" && mode !== "download") recordAssetUsage(row.id, `media-lab-${mode}`, row.id, row.title).catch(() => {});
+  if (mode !== "download") renderMediaStudio(root, opts);
+}
+async function mutateCatalogueAsset(row, action, root, opts) {
+  if (!row || row.sourceType !== "cloud") return;
+  const result = action === "favorite"
+    ? await patchAsset(row.id, { favorite: !row.favorite })
+    : await assetLifecycle(row.id, action);
+  assetCatalogueState.message = result.ok ? "Asset updated." : (result.error || "The asset could not be updated.");
+  resetAssetCatalogueQuery(root, opts, true);
+}
+function wireAssetCatalogue(body, root, opts) {
+  const uploadInput = body.querySelector("[data-catalog-upload-input]");
+  const folderInput = body.querySelector("[data-catalog-folder-input]");
+  body.querySelectorAll("[data-catalog-upload]").forEach((button) => button.onclick = () => uploadInput?.click());
+  body.querySelector("[data-catalog-sync]")?.addEventListener("click", () => folderInput?.click());
+  if (uploadInput) uploadInput.onchange = () => uploadCatalogueFiles(uploadInput.files, root, opts, "upload");
+  if (folderInput) folderInput.onchange = () => syncCatalogueFolder(folderInput.files, root, opts);
+  body.querySelector("[data-catalog-refresh]")?.addEventListener("click", async () => {
+    assetCatalogueState.message = "Refreshing connected libraries...";
+    renderMediaStudio(root, opts);
+    await refreshLocalAssets().catch(() => null);
+    resetAssetCatalogueQuery(root, opts, true);
+  });
+  const search = body.querySelector("[data-catalog-search]");
+  if (search) {
+    let timer = null;
+    search.oninput = () => {
+      assetCatalogueState.search = search.value;
+      clearTimeout(timer);
+      timer = setTimeout(() => resetAssetCatalogueQuery(root, opts), 220);
+    };
+  }
+  body.querySelectorAll("[data-catalog-kind]").forEach((button) => button.onclick = () => { assetCatalogueState.kind = button.dataset.catalogKind || "all"; resetAssetCatalogueQuery(root, opts); });
+  body.querySelectorAll("[data-catalog-source]").forEach((button) => button.onclick = () => { assetCatalogueState.source = button.dataset.catalogSource || "all"; resetAssetCatalogueQuery(root, opts); });
+  body.querySelectorAll("[data-catalog-view]").forEach((button) => button.onclick = () => { assetCatalogueState.view = button.dataset.catalogView || "library"; if (assetCatalogueState.view !== "library") assetCatalogueState.source = "cloud"; resetAssetCatalogueQuery(root, opts); });
+  const sort = body.querySelector("[data-catalog-sort]");
+  if (sort) sort.onchange = () => { assetCatalogueState.sort = sort.value; resetAssetCatalogueQuery(root, opts); };
+  body.querySelectorAll("[data-catalog-display]").forEach((button) => button.onclick = () => { assetCatalogueState.display = button.dataset.catalogDisplay || "grid"; renderMediaStudio(root, opts); });
+  body.querySelectorAll("[data-catalog-open]").forEach((button) => button.onclick = () => { assetCatalogueState.detailKey = button.dataset.catalogOpen || ""; renderMediaStudio(root, opts); });
+  body.querySelector("[data-catalog-close-detail]")?.addEventListener("click", () => { assetCatalogueState.detailKey = ""; renderMediaStudio(root, opts); });
+  body.querySelectorAll("[data-catalog-select]").forEach((input) => input.onchange = () => {
+    if (input.checked) assetCatalogueState.selected.add(input.dataset.catalogSelect);
+    else assetCatalogueState.selected.delete(input.dataset.catalogSelect);
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-catalog-clear-selection]")?.addEventListener("click", () => { assetCatalogueState.selected = new Set(); renderMediaStudio(root, opts); });
+  body.querySelectorAll("[data-catalog-favorite]").forEach((button) => button.onclick = () => mutateCatalogueAsset(catalogueRow(button.dataset.catalogFavorite), "favorite", root, opts));
+  body.querySelectorAll("[data-catalog-edit]").forEach((button) => button.onclick = () => openCatalogueRow(catalogueRow(button.dataset.catalogEdit), "edit", root, opts));
+  body.querySelectorAll("[data-catalog-reference]").forEach((button) => button.onclick = () => openCatalogueRow(catalogueRow(button.dataset.catalogReference), "reference", root, opts));
+  body.querySelectorAll("[data-catalog-download]").forEach((button) => button.onclick = () => openCatalogueRow(catalogueRow(button.dataset.catalogDownload), "download", root, opts));
+  body.querySelectorAll("[data-catalog-import]").forEach((button) => button.onclick = () => importCatalogueRow(catalogueRow(button.dataset.catalogImport), root, opts));
+  body.querySelectorAll("[data-catalog-lifecycle]").forEach((button) => button.onclick = () => mutateCatalogueAsset(catalogueRow(button.dataset.key), button.dataset.catalogLifecycle, root, opts));
+  const form = body.querySelector("[data-catalog-meta-form]");
+  if (form) form.onsubmit = async (event) => {
+    event.preventDefault();
+    const row = catalogueRow(form.dataset.catalogMetaForm);
+    const data = new FormData(form);
+    const result = await patchAsset(row.id, { title: String(data.get("title") || "").trim(), tags: String(data.get("tags") || "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 20) });
+    assetCatalogueState.message = result.ok ? "Asset details saved." : (result.error || "Details could not be saved.");
+    resetAssetCatalogueQuery(root, opts, true);
+  };
+  body.querySelector("[data-catalog-bulk-favorite]")?.addEventListener("click", async () => {
+    const cloudRows = [...assetCatalogueState.selected].map(catalogueRow).filter((row) => row?.sourceType === "cloud");
+    await Promise.all(cloudRows.map((row) => patchAsset(row.id, { favorite: true })));
+    assetCatalogueState.message = `${cloudRows.length} asset${cloudRows.length === 1 ? "" : "s"} added to favorites.`;
+    resetAssetCatalogueQuery(root, opts, true);
+  });
+  body.querySelector("[data-catalog-bulk-trash]")?.addEventListener("click", async () => {
+    const cloudRows = [...assetCatalogueState.selected].map(catalogueRow).filter((row) => row?.sourceType === "cloud");
+    if (!cloudRows.length || !window.confirm(`Move ${cloudRows.length} selected asset${cloudRows.length === 1 ? "" : "s"} to Trash?`)) return;
+    await Promise.all(cloudRows.map((row) => assetLifecycle(row.id, "trash")));
+    assetCatalogueState.message = `${cloudRows.length} asset${cloudRows.length === 1 ? "" : "s"} moved to Trash.`;
+    resetAssetCatalogueQuery(root, opts, true);
+  });
 }
 async function useLocalAsset(assetId, mode, el, opts) {
   const asset = localAssetsState.assets.find((item) => item.id === assetId);
@@ -1874,7 +2347,7 @@ function mlOsOverlay(el, show) {
     overlay = document.createElement("div");
     overlay.className = "ml-os-drop-overlay";
     overlay.setAttribute("data-ml-os-overlay", "");
-    overlay.innerHTML = `<b>Drop media to open in the editor</b>`;
+    overlay.innerHTML = `<b>${session.tab === "assets" ? "Drop media to upload to Asset Cloud" : "Drop media to open in the editor"}</b>`;
     el.appendChild(overlay);
   }
   if (!show && overlay) overlay.remove();
@@ -1959,6 +2432,11 @@ function ensureMediaLabDnd(el, opts) {
     if (!isFileDrag(e)) return;
     e.preventDefault();
     mlEndDrag(el);
+    const catalogue = e.target?.closest?.("[data-ml-catalog-drop]");
+    if (catalogue || session.tab === "assets") {
+      uploadCatalogueFiles(e.dataTransfer?.files || [], el, dndOpts, "drag-drop");
+      return;
+    }
     if (e.target?.closest?.("[data-ml-drop]")) return; // Shot Builder's reference uploader owns drops on itself
     const fileObj = [...(e.dataTransfer?.files || [])].find((f) => /^(image|video)\//i.test(f.type || ""));
     if (!fileObj) {
@@ -1970,30 +2448,6 @@ function ensureMediaLabDnd(el, opts) {
 }
 
 function wireDrawer(el, kind, cfg, opts, esc) {
-  if (kind === "assets") {
-    if (!localAssetsDrawerSynced) {
-      localAssetsDrawerSynced = true;
-      // paints cache instantly, then refreshes once per drawer open in the background
-      loadLocalAssetsForDrawer(el, opts);
-    }
-    hydrateLocalAssetThumbs(el);
-    const search = el.querySelector("[data-ml-local-search]");
-    if (search) {
-      let timer = null;
-      search.oninput = () => {
-        localAssetsState.search = search.value;
-        clearTimeout(timer);
-        timer = setTimeout(() => loadLocalAssetsForDrawer(el, opts, true), 250);
-      };
-    }
-    el.querySelectorAll("[data-ml-local-kind]").forEach((b) => b.onclick = () => {
-      localAssetsState.kind = b.dataset.mlLocalKind || "all";
-      loadLocalAssetsForDrawer(el, opts, true);
-    });
-    el.querySelector("[data-ml-local-refresh]")?.addEventListener("click", () => loadLocalAssetsForDrawer(el, opts, true));
-    el.querySelectorAll("[data-ml-local-use]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalUse, "edit", el, opts));
-    el.querySelectorAll("[data-ml-local-ref]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalRef, "ref", el, opts));
-  }
   if (kind === "templates") {
     el.querySelectorAll(".ml-drawer [data-ml-presets] button").forEach((b) => b.onclick = () => {
       const preset = MEDIA_PRESETS.find((p) => p.id === b.dataset.v);
@@ -4842,6 +5296,13 @@ function svgIc(k) {
     download: `<path d="M8 3v7.5M5.2 8l2.8 2.8L10.8 8M4 13.5h8"/>`,
     target: `<circle cx="8" cy="8" r="5.3"/><circle cx="8" cy="8" r="1.7"/>`,
     grid: `<rect x="2.4" y="2.4" width="4.6" height="4.6" rx="1"/><rect x="9" y="2.4" width="4.6" height="4.6" rx="1"/><rect x="2.4" y="9" width="4.6" height="4.6" rx="1"/><rect x="9" y="9" width="4.6" height="4.6" rx="1"/>`,
+    list: `<path d="M5.5 4h8M5.5 8h8M5.5 12h8"/><circle cx="2.8" cy="4" r=".7"/><circle cx="2.8" cy="8" r=".7"/><circle cx="2.8" cy="12" r=".7"/>`,
+    search: `<circle cx="6.8" cy="6.8" r="4.2"/><path d="M10 10l3.2 3.2"/>`,
+    folder: `<path d="M2.5 4.5h4l1.2 1.4h5.8v6.8H2.5z"/>`,
+    music: `<path d="M6 12V4l6-1v7M6 12a2 2 0 1 1-2-2 2 2 0 0 1 2 2zm6-2a2 2 0 1 1-2-2 2 2 0 0 1 2 2z"/>`,
+    heart: `<path d="M8 13S2.7 9.8 2.7 5.8A2.8 2.8 0 0 1 8 4.5a2.8 2.8 0 0 1 5.3 1.3C13.3 9.8 8 13 8 13z"/>`,
+    archive: `<path d="M3 5h10v8H3zM2.5 3h11v2h-11zM6 8h4"/>`,
+    trash: `<path d="M3.5 4.5h9M6 4.5V3h4v1.5M5 6.5l.5 6h5l.5-6M7 7v4M9 7v4"/>`,
     clock: `<circle cx="8" cy="8" r="5.3"/><path d="M8 5.2v3.1l2.1 1.2"/>`,
     layout: `<rect x="2.4" y="2.4" width="11.2" height="11.2" rx="1.6"/><path d="M2.4 6.6h11.2M6.4 6.6v7"/>`,
     cpu: `<rect x="5" y="5" width="6" height="6" rx="1"/><path d="M8 2.5v2M8 11.5v2M2.5 8h2M11.5 8h2M5.1 5.1L3.8 3.8M10.9 5.1l1.3-1.3M5.1 10.9l-1.3 1.3M10.9 10.9l1.3 1.3"/>`,

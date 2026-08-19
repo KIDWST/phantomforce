@@ -51,6 +51,7 @@ if (requestedPages.size) pages.splice(0, pages.length, ...pages.filter((page) =>
 const requestedWidths = new Set(String(process.env.PHANTOMFORCE_RESPONSIVE_WIDTHS || "").split(",").map((value) => value.trim()).filter(Boolean).map(Number).filter(Number.isFinite));
 if (requestedWidths.size) viewports.splice(0, viewports.length, ...viewports.filter((viewport) => requestedWidths.has(viewport.width)));
 const requestedSettingsTab = String(process.env.PHANTOMFORCE_RESPONSIVE_SETTINGS_TAB || "").trim();
+const requestedMediaTab = String(process.env.PHANTOMFORCE_RESPONSIVE_MEDIA_TAB || "").trim();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -693,6 +694,43 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
       return !!button;
     })()`);
     await sleep(180);
+  }
+  if (page.id === "media" && requestedMediaTab) {
+    await evaluate(cdp, `(() => {
+      const button = document.querySelector(${JSON.stringify(`[data-ml-tab="${requestedMediaTab}"]`)});
+      button?.click();
+      return !!button;
+    })()`);
+    await sleep(240);
+    if (requestedMediaTab === "assets") {
+      await evaluate(cdp, `(() => {
+        const input = document.querySelector("[data-catalog-folder-input]");
+        if (!input || typeof DataTransfer !== "function") return false;
+        const transfer = new DataTransfer();
+        const swatches = [
+          ["campaign-hero.svg", "#1ee6a1", "Campaign hero"],
+          ["product-launch.svg", "#6d65ff", "Product launch"],
+          ["brand-mark.svg", "#ffca68", "Brand mark"],
+          ["social-cover.svg", "#eb4e87", "Social cover"],
+        ];
+        swatches.forEach(([name, color, label], index) => {
+          const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#071410"/><rect x="44" y="44" width="1112" height="712" rx="18" fill="' + color + '" opacity=".18"/><circle cx="600" cy="345" r="170" fill="' + color + '" opacity=".85"/><text x="600" y="650" fill="#f2fff9" font-size="64" text-anchor="middle" font-family="Arial">' + label + '</text></svg>';
+          transfer.items.add(new File([svg], name, { type: "image/svg+xml", lastModified: Date.now() - (index * 86400000) }));
+        });
+        transfer.items.add(new File([new Uint8Array(128)], "launch-cut.mp4", { type: "video/mp4", lastModified: Date.now() - 43200000 }));
+        transfer.items.add(new File([new Uint8Array(128)], "campaign-theme.mp3", { type: "audio/mpeg", lastModified: Date.now() - 21600000 }));
+        input.files = transfer.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      })()`);
+      await sleep(320);
+      await evaluate(cdp, `(() => {
+        const first = document.querySelector("[data-catalog-open]");
+        first?.click();
+        return !!first;
+      })()`);
+      await sleep(180);
+    }
   }
   if (page.id === "dashboard") {
     await evaluate(cdp, `(${injectDashboardDecisionFixture.toString()})()`);

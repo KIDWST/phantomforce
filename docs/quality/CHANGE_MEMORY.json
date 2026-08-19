@@ -1926,6 +1926,41 @@
           "description": "The AI pane cannot regress to a read-only label that sends the user elsewhere to discover or change the model."
         }
       ]
+    },
+    {
+      "id": "media-lab-full-asset-catalogue-floor",
+      "status": "active",
+      "title": "Media Lab Assets is a complete catalogue, not a drawer",
+      "ownerDecision": "Assets is a first-class Media Lab workspace for managing photos, video, and audio. It combines tenant-scoped Asset Cloud, explicit read-only local-library selection, and Media Pool; provides upload, folder sync, search, filters, grid/list layouts, previews, metadata, favorites, lifecycle, bulk actions, and reuse controls; and stays usable across desktop and mobile. Local files remain on the PC until the user explicitly imports them.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "const NAV_TABS = \\[[\\s\\S]*\\[\"assets\", \"Assets\"\\][\\s\\S]*renderAssetCatalogue[\\s\\S]*Asset Catalogue",
+          "description": "Assets remains a full Media Lab workspace instead of a small side drawer."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "uploadCatalogueFiles[\\s\\S]*uploadAsset\\([\\s\\S]*syncCatalogueFolder[\\s\\S]*webkitRelativePath[\\s\\S]*URL\\.createObjectURL",
+          "description": "Real Asset Cloud uploads and explicit local-folder sync remain connected."
+        },
+        {
+          "file": "app/creator-studio.css",
+          "pattern": "\\.ml-asset-catalogue[\\s\\S]*\\.ml-catalog-layout[\\s\\S]*\\.ml-catalog-detail[\\s\\S]*@media \\(max-width: 760px\\)",
+          "description": "The catalogue retains its organized desktop and responsive layouts."
+        },
+        {
+          "file": "scripts/test-media-asset-catalogue.mjs",
+          "pattern": "Assets must remain a first-class Media Lab workspace tab[\\s\\S]*Uploads must use tenant-scoped Asset Cloud[\\s\\S]*desktop, tablet, and phone layouts",
+          "description": "A dedicated regression test protects the end-to-end asset catalogue contract."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "const NAV_DRAWERS = \\[[\\s\\S]{0,300}\\[\"assets\"",
+          "description": "Assets cannot be demoted back into the utility drawer."
+        }
+      ]
     }
   ]
 }
