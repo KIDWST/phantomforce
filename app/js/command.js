@@ -12,12 +12,12 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260817-162";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260817-162";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260817-162";
-import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260817-162";
-import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260817-162";
-import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260817-162";
+} from "./store.js?v=phantom-live-20260817-163";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260817-163";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260817-163";
+import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260817-163";
+import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260817-163";
+import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260817-163";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -490,7 +490,10 @@ function chatRouteProfileForRequest(raw, intent, settings) {
       requestedModel: selectedModelForProvider(settings, providerId, { tier: "reasoning" }),
       allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
       allowFallback: false,
-      maxProviderMs: null,
+      /* Smart/multi routing gets a short per-lane budget so Phantom can try
+         the next healthy brain and still answer before the browser gives up.
+         A deliberately pinned single provider keeps its larger direct budget. */
+      maxProviderMs: directProviderBudget(providerId),
     };
   }
   if (isAdvisoryChatRequest(raw, intent)) {
@@ -501,7 +504,7 @@ function chatRouteProfileForRequest(raw, intent, settings) {
       requestedModel: selectedModelForProvider(settings, providerId, { tier: "advisory" }),
       allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
       allowFallback: false,
-      maxProviderMs: null,
+      maxProviderMs: directProviderBudget(providerId),
     };
   }
   return {
@@ -670,7 +673,7 @@ async function askHermesBrain(raw, intent, settings, effortOverride = "") {
         : routeProfile.tier === "instant"
         ? 6500
         : ["reasoning", "advisory"].includes(routeProfile.tier)
-          ? 16000
+          ? 18000
           : 140000,
   );
   const token = typeof session?.token === "function" ? session.token() : "";

@@ -7264,3 +7264,218 @@ html[data-command-os="2040"] .phantombot-session-clock {
     display: none;
   }
 }
+
+/* Workspace handoff: route-only styles are loaded before their markup becomes
+   visible. Fast, warmed routes change instantly; a slower route gets one
+   branded transition surface so unfinished document flow never leaks out. */
+.workspace-transition {
+  position: fixed;
+  z-index: 420;
+  inset: 70px 0 32px;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 28px;
+  overflow: hidden;
+  color: #eafff5;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(24, 242, 143, 0.11), transparent 32%),
+    linear-gradient(135deg, rgba(2, 7, 5, 0.985), rgba(2, 12, 8, 0.975));
+  backdrop-filter: blur(24px) saturate(1.08);
+  isolation: isolate;
+}
+
+.workspace-transition::before,
+.workspace-transition::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.workspace-transition::before {
+  inset: 0;
+  z-index: -2;
+  opacity: 0.22;
+  background-image:
+    linear-gradient(rgba(24, 242, 143, 0.065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 242, 143, 0.05) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(circle at 50% 48%, #000 10%, transparent 68%);
+}
+
+.workspace-transition::after {
+  z-index: -1;
+  width: min(72vw, 760px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(24, 242, 143, 0.1);
+  border-radius: 50%;
+  box-shadow: 0 0 120px rgba(24, 242, 143, 0.055), inset 0 0 90px rgba(24, 242, 143, 0.025);
+  animation: workspaceTransitionOrbit 9s linear infinite;
+}
+
+.workspace-transition-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: min(92vw, 520px);
+  padding: clamp(30px, 5vw, 54px);
+  border: 1px solid rgba(24, 242, 143, 0.2);
+  border-radius: 28px;
+  text-align: center;
+  background:
+    linear-gradient(145deg, rgba(9, 25, 18, 0.88), rgba(3, 12, 8, 0.93)),
+    #03100a;
+  box-shadow: 0 34px 110px rgba(0, 0, 0, 0.56), inset 0 1px rgba(255, 255, 255, 0.045);
+}
+
+.workspace-transition-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 118px;
+  height: 118px;
+  margin-bottom: 25px;
+  border-radius: 50%;
+}
+
+.workspace-transition-mark::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border: 1px solid rgba(24, 242, 143, 0.32);
+  border-radius: inherit;
+  box-shadow: 0 0 42px rgba(24, 242, 143, 0.18), inset 0 0 30px rgba(24, 242, 143, 0.08);
+}
+
+.workspace-transition-mark img {
+  position: relative;
+  z-index: 2;
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 18px rgba(24, 242, 143, 0.28));
+}
+
+.workspace-transition-mark > i {
+  position: absolute;
+  inset: 0;
+  border: 1px solid transparent;
+  border-top-color: #18f28f;
+  border-right-color: rgba(24, 242, 143, 0.18);
+  border-radius: 50%;
+  animation: workspaceTransitionSpin 1.7s linear infinite;
+}
+
+.workspace-transition-mark > i:last-child {
+  inset: 18px;
+  border-top-color: rgba(24, 242, 143, 0.24);
+  border-right-color: #18f28f;
+  animation-direction: reverse;
+  animation-duration: 1.15s;
+}
+
+.workspace-transition-card > p {
+  margin: 0 0 11px;
+  color: #18f28f;
+  font: 700 10px/1.2 "Spline Sans Mono", monospace;
+  letter-spacing: 0.24em;
+}
+
+.workspace-transition-card > h2 {
+  max-width: 15ch;
+  margin: 0;
+  color: #f1fff8;
+  font: 650 clamp(25px, 4vw, 38px)/1.04 "Spline Sans", sans-serif;
+  letter-spacing: -0.045em;
+}
+
+.workspace-transition-card > span {
+  margin-top: 13px;
+  color: #86a699;
+  font: 500 13px/1.55 "Spline Sans", sans-serif;
+}
+
+.workspace-transition-progress {
+  width: min(250px, 74%);
+  height: 2px;
+  margin-top: 28px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(24, 242, 143, 0.11);
+}
+
+.workspace-transition-progress > i {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, #18f28f, transparent);
+  box-shadow: 0 0 15px rgba(24, 242, 143, 0.55);
+  animation: workspaceTransitionProgress 1.15s ease-in-out infinite;
+}
+
+.workspace-transition-card > button {
+  min-width: 132px;
+  min-height: 44px;
+  margin-top: 26px;
+  border: 1px solid rgba(24, 242, 143, 0.55);
+  border-radius: 14px;
+  color: #021008;
+  background: #18f28f;
+  font: 750 12px/1 "Spline Sans", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 12px 35px rgba(24, 242, 143, 0.18);
+}
+
+.workspace-transition-card > button:focus-visible {
+  outline: 2px solid #effff7;
+  outline-offset: 4px;
+}
+
+.workspace-transition.is-error .workspace-transition-mark > i {
+  animation-duration: 5s;
+}
+
+@keyframes workspaceTransitionSpin { to { transform: rotate(1turn); } }
+@keyframes workspaceTransitionOrbit { to { transform: rotate(1turn); } }
+@keyframes workspaceTransitionProgress {
+  from { transform: translateX(-115%); }
+  to { transform: translateX(255%); }
+}
+
+@media (max-width: 900px) {
+  .workspace-transition {
+    inset: 0 0 calc(78px + env(safe-area-inset-bottom, 0px));
+    padding: 16px;
+  }
+
+  .workspace-transition-card {
+    width: min(100%, 430px);
+    padding: 30px 22px 34px;
+    border-radius: 22px;
+  }
+
+  .workspace-transition-mark {
+    width: 98px;
+    height: 98px;
+    margin-bottom: 20px;
+  }
+
+  .workspace-transition-mark img {
+    width: 58px;
+    height: 58px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-transition::after,
+  .workspace-transition-mark > i,
+  .workspace-transition-progress > i {
+    animation: none !important;
+  }
+
+  .workspace-transition-progress > i {
+    width: 100%;
+    opacity: 0.7;
+  }
+}

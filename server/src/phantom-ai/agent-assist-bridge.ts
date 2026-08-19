@@ -20,6 +20,7 @@ export type AgentAssistRequest = {
   constraints?: string[];
   desired_output?: string;
   execute_bridge?: boolean;
+  timeout_ms?: number;
 };
 
 export type AgentAssistAttachment = {
@@ -152,8 +153,8 @@ function bridgeEnabled() {
   return process.env.PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED !== "false";
 }
 
-function bridgeTimeoutMs() {
-  const parsed = Number(process.env.PHANTOM_AGENT_ASSIST_TIMEOUT_MS ?? 300000);
+function bridgeTimeoutMs(override?: number) {
+  const parsed = Number(override ?? process.env.PHANTOM_AGENT_ASSIST_TIMEOUT_MS ?? 300000);
   return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 5000), 600000) : 300000;
 }
 
@@ -329,14 +330,19 @@ export function buildAgentAssistRelayPacket(input: AgentAssistRequest) {
   };
 }
 
-async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPacket>["relay_packet"], effort: AgentAssistEffort) {
+async function callHttpBridge(
+  packet: ReturnType<typeof buildAgentAssistRelayPacket>["relay_packet"],
+  effort: AgentAssistEffort,
+  timeoutOverride?: number,
+) {
   const url = bridgeUrl();
   if (!bridgeEnabled() || !url) {
     return { ok: false as const, status: "bridge_unavailable" as const, output_text: "", attachments: [], error_message: "ChatGPT bridge is not configured for execution." };
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), bridgeTimeoutMs());
+  const timeoutMs = bridgeTimeoutMs(timeoutOverride);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const token = process.env.PHANTOM_AGENT_ASSIST_BRIDGE_TOKEN?.trim();
     const response = await fetch(url, {
@@ -368,7 +374,7 @@ async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPac
     return { ok: true as const, status: "bridge_called" as const, output_text: output, attachments, error_message: null };
   } catch (error) {
     const message = error instanceof Error && error.name === "AbortError"
-      ? `ChatGPT bridge timed out after ${bridgeTimeoutMs()} ms.`
+      ? `ChatGPT bridge timed out after ${timeoutMs} ms.`
       : error instanceof Error ? error.message : error;
     return {
       ok: false as const,
@@ -385,7 +391,7 @@ async function callHttpBridge(packet: ReturnType<typeof buildAgentAssistRelayPac
 export async function requestAgentAssist(input: AgentAssistRequest): Promise<AgentAssistBridgeResult> {
   const { caller, mode, effort, relay_packet } = buildAgentAssistRelayPacket(input);
   const shouldExecute = input.execute_bridge === true;
-  const bridge = shouldExecute ? await callHttpBridge(relay_packet, effort) : null;
+  const bridge = shouldExecute ? await callHttpBridge(relay_packet, effort, input.timeout_ms) : null;
   const status = bridge?.status ?? (getAgentAssistBridgeStatus().executable ? "relay_packet_ready" : "bridge_unavailable");
   const called = bridge?.status === "bridge_called";
   const outputText = called

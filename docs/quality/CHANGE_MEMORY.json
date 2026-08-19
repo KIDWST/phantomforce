@@ -675,7 +675,7 @@
       "id": "dashboard-chat-context-and-fast-routing",
       "status": "active",
       "title": "Dashboard chat keeps the thread behind the saved organization AI runtime",
-      "ownerDecision": "The organization owner can choose the provider and exact model that powers PhantomForce. The server-persisted organization runtime overrides forged browser provider fields, Ghost Mode remains a server-side local-only floor, and failures never silently switch providers or degrade into an unrelated status dump.",
+      "ownerDecision": "The organization owner can choose the provider and exact model that powers PhantomForce. The server-persisted organization runtime overrides forged browser provider fields, Ghost Mode remains a server-side local-only floor, and failures never silently switch providers or degrade into an unrelated status dump. Smart reasoning and advisory requests keep every provider attempt bounded and try the preferred lane plus the best active alternative so a useful truthful degradation reaches the user before the browser deadline; failed lanes are marked offline for the next automatic route, while an explicitly pinned single provider keeps its deliberate longer budget.",
       "requiredPatterns": [
         {
           "file": "app/js/store.js",
@@ -696,6 +696,31 @@
           "file": "server/src/index.ts",
           "pattern": "local_response: Boolean\\(localFallback\\)",
           "description": "Provider failure returns a safe local answer without pretending a provider succeeded."
+        },
+        {
+          "file": "app/js/command.js",
+          "pattern": "maxProviderMs: directProviderBudget\\(providerId\\)[\\s\\S]*maxProviderMs: directProviderBudget\\(providerId\\)",
+          "description": "Reasoning and advisory lanes use bounded smart-routing budgets while a pinned provider retains its explicit direct timeout."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "\\[\"instant\", \"reasoning\", \"advisory\"\\]\\.includes\\(ctx\\.routeTier \\|\\| \"\"\\)[\\s\\S]*eligibleOrder\\.slice\\(0, 2\\)",
+          "description": "Action-free conversation tries the preferred provider and best active alternative before returning truthful local degradation inside the browser deadline; recorded health advances future requests through the remaining routes."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "execute_bridge: true,[\\s\\S]*timeout_ms: timeoutMs[\\s\\S]*status: assist\\.provider_called && assist\\.output_text\\.trim\\(\\) \\? \"called\"",
+          "description": "The ChatGPT subscription bridge obeys the routed provider budget and counts as successful only when it actually returned an answer."
+        },
+        {
+          "file": "server/src/phantom-ai/agent-assist-bridge.ts",
+          "pattern": "timeout_ms\\?: number[\\s\\S]*bridgeTimeoutMs\\(timeoutOverride\\)[\\s\\S]*callHttpBridge\\(relay_packet, effort, input\\.timeout_ms\\)",
+          "description": "Per-request bridge budgets propagate into the HTTP abort timer instead of falling back to the global five-minute bridge timeout."
+        },
+        {
+          "file": "server/scripts/test-agent-assist-bridge.ts",
+          "pattern": "timeout_ms: 5_000[\\s\\S]*timed out after 5000 ms[\\s\\S]*budgetElapsedMs >= 4_500",
+          "description": "A real delayed HTTP adapter proves the per-request ChatGPT Bridge budget aborts near five seconds and cannot be reported as a provider call."
         },
         {
           "file": "scripts/test-dashboard-chat-quality.mjs",
@@ -786,6 +811,11 @@
           "file": "server/src/phantom-ai/instant-chat-tools.ts",
           "pattern": "function personalityReply\\(userRequest: string\\)[\\s\\S]*tool_id: \"phantom-personality\"",
           "description": "Direct harmless personality questions receive an immediate Phantom-specific answer instead of an AI disclaimer or an expensive model call."
+        },
+        {
+          "file": "server/src/phantom-ai/instant-chat-tools.ts",
+          "pattern": "const userMatches = \\[\\.\\.\\.relevant\\[index\\]\\.user\\.matchAll\\(RECALL_COLORS\\)\\][\\s\\S]*userMatches\\.at\\(-1\\)\\?\\.\\[0\\] \\|\\| assistantMatches",
+          "description": "Temporary fact recall treats the user's newest color statement or correction as authoritative over any conflicting descriptive color invented by the assistant."
         },
         {
           "file": "server/src/phantom-ai/instant-chat-tools.ts",
@@ -1554,7 +1584,7 @@
       "id": "phantom-hunter-desktop-web-split-floor",
       "status": "active",
       "title": "PhantomHunter keeps advanced desktop access separate from one-repository web",
-      "ownerDecision": "PhantomHunter Desktop is the advanced local application for explicitly selected local, Git, website/API, or pasted targets. PhantomHunter Web accepts no arbitrary target and scans only the repository bound to the active organization. Both run Betterleaks, TruffleHog, and KeyHunter as one pipeline, and user-facing or durable results contain provider-confirmed active findings only. Web never returns raw credentials; Desktop permits an explicitly confirmed one-time reveal from volatile local memory but never persists raw values.",
+      "ownerDecision": "PhantomHunter Desktop is the advanced local application for explicitly selected local, Git, website/API, or pasted targets. PhantomHunter Web accepts no arbitrary target and scans only the repository bound to the active organization. Both run Betterleaks, TruffleHog, and KeyHunter as one pipeline, and user-facing or durable results contain provider-confirmed active findings only. Web never returns raw credentials or local repository paths; Desktop permits an explicitly confirmed one-time reveal from volatile local memory but never persists raw values. Scan follow-ups stay pinned to the organization returned by the server, Windows Git history uses a working TruffleHog URI, and interrupted service work becomes a durable actionable failure instead of a missing or permanently running record.",
       "requiredPatterns": [
         {
           "file": "server/src/phantom-ai/phantom-hunter.ts",
@@ -1585,6 +1615,21 @@
           "file": "app/js/phantomhunter.js",
           "pattern": "import \\{ currentTenantId, friendlyBackendError, session \\} from \\\"\\./store\\.js\\?v=phantom-live-[0-9]{8}-[0-9]+\\\";[\\s\\S]*const token = session\\.token\\(\\);",
           "description": "PhantomHunter must use the signed-in shell's shared tenant and bearer-session contract on web and desktop-class app surfaces."
+        },
+        {
+          "file": "app/js/phantomhunter.js",
+          "pattern": "state\\.organizationId = String\\(web\\.organization_id[\\s\\S]*error\\?\\.status === 404[\\s\\S]*Repository refreshed[\\s\\S]*ignoreScanId",
+          "description": "Scan list, detail, export, and polling remain on one server-returned organization and stale records recover without a generic missing-record banner."
+        },
+        {
+          "file": "server/src/phantom-ai/phantom-hunter.ts",
+          "pattern": "scan_interrupted_by_service_restart[\\s\\S]*Connected workspace source[\\s\\S]*file:\\/\\/\\$\\{normalized\\}",
+          "description": "Restarted scans close truthfully, local paths stay behind the curtain, and Windows Git history uses TruffleHog's working repository form."
+        },
+        {
+          "file": "server/scripts/test-phantom-hunter.ts",
+          "pattern": "history scans must use TruffleHog[\\s\\S]*interruptedScanRecovery[\\s\\S]*listDetailCoherence",
+          "description": "The real three-engine fixture protects history scanning, restart recovery, and list/detail coherence."
         }
       ],
       "forbiddenPatterns": [
@@ -1614,7 +1659,7 @@
       "id": "admin-pages-preloaded-green-black-ui-floor",
       "status": "active",
       "title": "Admin pages use one fast black and Phantom-green visual system",
-      "ownerDecision": "Global admin styles are applied before boot, while workspace-only styles load automatically when their route opens so initial paint stays inside the performance budget. Page modules remain in the static import graph with eager hints for primary surfaces. The admin shell, navigation state, page intelligence, shared controls, and Planner use black, graphite, and Phantom green. Purple and blue are not admin accent colors. Planner must retain a real responsive card, metric, week-board, and side-panel layout instead of collapsing to raw document flow.",
+      "ownerDecision": "Global admin styles are applied before boot, while workspace-only styles warm in the background and are awaited when their route opens so initial paint stays inside the performance budget. A route may never insert raw workspace markup before its visual system is applied: the previous complete page remains intact and a branded Phantom transition appears only when loading takes long enough to be visible. Failed styling stays behind a truthful retry surface. Page modules remain in the static import graph with eager hints for primary surfaces. The admin shell, navigation state, page intelligence, shared controls, and Planner use black, graphite, and Phantom green. Purple and blue are not admin accent colors. Planner must retain a real responsive card, metric, week-board, and side-panel layout instead of collapsing to raw document flow.",
       "requiredPatterns": [
         {
           "file": "app/index.html",
@@ -1645,6 +1690,21 @@
           "file": "scripts/test-admin-ui-system.mjs",
           "pattern": "requiredStyles[\\s\\S]*requiredModuleHints[\\s\\S]*Planner presentation must style[\\s\\S]*retired purple/blue palette",
           "description": "A dedicated regression test protects page preload, Planner layout, and brand color rules."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "const workspaceStylePromises = new Map\\(\\)[\\s\\S]*warmWorkspaceStyles[\\s\\S]*async function renderWorkspacePage[\\s\\S]*await ensureWorkspaceStyles\\(key\\)[\\s\\S]*root\\.innerHTML[\\s\\S]*async function openWorkspace[\\s\\S]*await ensureWorkspaceStyles\\(key\\)[\\s\\S]*overlayRoot\\.innerHTML",
+          "description": "Both page and overlay routes wait for shared warmed styles before committing markup."
+        },
+        {
+          "file": "app/command-os.css",
+          "pattern": "Workspace handoff[\\s\\S]*\\.workspace-transition[\\s\\S]*\\.workspace-transition-mark[\\s\\S]*prefers-reduced-motion",
+          "description": "Slow and failed route handoffs use the responsive Phantom transition rather than exposing document flow."
+        },
+        {
+          "file": "scripts/test-responsive-viewports.mjs",
+          "pattern": "verifyAtomicWorkspaceTransition[\\s\\S]*rawStoreVisible[\\s\\S]*must never render before its visual system[\\s\\S]*styleReady",
+          "description": "Real delayed-network Chrome evidence proves raw PhantomStore markup remains hidden until its stylesheet is applied."
         }
       ],
       "forbiddenPatterns": [

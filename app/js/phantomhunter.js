@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260817-162";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260817-163";
 
 const states = new WeakMap();
 const terminal = new Set(["completed", "partial", "failed", "cancelled"]);
@@ -16,25 +16,28 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function withTenant(path) {
-  const tenant = tenantId();
+function withTenant(path, organizationId = tenantId()) {
+  const tenant = String(organizationId || "").trim();
   if (!tenant) return path;
   const joiner = path.includes("?") ? "&" : "?";
   return `${path}${joiner}tenant_id=${encodeURIComponent(tenant)}`;
 }
 
-async function api(path, options = {}) {
-  const response = await fetch(withTenant(path), {
+async function api(path, options = {}, organizationId = tenantId()) {
+  const response = await fetch(withTenant(path, organizationId), {
     ...options,
     headers: { "Content-Type": "application/json", ...authHeaders(), ...(options.headers || {}) },
   });
   const body = await response.json().catch(() => ({ ok: false, error: "PhantomHunter returned an unreadable response." }));
   if (!response.ok || body.ok === false) {
     const backendError = typeof body.error === "string" ? body.error : body.error?.message;
-    throw new Error(friendlyBackendError(response.status, backendError, {
+    const error = new Error(friendlyBackendError(response.status, backendError, {
       authMessage: "Your PhantomForce session expired. Sign in again to use PhantomHunter.",
       fallbackPrefix: "PhantomHunter request failed",
     }));
+    error.status = response.status;
+    error.code = backendError || "request_failed";
+    throw error;
   }
   return body;
 }
@@ -55,13 +58,14 @@ function toolStrip(hunter) {
 function repoCard(repository) {
   const repo = repository.repository;
   if (!repository.connected || !repo) {
+    const unavailable = Boolean(repo);
     return `<section class="hunter-web-connect">
       <div class="hunter-web-connect-icon">⌁</div>
-      <span>ONE-TIME SETUP</span>
-      <h2>Connect your code source</h2>
-      <p>Your workspace owner connects GitHub, GitLab, or Bitbucket once. After that, everyone uses one button—no paths, URLs, or repo hunting.</p>
+      <span>${unavailable ? "CONNECTION REFRESH" : "ONE-TIME CONNECTION"}</span>
+      <h2>${unavailable ? "Reconnect your code source" : "Connect your code source"}</h2>
+      <p>${unavailable ? "The saved source is not reachable right now. Choose its provider once and PhantomForce will restore the secure connection." : "Choose GitHub, GitLab, or Bitbucket once. After that, everyone uses one button—no paths, URLs, or repo hunting."}</p>
       <div class="hunter-web-providers"><button type="button" data-hunter-connect="github">GitHub</button><button type="button" data-hunter-connect="gitlab">GitLab</button><button type="button" data-hunter-connect="bitbucket">Bitbucket</button></div>
-      <small>PhantomHunter Web never accepts a custom scan target.</small>
+      <small>PhantomHunter handles the secure connection behind the button.</small>
     </section>`;
   }
   return `<section class="hunter-web-repo">
@@ -86,13 +90,40 @@ function resultPanel(scan) {
   }
   const findings = scan.findings || scan.active_findings || [];
   const running = !terminal.has(scan.status);
+  const partial = scan.status === "partial";
+  const failed = scan.status === "failed";
+  const cancelled = scan.status === "cancelled";
+  const limited = partial || failed || cancelled;
+  const failedEngines = [...new Set((scan.engine_runs || []).filter((run) => run.status === "failed").map((run) => run.engine))];
   const completed = Number(scan.progress?.completed_assets || 0);
   const total = Number(scan.progress?.total_assets || 1);
   const percent = Math.max(0, Math.min(100, Math.round((completed / total) * 100)));
-  return `<section class="hunter-web-results ${findings.length ? "has-exposure" : "is-clean"}">
+  const title = running
+    ? "Checking the connected repository"
+    : findings.length
+      ? `${findings.length} active key${findings.length === 1 ? "" : "s"} confirmed`
+      : partial
+        ? "Check completed with limited coverage"
+        : failed
+          ? "Check stopped before completion"
+          : cancelled
+            ? "Check cancelled"
+            : "No active keys confirmed";
+  const detail = running
+    ? "Betterleaks, TruffleHog, and KeyHunter are working as one pipeline."
+    : findings.length
+      ? "Rotate or revoke immediately, remove the source copy, then scan again."
+      : partial
+        ? `${failedEngines.length ? `${failedEngines.join(", ")} needs another attempt. ` : ""}Run the check again for complete coverage.`
+        : failed
+          ? "A service update or scanner interruption stopped this check. Run it again when ready."
+          : cancelled
+            ? "No result was claimed. Start a new check whenever you are ready."
+            : "Nothing provider-confirmed reached the result surface.";
+  return `<section class="hunter-web-results ${limited ? "needs-attention" : findings.length ? "has-exposure" : "is-clean"}">
     <div class="hunter-web-result-head">
-      <div class="hunter-web-result-icon">${running ? "↻" : findings.length ? "!" : "✓"}</div>
-      <div><span>VERIFIED EXPOSURE · ${esc(scan.id.slice(0, 8).toUpperCase())}</span><h2>${running ? "Checking the connected repository" : findings.length ? `${findings.length} active key${findings.length === 1 ? "" : "s"} confirmed` : "No active keys confirmed"}</h2><p>${running ? "Betterleaks, TruffleHog, and KeyHunter are working as one pipeline." : findings.length ? "Rotate or revoke immediately, remove the source copy, then scan again." : "Nothing provider-confirmed reached the result surface."}</p></div>
+      <div class="hunter-web-result-icon">${running ? "↻" : limited || findings.length ? "!" : "✓"}</div>
+      <div><span>VERIFIED EXPOSURE · ${esc(scan.id.slice(0, 8).toUpperCase())}</span><h2>${esc(title)}</h2><p>${esc(detail)}</p></div>
       ${!running ? `<button type="button" data-hunter-export>Export</button>` : ""}
     </div>
     ${running ? `<div class="hunter-web-progress"><i style="width:${percent}%"></i></div>` : ""}
@@ -110,6 +141,7 @@ function historyPanel(scans) {
 function render(root) {
   const state = states.get(root);
   const connected = Boolean(state.web?.repository?.connected);
+  const visibleScans = (state.web?.scans || []).filter((scan) => !state.unresolvedScanIds.has(scan.id));
   root.innerHTML = `<div class="hunter-web-shell">
     <header class="hunter-web-hero">
       <div><span class="hunter-web-kicker">PHANTOMHUNTER WEB</span><h1>Your repository.<br><em>One clear answer.</em></h1><p>No paths. No target lists. No security jargon. PhantomHunter checks only the repository already connected to this workspace and shows active keys only.</p></div>
@@ -117,7 +149,7 @@ function render(root) {
     </header>
     ${state.loading ? `<section class="hunter-web-loading">Loading the workspace repository…</section>` : ""}
     ${state.error ? `<section class="hunter-web-error"><b>PhantomHunter needs attention</b><span>${esc(state.error)}</span><button type="button" data-hunter-retry>Retry</button></section>` : ""}
-    ${state.notice ? `<section class="hunter-web-notice"><b>Connection requested</b><span>${esc(state.notice)}</span></section>` : ""}
+    ${state.notice ? `<section class="hunter-web-notice"><b>${esc(state.noticeTitle || "Update")}</b><span>${esc(state.notice)}</span></section>` : ""}
     ${state.web ? repoCard(state.web.repository) : ""}
     ${state.web ? `<section class="hunter-web-action ${connected ? "" : "disabled"}">
       <div><span>ONE ACTION</span><h2>Check this repository now</h2><p>Read-only scan. PhantomHunter will not rotate, revoke, publish, or change anything.</p></div>
@@ -126,24 +158,36 @@ function render(root) {
     </section>` : ""}
     ${toolStrip(state.web?.hunter)}
     ${resultPanel(state.activeScan)}
-    ${historyPanel(state.web?.scans || [])}
+    ${historyPanel(visibleScans)}
   </div>`;
   bind(root);
 }
 
-async function load(root) {
+async function load(root, { ignoreScanId = "", keepSelection = false } = {}) {
   const state = states.get(root);
+  if (!state || !root.isConnected) return;
+  const requestVersion = ++state.requestVersion;
+  clearTimeout(state.timer);
   state.loading = true;
   state.error = "";
   render(root);
   try {
-    state.web = await api("/phantom-ai/phantom-hunter/web?limit=10");
-    const running = state.web.scans?.find((scan) => !terminal.has(scan.status));
-    if (!state.activeScan) state.activeScan = running || state.web.scans?.[0] || null;
+    const web = await api("/phantom-ai/phantom-hunter/web?limit=10", {}, state.organizationId || tenantId());
+    if (requestVersion !== state.requestVersion || !root.isConnected) return;
+    state.organizationId = String(web.organization_id || state.organizationId || tenantId());
+    state.web = web;
+    if (ignoreScanId) state.unresolvedScanIds.add(ignoreScanId);
+    const scans = (web.scans || []).filter((scan) => !state.unresolvedScanIds.has(scan.id));
+    const running = scans.find((scan) => !terminal.has(scan.status));
+    const selected = keepSelection ? scans.find((scan) => scan.id === state.activeScan?.id) : null;
+    state.activeScan = running || selected || scans[0] || null;
+    state.running = Boolean(running);
+    state.pollingScanId = running?.id || "";
     state.loading = false;
     render(root);
-    if (running) poll(root, running.id);
+    if (running) void poll(root, running.id);
   } catch (error) {
+    if (requestVersion !== state.requestVersion || !root.isConnected) return;
     state.loading = false;
     state.error = error instanceof Error ? error.message : "PhantomHunter is unavailable.";
     render(root);
@@ -152,15 +196,29 @@ async function load(root) {
 
 async function poll(root, scanId) {
   const state = states.get(root);
+  if (!state || !root.isConnected) return;
+  state.pollingScanId = scanId;
   clearTimeout(state.timer);
   try {
-    const result = await api(`/phantom-ai/phantom-hunter/scans/${encodeURIComponent(scanId)}`);
+    const result = await api(`/phantom-ai/phantom-hunter/scans/${encodeURIComponent(scanId)}`, {}, state.organizationId || tenantId());
+    if (!root.isConnected || state.pollingScanId !== scanId) return;
+    state.organizationId = String(result.organization_id || state.organizationId || tenantId());
     state.activeScan = result.scan;
     state.running = !terminal.has(result.scan.status);
     render(root);
-    if (state.running) state.timer = setTimeout(() => poll(root, scanId), 900);
-    else await load(root);
+    if (state.running) state.timer = setTimeout(() => { void poll(root, scanId); }, 900);
+    else await load(root, { keepSelection: true });
   } catch (error) {
+    if (!root.isConnected || state.pollingScanId !== scanId) return;
+    if (error?.status === 404 || error?.code === "scan_not_found") {
+      state.running = false;
+      state.activeScan = null;
+      state.pollingScanId = "";
+      state.noticeTitle = "Repository refreshed";
+      state.notice = "The previous check changed during a service update. PhantomHunter refreshed the repository and is ready to run again.";
+      await load(root, { ignoreScanId: scanId });
+      return;
+    }
     state.running = false;
     state.error = error instanceof Error ? error.message : "Could not refresh this check.";
     render(root);
@@ -180,10 +238,12 @@ async function launch(root) {
     const result = await api("/phantom-ai/phantom-hunter/web/scan", {
       method: "POST",
       body: JSON.stringify({ authorization_attested: true }),
-    });
+    }, state.organizationId || tenantId());
+    state.organizationId = String(result.organization_id || state.organizationId || tenantId());
+    state.unresolvedScanIds.delete(result.scan.id);
     state.activeScan = result.scan;
     render(root);
-    poll(root, result.scan.id);
+    void poll(root, result.scan.id);
   } catch (error) {
     state.running = false;
     state.error = error instanceof Error ? error.message : "The repository check could not start.";
@@ -199,7 +259,8 @@ async function requestConnection(root, provider) {
     const result = await api("/phantom-ai/phantom-hunter/web/connect", {
       method: "POST",
       body: JSON.stringify({ provider }),
-    });
+    }, state.organizationId || tenantId());
+    state.noticeTitle = "Connection requested";
     state.notice = result.customer_message;
     render(root);
   } catch (error) {
@@ -211,7 +272,7 @@ async function requestConnection(root, provider) {
 async function exportScan(root) {
   const state = states.get(root);
   if (!state.activeScan) return;
-  const response = await fetch(withTenant(`/phantom-ai/phantom-hunter/scans/${encodeURIComponent(state.activeScan.id)}/export.csv`), { headers: authHeaders() });
+  const response = await fetch(withTenant(`/phantom-ai/phantom-hunter/scans/${encodeURIComponent(state.activeScan.id)}/export.csv`, state.organizationId || tenantId()), { headers: authHeaders() });
   if (!response.ok) {
     state.error = "The active-key report could not be exported.";
     return render(root);
@@ -234,11 +295,18 @@ function bind(root) {
   root.querySelectorAll("[data-hunter-connect]").forEach((button) => button.addEventListener("click", () => requestConnection(root, button.dataset.hunterConnect)));
   root.querySelectorAll("[data-hunter-scan]").forEach((button) => button.addEventListener("click", async () => {
     try {
-      const result = await api(`/phantom-ai/phantom-hunter/scans/${encodeURIComponent(button.dataset.hunterScan)}`);
+      const result = await api(`/phantom-ai/phantom-hunter/scans/${encodeURIComponent(button.dataset.hunterScan)}`, {}, state.organizationId || tenantId());
+      state.organizationId = String(result.organization_id || state.organizationId || tenantId());
       state.activeScan = result.scan;
       render(root);
       root.querySelector(".hunter-web-results")?.scrollIntoView({ behavior: "smooth", block: "center" });
     } catch (error) {
+      if (error?.status === 404 || error?.code === "scan_not_found") {
+        state.noticeTitle = "Repository refreshed";
+        state.notice = "That older check is no longer available. PhantomHunter refreshed the repository history.";
+        await load(root, { ignoreScanId: button.dataset.hunterScan });
+        return;
+      }
       state.error = error instanceof Error ? error.message : "Could not open that check.";
       render(root);
     }
@@ -247,6 +315,20 @@ function bind(root) {
 
 export function renderPhantomHunter(root) {
   if (!root) return;
-  if (!states.has(root)) states.set(root, { loading: true, error: "", notice: "", web: null, activeScan: null, running: false, attested: false, timer: null });
-  load(root);
+  if (!states.has(root)) states.set(root, {
+    loading: true,
+    error: "",
+    notice: "",
+    noticeTitle: "",
+    web: null,
+    activeScan: null,
+    running: false,
+    attested: false,
+    timer: null,
+    organizationId: "",
+    pollingScanId: "",
+    requestVersion: 0,
+    unresolvedScanIds: new Set(),
+  });
+  void load(root);
 }

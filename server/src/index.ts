@@ -4678,11 +4678,12 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       ],
       desired_output: "Return the concise answer PhantomForce should show in chat. If hands-on work is needed, include the Hermes handoff as the next step.",
       execute_bridge: true,
+      timeout_ms: timeoutMs,
     });
     return {
       provider_id: "chatgpt_bridge" as const,
       model_id: ctx.requestedModelId || ctx.requestedModel || "chatgpt-standard",
-      status: "called" as const,
+      status: assist.provider_called && assist.output_text.trim() ? "called" as const : "error" as const,
       output_text: assist.output_text,
       provider_called: assist.provider_called,
       network_call_performed: assist.network_call_performed,
@@ -4770,7 +4771,17 @@ async function runAdminPhantomAiChatWithFallback(
   const allowed = Array.isArray(allowedProviders) && allowedProviders.length ? new Set(allowedProviders) : null;
   const attemptOrder = options.allowFallback === false ? [requestedPrimaryProviderId] : adminProviderAttemptOrder(requestedPrimaryProviderId);
   const filteredOrder = attemptOrder.filter((providerId) => !allowed || allowed.has(providerId));
-  const order = filteredOrder.length ? filteredOrder : allowed ? [...allowed] : [requestedPrimaryProviderId];
+  const eligibleOrder = filteredOrder.length ? filteredOrder : allowed ? [...allowed] : [requestedPrimaryProviderId];
+  /* Conversation must remain responsive even when every configured brain is
+     cold or offline. The preferred lane plus the best active alternative fit
+     inside the browser deadline; failed lanes are marked offline so the next
+     request advances through the remaining configured brains. The truthful
+     local degradation path answers this request immediately instead of
+     leaving the user with a generic client-side timeout. Long-running
+     build/mission lanes retain the complete configured provider walk. */
+  const order = ["instant", "reasoning", "advisory"].includes(ctx.routeTier || "")
+    ? eligibleOrder.slice(0, 2)
+    : eligibleOrder;
   const primaryProviderId = order[0];
   const attempts: AdminPhantomAiChatAttempt[] = [];
   let providerId = primaryProviderId;

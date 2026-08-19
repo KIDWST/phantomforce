@@ -6,18 +6,21 @@ function assert(condition, message) {
 }
 
 const root = resolve(import.meta.dirname, "..");
-const [index, main, hunter, css] = await Promise.all([
+const [index, main, hunter, css, server] = await Promise.all([
   readFile(resolve(root, "app/index.html"), "utf8"),
   readFile(resolve(root, "app/js/main.js"), "utf8"),
   readFile(resolve(root, "app/js/phantomhunter.js"), "utf8"),
   readFile(resolve(root, "app/phantomhunter.css"), "utf8"),
+  readFile(resolve(root, "server/src/phantom-ai/phantom-hunter.ts"), "utf8"),
 ]);
+const buildId = index.match(/phantom-live-\d{8}-\d+/u)?.[0];
+assert(buildId, "Index must carry the PhantomHunter build identity.");
+const escapedBuildId = buildId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-assert(index.includes('phantom-live-20260817-162'), "Index must carry the PhantomHunter build identity.");
 assert(index.includes('data-nav-id="phantomhunter"'), "The operating rail must expose PhantomHunter.");
 assert(main.includes('renderPhantomHunter') && main.includes('id: "phantomhunter"'), "Main routing must register the PhantomHunter workspace.");
-assert(main.includes('/app/phantomhunter.css?v=phantom-live-20260817-162'), "The workspace must load its cache-busted visual system.");
-assert(hunter.includes('import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260817-162"'), "PhantomHunter must use the shared authenticated session contract.");
+assert(new RegExp(`/app/phantomhunter\\.css\\?v=${escapedBuildId}`).test(main), "The workspace must load its cache-busted visual system.");
+assert(new RegExp(`import \\{ currentTenantId, friendlyBackendError, session \\} from "\\./store\\.js\\?v=${escapedBuildId}"`).test(hunter), "PhantomHunter must use the shared authenticated session contract.");
 assert(hunter.includes("const token = session.token();"), "Every PhantomHunter request must read the current in-memory browser-session token.");
 assert(!hunter.includes("phantomforce_access_token"), "PhantomHunter must not read obsolete private token keys.");
 for (const engine of ["Betterleaks", "TruffleHog", "KeyHunter"]) {
@@ -33,16 +36,24 @@ assert(!hunter.includes("assets/bulk") && !hunter.includes("include_review") && 
 assert(!/unverified|inactive key|candidate review/i.test(hunter), "Web UI must not surface non-active credential noise.");
 assert(!/Show raw key|Copy full key|key_full/.test(hunter), "The UI must not offer raw-secret reveal or export.");
 assert(css.includes(".hunter-web-shell") && css.includes(".hunter-web-finding") && css.includes(".hunter-web-action"), "The complete PhantomHunter web visual system must exist.");
+assert(/state\.organizationId = String\(web\.organization_id[\s\S]*state\.organizationId \|\| tenantId\(\)/u.test(hunter), "Every follow-up must remain pinned to the organization returned by the workspace response.");
+assert(/error\?\.status === 404[\s\S]*Repository refreshed[\s\S]*ignoreScanId/u.test(hunter), "A missing stale scan must self-heal without exposing a generic record-not-found failure.");
+assert(server.includes('if (kind === "local_path") return "Connected workspace source"'), "Repository cards must never receive an internal local path.");
+assert(/Check completed with limited coverage[\s\S]*Run the check again for complete coverage/u.test(hunter), "Partial scan coverage must remain visible and actionable.");
+assert(server.includes("scan_interrupted_by_service_restart"), "Service restarts must close and preserve an actionable interrupted scan record.");
 
 console.log(JSON.stringify({
   ok: true,
-  build: "phantom-live-20260817-162",
+  build: buildId,
   firstClassRoute: true,
   boundRepositoryOnly: true,
   arbitraryTargetIntake: false,
   threeEnginePipeline: true,
   authorizationAttestation: true,
   activeOnlyResults: true,
+  tenantPinnedFollowups: true,
+  interruptedScanRecovery: true,
+  localPathExposed: false,
   rawKeyControls: false,
   responsiveWorkspace: true,
 }, null, 2));

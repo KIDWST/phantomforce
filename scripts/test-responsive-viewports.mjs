@@ -809,6 +809,68 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
   return { page: page.id, label: page.label, viewport, appState, audit, screenshot: file };
 }
 
+async function verifyAtomicWorkspaceTransition(cdp, baseUrl) {
+  await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  const loadEvent = cdp.waitEvent("Page.loadEventFired", 15_000).catch(() => null);
+  await cdp.send("Page.navigate", { url: `${baseUrl}/app/?session=owner-admin` });
+  await loadEvent;
+  await waitForApp(cdp, "dashboard");
+  await evaluate(cdp, `(() => { document.querySelector(".os-poweron")?.click(); return true; })()`);
+  await sleep(720);
+  await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+  const reset = await evaluate(cdp, `(() => ({
+    supported: typeof window.PHANTOM_TEST_RESET_WORKSPACE_STYLE === "function",
+    removed: window.PHANTOM_TEST_RESET_WORKSPACE_STYLE?.("phantomstore") || 0,
+  }))()`);
+  assert.equal(reset?.supported, true, "Local browser QA must expose the safe route-style reset hook.");
+  await cdp.send("Network.emulateNetworkConditions", {
+    offline: false,
+    latency: 900,
+    downloadThroughput: 250_000,
+    uploadThroughput: 250_000,
+    connectionType: "cellular3g",
+  });
+  await evaluate(cdp, `(() => { window.PHANTOM_GO_NAV("phantomstore"); return true; })()`);
+  await sleep(260);
+  const delayed = await evaluate(cdp, `(() => {
+    const transition = document.querySelector("[data-workspace-transition='phantomstore']");
+    const rect = transition?.getBoundingClientRect();
+    return {
+      transitionVisible: !!transition && rect.width > 100 && rect.height > 100,
+      role: transition?.getAttribute("role") || "",
+      rawStoreVisible: !!document.querySelector("[data-workspace-page='phantomstore']"),
+      dashboardStillPresent: !!document.querySelector("[data-dashboard-brief-title]"),
+    };
+  })()`);
+  assert.equal(delayed.transitionVisible, true, "A delayed workspace style must show the branded Phantom transition.");
+  assert.equal(delayed.role, "status", "The loading handoff must announce a polite status.");
+  assert.equal(delayed.rawStoreVisible, false, "PhantomStore markup must never render before its visual system is ready.");
+  assert.equal(delayed.dashboardStillPresent, true, "The previous complete workspace must stay intact behind the transition.");
+  const completed = await waitForApp(cdp, "phantomstore");
+  assert.equal(completed?.ready, true, "The delayed styled route must complete successfully.");
+  const settled = await evaluate(cdp, `(() => {
+    const link = [...document.querySelectorAll("link[data-workspace-style]")].find((item) => item.getAttribute("href")?.includes("/app/phantomstore.css"));
+    const shell = document.querySelector(".phantomstore, .ps-shell, [data-phantomstore]");
+    return {
+      transitionGone: !document.querySelector("[data-workspace-transition]"),
+      styleReady: link?.dataset.workspaceStyleState === "ready" && !!link.sheet,
+      shellPresent: !!shell,
+    };
+  })()`);
+  assert.equal(settled.transitionGone, true, "The transition must leave after the styled workspace commits.");
+  assert.equal(settled.styleReady, true, "The route stylesheet must be applied before the transition leaves.");
+  assert.equal(settled.shellPresent, true, "PhantomStore must render its finished product shell.");
+  await cdp.send("Network.emulateNetworkConditions", {
+    offline: false,
+    latency: 0,
+    downloadThroughput: -1,
+    uploadThroughput: -1,
+    connectionType: "none",
+  });
+  await cdp.send("Network.setCacheDisabled", { cacheDisabled: false });
+  return { ...delayed, ...settled };
+}
+
 function assertCase(result) {
   const { page, label, viewport, audit, appState } = result;
   assert.equal(appState?.gateVisible, false, `${label} ${viewport.width}: auth gate must not remain visible during local QA.`);
@@ -962,6 +1024,8 @@ async function main() {
     cdp = createCdpClient(wsUrl);
     await cdp.send("Page.enable");
     await cdp.send("Runtime.enable");
+    await cdp.send("Network.enable");
+    const workspaceTransition = await verifyAtomicWorkspaceTransition(cdp, baseUrl);
 
     for (const page of pages) {
       let navigate = true;
@@ -981,6 +1045,7 @@ async function main() {
       pages: pages.map((page) => page.id),
       viewports,
       cases: results.length,
+      workspaceTransition,
       screenshots: screenshotDir,
       report: path.join(runDir, "report.json"),
       checks: [
@@ -1003,6 +1068,7 @@ async function main() {
         "PhantomPlay card actions stay fully visible inside game cards",
         "PhantomStore phone view puts product art before prompt chrome",
         "PhantomStore products render with full-frame media blocks",
+        "delayed route styling keeps raw workspace markup hidden behind a branded transition",
       ],
     };
     writeFileSync(summary.report, JSON.stringify({ ...summary, results }, null, 2));

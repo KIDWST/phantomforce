@@ -973,8 +973,13 @@ function contextFactReply(userRequest: string, turns: InstantChatToolTurn[]): In
 
   if (/\b(?:what|which)\b.{0,60}\bcolou?r\b|\bcolou?r only\b/i.test(userRequest)) {
     for (let index = relevant.length - 1; index >= 0; index -= 1) {
-      const matches = [...`${relevant[index].user} ${relevant[index].assistant}`.matchAll(RECALL_COLORS)];
-      const value = matches.at(-1)?.[0];
+      /* User statements are the authority. An assistant may have added a
+         descriptive color of its own (for example, a red hood) after the
+         user corrected the actual raincoat to purple; that prose must never
+         outrank the user's newest fact. */
+      const userMatches = [...relevant[index].user.matchAll(RECALL_COLORS)];
+      const assistantMatches = [...relevant[index].assistant.matchAll(RECALL_COLORS)];
+      const value = userMatches.at(-1)?.[0] || assistantMatches.at(-1)?.[0];
       if (value) return { output_text: value, tool_id: "phantom-context-recall" };
     }
   }

@@ -1,17 +1,23 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`ASSERTION FAILED: ${message}`);
 }
 
 const parse = <T>(payload: string) => JSON.parse(payload) as T;
+const execFileAsync = promisify(execFile);
 const fixtureRoot = await mkdtemp(join(tmpdir(), "phantomhunter-web-test-"));
 const repositoryRoot = join(fixtureRoot, "authorized-workspace-repository");
 const syntheticCredential = `ghp_${"Z9aB7cD5eF3gH1jK8mN6pQ4rS2tV0wX"}`;
 await mkdir(repositoryRoot, { recursive: true });
 await writeFile(join(repositoryRoot, "runtime.env"), `GITHUB_TOKEN=${syntheticCredential}\n`, "utf8");
+await execFileAsync("git", ["init", "--quiet", repositoryRoot]);
+await execFileAsync("git", ["-C", repositoryRoot, "add", "runtime.env"]);
+await execFileAsync("git", ["-C", repositoryRoot, "-c", "user.name=PhantomHunter Test", "-c", "user.email=phantomhunter@example.invalid", "commit", "--quiet", "-m", "fixture"]);
 
 process.env.NODE_ENV = "development";
 process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
@@ -27,7 +33,13 @@ process.env.PHANTOM_HUNTER_WEB_REPOSITORIES_JSON = JSON.stringify({
 });
 
 const { app } = await import("../src/index.js");
-const { parseBetterleaksOutput, parseKeyHunterVerificationOutput, parseTrufflehogOutput } = await import("../src/phantom-ai/phantom-hunter.js");
+const {
+  localGitUri,
+  parseBetterleaksOutput,
+  parseKeyHunterVerificationOutput,
+  parseTrufflehogOutput,
+  resetPhantomHunterStateForTests,
+} = await import("../src/phantom-ai/phantom-hunter.js");
 
 type Login = { token: string };
 
@@ -82,6 +94,10 @@ try {
   assert(workspace.statusCode === 200 && workspaceBody.repository.connected, "Web must expose one bound repository.");
   assert(workspaceBody.repository.accepts_arbitrary_targets === false, "Web repository response must explicitly reject arbitrary targets.");
   assert(!workspace.payload.includes(repositoryRoot), "The server must not expose a full local repository path.");
+  assert(workspaceBody.repository.repository.target_display === "Connected workspace source", "The web repository card must not expose a shortened local path.");
+  if (process.platform === "win32") {
+    assert(/^file:\/\/[A-Za-z]:\//u.test(localGitUri(repositoryRoot)), "Windows history scans must use TruffleHog's working file://C:/ repository form.");
+  }
 
   const connectRequest = await app.inject({
     method: "POST",
@@ -160,6 +176,44 @@ try {
   assert(!exported.payload.includes(syntheticCredential), "CSV export must not expose raw credentials.");
 
   const tenantStateDirs = await readdir(join(fixtureRoot, "state"));
+  const stateFiles = tenantStateDirs.map((directory) => join(fixtureRoot, "state", directory, "state.json"));
+  const stateRecords = await Promise.all(stateFiles.map(async (file) => ({ file, content: await readFile(file, "utf8") })));
+  const ownerStateRecord = stateRecords.find((record) => record.content.includes("hunter-org-a")) || stateRecords[0];
+  assert(ownerStateRecord, "The organization scan state must be durable.");
+  const stateFile = ownerStateRecord.file;
+  const durableState = parse<any>(ownerStateRecord.content);
+  const interruptedId = "11111111-2222-4333-8444-555555555555";
+  durableState.scans.unshift({
+    ...durableState.scans[0],
+    id: interruptedId,
+    status: "running",
+    completed_at: null,
+    errors: [],
+    progress: { ...durableState.scans[0].progress, current_asset_id: durableState.scans[0].asset_ids[0] },
+    engine_runs: durableState.scans[0].engine_runs.map((run: any, index: number) => ({
+      ...run,
+      status: index === 0 ? "running" : "queued",
+      completed_at: null,
+      note: null,
+    })),
+  });
+  await writeFile(stateFile, `${JSON.stringify(durableState, null, 2)}\n`, "utf8");
+  resetPhantomHunterStateForTests();
+  const recoveredWorkspace = await app.inject({
+    method: "GET",
+    url: "/phantom-ai/phantom-hunter/web?tenant_id=hunter-org-a",
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  const recoveredScan = parse<any>(recoveredWorkspace.payload).scans.find((scan: any) => scan.id === interruptedId);
+  assert(recoveredWorkspace.statusCode === 200 && recoveredScan?.status === "failed", "A service restart must close an orphaned running scan instead of leaving it spinning.");
+  assert(recoveredScan.errors.some((error: any) => error.code === "scan_interrupted_by_service_restart"), "Interrupted recovery must remain diagnosable.");
+  const recoveredDetail = await app.inject({
+    method: "GET",
+    url: `/phantom-ai/phantom-hunter/scans/${interruptedId}?tenant_id=hunter-org-a`,
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  assert(recoveredDetail.statusCode === 200, "Every scan returned by the workspace list must remain resolvable by its detail route.");
+
   const persistedState = await Promise.all(tenantStateDirs.map((directory) => readFile(join(fixtureRoot, "state", directory, "state.json"), "utf8")));
   assert(persistedState.every((content) => !content.includes(syntheticCredential)), "Durable tenant state must never contain raw credentials.");
   assert(persistedState.every((content) => !content.includes('"verification_status": "unverified"') && !content.includes('"verification_status": "inactive"')), "Durable web state must retain active findings only.");
@@ -171,6 +225,8 @@ try {
     enginesReady: statusBody.hunter.tools.map((tool: any) => `${tool.id}:${tool.version}`),
     tenantIsolation: true,
     activeOnlyResults: true,
+    interruptedScanRecovery: true,
+    listDetailCoherence: true,
     rawSecretsReturned: false,
     rawSecretsPersisted: false,
     maskedExport: true,

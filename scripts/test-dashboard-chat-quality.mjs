@@ -240,6 +240,7 @@ for (const prompt of customerReasoningPrompts) {
   assert.equal(body.runtime_config, true);
   assert.equal(body.runtime_surface, "phantombot");
   assert.equal(body.route_tier, "reasoning");
+  assert.ok(body.max_provider_ms > 0 && body.max_provider_ms <= 4500, "smart reasoning must leave time for fallback before the browser deadline");
   assert.equal(body.message, prompt);
   assert.match(body.business_summary, /General conversation/i);
   assert.ok(body.requested_model);
@@ -263,6 +264,7 @@ for (const prompt of customerCreativePrompts) {
   assert.equal(body.runtime_config, true);
   assert.equal(body.runtime_surface, "phantombot");
   assert.equal(body.route_tier, "reasoning");
+  assert.ok(body.max_provider_ms > 0 && body.max_provider_ms <= 4500, "smart creative reasoning must stay inside the bounded provider budget");
   assert.equal(body.message, prompt);
   assert.match(body.business_summary, /General conversation/i);
   assert.ok(body.requested_model);
@@ -284,6 +286,7 @@ for (const prompt of customerAdvisoryPrompts) {
   assert.equal(body.runtime_config, true);
   assert.equal(body.runtime_surface, "phantombot");
   assert.equal(body.route_tier, "advisory");
+  assert.ok(body.max_provider_ms > 0 && body.max_provider_ms <= 4500, "smart advisory chat must stay inside the bounded provider budget");
   assert.equal(body.message, prompt);
   assert.match(body.business_summary, /Business Manager workspace/i);
   assert.ok(body.module_data.some((entry) => entry.module === "active_business"));

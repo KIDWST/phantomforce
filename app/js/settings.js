@@ -1,20 +1,20 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260817-162";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260817-162";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260817-162";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260817-162";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260817-162";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260817-162";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260817-162";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260817-163";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260817-163";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260817-163";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260817-163";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260817-163";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260817-163";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260817-163";
 import {
   getAiRuntimeState,
   loadAiRuntimeConfig,
   persistAiRuntimeConfig,
   refreshAiRuntimeProviders,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260817-162";
+} from "./ai-runtime.js?v=phantom-live-20260817-163";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";

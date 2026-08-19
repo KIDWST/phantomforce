@@ -6,6 +6,7 @@ const index = read("../app/index.html");
 const main = read("../app/js/main.js");
 const planner = read("../app/js/planner.js");
 const adminCss = read("../app/admin-next.css");
+const commandCss = read("../app/command-os.css");
 const buildId = index.match(/phantom-live-\d{8}-\d+/u)?.[0];
 assert.ok(buildId, "The initial admin document must expose a live cache build.");
 const escapedBuildId = buildId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -36,6 +37,12 @@ for (const file of ["phantomstore.css", "creator-studio.css", "phantomhunter.css
   assert.doesNotMatch(index, new RegExp(`<link rel="stylesheet"[^>]*href="/app/${file.replaceAll(".", "\\.")}`), `${file} must stay off the initial shell.`);
   assert.match(main, new RegExp(`/${file.replaceAll(".", "\\.")}\\?v=${escapedBuildId}`), `${file} must remain available through the workspace style loader at ${buildId}.`);
 }
+
+assert.match(main, /const workspaceStylePromises = new Map\(\)[\s\S]*function loadWorkspaceStyle[\s\S]*link\.addEventListener\("load"[\s\S]*function warmWorkspaceStyles/u, "Route-only styles must expose one shared, awaitable preload contract.");
+assert.match(main, /async function renderWorkspacePage[\s\S]*await ensureWorkspaceStyles\(key\)[\s\S]*root\.innerHTML/u, "A workspace page must wait for its complete visual system before inserting route markup.");
+assert.match(main, /async function openWorkspace[\s\S]*await ensureWorkspaceStyles\(key\)[\s\S]*overlayRoot\.innerHTML/u, "Overlay workspaces must obey the same styled-before-visible handoff.");
+assert.match(main, /data-workspace-transition[\s\S]*beginWorkspaceTransition[\s\S]*failWorkspaceTransition/u, "Slow and failed routes must use the branded transition and truthful retry surface.");
+assert.match(commandCss, /Workspace handoff[\s\S]*\.workspace-transition[\s\S]*\.workspace-transition-mark[\s\S]*prefers-reduced-motion/u, "The branded route transition must be responsive and reduced-motion safe.");
 
 const adminCssPosition = index.indexOf("/app/admin-next.css");
 const integrityCssPosition = index.indexOf("/app/workspace-mobile-integrity.css");
@@ -92,4 +99,4 @@ const openingBraces = (adminCss.match(/\{/gu) || []).length;
 const closingBraces = (adminCss.match(/\}/gu) || []).length;
 assert.equal(openingBraces, closingBraces, "Admin Next CSS must have balanced blocks.");
 
-console.log(`Admin UI system checks passed: ${requiredStyles.length} global styles, lazy workspace CSS, ${requiredModuleHints.length} eager modules, responsive Planner, green/black brand.`);
+console.log(`Admin UI system checks passed: ${requiredStyles.length} global styles, atomic warmed workspace CSS, branded route recovery, ${requiredModuleHints.length} eager modules, responsive Planner, green/black brand.`);

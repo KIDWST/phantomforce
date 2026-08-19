@@ -39,8 +39,8 @@ assert.deepEqual(
 );
 assert.equal(buildInstantChatToolReply("Tell me a joke.", listTurns), null);
 const longNovaTurns = [
-  { user: "My dog Nova wears a yellow raincoat.", assistant: "Nova wears yellow." },
-  { user: "Correction: Nova's raincoat is purple.", assistant: "Nova's raincoat is purple." },
+  { user: "My dog Nova wears a yellow raincoat.", assistant: "Nova wears yellow with a red hood." },
+  { user: "Correction: Nova's raincoat is purple.", assistant: "Nova's purple raincoat still has the little red hood." },
   ...Array.from({ length: 9 }, (_, index) => ({
     user: `Unrelated subject ${index + 1}.`,
     assistant: `Unrelated answer ${index + 1}.`,

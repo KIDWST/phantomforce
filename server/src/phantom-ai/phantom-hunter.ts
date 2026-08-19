@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
 
-export const PHANTOM_HUNTER_VERSION = "1.1.0";
+export const PHANTOM_HUNTER_VERSION = "1.2.0";
 export const PHANTOM_HUNTER_POLICY_ID = "phantom-hunter-authorized-secret-discovery.v1";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
@@ -217,10 +217,35 @@ async function loadOrgState(organizationId: string): Promise<OrgState> {
           providers: new Set(scan.findings.map((finding) => finding.provider)).size,
         };
       }
-      return {
+      const state = {
         assets: Array.isArray(parsed.assets) ? parsed.assets.filter((asset) => asset.organization_id === organizationId) : [],
         scans,
       };
+      /* Scan workers are process-local. If a service restart loads a durable
+         queued/running record, no worker exists that can finish it. Close the
+         record truthfully and persist the recovery before any list/detail
+         route can surface a permanently spinning scan. */
+      const interruptedAt = isoNow();
+      let recovered = false;
+      for (const scan of state.scans) {
+        if (["completed", "partial", "failed", "cancelled"].includes(scan.status)) continue;
+        recovered = true;
+        scan.status = "failed";
+        scan.completed_at = scan.completed_at || interruptedAt;
+        scan.progress.current_asset_id = null;
+        for (const run of scan.engine_runs || []) {
+          if (run.status === "running") run.status = "failed";
+          else if (run.status === "queued") run.status = "skipped";
+          if (!run.completed_at) run.completed_at = interruptedAt;
+          if (!run.note) run.note = "scan_interrupted_by_service_restart";
+        }
+        if (!scan.errors.some((entry) => entry.code === "scan_interrupted_by_service_restart")) {
+          scan.errors.push({ engine: "orchestrator", asset_id: null, code: "scan_interrupted_by_service_restart" });
+        }
+        summarizeScan(scan);
+      }
+      if (recovered) await persistOrgState(organizationId, state);
+      return state;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       return emptyState();
@@ -347,7 +372,7 @@ function blockedLocalTarget(target: string) {
 }
 
 function targetDisplay(kind: PhantomHunterAssetKind, target: string) {
-  if (kind === "local_path") return `${parse(target).root}…${basename(target)}`;
+  if (kind === "local_path") return "Connected workspace source";
   try {
     const url = new URL(target);
     return `${url.hostname}${url.pathname}`.replace(/\/$/, "") || url.hostname;
@@ -404,6 +429,9 @@ export async function addPhantomHunterAssets(input: {
       }
       const duplicate = state.assets.find((asset) => asset.kind === normalized.kind && asset.target === normalized.target);
       if (duplicate) {
+        duplicate.label = normalized.label;
+        duplicate.readiness = normalized.readiness;
+        duplicate.target_display = targetDisplay(normalized.kind, normalized.target);
         created.push(duplicate);
         continue;
       }
@@ -473,10 +501,11 @@ export async function getPhantomHunterWebRepository(input: {
     assets: [{ target: binding.target, label: binding.label, kind: inferredKind }],
   });
   const repository = result.assets[0] || null;
+  const ready = repository?.readiness === "ready";
   return {
-    connected: Boolean(repository),
+    connected: ready,
     repository,
-    connection_state: repository ? "connected" as const : "repository_unavailable" as const,
+    connection_state: ready ? "connected" as const : "repository_unavailable" as const,
     accepts_arbitrary_targets: false,
   };
 }
@@ -857,8 +886,12 @@ async function runBetterleaks(scanId: string, asset: PhantomHunterAsset, webCont
   return parseBetterleaksOutput(result.stdout, asset);
 }
 
-function localGitUri(target: string) {
-  return new URL(`file:///${target.replace(/\\/g, "/")}`).toString();
+export function localGitUri(target: string) {
+  const normalized = resolve(target).replace(/\\/g, "/");
+  /* TruffleHog's Windows clone adapter expects file://C:/path. WHATWG's
+     file:///C:/path form is rewritten by that adapter to C:/C:/path and the
+     history scan exits before reading the repository. */
+  return encodeURI(`file://${normalized}`);
 }
 
 async function runTrufflehog(scanId: string, asset: PhantomHunterAsset, webContent?: Buffer) {

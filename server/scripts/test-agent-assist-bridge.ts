@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { requestAgentAssist } from "../src/phantom-ai/agent-assist-bridge.js";
 import { buildPromptIntegrityEnvelope } from "../src/phantom-ai/prompt-integrity.js";
 
 const port = "5195";
@@ -154,6 +156,41 @@ try {
   assert.equal(blocked.network_call_performed, false);
   assert.equal(blocked.status, "bridge_error");
   assert.match(blocked.error_message, /not configured|not connected/i);
+
+  const slowBridge = createServer((_request, response) => {
+    const lateResponse = setTimeout(() => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ output_text: "late answer" }));
+    }, 8_000);
+    lateResponse.unref();
+  });
+  await new Promise<void>((resolve) => slowBridge.listen(0, "127.0.0.1", resolve));
+  const slowAddress = slowBridge.address();
+  assert.ok(slowAddress && typeof slowAddress === "object");
+  const previousBridgeUrl = process.env.PHANTOM_AGENT_ASSIST_BRIDGE_URL;
+  const previousBridgeEnabled = process.env.PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED;
+  process.env.PHANTOM_AGENT_ASSIST_BRIDGE_URL = `http://127.0.0.1:${slowAddress.port}/assist`;
+  process.env.PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED = "true";
+  const budgetStartedAt = Date.now();
+  const budgeted = await requestAgentAssist({
+    caller: "phantom_ai",
+    mode: "instant",
+    effort: "standard",
+    task: "Budgeted bridge request",
+    execute_bridge: true,
+    timeout_ms: 5_000,
+  });
+  const budgetElapsedMs = Date.now() - budgetStartedAt;
+  if (previousBridgeUrl === undefined) delete process.env.PHANTOM_AGENT_ASSIST_BRIDGE_URL;
+  else process.env.PHANTOM_AGENT_ASSIST_BRIDGE_URL = previousBridgeUrl;
+  if (previousBridgeEnabled === undefined) delete process.env.PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED;
+  else process.env.PHANTOM_AGENT_ASSIST_BRIDGE_ENABLED = previousBridgeEnabled;
+  slowBridge.closeAllConnections();
+  await new Promise<void>((resolve) => slowBridge.close(() => resolve()));
+  assert.equal(budgeted.status, "bridge_error");
+  assert.equal(budgeted.provider_called, false);
+  assert.match(budgeted.error_message || "", /timed out after 5000 ms/i);
+  assert.ok(budgetElapsedMs >= 4_500 && budgetElapsedMs < 7_500, `per-request bridge timeout must be enforced near 5s, got ${budgetElapsedMs}ms`);
 
   console.log("agent assist universal bridge checks passed");
 } finally {
