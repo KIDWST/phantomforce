@@ -70,6 +70,17 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **PhantomPlay V18 recovery + Vespergate 3.0 (2026-08-19)** — product commits
+  `f7a3c441` and `8eee40c5`, browser build `phantom-live-20260819-168`.
+  Recovered the missing Unreal V13–V17 content and world passes, CubeTown
+  Memorycraft V16 and Diorama Adventure V17, and PhantomPlay AI V18 provider
+  routing. Four V18R1 Windows Shipping candidates package and pass 4/4 automated
+  visual acceptance plus human screenshot review; the installed four-game set
+  truthfully remains V11R15 until literal `PROMOTE` authorization. Vespergate 3.0
+  adds touch play, persistent wayfinding, Vesper Sense, mastery, autosave/migration,
+  and portable PhantomPlay state. Release-critical passed 32/32, responsive Chrome
+  passed 66/66 across eleven surfaces and six viewports, and the strict history
+  secret scan found 0 verified/unknown findings.
 - **Atomic workspace transitions + recoverable PhantomHunter/AI routing (2026-08-18)** —
   product commit `79e4b371`, browser build `phantom-live-20260817-163`.
   Workspace routes now warm and await their complete style bundles, preserve the
