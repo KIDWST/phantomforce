@@ -70,6 +70,16 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Future command shell material pass (2026-08-18)** — product commit
+  `24e6f1ed`, browser build `phantom-live-20260817-162`. The desktop command
+  rail is now one continuous glass surface instead of painting a rectangular
+  block behind Search and Approvals. Active navigation, utility actions,
+  account access, Menu, and the bottom system line use a consistent rounded
+  instrument language; laptop widths switch utilities to icon-first density,
+  while standard desktop keeps every primary division visible. Release-critical
+  passed 31/31 and responsive Chrome passed 60/60 across ten surfaces and six
+  viewports, including direct regression assertions for utility background,
+  vertical inset, overlap, control radius, and primary-navigation visibility.
 - **Unified PhantomBot workspace polish (2026-08-18)** — product release commit
   `903a518e`, browser build `phantom-live-20260817-161`. PhantomBot now uses one
   intent-adaptive composer with a real organization-wide model picker for
