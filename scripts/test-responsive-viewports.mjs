@@ -457,6 +457,18 @@ function auditPage() {
     return { r: parts[0], g: parts[1], b: parts[2], a: parts.length >= 4 && !Number.isNaN(parts[3]) ? parts[3] : 1 };
   };
   const luminance = ({ r, g, b }) => (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+  const relativeLuminance = ({ r, g, b }) => {
+    const channel = (value) => {
+      const ratio = value / 255;
+      return ratio <= 0.04045 ? ratio / 12.92 : ((ratio + 0.055) / 1.055) ** 2.4;
+    };
+    return (0.2126 * channel(r)) + (0.7152 * channel(g)) + (0.0722 * channel(b));
+  };
+  const contrastRatio = (foreground, background) => {
+    const fg = relativeLuminance(foreground);
+    const bg = relativeLuminance(background);
+    return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+  };
   const isAllowedPaleSurface = (el) => {
     if (el.closest("img, video, canvas, svg, picture")) return true;
     if (el.matches("img, video, canvas, svg, path, circle, rect, line, polyline, polygon")) return true;
@@ -560,6 +572,38 @@ function auditPage() {
       }
     }
   }
+  const dropdownOptionFailures = [];
+  const dropdownSchemeFailures = [];
+  const expectedColorScheme = document.documentElement.dataset.orgColorMode === "light" ? "light" : "dark";
+  const visibleSelects = [...document.querySelectorAll("select")].filter(isVisible);
+  visibleSelects.forEach((select) => {
+    const selectStyle = getComputedStyle(select);
+    if (!String(selectStyle.colorScheme || "").split(/\s+/).includes(expectedColorScheme)) {
+      dropdownSchemeFailures.push({
+        selector: selectorName(select),
+        expected: expectedColorScheme,
+        actual: selectStyle.colorScheme || "unset",
+      });
+    }
+    [...select.querySelectorAll("option, optgroup")].forEach((row) => {
+      const style = getComputedStyle(row);
+      const foreground = parseRgb(style.color);
+      const background = parseRgb(style.backgroundColor);
+      const ratio = foreground && background && background.a >= 0.98
+        ? contrastRatio(foreground, background)
+        : 0;
+      if (ratio < 4.5) {
+        dropdownOptionFailures.push({
+          select: selectorName(select),
+          row: row.tagName.toLowerCase(),
+          text: (row.textContent || "").trim().slice(0, 80),
+          color: style.color,
+          background: style.backgroundColor,
+          contrast: Number(ratio.toFixed(2)),
+        });
+      }
+    });
+  });
   return {
     title: document.title,
     hash: location.hash,
@@ -660,6 +704,11 @@ function auditPage() {
       railToggleVisible: phantomBotRailToggles.some(isVisible),
       pageWorkerVisible: isVisible(pageWorker),
       topSearchVisible: isVisible(commandRailSearch),
+    },
+    dropdowns: {
+      visibleSelects: visibleSelects.length,
+      schemeFailures: dropdownSchemeFailures.slice(0, 12),
+      optionFailures: dropdownOptionFailures.slice(0, 12),
     },
     textProbe: document.body.innerText.slice(0, 300),
   };
@@ -847,12 +896,37 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
       audit.phantomBotTaskRail = { ...railOpened, ...railWrapped, ...railClosed };
     }
   }
+  if (page.id === "dashboard" && viewport.width > 900) {
+    const opened = await evaluate(cdp, `(() => {
+      const toggle = document.querySelector("[data-os-model-toggle]");
+      const panel = document.querySelector("[data-os-model-popover]");
+      if (!toggle || !panel) return false;
+      if (panel.hidden) toggle.click();
+      return !panel.hidden;
+    })()`);
+    await sleep(120);
+    const openAudit = await evaluate(cdp, `(${auditPage.toString()})()`);
+    audit.dashboardModelSwitcher = {
+      visible: opened,
+      visibleSelects: openAudit.dropdowns.visibleSelects,
+      schemeFailures: openAudit.dropdowns.schemeFailures,
+      optionFailures: openAudit.dropdowns.optionFailures,
+    };
+  }
   const png = await cdp.send("Page.captureScreenshot", {
     format: "png",
     captureBeyondViewport: false,
   }, 20_000);
   const file = path.join(screenshotDir, `${page.label}-${viewport.width}x${viewport.height}.png`);
   writeFileSync(file, Buffer.from(png.data, "base64"));
+  if (page.id === "dashboard" && viewport.width > 900) {
+    await evaluate(cdp, `(() => {
+      const toggle = document.querySelector("[data-os-model-toggle]");
+      const panel = document.querySelector("[data-os-model-popover]");
+      if (toggle && panel && !panel.hidden) toggle.click();
+      return !!panel?.hidden;
+    })()`);
+  }
   return { page: page.id, label: page.label, viewport, appState, audit, screenshot: file };
 }
 
@@ -933,6 +1007,8 @@ function assertCase(result) {
   assert.deepEqual(audit.offenders, [], `${label} ${viewport.width}: visible elements escape the viewport.`);
   assert.deepEqual(audit.paleSurfaces, [], `${label} ${viewport.width}: dark mode has large pale/white UI surfaces.`);
   assert.deepEqual(audit.clippedText, [], `${label} ${viewport.width}: visible control text is clipped.`);
+  assert.deepEqual(audit.dropdowns.schemeFailures, [], `${label} ${viewport.width}: visible native selects must declare the active color scheme directly.`);
+  assert.deepEqual(audit.dropdowns.optionFailures, [], `${label} ${viewport.width}: native dropdown options must retain at least 4.5:1 foreground/background contrast.`);
   if (viewport.width <= 900) {
     assert.equal(audit.nav.mobileVisible, true, `${label} ${viewport.width}: compact bottom nav must be visible.`);
     assert.deepEqual(audit.nav.visibleSurfaces.map((surface) => surface.name), ["bottom-dock"], `${label} ${viewport.width}: mobile must have exactly one visible nav surface.`);
@@ -983,6 +1059,12 @@ function assertCase(result) {
       if (viewport.width >= 1440) {
         assert.equal(audit.nav.commandRailPolish.lastNavControlVisible, true, `${label} ${viewport.width}: all primary divisions must remain visible without scrolling on a standard desktop.`);
       }
+    }
+    if (page === "dashboard") {
+      assert.equal(audit.dashboardModelSwitcher?.visible, true, `${label} ${viewport.width}: the exact Console settings dropdown panel must open for browser verification.`);
+      assert.ok(audit.dashboardModelSwitcher?.visibleSelects >= 4, `${label} ${viewport.width}: Console settings must expose its complete native dropdown set.`);
+      assert.deepEqual(audit.dashboardModelSwitcher?.schemeFailures, [], `${label} ${viewport.width}: Console settings selects must use the dark native popup scheme.`);
+      assert.deepEqual(audit.dashboardModelSwitcher?.optionFailures, [], `${label} ${viewport.width}: Console settings option rows must retain at least 4.5:1 contrast.`);
     }
   }
   if (page === "phantomstore") {
@@ -1107,6 +1189,8 @@ async function main() {
         "visible elements do not escape viewport",
         "dark mode has no large pale/white UI surfaces",
         "visible control text is not clipped",
+        "visible native dropdown schemes and option rows remain readable at 4.5:1 or better",
+        "the dashboard Console settings panel opens with every native option row readable",
         "compact drawer focus enters, traps, closes, and restores",
         "PhantomBot model picker opens, fits, closes, and restores focus",
         "PhantomBot session controls expose a modal keyboard boundary",

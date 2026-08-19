@@ -242,7 +242,7 @@ assert.equal(instantQuestion.say, "I'd pick tacos.");
 assert.equal(capturedChatBody.route_tier, "instant");
 assert.equal(capturedChatBody.requested_model, "local-auto", "the request must honor the currently selected local model instead of hardcoding a Phantom alias");
 assert.equal(capturedChatBody.admin_model, "local_ollama");
-assert.deepEqual(capturedChatBody.allowed_providers, ["local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"], "the request must carry the configured user-selectable provider set");
+assert.deepEqual(capturedChatBody.allowed_providers, ["deepseek_api", "local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"], "the request must carry the configured user-selectable provider set");
 assert.equal(capturedChatBody.allow_provider_fallback, true);
 assert.ok(capturedChatBody.max_provider_ms <= 4500, "instant questions should cap one provider attempt tightly");
 globalThis.fetch = originalFetch;

@@ -4,6 +4,35 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "native-dropdowns-remain-readable",
+      "status": "active",
+      "title": "Native and custom dropdowns remain readable in every workspace",
+      "ownerDecision": "Every dropdown must be easy to read when closed and open. Native select popups must not fall back to a white browser surface beneath light option text; dark and light themes must explicitly cover normal, selected, hovered, focused, disabled, optgroup, and forced-colors states across the entire product shell.",
+      "requiredPatterns": [
+        {
+          "file": "app/admin-next.css",
+          "pattern": "Dropdown readability contract[\\s\\S]*html:not\\(\\[data-org-color-mode=\\\"light\\\"\\]\\) :where\\(select\\)[\\s\\S]*color-scheme:\\s*dark\\s*!important[\\s\\S]*html\\[data-org-color-mode=\\\"light\\\"\\] :where\\(select\\)[\\s\\S]*color-scheme:\\s*light\\s*!important",
+          "description": "Every native select receives an explicit browser color scheme in both supported themes."
+        },
+        {
+          "file": "app/admin-next.css",
+          "pattern": ":where\\(select\\) :where\\(option, optgroup\\)[\\s\\S]{0,700}background-color:[^;]+!important[\\s\\S]{0,350}color:[^;]+!important",
+          "description": "Every native popup row owns a high-contrast foreground and background instead of inheriting a white browser menu."
+        },
+        {
+          "file": "app/admin-next.css",
+          "pattern": ":where\\(select\\) option:checked,[\\s\\S]{0,250}:where\\(select\\) option:hover,[\\s\\S]{0,250}:where\\(select\\) option:focus[\\s\\S]{0,900}:where\\(select\\) option:disabled,[\\s\\S]{0,250}:where\\(select:disabled\\)[\\s\\S]{0,600}:where\\(select:disabled\\) option:checked",
+          "description": "Selected, pointer, keyboard, disabled, and disabled-selected dropdown states stay readable."
+        },
+        {
+          "file": "scripts/test-dropdown-readability.mjs",
+          "pattern": "selectInventory.length >= 20[\\s\\S]*selectCount >= 70[\\s\\S]*ratio >= 4\\.5",
+          "description": "The regression test inventories the broad product surface and enforces WCAG-readable dropdown color pairs."
+        }
+      ],
+      "forbiddenPatterns": []
+    },
+    {
       "id": "phantompet-full-presence-and-vespergate-current-build",
       "status": "active",
       "title": "PhantomPet stays full-body and Vespergate stays on its current build",
@@ -1931,7 +1960,7 @@
       "id": "media-lab-full-asset-catalogue-floor",
       "status": "active",
       "title": "Media Lab Assets is a complete catalogue, not a drawer",
-      "ownerDecision": "Assets is a first-class Media Lab workspace for managing photos, video, and audio. It combines tenant-scoped Asset Cloud, explicit read-only local-library selection, and Media Pool; provides upload, folder sync, search, filters, grid/list layouts, previews, metadata, favorites, lifecycle, bulk actions, and reuse controls; and stays usable across desktop and mobile. Local files remain on the PC until the user explicitly imports them.",
+      "ownerDecision": "Assets is a first-class Media Lab workspace for managing photos, video, and audio. It combines tenant-scoped Asset Cloud, explicit read-only local-library selection, and Media Pool; provides upload, folder sync, search, filters, grid/list layouts, previews, metadata, favorites, lifecycle, bulk actions, and reuse controls; and stays usable across desktop and mobile. Local files remain on the PC until the user explicitly imports them. Every asset card must always render a thumbnail: cached poster frames and waveforms replace full-file browser downloads, while an immediate branded fallback prevents blank cards during extraction or unsupported formats.",
       "requiredPatterns": [
         {
           "file": "app/js/medialab.js",
@@ -1952,6 +1981,16 @@
           "file": "scripts/test-media-asset-catalogue.mjs",
           "pattern": "Assets must remain a first-class Media Lab workspace tab[\\s\\S]*Uploads must use tenant-scoped Asset Cloud[\\s\\S]*desktop, tablet, and phone layouts",
           "description": "A dedicated regression test protects the end-to-end asset catalogue contract."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "catalogueFallbackThumbnail[\\s\\S]*localAssetThumbnailBlobUrl\\(row\\.id\\)[\\s\\S]*const cards = \\[\\.\\.\\.body\\.querySelectorAll\\(\"\\[data-catalog-thumb\\]\"\\)\\]",
+          "description": "Every visible card paints immediately and every result is eligible for cached preview hydration."
+        },
+        {
+          "file": "server/src/assets/local-media-thumbnail.ts",
+          "pattern": "MAX_ACTIVE_GENERATORS = 2[\\s\\S]*showwavespic[\\s\\S]*00:00:00\\.750[\\s\\S]*localMediaFallbackSvg",
+          "description": "The server keeps thumbnail generation bounded, extracts video posters and audio waveforms, and always has a renderable fallback."
         }
       ],
       "forbiddenPatterns": [
@@ -1959,6 +1998,11 @@
           "file": "app/js/medialab.js",
           "pattern": "const NAV_DRAWERS = \\[[\\s\\S]{0,300}\\[\"assets\"",
           "description": "Assets cannot be demoted back into the utility drawer."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "querySelectorAll\\(\"\\[data-catalog-thumb\\]\"\\)\\]\\.slice",
+          "description": "Thumbnail hydration cannot silently stop after an arbitrary number of cards."
         }
       ]
     }
