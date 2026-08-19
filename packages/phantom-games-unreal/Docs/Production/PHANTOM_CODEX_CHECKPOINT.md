@@ -16,8 +16,8 @@ Native PhantomPlay desktop shell and project history; Unreal, Unity, and Panda3D
 
 Repository verification completed on this release candidate:
 
-- `npm run test:release-critical`: 31/31 passed.
-- Responsive Chrome matrix: 60/60 passed across 10 surfaces and six viewports.
+- `npm run test:release-critical`: 32/32 passed on the rebased release.
+- Responsive Chrome matrix: 66/66 passed across 11 surfaces and six viewports.
 - Vespergate browser runtime: phone and desktop gameplay/map-state visual checks passed for version 3.0.
 - PhantomPlay AI V18: four adapter/security tests and the V18 self-test passed.
 - Unreal one-shot production validation: character, material, external-asset, world, V13, and CubeTown V17 gates passed.

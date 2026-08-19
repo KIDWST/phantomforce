@@ -731,7 +731,17 @@ function closeSessionMenu({ restoreFocus = false } = {}) {
     menu.hidden = true;
     setChildrenInert(menu.parentElement, menu, false);
   }
-  if (restoreFocus) requestAnimationFrame(() => focusWithoutScroll(returnTarget));
+  if (restoreFocus) {
+    const fallbackTarget = [...(rootEl?.querySelectorAll("[data-phantombot-manage-session]") || [])]
+      .find((element) => element.isConnected && element.getBoundingClientRect().width > 0);
+    const focusTarget = returnTarget?.isConnected ? returnTarget : fallbackTarget;
+    // Restore immediately after removing inert, then reinforce on the next
+    // frame in case the browser's Escape keyup or layout work moves focus.
+    focusWithoutScroll(focusTarget);
+    requestAnimationFrame(() => {
+      if (document.activeElement !== focusTarget) focusWithoutScroll(focusTarget);
+    });
+  }
   overlayReturnFocus.session = null;
 }
 
