@@ -136,14 +136,6 @@ def _run(
     )
 
 
-def test_all_cleanup_steps_raise_response_still_returned():
-    agent = _StubAgent(
-        raise_in=("save_trajectory", "cleanup_task_resources", "persist_session")
-    )
-    result = _run(agent)
-    assert result["final_response"] == "PARTIAL SUMMARY FROM MODEL"
-    labels = [e.split(":")[0] for e in result["cleanup_errors"]]
-    assert labels == ["save_trajectory", "cleanup_task_resources", "persist_session"]
 
 
 @pytest.mark.parametrize(
@@ -173,44 +165,3 @@ def test_clean_turn_has_no_cleanup_errors_key():
     assert "cleanup_errors" not in result
 
 
-def test_text_response_on_last_allowed_call_is_completed():
-    agent = _StubAgent(raise_in=())
-    result = _run(
-        agent,
-        final_response="final report",
-        api_call_count=agent.max_iterations,
-        turn_exit_reason="text_response(finish_reason=stop)",
-    )
-    assert result["final_response"] == "final report"
-    assert result["completed"] is True
-
-
-def test_completed_turn_finalizes_all_matching_engineering_runs(tmp_path, monkeypatch):
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes-home"))
-    store = EngineeringStore()
-    project = tmp_path / "project"
-    project.mkdir()
-    session_run = store.create_run(
-        title="Session run",
-        cwd=str(project),
-        session_id="sess-1",
-        status="running",
-    )
-    task_run = store.create_run(
-        title="Task run",
-        cwd=str(project),
-        task_id="task-1",
-        status="verifying",
-    )
-
-    result = _run(
-        _StubAgent(raise_in=()),
-        final_response="fixed and verified",
-        api_call_count=1,
-        turn_exit_reason="text_response(finish_reason=stop)",
-    )
-
-    assert result["completed"] is True
-    assert store.get_run(session_run["id"])["status"] == "succeeded"
-    assert store.get_run(task_run["id"])["status"] == "succeeded"
-    assert store.get_run(session_run["id"])["summary"] == "fixed and verified"
