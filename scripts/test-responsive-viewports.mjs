@@ -898,21 +898,38 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
     }
   }
   if (page.id === "dashboard" && viewport.width > 900) {
-    const opened = await evaluate(cdp, `(() => {
+    const triggered = await evaluate(cdp, `(() => {
       const toggle = document.querySelector("[data-os-model-toggle]");
-      const panel = document.querySelector("[data-os-model-popover]");
-      if (!toggle || !panel) return false;
-      if (panel.hidden) toggle.click();
-      return !panel.hidden;
+      if (!toggle) return false;
+      toggle.click();
+      return true;
     })()`);
-    await sleep(120);
+    const gatewayState = await waitForApp(cdp, "settings");
+    await sleep(180);
+    await evaluate(cdp, `(() => {
+      document.querySelector(".set-route-grid")?.scrollIntoView({ block: "start" });
+      return true;
+    })()`);
+    await sleep(100);
     const openAudit = await evaluate(cdp, `(${auditPage.toString()})()`);
-    audit.dashboardModelSwitcher = {
-      visible: opened,
+    const gatewayVisible = await evaluate(cdp, `(() => {
+      const panel = document.querySelector(".set-ai-control-center");
+      if (!panel) return false;
+      const style = getComputedStyle(panel);
+      const rect = panel.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 1 && rect.height > 1;
+    })()`);
+    audit.dashboardGateway = {
+      triggered,
+      routed: gatewayState?.ready === true,
+      visible: gatewayVisible,
       visibleSelects: openAudit.dropdowns.visibleSelects,
       schemeFailures: openAudit.dropdowns.schemeFailures,
       optionFailures: openAudit.dropdowns.optionFailures,
     };
+    await evaluate(cdp, `(() => { window.PHANTOM_GO_NAV?.("dashboard"); return true; })()`);
+    await waitForApp(cdp, "dashboard");
+    await sleep(120);
   }
   const png = await cdp.send("Page.captureScreenshot", {
     format: "png",
@@ -920,14 +937,6 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
   }, 20_000);
   const file = path.join(screenshotDir, `${page.label}-${viewport.width}x${viewport.height}.png`);
   writeFileSync(file, Buffer.from(png.data, "base64"));
-  if (page.id === "dashboard" && viewport.width > 900) {
-    await evaluate(cdp, `(() => {
-      const toggle = document.querySelector("[data-os-model-toggle]");
-      const panel = document.querySelector("[data-os-model-popover]");
-      if (toggle && panel && !panel.hidden) toggle.click();
-      return !!panel?.hidden;
-    })()`);
-  }
   return { page: page.id, label: page.label, viewport, appState, audit, screenshot: file };
 }
 
@@ -1062,10 +1071,12 @@ function assertCase(result) {
       }
     }
     if (page === "dashboard") {
-      assert.equal(audit.dashboardModelSwitcher?.visible, true, `${label} ${viewport.width}: the exact Console settings dropdown panel must open for browser verification.`);
-      assert.ok(audit.dashboardModelSwitcher?.visibleSelects >= 4, `${label} ${viewport.width}: Console settings must expose its complete native dropdown set.`);
-      assert.deepEqual(audit.dashboardModelSwitcher?.schemeFailures, [], `${label} ${viewport.width}: Console settings selects must use the dark native popup scheme.`);
-      assert.deepEqual(audit.dashboardModelSwitcher?.optionFailures, [], `${label} ${viewport.width}: Console settings option rows must retain at least 4.5:1 contrast.`);
+      assert.equal(audit.dashboardGateway?.triggered, true, `${label} ${viewport.width}: the footer Gateway control must be available.`);
+      assert.equal(audit.dashboardGateway?.routed, true, `${label} ${viewport.width}: the footer Gateway control must open the dedicated Gateway & Brain page.`);
+      assert.equal(audit.dashboardGateway?.visible, true, `${label} ${viewport.width}: the full Gateway control center must render for browser verification.`);
+      assert.ok(audit.dashboardGateway?.visibleSelects >= 2, `${label} ${viewport.width}: Gateway & Brain settings must visibly expose provider and model dropdowns.`);
+      assert.deepEqual(audit.dashboardGateway?.schemeFailures, [], `${label} ${viewport.width}: Gateway & Brain selects must use the dark native popup scheme.`);
+      assert.deepEqual(audit.dashboardGateway?.optionFailures, [], `${label} ${viewport.width}: Gateway & Brain option rows must retain at least 4.5:1 contrast.`);
     }
   }
   if (page === "phantomstore") {
@@ -1191,7 +1202,7 @@ async function main() {
         "dark mode has no large pale/white UI surfaces",
         "visible control text is not clipped",
         "visible native dropdown schemes and option rows remain readable at 4.5:1 or better",
-        "the dashboard Console settings panel opens with every native option row readable",
+        "the dashboard Gateway control opens the full brain page with readable native option rows",
         "compact drawer focus enters, traps, closes, and restores",
         "PhantomBot model picker opens, fits, closes, and restores focus",
         "PhantomBot session controls expose a modal keyboard boundary",
