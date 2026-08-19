@@ -90,7 +90,7 @@ dx bundle --release
 The release installer is produced at:
 
 ```text
-target\dx\PhantomPlay\bundle\windows\nsis\PhantomPlay_0.3.0_x64-setup.exe
+target\dx\PhantomPlay\bundle\windows\nsis\PhantomPlay_0.3.1_x64-setup.exe
 ```
 
 The verified per-user installation is:

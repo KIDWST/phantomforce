@@ -5531,45 +5531,42 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
   }
 }
 
-/* Recovered Phantom presence
-   The dashboard pet and PhantomBot now use the original painted character
-   engine instead of static brand marks. Keep these selectors isolated from
-   the legacy hero layers intentionally hidden elsewhere in this file. */
-.phantompet-orb-canvas {
+/* The dashboard pet and PhantomBot use the original painted character engine.
+   PhantomPet stays a transparent full-body presence, never a circular avatar. */
+.phantompet-presence-canvas {
   display: block;
-  width: 78px;
-  height: 78px;
+  width: 118px;
+  height: 146px;
   pointer-events: none;
-  filter: drop-shadow(0 0 9px rgba(0, 255, 148, .46));
+  filter:
+    saturate(1.06)
+    drop-shadow(0 0 10px rgba(0, 255, 148, .42))
+    drop-shadow(0 16px 22px rgba(0, 0, 0, .54));
 }
 
-.phantompet-orb-wrap {
+.phantompet-presence-wrap {
   z-index: 8;
 }
 
 @media (min-width: 681px) {
-  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 > .phantompet-orb-wrap {
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 > .phantompet-presence-wrap {
     position: absolute;
-    top: 270px;
-    left: 38px;
-    width: 84px;
-    height: 84px;
+    top: 228px;
+    left: 24px;
+    width: 122px;
+    height: 150px;
     margin: 0;
   }
 
-  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 .phantompet-orb {
-    width: 84px;
-    height: 84px;
-    border-color: rgba(0, 255, 148, .24);
-    background: rgba(3, 10, 13, .66);
-    box-shadow: 0 0 30px rgba(0, 255, 148, .13);
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 .phantompet-presence,
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 .phantompet-presence-canvas {
+    width: 122px;
+    height: 150px;
   }
 }
 
-.phantompet-orb[data-phantom-state="thinking"],
-.phantompet-orb:has(.phantompet-orb-canvas[data-phantom-state="thinking"]) {
-  border-color: rgba(138, 121, 255, .72);
-  box-shadow: 0 0 0 1px rgba(138, 121, 255, .16), 0 0 24px rgba(138, 121, 255, .24);
+.phantompet-presence:has(.phantompet-presence-canvas[data-phantom-state="thinking"]) {
+  filter: hue-rotate(34deg) saturate(1.12) brightness(1.08);
 }
 
 .phantombot-presence {
@@ -5679,22 +5676,22 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
     justify-content: center !important;
   }
 
-  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 > :not(.phantompet-orb-wrap) {
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 > :not(.phantompet-presence-wrap) {
     display: none !important;
   }
 
-  .phantompet-orb-wrap,
-  .phantompet-orb {
+  .phantompet-presence-wrap,
+  .phantompet-presence {
     position: relative;
     inset: auto;
-    width: 58px;
-    height: 58px;
+    width: 64px;
+    height: 72px;
     margin: 0;
   }
 
-  .phantompet-orb-canvas {
-    width: 54px;
-    height: 54px;
+  .phantompet-presence-canvas {
+    width: 64px;
+    height: 72px;
   }
 
   .phantombot-presence {

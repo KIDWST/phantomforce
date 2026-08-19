@@ -60,7 +60,7 @@ function rawRequest(port, pathname) {
    dedicated PhantomBot entrypoint, reduced motion, and targeted build refresh. */
 assert.match(index, /<a class="pf-skip-link" href="#phantom-main">Skip to main workspace<\/a>/u);
 assert.match(index, /<main class="console" id="phantom-main" data-console tabindex="-1">/u);
-assert.match(index, /class="phantompet-orb"[^>]*data-open-ws="phantomai"/u);
+assert.match(index, /class="phantompet-presence"[^>]*data-open-ws="phantomai"/u);
 assert.match(mobileCss, /\.pf-skip-link:focus\s*\{[\s\S]*?transform:\s*translateY\(0\)/u);
 assert.match(mobileCss, /@media \(prefers-reduced-motion: reduce\)/u);
 assert.doesNotMatch(index, /getRegistrations\(\)[\s\S]*?unregister\(\)/u,

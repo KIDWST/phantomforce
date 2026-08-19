@@ -1593,6 +1593,17 @@ fn watch_for_hot_reload(target: PathBuf) -> Arc<AtomicU64> {
 /// — never touches the files on disk, and the public web app never sees it.
 fn inject_dev_scripts(bytes: Vec<u8>, game_id: &str) -> Vec<u8> {
     let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    // Strict built-in games (including Vespergate) intentionally reject
+    // arbitrary inline script. Give only the shell-authored bootstrap a nonce
+    // instead of weakening their CSP with `unsafe-inline`.
+    const NATIVE_SCRIPT_NONCE: &str = "phantomplay-native-shell";
+    if text.contains("script-src ") {
+        text = text.replacen(
+            "script-src ",
+            &format!("script-src 'nonce-{NATIVE_SCRIPT_NONCE}' "),
+            1,
+        );
+    }
     let bootstrap = serde_json::json!({
         "gameId": game_id,
         "modBase": project_mod_base(game_id),
@@ -1605,9 +1616,9 @@ fn inject_dev_scripts(bytes: Vec<u8>, game_id: &str) -> Vec<u8> {
         .replace('>', "\\u003e")
         .replace('&', "\\u0026");
     let injection = format!(
-        r#"<script>document.documentElement.setAttribute("data-pm-game-id","{game_id}");document.documentElement.setAttribute("data-pm-native","true");window.__PHANTOMPLAY_MOD_BOOTSTRAP__={bootstrap_json};</script>
+        r#"<script nonce="{NATIVE_SCRIPT_NONCE}">document.documentElement.setAttribute("data-pm-game-id","{game_id}");document.documentElement.setAttribute("data-pm-native","true");window.__PHANTOMPLAY_MOD_BOOTSTRAP__={bootstrap_json};</script>
 <script src="/shared/modLoader.js"></script>
-<script>
+<script nonce="{NATIVE_SCRIPT_NONCE}">
 (function(){{
   var lastV = null;
   var stateKey = "phantomplay.devstate.{game_id}";
@@ -2097,7 +2108,7 @@ mod tests {
 
     #[test]
     fn inject_dev_scripts_adds_mod_loader_and_hot_reload_poll() {
-        let html = b"<html><body>hi</body></html>".to_vec();
+        let html = br#"<html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'"></head><body>hi</body></html>"#.to_vec();
         let out = String::from_utf8(inject_dev_scripts(html, "vespergate")).unwrap();
         assert!(out.contains("/shared/modLoader.js"));
         assert!(out.contains("/__pm_version"));
@@ -2105,6 +2116,9 @@ mod tests {
         assert!(out.contains("data-pm-native"));
         assert!(out.contains("__PHANTOMPLAY_MOD_BOOTSTRAP__"));
         assert!(out.contains("/__pm_version.js"));
+        assert!(out.contains("script-src 'nonce-phantomplay-native-shell' 'self'"));
+        assert!(out.contains("<script nonce=\"phantomplay-native-shell\">"));
+        assert!(!out.contains("script-src 'unsafe-inline'"));
     }
 
     #[test]

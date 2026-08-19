@@ -9,8 +9,8 @@ icon = ["assets/phantomplay.ico", "assets/brand-phantom.png"]
 short_description = "PhantomPlay"
 long_description = "PhantomForce's native game library and creation studio."
 copyright = "Copyright © PhantomForce"
-version = "0.3.0"
-file_version = "0.3.0.0"
+version = "0.3.1"
+file_version = "0.3.1.0"
 original_file_name = "PhantomPlay.exe"
 
 [windows]

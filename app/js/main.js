@@ -2669,7 +2669,7 @@ function renderConsole() {
     return;
   }
   ensureDashboardShell();
-  mountPhantomPresence($("[data-phantompet-canvas]"), { compact: true, small: true, state: "idle" });
+  mountPhantomPresence($("[data-phantompet-canvas]"), { compact: false, small: false, state: "idle" });
   // Workspace pages replace the dashboard DOM. Rebind the restored command
   // form before optional widgets render so a secondary panel failure can
   // never leave the primary chat composer visible but inert.

@@ -357,7 +357,7 @@ function auditPage() {
   const dashboardBrief = document.querySelector(".dashboard-brief");
   const decisionDeck = document.querySelector(".decision-deck");
   const dashboardHero = consoleRoot?.querySelector(".hero2");
-  const dashboardComposer = consoleRoot?.querySelector(".phantompet-orb");
+  const dashboardComposer = consoleRoot?.querySelector(".phantompet-presence");
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
   const featuredProductMedia = document.querySelector(".ps-spotlight-panel");
@@ -851,7 +851,7 @@ function assertCase(result) {
         assert.equal(audit.dashboard.visibleDecisionCards, 1, `${label} ${viewport.width}: phone home must show one priority decision before Phantom.`);
         assert.ok(
           audit.dashboard.composerBottom !== null && audit.nav.mobileTop !== null && audit.dashboard.composerBottom <= audit.nav.mobileTop + 2,
-          `${label} ${viewport.width}: PhantomPet card must be fully tappable above the fixed mobile dock on initial load.`
+          `${label} ${viewport.width}: PhantomPet must be fully tappable above the fixed mobile dock on initial load.`
         );
       }
       assert.ok(
