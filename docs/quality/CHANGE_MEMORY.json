@@ -1960,7 +1960,7 @@
       "id": "media-lab-full-asset-catalogue-floor",
       "status": "active",
       "title": "Media Lab Assets is a complete catalogue, not a drawer",
-      "ownerDecision": "Assets is a first-class Media Lab workspace for managing photos, video, and audio. It combines tenant-scoped Asset Cloud, explicit read-only local-library selection, and Media Pool; provides upload, folder sync, search, filters, grid/list layouts, previews, metadata, favorites, lifecycle, bulk actions, and reuse controls; and stays usable across desktop and mobile. Local files remain on the PC until the user explicitly imports them.",
+      "ownerDecision": "Assets is a first-class Media Lab workspace for managing photos, video, and audio. It combines tenant-scoped Asset Cloud, explicit read-only local-library selection, and Media Pool; provides upload, folder sync, search, filters, grid/list layouts, previews, metadata, favorites, lifecycle, bulk actions, and reuse controls; and stays usable across desktop and mobile. Local files remain on the PC until the user explicitly imports them. Every asset card must always render a thumbnail: cached poster frames and waveforms replace full-file browser downloads, while an immediate branded fallback prevents blank cards during extraction or unsupported formats.",
       "requiredPatterns": [
         {
           "file": "app/js/medialab.js",
@@ -1981,6 +1981,16 @@
           "file": "scripts/test-media-asset-catalogue.mjs",
           "pattern": "Assets must remain a first-class Media Lab workspace tab[\\s\\S]*Uploads must use tenant-scoped Asset Cloud[\\s\\S]*desktop, tablet, and phone layouts",
           "description": "A dedicated regression test protects the end-to-end asset catalogue contract."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "catalogueFallbackThumbnail[\\s\\S]*localAssetThumbnailBlobUrl\\(row\\.id\\)[\\s\\S]*const cards = \\[\\.\\.\\.body\\.querySelectorAll\\(\"\\[data-catalog-thumb\\]\"\\)\\]",
+          "description": "Every visible card paints immediately and every result is eligible for cached preview hydration."
+        },
+        {
+          "file": "server/src/assets/local-media-thumbnail.ts",
+          "pattern": "MAX_ACTIVE_GENERATORS = 2[\\s\\S]*showwavespic[\\s\\S]*00:00:00\\.750[\\s\\S]*localMediaFallbackSvg",
+          "description": "The server keeps thumbnail generation bounded, extracts video posters and audio waveforms, and always has a renderable fallback."
         }
       ],
       "forbiddenPatterns": [
@@ -1988,6 +1998,11 @@
           "file": "app/js/medialab.js",
           "pattern": "const NAV_DRAWERS = \\[[\\s\\S]{0,300}\\[\"assets\"",
           "description": "Assets cannot be demoted back into the utility drawer."
+        },
+        {
+          "file": "app/js/medialab.js",
+          "pattern": "querySelectorAll\\(\"\\[data-catalog-thumb\\]\"\\)\\]\\.slice",
+          "description": "Thumbnail hydration cannot silently stop after an arbitrary number of cards."
         }
       ]
     }

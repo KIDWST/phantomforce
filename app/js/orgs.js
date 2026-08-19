@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260819-166";
+import { ctx, session } from "./store.js?v=phantom-live-20260819-167";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -601,6 +601,7 @@ export async function refreshLocalAssets() {
 }
 
 const localAssetBlobCache = new Map();
+const localAssetThumbnailBlobCache = new Map();
 export async function localAssetBlobUrl(assetId) {
   const key = String(assetId || "");
   if (!key) return null;
@@ -617,7 +618,29 @@ export async function localAssetBlobUrl(assetId) {
   }
 }
 
+export async function localAssetThumbnailBlobUrl(assetId) {
+  const key = String(assetId || "");
+  if (!key) return null;
+  if (localAssetThumbnailBlobCache.has(key)) return localAssetThumbnailBlobCache.get(key);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const res = await fetch(`/phantom-ai/local-assets/${encodeURIComponent(key)}/thumbnail`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`thumbnail_http_${res.status}`);
+      const blob = await res.blob();
+      if (!blob.size || !String(blob.type || "").startsWith("image/")) throw new Error("thumbnail_payload_invalid");
+      const url = URL.createObjectURL(blob);
+      localAssetThumbnailBlobCache.set(key, url);
+      return url;
+    } catch {
+      if (!attempt) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  return null;
+}
+
 export function clearLocalAssetBlobCache() {
   for (const url of localAssetBlobCache.values()) URL.revokeObjectURL(url);
+  for (const url of localAssetThumbnailBlobCache.values()) URL.revokeObjectURL(url);
   localAssetBlobCache.clear();
+  localAssetThumbnailBlobCache.clear();
 }

@@ -6,27 +6,27 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-166";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-167";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260819-166";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260819-166";
+} from "./contenthub.js?v=phantom-live-20260819-167";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260819-167";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260819-166";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260819-166";
-import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260819-166";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260819-166";
+} from "./content-editor.js?v=phantom-live-20260819-167";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260819-167";
+import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260819-167";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260819-167";
 import {
   assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud,
   uploadAsset, patchAsset, assetLifecycle,
-  listLocalAssets, refreshLocalAssets, localAssetBlobUrl,
-} from "./orgs.js?v=phantom-live-20260819-166";
+  listLocalAssets, refreshLocalAssets, localAssetBlobUrl, localAssetThumbnailBlobUrl,
+} from "./orgs.js?v=phantom-live-20260819-167";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1883,6 +1883,18 @@ function catalogueRow(key) {
 function catalogueMediaIcon(kind) {
   return kind === "video" ? svgIc("film") : kind === "audio" ? svgIc("music") : svgIc("image");
 }
+function catalogueFallbackThumbnail(row) {
+  const xml = (value) => String(value || "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&apos;",
+  })[character] || character);
+  const title = xml(String(row?.title || row?.originalName || "Untitled asset").slice(0, 54));
+  const kind = xml(String(row?.kind || "asset").toUpperCase()).slice(0, 18);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360"><rect width="640" height="360" fill="#071018"/><path d="M0 300H640M0 240H640M0 180H640M0 120H640M0 60H640M80 0V360M160 0V360M240 0V360M320 0V360M400 0V360M480 0V360M560 0V360" stroke="#173229" opacity=".55"/><rect x="42" y="42" width="92" height="28" rx="4" fill="#102b22" stroke="#2ba976"/><text x="88" y="61" fill="#8fffd0" font-family="Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle">${kind}</text><path d="M274 130h92v72h-92z" fill="#0b1815" stroke="#36dc99" stroke-width="3"/><path d="m309 150 32 16-32 16z" fill="#53f5a4"/><text x="42" y="306" fill="#edf8f3" font-family="Arial,sans-serif" font-size="22" font-weight="700">${title}</text><text x="42" y="332" fill="#7f9a90" font-family="Arial,sans-serif" font-size="13">PHANTOMFORCE MEDIA LAB</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+function catalogueThumbnailHtml(row) {
+  return `<img src="${catalogueFallbackThumbnail(row)}" alt="" data-catalog-fallback/>`;
+}
 function catalogueDate(row) {
   const stamp = Date.parse(row.updatedAt || row.createdAt || 0) || Number(row.updatedAt || row.createdAt) || 0;
   return stamp ? new Date(stamp).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "Date unavailable";
@@ -1893,7 +1905,7 @@ function catalogueAssetCard(row, esc) {
   return `<article class="ml-catalog-card ${selected ? "is-selected" : ""} ${detail ? "is-active" : ""}" data-catalog-card="${esc(row.key)}">
     <label class="ml-catalog-check" title="Select ${esc(row.title)}"><input type="checkbox" data-catalog-select="${esc(row.key)}" ${selected ? "checked" : ""}/><span></span></label>
     <button class="ml-catalog-preview" type="button" data-catalog-open="${esc(row.key)}" aria-label="Open details for ${esc(row.title)}">
-      <span data-catalog-thumb="${esc(row.key)}">${catalogueMediaIcon(row.kind)}</span>
+      <span data-catalog-thumb="${esc(row.key)}">${catalogueThumbnailHtml(row)}</span>
       ${row.kind !== "image" ? `<i>${row.kind === "video" ? "Video" : "Audio"}</i>` : ""}
     </button>
     <div class="ml-catalog-card-copy">
@@ -1910,7 +1922,7 @@ function catalogueDetailHtml(row, esc) {
   const dimensions = row.width && row.height ? `${row.width} x ${row.height}` : "Dimensions unavailable";
   const canEdit = row.kind === "image" || row.kind === "video";
   return `<div class="ml-catalog-detail-head"><div><span>${esc(row.sourceLabel)}</span><h3>${esc(row.title || row.originalName)}</h3></div><button type="button" data-catalog-close-detail aria-label="Close details">${svgIc("close")}</button></div>
-    <div class="ml-catalog-detail-preview" data-catalog-detail-preview="${esc(row.key)}">${catalogueMediaIcon(row.kind)}</div>
+    <div class="ml-catalog-detail-preview" data-catalog-detail-preview="${esc(row.key)}">${catalogueThumbnailHtml(row)}</div>
     <dl class="ml-catalog-meta">
       <div><dt>Type</dt><dd>${esc(row.kind)}</dd></div>
       <div><dt>Size</dt><dd>${esc(row.sizeLabel || "Unavailable")}</dd></div>
@@ -2037,31 +2049,88 @@ function resetAssetCatalogueQuery(root, opts) {
 }
 async function catalogueUrl(row, preferThumbnail = false) {
   if (!row) return null;
-  if (row.previewUrl) return row.previewUrl;
-  if (row.sourceType === "cloud") return assetBlobUrl(row.id, preferThumbnail && row.kind === "image" ? "thumbnail" : "file");
-  if (row.sourceType === "local") return localAssetBlobUrl(row.id);
+  if (row.previewUrl) {
+    if (preferThumbnail && row.kind === "video") return captureCatalogueVideoPoster(row.previewUrl);
+    if (preferThumbnail && row.kind === "audio") return null;
+    return row.previewUrl;
+  }
+  if (row.sourceType === "cloud") return assetBlobUrl(row.id, preferThumbnail ? "thumbnail" : "file");
+  if (row.sourceType === "local") return preferThumbnail ? localAssetThumbnailBlobUrl(row.id) : localAssetBlobUrl(row.id);
   return null;
+}
+const catalogueVideoPosterCache = new Map();
+function captureCatalogueVideoPoster(sourceUrl) {
+  const key = String(sourceUrl || "");
+  if (!key) return Promise.resolve(null);
+  if (catalogueVideoPosterCache.has(key)) return catalogueVideoPosterCache.get(key);
+  const job = new Promise((resolveP) => {
+    const video = document.createElement("video");
+    const canvas = document.createElement("canvas");
+    let settled = false;
+    const finish = (value = null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      video.removeAttribute("src");
+      video.load();
+      resolveP(value);
+    };
+    const capture = () => {
+      if (!video.videoWidth || !video.videoHeight) return finish();
+      canvas.width = 640;
+      canvas.height = 360;
+      const context = canvas.getContext("2d");
+      if (!context) return finish();
+      const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+      const width = Math.round(video.videoWidth * scale);
+      const height = Math.round(video.videoHeight * scale);
+      context.fillStyle = "#071018";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(video, Math.round((canvas.width - width) / 2), Math.round((canvas.height - height) / 2), width, height);
+      try { finish(canvas.toDataURL("image/jpeg", 0.82)); } catch { finish(); }
+    };
+    const timer = setTimeout(() => finish(), 8_000);
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.addEventListener("error", () => finish(), { once: true });
+    video.addEventListener("loadedmetadata", () => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      const target = Math.min(0.75, Math.max(0, duration * 0.15));
+      if (target > 0.05) {
+        video.addEventListener("seeked", capture, { once: true });
+        video.currentTime = target;
+      } else {
+        video.addEventListener("loadeddata", capture, { once: true });
+      }
+    }, { once: true });
+    video.src = key;
+  });
+  catalogueVideoPosterCache.set(key, job);
+  return job;
 }
 function paintCataloguePreview(node, row, url, detail = false) {
   if (!node || !url) return;
-  if (row.kind === "video") node.innerHTML = `<video src="${url}" muted playsinline ${detail ? "controls autoplay" : "preload=\"metadata\""}></video>`;
-  else if (row.kind === "audio") node.innerHTML = detail ? `<div class="ml-catalog-audio-art">${svgIc("music")}</div><audio src="${url}" controls preload="metadata"></audio>` : `<div class="ml-catalog-audio-art">${svgIc("music")}</div>`;
+  if (row.kind === "video" && detail) node.innerHTML = `<video src="${url}" muted playsinline controls preload="metadata"></video>`;
+  else if (row.kind === "audio") node.innerHTML = detail ? `<div class="ml-catalog-audio-art">${svgIc("music")}</div><audio src="${url}" controls preload="metadata"></audio>` : `<img src="${url}" alt=""/>`;
   else node.innerHTML = `<img src="${url}" alt=""/>`;
+  const image = node.querySelector("img");
+  if (image) image.addEventListener("error", () => { image.src = catalogueFallbackThumbnail(row); }, { once: true });
 }
 async function hydrateAssetCataloguePreviews(body) {
-  const cards = [...body.querySelectorAll("[data-catalog-thumb]")].slice(0, 36);
+  const cards = [...body.querySelectorAll("[data-catalog-thumb]")];
   let next = 0;
   const worker = async () => {
     while (next < cards.length) {
       const node = cards[next++];
       const row = catalogueRow(node.dataset.catalogThumb);
-      if (!row || row.kind === "audio") continue;
-      if (row.sourceType === "cloud" && row.kind !== "image") continue;
-      const url = await catalogueUrl(row, row.kind === "image");
+      if (!row) continue;
+      if (row.kind === "audio" && row.sourceType !== "local") continue;
+      const url = await catalogueUrl(row, true);
       if (node.isConnected && url) paintCataloguePreview(node, row, url, false);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(4, cards.length) }, () => worker()));
+  await Promise.all(Array.from({ length: Math.min(6, cards.length) }, () => worker()));
   const detailNode = body.querySelector("[data-catalog-detail-preview]");
   const detailRow = detailNode ? catalogueRow(detailNode.dataset.catalogDetailPreview) : null;
   if (detailNode && detailRow) {

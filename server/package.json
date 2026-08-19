@@ -23,6 +23,7 @@
     "test:social-analytics": "tsx scripts/test-social-analytics-connector.ts",
     "test:windows-media": "tsx scripts/test-windows-media-session.ts",
     "test:windows-media-route": "tsx scripts/test-windows-media-route.ts",
+    "test:local-media-thumbnails": "tsx scripts/test-local-media-thumbnail.ts",
     "test:agent-workforce": "tsx scripts/test-agent-workforce-status.ts",
     "test:vacation-operator": "tsx scripts/test-vacation-operator-coverage.ts",
     "test:neural-spine": "tsx scripts/test-neural-spine.ts",

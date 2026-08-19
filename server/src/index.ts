@@ -15,6 +15,7 @@ import {
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { WorkspaceProfileSchema } from "./customization/schemas.js";
+import { generateLocalMediaThumbnail, localMediaFallbackSvg, type LocalThumbnailKind } from "./assets/local-media-thumbnail.js";
 
 import {
   AccessApprovalDecisionSchema,
@@ -2618,6 +2619,7 @@ const LOCAL_ASSET_DEFAULT_ROOTS = ["G:\\Motionarray download here", "G:\\Motiona
 const LOCAL_ASSET_MANAGER_DIR = "_PhantomForce_Asset_Manager";
 const LOCAL_ASSET_MANIFEST = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce_motionarray_manifest.json");
 const LOCAL_ASSET_CACHE = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce-local-asset-cache.json");
+const LOCAL_ASSET_THUMBNAILS = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "thumbnails");
 const LOCAL_ASSET_SCAN_LIMIT = 2500;
 const LOCAL_ASSET_CACHE_TTL_MS = 10 * 60 * 1000;
 const LOCAL_ASSET_MIME: Record<string, { kind: LocalAssetKind; mime: string; previewable: boolean }> = {
@@ -2627,9 +2629,19 @@ const LOCAL_ASSET_MIME: Record<string, { kind: LocalAssetKind; mime: string; pre
   ".webp": { kind: "image", mime: "image/webp", previewable: true },
   ".gif": { kind: "image", mime: "image/gif", previewable: true },
   ".svg": { kind: "image", mime: "image/svg+xml", previewable: true },
+  ".avif": { kind: "image", mime: "image/avif", previewable: true },
+  ".bmp": { kind: "image", mime: "image/bmp", previewable: true },
+  ".tif": { kind: "image", mime: "image/tiff", previewable: true },
+  ".tiff": { kind: "image", mime: "image/tiff", previewable: true },
+  ".heic": { kind: "image", mime: "image/heic", previewable: true },
   ".mp4": { kind: "video", mime: "video/mp4", previewable: true },
-  ".mov": { kind: "video", mime: "video/quicktime", previewable: false },
+  ".mov": { kind: "video", mime: "video/quicktime", previewable: true },
   ".webm": { kind: "video", mime: "video/webm", previewable: true },
+  ".m4v": { kind: "video", mime: "video/x-m4v", previewable: true },
+  ".mkv": { kind: "video", mime: "video/x-matroska", previewable: true },
+  ".avi": { kind: "video", mime: "video/x-msvideo", previewable: true },
+  ".mts": { kind: "video", mime: "video/mp2t", previewable: true },
+  ".m2ts": { kind: "video", mime: "video/mp2t", previewable: true },
   ".mp3": { kind: "audio", mime: "audio/mpeg", previewable: true },
   ".wav": { kind: "audio", mime: "audio/wav", previewable: true },
   ".m4a": { kind: "audio", mime: "audio/mp4", previewable: true },
@@ -2936,8 +2948,27 @@ function publicLocalAsset(asset: LocalAssetRecord) {
     tags: asset.tags,
     previewable: asset.previewable,
     has_preview: !!asset.servePath || asset.previewable,
+    thumbnail_url: `/phantom-ai/local-assets/${encodeURIComponent(asset.id)}/thumbnail`,
     updated_at: asset.updatedAt,
   };
+}
+
+function localAssetThumbnailKind(asset: LocalAssetRecord): LocalThumbnailKind {
+  return asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? asset.kind : "other";
+}
+
+async function createLocalAssetThumbnail(asset: LocalAssetRecord, root: string) {
+  const sourcePath = resolve(asset.servePath || asset.localPath);
+  if (!isPathInside(root, sourcePath)) return { ok: false as const, state: "unavailable" as const, detail: "source_path_blocked" };
+  const sourceStat = await safeStat(sourcePath);
+  if (!sourceStat?.isFile()) return { ok: false as const, state: "unavailable" as const, detail: "source_file_missing" };
+  const fingerprint = createHash("sha1")
+    .update(`${sourcePath.toLowerCase()}|${sourceStat.size}|${sourceStat.mtimeMs}`)
+    .digest("hex")
+    .slice(0, 16);
+  const outputPath = resolve(root, LOCAL_ASSET_THUMBNAILS, `${asset.id}-${fingerprint}.jpg`);
+  if (!isPathInside(root, outputPath)) return { ok: false as const, state: "unavailable" as const, detail: "thumbnail_path_blocked" };
+  return generateLocalMediaThumbnail({ sourcePath, outputPath, kind: localAssetThumbnailKind(asset) });
 }
 
 app.get("/phantom-ai/local-assets/status", async (request, reply) => {
@@ -2989,6 +3020,32 @@ app.get("/phantom-ai/local-assets/:assetId/file", async (request, reply) => {
     .header("x-content-type-options", "nosniff")
     .header("cache-control", "private, max-age=3600")
     .send(createReadStream(resolved));
+});
+
+app.get("/phantom-ai/local-assets/:assetId/thumbnail", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const { assetId } = request.params as { assetId: string };
+  const index = await loadLocalAssetIndex(false);
+  const asset = index.assets.find((item) => item.id === assetId);
+  if (!asset) return reply.code(404).send({ ok: false, error: "local_asset_not_found" });
+
+  const result = await createLocalAssetThumbnail(asset, localAssetRoot());
+  if (result.ok && result.path) {
+    return reply
+      .header("content-type", "image/jpeg")
+      .header("x-content-type-options", "nosniff")
+      .header("x-phantom-thumbnail-state", result.state)
+      .header("cache-control", "private, max-age=86400, immutable")
+      .send(createReadStream(result.path));
+  }
+
+  return reply
+    .header("content-type", "image/svg+xml; charset=utf-8")
+    .header("x-content-type-options", "nosniff")
+    .header("x-phantom-thumbnail-state", "fallback")
+    .header("cache-control", "private, max-age=300")
+    .send(localMediaFallbackSvg({ title: asset.title, kind: asset.kind }));
 });
 
 app.post("/phantom-ai/local-assets/refresh", async (request, reply) => {

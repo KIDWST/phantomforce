@@ -4,10 +4,10 @@
 import {
   store, isAdmin, isOwnerOperator, session, currentTenantId, moneyView, fmtMoney,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260819-166";
-import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260819-166";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260819-166";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260819-166";
+} from "./store.js?v=phantom-live-20260819-167";
+import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260819-167";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260819-167";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260819-167";
 
 const LAST_DOMAIN_KEY = "pf.analytics.lastDomain.v1";
 const CUSTOM_SOURCES_KEY = "pf.analytics.customSources.v1";
