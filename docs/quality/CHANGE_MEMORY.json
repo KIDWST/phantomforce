@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-08-17",
+  "lastUpdated": "2026-08-18",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
@@ -1580,7 +1580,7 @@
       "id": "phantombot-next-level-mission-workspace-floor",
       "status": "active",
       "title": "PhantomBot is a mission workspace, not a disposable chat",
-      "ownerDecision": "PhantomBot is the flagship green-and-black AI operating workspace. Every persistent session uses one continuous composer for questions, building, research, media, and operations; the product infers the right route from each message and current conversation instead of asking the user to choose a working mode. Sessions expose live state, context and output counts, approval posture, and safe context-derived next moves. Users can search full transcripts, pin, rename, export, or non-destructively archive sessions. External operations remain approval-gated, while suggested follow-ups never auto-execute.",
+      "ownerDecision": "PhantomBot is the flagship green-and-black AI operating workspace. Every persistent session uses one continuous composer for questions, building, research, media, and operations; the product infers the right route from each message and current conversation instead of asking the user to choose a working mode. Users may choose automatic routing or the exact organization-wide provider and model from the composer, and that choice must persist through the canonical server runtime without a false local success. Sessions expose live state, context and output counts, approval posture, and safe context-derived next moves. Users can search full transcripts, pin, rename, export, non-destructively archive, and restore sessions. Files cannot disappear while they are being read, and retry retains their context. Session panels and the compact task rail must trap keyboard focus, close with Escape, and restore focus. External operations remain approval-gated, while suggested follow-ups never auto-execute.",
       "requiredPatterns": [
         {
           "file": "app/js/main.js",
@@ -1598,6 +1598,16 @@
           "description": "Persistent work can be organized, exported, archived, and continued through suggested next moves."
         },
         {
+          "file": "app/js/settings.js",
+          "pattern": "export function getOperatorBrainChoices[\\s\\S]*export async function setOperatorBrainChoice[\\s\\S]*await persistAiRuntimeConfig\\(next\\)[\\s\\S]*saveOperatorSettings\\(previous\\)",
+          "description": "Composer model choices reuse the canonical settings contract, persist organization-wide, and roll back local state after a failed server save."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "function trapModalFocus[\\s\\S]*function paintModelMenu[\\s\\S]*function unarchiveTask[\\s\\S]*pendingAttachments\\.some[\\s\\S]*submitPrompt\\(message\\.q, message\\.attachments",
+          "description": "The live workspace exposes a real model picker, keyboard-safe modal panels, recoverable archives, and attachment-safe send/retry behavior."
+        },
+        {
           "file": "app/phantombot-next.css",
           "pattern": "--pbot-bg: #020705[\\s\\S]*--pbot-live: #18f28f[\\s\\S]*\\.phantombot-mission-hud[\\s\\S]*\\.phantombot-session-menu[\\s\\S]*@media \\(max-width: 760px\\)",
           "description": "The dedicated visual authority provides a responsive, modern black and Phantom-green mission workspace."
@@ -1606,6 +1616,11 @@
           "file": "scripts/test-phantombot-next-level.mjs",
           "pattern": "data-phantombot-mission-hud[\\s\\S]*full transcript[\\s\\S]*contextual next moves[\\s\\S]*reduced-motion",
           "description": "A dedicated regression test protects the full flagship behavior and presentation contract."
+        },
+        {
+          "file": "scripts/test-responsive-viewports.mjs",
+          "pattern": "phantomBotModelPicker[\\s\\S]*phantomBotSessionDialog[\\s\\S]*phantomBotTaskRail[\\s\\S]*Tab focus",
+          "description": "Browser-driven responsive evidence opens the new controls and proves fit, focus containment, Escape close, and focus restoration."
         }
       ],
       "forbiddenPatterns": [

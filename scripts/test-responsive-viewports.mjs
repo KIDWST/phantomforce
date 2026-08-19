@@ -590,7 +590,8 @@ function auditPage() {
         const img = media.querySelector("img");
         const fallback = media.querySelector(".ps-product-fallback, .ps-ai-product-art");
         const style = img ? getComputedStyle(img) : null;
-        return rect.width < 120 || rect.height < 60 || (!img && !fallback) || (style && (style.objectFit !== "contain" || style.transform !== "none"));
+        const approvedFit = img?.closest(".ps-ai-product-art.has-cover") ? "cover" : "contain";
+        return rect.width < 120 || rect.height < 60 || (!img && !fallback) || (style && (style.objectFit !== approvedFit || style.transform !== "none"));
       }).map(elementSummary).slice(0, 5),
     },
     phantomPlay: {
@@ -655,6 +656,11 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
     await sleep(250);
   }
   const appState = await waitForApp(cdp, page.id);
+  // The branded power-on animation intentionally overlays the first session.
+  // Dismiss it in QA, then wait through its fade so screenshots prove the
+  // audited workspace instead of capturing startup chrome.
+  await evaluate(cdp, `(() => { document.querySelector(".os-poweron")?.click(); return true; })()`);
+  await sleep(720);
   if (page.id === "dashboard") {
     await evaluate(cdp, `(${injectDashboardDecisionFixture.toString()})()`);
   }
@@ -690,6 +696,85 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
       };
     })()`);
     audit.mobileDrawer = { ...opened, ...closed };
+  }
+  if (page.id === "phantomai") {
+    await evaluate(cdp, `(() => { const button = document.querySelector("[data-phantombot-model]"); button?.click(); return !!button; })()`);
+    await sleep(120);
+    const modelOpened = await evaluate(cdp, `(() => {
+      const menu = document.querySelector("[data-phantombot-model-menu]");
+      const trigger = document.querySelector("[data-phantombot-model]");
+      const rect = menu?.getBoundingClientRect();
+      return {
+        visible: !!menu && !menu.hidden,
+        focusInside: !!menu?.contains(document.activeElement),
+        automaticChoice: !!menu?.querySelector("[data-phantombot-brain-auto]"),
+        exactChoices: menu?.querySelectorAll("[data-phantombot-brain-provider][data-phantombot-brain-model]").length || 0,
+        withinViewport: !!rect && rect.left >= -1 && rect.right <= innerWidth + 1 && rect.top >= -1 && rect.bottom <= innerHeight + 1,
+        expanded: trigger?.getAttribute("aria-expanded") || "",
+      };
+    })()`);
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+    await sleep(80);
+    const modelClosed = await evaluate(cdp, `(() => ({
+      closed: !!document.querySelector("[data-phantombot-model-menu]")?.hidden,
+      focusRestored: !!document.activeElement?.matches?.("[data-phantombot-model]"),
+    }))()`);
+    audit.phantomBotModelPicker = { ...modelOpened, ...modelClosed };
+
+    await evaluate(cdp, `(() => { const button = [...document.querySelectorAll("[data-phantombot-manage-session]")].find((item) => item.getBoundingClientRect().width > 0); button?.focus(); button?.click(); return !!button; })()`);
+    await sleep(120);
+    const sessionOpened = await evaluate(cdp, `(() => {
+      const panel = document.querySelector("[data-phantombot-session-menu]");
+      return {
+        visible: !!panel && !panel.hidden,
+        role: panel?.getAttribute("role") || "",
+        modal: panel?.getAttribute("aria-modal") || "",
+        focusInside: !!panel?.contains(document.activeElement),
+        backgroundInert: [...(panel?.parentElement?.children || [])].filter((child) => child !== panel).every((child) => child.hasAttribute("inert")),
+      };
+    })()`);
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+    await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+    await sleep(80);
+    const sessionClosed = await evaluate(cdp, `(() => ({
+      closed: !!document.querySelector("[data-phantombot-session-menu]")?.hidden,
+      focusRestored: !!document.activeElement?.matches?.("[data-phantombot-manage-session]"),
+    }))()`);
+    audit.phantomBotSessionDialog = { ...sessionOpened, ...sessionClosed };
+
+    if (viewport.width <= 1100) {
+      await evaluate(cdp, `(() => { const button = [...document.querySelectorAll("[data-phantombot-rail-toggle]")].find((item) => item.getBoundingClientRect().width > 0); button?.click(); return !!button; })()`);
+      await sleep(120);
+      const railOpened = await evaluate(cdp, `(() => {
+        const rail = document.querySelector(".phantombot-taskrail");
+        const focusable = [...(rail?.querySelectorAll("button:not([disabled]), input:not([disabled])") || [])].filter((item) => item.getBoundingClientRect().width > 0);
+        focusable.at(-1)?.focus();
+        return {
+          visible: !!rail && rail.getBoundingClientRect().width > 0,
+          role: rail?.getAttribute("role") || "",
+          modal: rail?.getAttribute("aria-modal") || "",
+          stageInert: document.querySelector(".phantombot-stage")?.hasAttribute("inert") || false,
+          focusInside: !!rail?.contains(document.activeElement),
+        };
+      })()`);
+      await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab" });
+      await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab" });
+      await sleep(60);
+      const railWrapped = await evaluate(cdp, `(() => {
+        const rail = document.querySelector(".phantombot-taskrail");
+        return { tabStayedInside: !!rail?.contains(document.activeElement) };
+      })()`);
+      await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+      await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
+      await sleep(80);
+      const railClosed = await evaluate(cdp, `(() => ({
+        closed: !document.querySelector(".phantombot-os")?.classList.contains("is-rail-open"),
+        stageInteractive: !document.querySelector(".phantombot-stage")?.hasAttribute("inert"),
+        focusRestored: !!document.activeElement?.matches?.("[data-phantombot-rail-toggle]"),
+      }))()`);
+      audit.phantomBotTaskRail = { ...railOpened, ...railWrapped, ...railClosed };
+    }
   }
   const png = await cdp.send("Page.captureScreenshot", {
     format: "png",
@@ -779,9 +864,33 @@ function assertCase(result) {
     assert.equal(audit.phantomBot.composerTag, "TEXTAREA", `${label} ${viewport.width}: composer must be multiline.`);
     assert.equal(audit.phantomBot.pageWorkerVisible, false, `${label} ${viewport.width}: generic page-intelligence prompt must not duplicate PhantomBot chat.`);
     assert.equal(audit.phantomBot.topSearchVisible, false, `${label} ${viewport.width}: global top Search control must stay out of the dedicated PhantomBot OS.`);
+    assert.equal(audit.phantomBotModelPicker?.visible, true, `${label} ${viewport.width}: model picker must open from the composer.`);
+    assert.equal(audit.phantomBotModelPicker?.focusInside, true, `${label} ${viewport.width}: model picker must receive keyboard focus.`);
+    assert.equal(audit.phantomBotModelPicker?.automaticChoice, true, `${label} ${viewport.width}: model picker must offer automatic brain routing.`);
+    assert.ok(audit.phantomBotModelPicker?.exactChoices >= 5, `${label} ${viewport.width}: model picker must expose exact provider/model choices.`);
+    assert.equal(audit.phantomBotModelPicker?.withinViewport, true, `${label} ${viewport.width}: model picker must remain inside the viewport.`);
+    assert.equal(audit.phantomBotModelPicker?.expanded, "true", `${label} ${viewport.width}: model trigger must report its expanded state.`);
+    assert.equal(audit.phantomBotModelPicker?.closed, true, `${label} ${viewport.width}: Escape must close the model picker.`);
+    assert.equal(audit.phantomBotModelPicker?.focusRestored, true, `${label} ${viewport.width}: closing the model picker must restore focus.`);
+    assert.equal(audit.phantomBotSessionDialog?.visible, true, `${label} ${viewport.width}: session controls must open.`);
+    assert.equal(audit.phantomBotSessionDialog?.role, "dialog", `${label} ${viewport.width}: session controls must expose dialog semantics.`);
+    assert.equal(audit.phantomBotSessionDialog?.modal, "true", `${label} ${viewport.width}: session controls must expose a modal boundary.`);
+    assert.equal(audit.phantomBotSessionDialog?.focusInside, true, `${label} ${viewport.width}: session controls must receive focus.`);
+    assert.equal(audit.phantomBotSessionDialog?.backgroundInert, true, `${label} ${viewport.width}: session controls must inert the chat background.`);
+    assert.equal(audit.phantomBotSessionDialog?.closed, true, `${label} ${viewport.width}: Escape must close session controls.`);
+    assert.equal(audit.phantomBotSessionDialog?.focusRestored, true, `${label} ${viewport.width}: closing session controls must restore focus.`);
     if (viewport.width <= 1100) {
       assert.equal(audit.phantomBot.taskRailVisible, false, `${label} ${viewport.width}: compact PhantomBot must keep the task rail collapsed by default.`);
       assert.equal(audit.phantomBot.railToggleVisible, true, `${label} ${viewport.width}: compact PhantomBot needs a visible task-rail toggle.`);
+      assert.equal(audit.phantomBotTaskRail?.visible, true, `${label} ${viewport.width}: compact task rail must open.`);
+      assert.equal(audit.phantomBotTaskRail?.role, "dialog", `${label} ${viewport.width}: compact task rail must expose dialog semantics.`);
+      assert.equal(audit.phantomBotTaskRail?.modal, "true", `${label} ${viewport.width}: compact task rail must expose a modal boundary.`);
+      assert.equal(audit.phantomBotTaskRail?.stageInert, true, `${label} ${viewport.width}: compact task rail must inert the workspace stage.`);
+      assert.equal(audit.phantomBotTaskRail?.focusInside, true, `${label} ${viewport.width}: compact task rail must receive focus.`);
+      assert.equal(audit.phantomBotTaskRail?.tabStayedInside, true, `${label} ${viewport.width}: compact task rail must trap Tab focus.`);
+      assert.equal(audit.phantomBotTaskRail?.closed, true, `${label} ${viewport.width}: Escape must close the compact task rail.`);
+      assert.equal(audit.phantomBotTaskRail?.stageInteractive, true, `${label} ${viewport.width}: closing the compact rail must restore the stage.`);
+      assert.equal(audit.phantomBotTaskRail?.focusRestored, true, `${label} ${viewport.width}: closing the compact rail must restore focus.`);
     } else {
       assert.equal(audit.phantomBot.taskRailVisible, true, `${label} ${viewport.width}: desktop PhantomBot must show the task rail.`);
     }
@@ -849,6 +958,9 @@ async function main() {
         "dark mode has no large pale/white UI surfaces",
         "visible control text is not clipped",
         "compact drawer focus enters, traps, closes, and restores",
+        "PhantomBot model picker opens, fits, closes, and restores focus",
+        "PhantomBot session controls expose a modal keyboard boundary",
+        "PhantomBot compact task rail traps focus and restores the stage",
         "phone Business Signals use one readable column",
         "PhantomPlay card actions stay fully visible inside game cards",
         "PhantomStore phone view puts product art before prompt chrome",

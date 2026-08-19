@@ -3946,8 +3946,18 @@ function phantomBotBrainPresentation() {
   const settings = getOperatorSettings();
   const status = getOperatorInfrastructureStatus();
   const providerNames = { local: "Phantom V1 / Ollama", private: "Codex CLI", claude: "Claude CLI", openrouter: "OpenRouter", chatgpt: "ChatGPT Bridge" };
-  const provider = providerNames[settings.provider] || settings.provider || "AI brain";
-  const model = String(settings.models?.[settings.provider] || "model not selected");
+  const explicitProvider = providerNames[settings.provider] || settings.provider || "AI brain";
+  const explicitModel = String(settings.models?.[settings.provider] || "model not selected");
+  const provider = settings.providerMode === "smart"
+    ? "Phantom Hybrid"
+    : settings.providerMode === "multiple"
+      ? "Phantom Blend"
+      : explicitProvider;
+  const model = settings.providerMode === "smart"
+    ? "Automatic routing"
+    : settings.providerMode === "multiple"
+      ? `${settings.selectedProviders?.length || 0} providers`
+      : explicitModel;
   return {
     provider,
     model,
@@ -4025,7 +4035,7 @@ const CUSTOM = {
             </nav>
             <div class="phantombot-brand">
               <span class="phantombot-brand-mark" aria-hidden="true"><img src="/app/assets/brand-phantom-favicon.png" alt="" /></span>
-              <span><b>PhantomBot</b><small>${esc(brain.provider)}</small></span>
+              <span><b>PhantomBot</b><small data-phantombot-brand-provider>${esc(brain.provider)}</small></span>
             </div>
             <label class="phantombot-session-search">
               <span aria-hidden="true">⌕</span>
@@ -4040,9 +4050,15 @@ const CUSTOM = {
               <p><span>SESSIONS</span><small data-phantombot-session-count>0</small></p>
               <nav class="phantombot-task-list" data-phantombot-task-list aria-label="Recent PhantomBot sessions"></nav>
             </div>
+            <div class="phantombot-task-section is-archived" data-phantombot-archive-section hidden>
+              <button class="phantombot-archive-toggle" type="button" data-phantombot-toggle-archives aria-expanded="false">
+                <span>ARCHIVED</span><small data-phantombot-archive-count>0</small>
+              </button>
+              <nav class="phantombot-task-list" data-phantombot-archive-list aria-label="Archived PhantomBot sessions" hidden></nav>
+            </div>
             <footer class="phantombot-profile-row">
               <span class="phantombot-profile-avatar">P</span>
-              <span><b>default</b><small>${esc(brain.provider)} workspace</small></span>
+              <span><b>default</b><small data-phantombot-profile-provider>${esc(brain.provider)} workspace</small></span>
               <button type="button" data-open-ws="settings" aria-label="Profile settings">•••</button>
             </footer>
           </aside>
@@ -4089,7 +4105,7 @@ const CUSTOM = {
                   <textarea class="phantomai-chat-input" data-phantomai-chat-input rows="1" autocomplete="off" placeholder="Ask a question or describe what you want done…" aria-label="Message PhantomBot"></textarea>
                   <div class="phantombot-composer-foot">
                     <div class="phantombot-composer-controls">
-                      <button type="button" data-phantombot-model aria-haspopup="listbox" aria-expanded="false"><span>${esc(brain.provider)} · ${esc(brain.model)}</span><i>⌄</i></button>
+                      <button type="button" data-phantombot-model aria-haspopup="menu" aria-expanded="false"><span data-phantombot-model-label>${esc(brain.provider)} · ${esc(brain.model)}</span><i>⌄</i></button>
                       <label title="Response effort">
                         <span class="sr-only">Response effort</span>
                         <select data-phantombot-effort aria-label="Response effort">
@@ -4106,13 +4122,9 @@ const CUSTOM = {
                     </button>
                   </div>
                 </form>
-                <div class="phantombot-model-menu" data-phantombot-model-menu hidden role="listbox" aria-label="Model">
-                  <button type="button" class="is-active" role="option" aria-selected="true">
-                    <span><b>${esc(brain.provider)} · ${esc(brain.model)}</b><small>${esc(brain.status)} · Change this organization-wide choice in Settings.</small></span><i>✓</i>
-                  </button>
-                </div>
-                <section class="phantombot-session-menu" data-phantombot-session-menu hidden aria-label="Manage current session">
-                  <header><div><span>SESSION CONTROL</span><b>Keep the work organized</b></div><button type="button" data-phantombot-close-session-menu aria-label="Close session controls">×</button></header>
+                <div class="phantombot-model-menu" data-phantombot-model-menu hidden role="menu" aria-label="Choose the organization AI model"></div>
+                <section class="phantombot-session-menu" data-phantombot-session-menu hidden role="dialog" aria-modal="true" aria-labelledby="phantombot-session-control-title" tabindex="-1">
+                  <header><div><span>SESSION CONTROL</span><b id="phantombot-session-control-title">Keep the work organized</b></div><button type="button" data-phantombot-close-session-menu aria-label="Close session controls">×</button></header>
                   <label><span>Session name</span><input type="text" data-phantombot-session-name maxlength="72" value="New session" /></label>
                   <div>
                     <button type="button" class="is-primary" data-phantombot-save-session-name>Save name</button>
@@ -4150,16 +4162,16 @@ const CUSTOM = {
               <div class="phantomai-activity-mount" data-phantomai-activity-mount></div>
             </div>
 
-            <aside class="phantombot-context-drawer" data-phantombot-context-drawer hidden aria-label="Session details">
+            <aside class="phantombot-context-drawer" data-phantombot-context-drawer hidden role="dialog" aria-modal="true" aria-labelledby="phantombot-session-details-title" tabindex="-1">
               <header>
-                <div><span>SESSION</span><h2 data-phantombot-context-title>New session</h2></div>
+                <div><span>SESSION</span><h2 id="phantombot-session-details-title" data-phantombot-context-title>New session</h2></div>
                 <button type="button" data-phantombot-close-context aria-label="Close details">×</button>
               </header>
               <nav role="tablist" aria-label="Session details">
-                <button type="button" class="is-active" data-phantombot-detail-tab="context">Context</button>
-                <button type="button" data-phantombot-detail-tab="timeline">Timeline</button>
-                <button type="button" data-phantombot-detail-tab="steps">Steps</button>
-                <button type="button" data-phantombot-detail-tab="artifacts">Artifacts</button>
+                <button type="button" role="tab" class="is-active" data-phantombot-detail-tab="context">Context</button>
+                <button type="button" role="tab" data-phantombot-detail-tab="timeline">Timeline</button>
+                <button type="button" role="tab" data-phantombot-detail-tab="steps">Steps</button>
+                <button type="button" role="tab" data-phantombot-detail-tab="artifacts">Artifacts</button>
               </nav>
               <div data-phantombot-detail-body></div>
             </aside>
@@ -4172,7 +4184,7 @@ const CUSTOM = {
               <button type="button" data-phantomai-tab="media"><span>Outputs</span></button>
               <span class="phantombot-session-clock" data-phantombot-session-clock>Session 0:00</span>
               <button type="button" data-phantombot-companion><i></i><span>${esc(brain.ready ? `${brain.provider} ready` : brain.status)}</span></button>
-              <span>${esc(brain.model)}</span>
+              <span data-phantombot-runtime-model>${esc(brain.model)}</span>
             </footer>
           </section>
         </div>`;

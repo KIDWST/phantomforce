@@ -6,6 +6,9 @@ const index = read("../app/index.html");
 const main = read("../app/js/main.js");
 const planner = read("../app/js/planner.js");
 const adminCss = read("../app/admin-next.css");
+const buildId = index.match(/phantom-live-\d{8}-\d+/u)?.[0];
+assert.ok(buildId, "The initial admin document must expose a live cache build.");
+const escapedBuildId = buildId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const requiredStyles = [
   "phantom.css",
@@ -31,7 +34,7 @@ for (const file of requiredStyles) {
 
 for (const file of ["phantomstore.css", "creator-studio.css", "phantomhunter.css", "phantomhunter-connect.css"]) {
   assert.doesNotMatch(index, new RegExp(`<link rel="stylesheet"[^>]*href="/app/${file.replaceAll(".", "\\.")}`), `${file} must stay off the initial shell.`);
-  assert.match(main, new RegExp(`/${file.replaceAll(".", "\\.")}\\?v=phantom-live-20260817-159`), `${file} must remain available through the workspace style loader.`);
+  assert.match(main, new RegExp(`/${file.replaceAll(".", "\\.")}\\?v=${escapedBuildId}`), `${file} must remain available through the workspace style loader at ${buildId}.`);
 }
 
 const adminCssPosition = index.indexOf("/app/admin-next.css");

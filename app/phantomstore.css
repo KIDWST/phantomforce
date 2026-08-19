@@ -842,6 +842,12 @@ html[data-org-color-mode="light"] .ps-spotlight-panel{
   .ps-ai-workspace-hero > div:last-child { justify-content:flex-start; }
   .ps-ai-workspace { margin-inline:-4px; }
 }
+
+/* Put the featured product itself above long phone copy and action chrome.
+   This keeps real product art visible on entry instead of below the dock. */
+@media(max-width:640px){
+  .ps-spotlight-panel { order:-1; min-height:200px; }
+}
 @media(forced-colors:active){
   .ps-ai-product-art,.ps-ai-hub-card,.ps-ai-workspace-hero,.ps-ai-create,.ps-ai-artifacts,.ps-ai-analysis,.ps-ai-core { border:1px solid CanvasText; }
 }

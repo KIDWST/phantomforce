@@ -182,6 +182,48 @@ html[data-command-os="2040"] .phantombot-task-pin[aria-pressed="true"] {
   color: var(--pbot-live);
 }
 
+html[data-command-os="2040"] .phantombot-task-section.is-archived {
+  flex: 0 1 34%;
+  overflow: hidden;
+  border-top: 1px solid rgba(153, 196, 174, .08);
+}
+
+html[data-command-os="2040"] .phantombot-task-section.is-archived[hidden] {
+  display: none;
+}
+
+html[data-command-os="2040"] .phantombot-archive-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 25px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--pbot-faint);
+  cursor: pointer;
+  font: 650 7px/1 "Spline Sans Mono", monospace;
+  letter-spacing: .1em;
+}
+
+html[data-command-os="2040"] .phantombot-archive-toggle:hover,
+html[data-command-os="2040"] .phantombot-archive-toggle[aria-expanded="true"] {
+  color: var(--pbot-muted);
+}
+
+html[data-command-os="2040"] .phantombot-task-section.is-archived .phantombot-task-list {
+  overflow: auto;
+}
+
+html[data-command-os="2040"] .phantombot-task-row.is-archived {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html[data-command-os="2040"] .phantombot-task-row.is-archived .phantombot-task small {
+  color: #8bdcb6;
+}
+
 html[data-command-os="2040"] .phantombot-profile-row {
   flex-basis: 54px;
   grid-template-columns: 32px minmax(0, 1fr) 28px;
@@ -540,6 +582,11 @@ html[data-command-os="2040"] .phantombot-stage .phantomai-attach:hover {
   color: var(--pbot-live);
 }
 
+html[data-command-os="2040"] .phantombot-stage .phantomai-attach:disabled {
+  cursor: not-allowed;
+  opacity: .38;
+}
+
 html[data-command-os="2040"] .phantombot-stage .phantomai-chat-input {
   grid-column: 2;
   grid-row: 1;
@@ -592,10 +639,95 @@ html[data-command-os="2040"] .phantombot-send:hover {
 html[data-command-os="2040"] .phantombot-model-menu {
   right: max(14px, calc((100% - 850px) / 2));
   bottom: 118px;
-  width: min(300px, calc(100% - 28px));
+  display: grid;
+  width: min(390px, calc(100% - 28px));
+  max-height: min(590px, calc(100% - 152px));
+  overflow: hidden;
   border-color: var(--pbot-line-strong);
   border-radius: 10px;
   background: #07120c;
+}
+
+html[data-command-os="2040"] .phantombot-model-menu[hidden] {
+  display: none;
+}
+
+html[data-command-os="2040"] .phantombot-model-menu > header {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px 8px;
+  border-bottom: 1px solid var(--pbot-line);
+}
+
+html[data-command-os="2040"] .phantombot-model-menu > header span,
+html[data-command-os="2040"] .phantombot-model-options section > p {
+  color: #83cfa9;
+  font: 650 7px/1.2 "Spline Sans Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+html[data-command-os="2040"] .phantombot-model-menu > header b {
+  font-size: 11px;
+}
+
+html[data-command-os="2040"] .phantombot-model-options {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+html[data-command-os="2040"] .phantombot-model-options section {
+  padding: 5px;
+  border-top: 1px solid rgba(153, 196, 174, .07);
+}
+
+html[data-command-os="2040"] .phantombot-model-options section > p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 2px 5px 4px;
+}
+
+html[data-command-os="2040"] .phantombot-model-options section > p em {
+  color: #8bdcb6;
+  font-style: normal;
+  letter-spacing: .04em;
+}
+
+html[data-command-os="2040"] .phantombot-model-options section.is-unavailable > p em {
+  color: #ff9cab;
+}
+
+html[data-command-os="2040"] .phantombot-model-options section.is-checking > p em {
+  color: var(--pbot-warn);
+}
+
+html[data-command-os="2040"] .phantombot-model-menu button {
+  cursor: pointer;
+}
+
+html[data-command-os="2040"] .phantombot-model-menu .phantombot-brain-choice {
+  background: transparent;
+}
+
+html[data-command-os="2040"] .phantombot-model-menu .phantombot-brain-choice:hover,
+html[data-command-os="2040"] .phantombot-model-menu .phantombot-brain-choice.is-active {
+  background: rgba(24, 242, 143, .07);
+}
+
+html[data-command-os="2040"] .phantombot-model-menu .phantombot-manage-models {
+  min-height: 36px;
+  border-top: 1px solid var(--pbot-line);
+  border-radius: 0 0 8px 8px;
+  background: rgba(24, 242, 143, .04);
+  color: #aaf2cf;
+  font-size: 8px;
+}
+
+html[data-command-os="2040"] .phantombot-model-menu[aria-busy="true"] {
+  cursor: wait;
+  opacity: .72;
 }
 
 html[data-command-os="2040"] .phantombot-session-menu {
@@ -753,6 +885,14 @@ html[data-command-os="2040"] .phantombot-composer-status[data-tone="error"] {
   border-color: rgba(255, 105, 127, .38);
   background: #1a0a0d;
   color: #ff9cab;
+}
+
+html[data-command-os="2040"] .phantombot-os button:focus-visible,
+html[data-command-os="2040"] .phantombot-os input:focus-visible,
+html[data-command-os="2040"] .phantombot-os textarea:focus-visible,
+html[data-command-os="2040"] .phantombot-os select:focus-visible {
+  outline: 2px solid rgba(24, 242, 143, .78);
+  outline-offset: 2px;
 }
 
 @keyframes phantombot-next-pulse {

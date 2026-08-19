@@ -5,6 +5,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const index = read("../app/index.html");
 const main = read("../app/js/main.js");
 const bot = read("../app/js/phantomai.js");
+const settings = read("../app/js/settings.js");
 const css = read("../app/phantombot-next.css");
 
 for (const selector of [
@@ -41,6 +42,25 @@ assert.match(bot, /const outbound = composeMessage\(prompt, attachments\)/u, "Th
 assert.match(bot, /handleSmartCommand\(outbound, \{ effort: task\.effort \|\| "instant" \}\)/u, "The automatic intent router must receive every ordinary message directly.");
 assert.doesNotMatch(bot, /data-phantombot-next[^\n]{0,220}(?:requestSubmit|submitPrompt)/u, "Recommended next moves must fill the composer without silently executing.");
 
+assert.match(main, /data-phantombot-model aria-haspopup="menu"/u, "The composer model control must expose a real menu instead of a dead listbox.");
+assert.match(bot, /function paintModelMenu[\s\S]*data-phantombot-brain-auto[\s\S]*data-phantombot-brain-provider/u, "The composer must offer automatic routing and exact provider/model choices.");
+assert.match(settings, /export function getOperatorBrainChoices/u, "Settings must expose the canonical organization brain choices to PhantomBot.");
+assert.match(settings, /export async function setOperatorBrainChoice[\s\S]*await persistAiRuntimeConfig\(next\)[\s\S]*saveOperatorSettings\(previous\)/u, "A model change must persist server-side and roll local state back if persistence fails.");
+assert.match(bot, /data-phantombot-manage-models[\s\S]*pf\.settings\.tab\.v1", "model"/u, "The model picker must link directly to full connection and custom-model management.");
+assert.match(bot, /brain\.status\.configured[\s\S]*now powers this organization[\s\S]*selected · \$\{brain\.status\.detail\}/u, "A selected but unavailable model must never be described as actively powering the organization.");
+
+assert.match(main, /data-phantombot-toggle-archives[\s\S]*data-phantombot-archive-list/u, "Archived sessions must have a recoverable rail surface.");
+assert.match(bot, /function unarchiveTask[\s\S]*task\.archived = false/u, "Archived sessions must be restorable without data loss.");
+assert.match(bot, /pendingAttachments\.some\(\(attachment\) => attachment\.status === "reading"\)[\s\S]*will stay here until they are ready/u, "Sending while files are still being read must preserve them and explain the wait.");
+assert.match(bot, /submitPrompt\(message\.q, message\.attachments \|\| \[\]\)/u, "Retry must preserve the original attachments.");
+assert.match(bot, /PhantomBot accepts up to 8 files per message[\s\S]*25 MB file limit/u, "Attachment limits must be explicit instead of silently dropping files.");
+
+assert.match(main, /data-phantombot-session-menu hidden role="dialog" aria-modal="true"/u, "Session management must expose modal dialog semantics.");
+assert.match(main, /data-phantombot-context-drawer hidden role="dialog" aria-modal="true"/u, "The session detail drawer must expose modal dialog semantics.");
+assert.match(bot, /function trapModalFocus[\s\S]*event\.key !== "Tab"/u, "PhantomBot dialogs must trap keyboard focus.");
+assert.match(bot, /function openCompactRail[\s\S]*aria-modal[\s\S]*stage\.setAttribute\("inert"/u, "The compact task rail must protect background content from keyboard interaction.");
+assert.match(bot, /if \(event\.key === "Escape"\)[\s\S]*closeSessionMenu\(\{ restoreFocus: true \}\)[\s\S]*closeDetailDrawer\(\{ restoreFocus: true \}\)[\s\S]*closeCompactRail\(\{ restoreFocus: true \}\)/u, "Escape must close each PhantomBot modal and restore focus.");
+
 assert.match(index, /data-admin-page-style href="\/app\/phantombot-next\.css\?v=phantom-live-[^"]+"/u, "The mission workspace stylesheet must be loaded by the initial document.");
 assert.ok(index.indexOf("/app/phantombot-next.css") < index.indexOf("/app/admin-next.css"), "Admin Next must remain the final global authority.");
 assert.match(main, /\.\/phantomai\.js\?v=phantom-live-[^"]+/u, "The shell must fetch the upgraded PhantomBot module.");
@@ -51,6 +71,8 @@ for (const selector of [
   ".phantombot-next-moves",
   ".phantombot-session-menu",
   ".phantombot-context-drawer",
+  ".phantombot-archive-toggle",
+  ".phantombot-model-options",
 ]) {
   assert.match(css, new RegExp(selector.replaceAll(".", "\\.")), `The mission stylesheet must style ${selector}.`);
 }

@@ -398,6 +398,83 @@ function runtimeProviderStatus(providerId) {
   return { state: "checking", label: "Checking", detail: provider.detail || "Health has not been confirmed yet." };
 }
 
+export function getOperatorBrainChoices() {
+  const settings = loadOperatorSettings();
+  const infrastructure = getOperatorInfrastructureStatus();
+  const activeProvider = providerFor(settings.provider);
+  const explicitModel = settings.models[activeProvider.id] || providerModels(activeProvider)[0] || "";
+  const current = settings.providerMode === "smart"
+    ? { provider: "Phantom Hybrid", model: "Automatic routing", automatic: true }
+    : settings.providerMode === "multiple"
+      ? { provider: "Phantom Blend", model: `${settings.selectedProviders.length} providers`, automatic: false }
+      : {
+          provider: activeProvider.name,
+          model: activeProvider.id === "local" ? localModelLabel(explicitModel) : modelDisplayLabel(explicitModel),
+          automatic: false,
+        };
+  return {
+    current,
+    automatic: {
+      selected: settings.providerMode === "smart",
+      state: infrastructure.tone === "ok" ? "real" : infrastructure.tone === "error" ? "unavailable" : "checking",
+      label: infrastructure.label,
+      detail: infrastructure.detail,
+    },
+    providers: PROVIDERS.map((provider) => {
+      const runtime = runtimeProviderStatus(provider.id);
+      const selectedModel = settings.models[provider.id] || providerModels(provider)[0] || provider.models[0] || "";
+      const models = [...new Set([selectedModel, ...providerModels(provider)].filter(Boolean))];
+      return {
+        id: provider.id,
+        name: provider.name,
+        short: provider.short,
+        state: runtime.state,
+        status: runtime.label,
+        detail: runtime.detail,
+        models: models.map((model) => ({
+          id: model,
+          label: provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model),
+          selected: settings.providerMode === "single" && settings.provider === provider.id && selectedModel === model,
+        })),
+      };
+    }),
+  };
+}
+
+export async function setOperatorBrainChoice({ automatic = false, provider: providerId = "", model = "" } = {}) {
+  const previous = loadOperatorSettings();
+  let next;
+  if (automatic) {
+    next = normalizeSettings({
+      ...previous,
+      providerMode: "smart",
+      selectedProviders: PROVIDERS.map((provider) => provider.id),
+    });
+  } else {
+    const provider = PROVIDERS.find((item) => item.id === providerId);
+    const selectedModel = String(model || "").trim();
+    const allowedModels = provider ? providerModels(provider) : [];
+    if (!provider || !selectedModel || (!allowedModels.includes(selectedModel) && !provider.allowCustomModel)) {
+      throw new Error("That model is not available in PhantomForce.");
+    }
+    next = normalizeSettings({
+      ...previous,
+      provider: provider.id,
+      providerMode: "single",
+      selectedProviders: [provider.id],
+      models: { ...previous.models, [provider.id]: selectedModel },
+    });
+  }
+  saveOperatorSettings(next);
+  try {
+    await persistAiRuntimeConfig(next);
+    return getOperatorBrainChoices();
+  } catch (error) {
+    saveOperatorSettings(previous);
+    throw error;
+  }
+}
+
 function renderProviderCards(settings) {
   return PROVIDERS.map((provider) => {
     const runtime = runtimeProviderStatus(provider.id);
