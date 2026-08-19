@@ -56,7 +56,7 @@ for (const [id, def] of Object.entries(ROOMS)) {
   check(`${id}: spawn walkable`, !room.blockedAtPx(def.spawn.x * T + 8, def.spawn.y * T + 8));
 }
 
-// 2. exit graph: targets exist, toSpawn walkable, and every exit is returnable
+// 2. exit graph: targets exist, toSpawn is walkable, and non-one-way exits are returnable
 for (const [id, def] of Object.entries(ROOMS)) {
   for (const ex of def.exits || []) {
     check(`${id}→${ex.to}: target exists`, !!ROOMS[ex.to]);
@@ -64,7 +64,7 @@ for (const [id, def] of Object.entries(ROOMS)) {
     const target = new VG.Room(ROOMS[ex.to]);
     check(`${id}→${ex.to}: toSpawn walkable`, !target.blockedAtPx(ex.toSpawn.x * T + 8, ex.toSpawn.y * T + 8),
       `(${ex.toSpawn.x},${ex.toSpawn.y})`);
-    check(`${id}→${ex.to}: return path exists`, (ROOMS[ex.to].exits || []).some((r) => r.to === id));
+    if (!ex.oneWay) check(`${id}→${ex.to}: return path exists`, (ROOMS[ex.to].exits || []).some((r) => r.to === id));
   }
 }
 
@@ -172,10 +172,10 @@ for (const s of D.SHOP) if (s.relic) check(`shop relic ${s.relic}: defined`, !!D
 // 10. every dungeon gating flag has a source
 {
   check("hollow1: exactly 2 bells to ring", (ROOMS.hollow1.bells || []).length === 2);
-  const bossExit = ROOMS.hollow1.exits.find((e) => e.to === "hollowboss");
-  check("hollow1: boss door needs both bells", bossExit && bossExit.needBells === 2);
-  const sigExit = ROOMS.ossuary1.exits.find((e) => e.to === "ossuaryboss");
-  check("ossuary1: boss door needs the sigil", sigExit && sigExit.needSigil === true);
+  const bellGate = ROOMS.hollow1.exits.find((e) => e.to === "hollow2");
+  check("hollow1: inner dungeon door needs both bells", bellGate && bellGate.needBells === 2);
+  const sigilGate = ROOMS.ossuary1.exits.find((e) => e.to === "ossuary2");
+  check("ossuary1: inner dungeon door needs the sigil", sigilGate && sigilGate.needSigil === true);
   check("ossuary1: sigil target defined", !!ROOMS.ossuary1.sigil);
   check("ossuaryboss: is a choir room with 3 elites", ROOMS.ossuaryboss.choir === true &&
     ROOMS.ossuaryboss.enemies.filter((e) => e.tag === "choir").length === 3);

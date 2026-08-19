@@ -35,8 +35,8 @@
     {
       "id": "phantompet-full-presence-and-vespergate-current-build",
       "status": "active",
-      "title": "PhantomPet stays full-body and Vespergate stays on its current build",
-      "ownerDecision": "PhantomPet must appear as the transparent painted full-body character, never clipped inside a circular orb. Vespergate must launch the same current 3.0.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app; an old catalog response or cached desktop shell must not resurrect 2.x.",
+      "title": "PhantomPet stays full-body and Vespergate keeps its restored living-world build",
+      "ownerDecision": "PhantomPet must appear as the transparent painted full-body character, never clipped inside a circular orb. Vespergate must launch the same current 3.1.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app. Its illustrated pointed-hood bearer, readable villagers, living-world detail, richer rooms, checkpoints, encounter objectives, mastery, map, touch controls, and save migration must remain together; an old catalog response, cached desktop shell, or smaller legacy source must not replace them.",
       "requiredPatterns": [
         {
           "file": "app/index.html",
@@ -50,18 +50,28 @@
         },
         {
           "file": "app/js/phantomplay.js",
-          "pattern": "id:\\s*\"vespergate\"[\\s\\S]{0,2600}index\\.html\\?v=3\\.0\\.0[\\s\\S]{0,500}version:\\s*\"3\\.0\\.0\"",
-          "description": "The browser catalog launches Vespergate 3.0.0."
+          "pattern": "id:\\s*\"vespergate\"[\\s\\S]{0,3200}index\\.html\\?v=3\\.1\\.0[\\s\\S]{0,500}version:\\s*\"3\\.1\\.0\"",
+          "description": "The browser catalog launches Vespergate 3.1.0."
         },
         {
           "file": "app/games/vespergate/index.html",
-          "pattern": "engine\\.js\\?v=3\\.0\\.0[\\s\\S]*game\\.js\\?v=3\\.0\\.0",
-          "description": "The Vespergate document loads the complete 3.0.0 game module graph."
+          "pattern": "engine\\.js\\?v=3\\.1\\.0[\\s\\S]*game\\.js\\?v=3\\.1\\.0",
+          "description": "The Vespergate document loads the complete 3.1.0 game module graph."
         },
         {
           "file": "server/src/phantom-ai/phantomplay.ts",
-          "pattern": "id:\\s*\"vespergate\"[\\s\\S]{0,3000}index\\.html\\?v=3\\.0\\.0[\\s\\S]{0,500}version:\\s*\"3\\.0\\.0\"",
-          "description": "The authenticated server catalog launches Vespergate 3.0.0."
+          "pattern": "id:\\s*\"vespergate\"[\\s\\S]{0,3400}index\\.html\\?v=3\\.1\\.0[\\s\\S]{0,500}version:\\s*\"3\\.1\\.0\"",
+          "description": "The authenticated server catalog launches Vespergate 3.1.0."
+        },
+        {
+          "file": "app/games/vespergate/game.js",
+          "pattern": "Three split cloak tails[\\s\\S]*Asymmetric mantle[\\s\\S]*Pointed hood and narrow mask[\\s\\S]*profession-readable silhouette[\\s\\S]*living-dread-restored-v1",
+          "description": "The restored illustrated bearer, villagers, and native visual-profile guard remain canonical."
+        },
+        {
+          "file": "app/games/vespergate/rooms.js",
+          "pattern": "bellSequence[\\s\\S]*mirrorRelays[\\s\\S]*sanctum",
+          "description": "The recovered room progression and living-world systems remain present."
         },
         {
           "file": "packages/phantomplay-dioxus-shell/src/main.rs",

@@ -6,71 +6,81 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src data:; connect-src 'none'; media-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'" />
 <title>Vespergate 3.0: Living Dread</title>
 <style>
-  :root { color-scheme:dark; --ink:#f4f0ff; --dim:#9ca7c2; --dawn:#8fe9ff; --dusk:#ff9ad0; --gold:#ffcf6b; --panel:rgba(8,7,19,.86); }
+  :root { color-scheme:dark; --ink:#f8ead2; --dim:#b8a690; --dawn:#8fe9ff; --dusk:#d88bc8; --gold:#ffbf69; --ember:#f07c42; --violet:#7b65ff; --panel:rgba(10,7,20,.9); }
   * { box-sizing:border-box; }
   html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#030208; color:var(--ink);
     font-family:Georgia,"Times New Roman",serif; -webkit-tap-highlight-color:transparent; user-select:none; touch-action:none; }
   button, input { font:inherit; }
   button:focus-visible, input:focus-visible { outline:2px solid var(--dawn); outline-offset:3px; }
   .vg-app { position:fixed; inset:0; display:grid; place-items:center; isolation:isolate; overflow:hidden;
-    background:radial-gradient(120% 100% at 50% 0%,#15102a 0%,#070511 55%,#030208 100%); }
+    background:radial-gradient(80% 90% at 78% 18%,rgba(246,121,61,.16),transparent 46%),
+      radial-gradient(70% 88% at 23% 85%,rgba(67,91,136,.18),transparent 55%),
+      linear-gradient(145deg,#070a16 0%,#111026 48%,#05030b 100%); }
+  .vg-app::before { content:""; position:absolute; inset:-4%; pointer-events:none; z-index:1; opacity:.34;
+    background:radial-gradient(40px 20px at 9% 77%,rgba(55,88,72,.7),transparent 70%),
+      radial-gradient(46px 24px at 91% 75%,rgba(67,52,93,.7),transparent 70%),
+      radial-gradient(30px 20px at 80% 11%,rgba(154,89,55,.44),transparent 70%),
+      repeating-linear-gradient(135deg,transparent 0,transparent 34px,rgba(255,190,100,.035) 35px,transparent 36px); }
   .vg-app::after { content:""; position:absolute; inset:0; pointer-events:none; z-index:2;
-    background:linear-gradient(180deg,rgba(2,1,8,.08),transparent 16%,transparent 78%,rgba(2,1,8,.56)),
+    background:linear-gradient(180deg,rgba(2,1,8,.12),transparent 18%,transparent 76%,rgba(2,1,8,.6)),
+      radial-gradient(120% 100% at 50% 50%,transparent 58%,rgba(0,0,0,.36) 100%),
       repeating-linear-gradient(180deg,rgba(255,255,255,.012) 0,rgba(255,255,255,.012) 1px,transparent 1px,transparent 4px); }
   canvas#vg { display:block; max-width:100vw; max-height:100vh; image-rendering:auto; cursor:crosshair;
-    box-shadow:0 0 100px rgba(83,55,160,.24); }
+    box-shadow:0 0 0 1px rgba(255,188,103,.12),0 0 110px rgba(246,121,61,.14),0 0 90px rgba(83,55,160,.22); }
   .vg-status { position:fixed; left:max(14px,env(safe-area-inset-left)); top:max(12px,env(safe-area-inset-top)); z-index:5;
     display:flex; align-items:center; gap:9px; color:rgba(234,242,255,.72); font:700 10px/1 monospace; letter-spacing:.12em;
     text-transform:uppercase; pointer-events:none; text-shadow:0 1px 8px #030208; }
-  .vg-status::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--dawn); box-shadow:0 0 14px var(--dawn); }
+  .vg-status::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--gold); box-shadow:0 0 14px var(--gold); }
   .vg-toolbar { position:fixed; right:max(12px,env(safe-area-inset-right)); top:max(10px,env(safe-area-inset-top)); z-index:8;
-    display:flex; align-items:center; gap:6px; padding:5px; border:1px solid rgba(143,233,255,.16); border-radius:8px;
-    background:rgba(5,4,13,.74); box-shadow:0 12px 28px rgba(0,0,0,.3); backdrop-filter:blur(14px); }
+    display:flex; align-items:center; gap:6px; padding:5px; border:1px solid rgba(255,191,105,.24); border-radius:8px;
+    background:linear-gradient(180deg,rgba(16,10,26,.86),rgba(5,4,13,.78)); box-shadow:0 12px 28px rgba(0,0,0,.34),inset 0 0 0 1px rgba(255,235,194,.06); backdrop-filter:blur(14px); }
   .vg-tool { min-width:38px; height:34px; border:1px solid transparent; border-radius:6px; cursor:pointer; color:var(--ink);
     background:transparent; font:700 10px/1 monospace; letter-spacing:.04em; }
-  .vg-tool:hover { color:var(--dawn); border-color:rgba(143,233,255,.28); background:rgba(143,233,255,.08); }
+  .vg-tool:hover { color:var(--gold); border-color:rgba(255,191,105,.34); background:rgba(255,191,105,.09); }
   .vg-tool[data-vg-fullscreen] { min-width:96px; padding:0 12px; }
   body:not(.is-vg-overlay-visible) .vg-status, body:not(.is-vg-overlay-visible) .vg-toolbar { opacity:0; pointer-events:none; }
   body:not([data-vg-overlay-kind="pause"]) [data-vg-pause] { display:none; }
   .vg-touch { display:none; }
   .vg-portrait-sigil { display:none; }
   [data-vg-hint] { position:fixed; right:max(14px,env(safe-area-inset-right)); bottom:max(14px,env(safe-area-inset-bottom)); z-index:5;
-    font:600 12px/1.4 Georgia,serif; color:#c7d2ea; background:rgba(6,5,16,.84); padding:8px 14px;
-    border:1px solid rgba(143,233,255,.2); border-radius:7px; max-width:min(420px,42vw); text-align:left; box-shadow:0 12px 28px rgba(0,0,0,.28); }
+    font:600 12px/1.4 Georgia,serif; color:#ead8ba; background:linear-gradient(180deg,rgba(17,10,25,.9),rgba(6,5,16,.88)); padding:9px 15px;
+    border:1px solid rgba(255,191,105,.26); border-radius:8px; max-width:min(420px,42vw); text-align:left; box-shadow:0 12px 28px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,240,210,.05); }
   [data-vg-overlay] { position:fixed; inset:0; z-index:7; display:grid; align-items:center; justify-items:start; padding:clamp(28px,6vw,84px);
-    overflow-y:auto; overflow-x:hidden; background:linear-gradient(90deg,rgba(3,2,9,.97) 0%,rgba(3,2,9,.86) 40%,rgba(3,2,9,.22) 72%,rgba(3,2,9,.5) 100%); }
+    overflow-y:auto; overflow-x:hidden; background:radial-gradient(52% 90% at 84% 18%,rgba(248,114,61,.13),transparent 54%),
+      radial-gradient(48% 70% at 44% 62%,rgba(76,60,122,.22),transparent 66%),
+      linear-gradient(90deg,rgba(3,2,9,.97) 0%,rgba(7,5,17,.9) 42%,rgba(3,2,9,.26) 74%,rgba(3,2,9,.56) 100%); }
   [data-vg-overlay][hidden] { display:none; }
   .vg-panel { width:min(650px,100%); max-width:100%; min-width:0; text-align:left; }
-  .vg-kick { margin:0 0 10px; letter-spacing:.34em; font:700 11px/1.2 monospace; color:var(--dawn); }
-  .vg-panel h1 { margin:0 0 14px; max-width:100%; font-size:clamp(44px,7vw,86px); line-height:.92; letter-spacing:0;
-    background:linear-gradient(180deg,#fff 0%,#d9e3ff 54%,#91a6d9 100%); -webkit-background-clip:text; background-clip:text; color:transparent;
-    text-shadow:0 0 46px rgba(143,233,255,.16); }
-  .vg-sub { margin:0 0 22px; max-width:58ch; color:#b1bdd5; font-size:clamp(14px,1.4vw,17px); line-height:1.55; }
+  .vg-kick { margin:0 0 10px; letter-spacing:.34em; font:700 11px/1.2 monospace; color:var(--gold); text-shadow:0 0 18px rgba(255,191,105,.2); }
+  .vg-panel h1 { margin:0 0 14px; max-width:100%; font-size:72px; line-height:.92; letter-spacing:0;
+    background:linear-gradient(180deg,#fff8df 0%,#f1c27e 58%,#9b6b45 100%); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 42px rgba(255,164,91,.18); }
+  .vg-sub { margin:0 0 22px; max-width:58ch; color:#d4c4a9; font-size:16px; line-height:1.55; }
   .vg-campaign { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 24px; }
-  .vg-campaign span { padding:7px 9px; border-left:2px solid var(--dawn); background:rgba(143,233,255,.06); color:#cbd7ed;
+  .vg-campaign span { padding:7px 9px; border-left:2px solid var(--gold); background:rgba(255,191,105,.075); color:#ead8ba;
     font:700 10px/1 monospace; letter-spacing:.06em; text-transform:uppercase; }
   .vg-btns { display:flex; flex-wrap:wrap; gap:9px; margin:0; }
-  .vg-btn { min-height:46px; padding:0 20px; border:1px solid rgba(143,233,255,.25); border-radius:7px; cursor:pointer;
-    background:rgba(17,14,34,.72); color:var(--ink); font:700 14px Georgia,serif; transition:background .15s,border-color .15s,transform .15s; }
-  .vg-btn:hover { border-color:var(--dawn); background:rgba(40,50,90,.62); transform:translateY(-1px); }
-  .vg-primary { min-width:190px; color:#07111a; background:linear-gradient(180deg,#a7efff,#6ebbd8); border-color:transparent;
-    box-shadow:0 8px 30px rgba(93,193,225,.22); }
-  .vg-primary:hover { color:#07111a; background:linear-gradient(180deg,#c5f5ff,#8bd3eb); }
+  .vg-btn { min-height:46px; padding:0 20px; border:1px solid rgba(255,191,105,.3); border-radius:7px; cursor:pointer;
+    background:linear-gradient(180deg,rgba(31,22,44,.82),rgba(15,11,27,.82)); color:var(--ink); font:700 14px Georgia,serif; transition:background .15s,border-color .15s,transform .15s,box-shadow .15s; }
+  .vg-btn:hover { border-color:var(--gold); background:linear-gradient(180deg,rgba(58,34,47,.84),rgba(20,14,31,.88)); transform:translateY(-1px); box-shadow:0 10px 24px rgba(0,0,0,.24); }
+  .vg-primary { min-width:190px; color:#1a0e11; background:linear-gradient(180deg,#ffe0a3,#d9824d); border-color:rgba(255,241,200,.18);
+    box-shadow:0 8px 30px rgba(240,124,66,.24),inset 0 1px rgba(255,255,255,.28); }
+  .vg-primary:hover { color:#1a0e11; background:linear-gradient(180deg,#fff0bf,#ec985d); }
   .vg-controls { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin:24px 0 0; max-width:620px; }
-  .vg-control { min-width:0; padding:8px 10px; border:1px solid rgba(156,167,194,.13); background:rgba(5,4,13,.46); color:#9ca7c2;
+  .vg-control { min-width:0; padding:8px 10px; border:1px solid rgba(255,191,105,.14); background:rgba(5,4,13,.52); color:#b8a690;
     font:600 10px/1.35 monospace; }
-  .vg-control b { display:block; margin-bottom:3px; color:#e9efff; font-size:10px; letter-spacing:.06em; }
+  .vg-control b { display:block; margin-bottom:3px; color:#fff0d6; font-size:10px; letter-spacing:.06em; }
   [data-kind="settings"] { justify-items:center; background:rgba(3,2,9,.9); }
   .vg-settings, [data-kind="pause"] .vg-panel, [data-kind="dead"] .vg-panel, [data-kind="win"] .vg-panel {
-    max-width:520px; padding:28px; border:1px solid rgba(143,233,255,.18); border-radius:8px; background:var(--panel);
-    box-shadow:0 28px 80px rgba(0,0,0,.45); backdrop-filter:blur(18px); }
-  .vg-settings h1, [data-kind="pause"] .vg-panel h1, [data-kind="dead"] .vg-panel h1, [data-kind="win"] .vg-panel h1 { font-size:clamp(36px,6vw,58px); }
-  .vg-set { display:flex; align-items:center; justify-content:space-between; gap:18px; margin:12px 0; color:#bac5dc; font-size:14px; }
-  .vg-set input[type=range] { flex:0 0 min(190px,45vw); accent-color:var(--dawn); }
-  .vg-set input[type=checkbox] { accent-color:var(--dawn); width:19px; height:19px; }
+    max-width:520px; padding:28px; border:1px solid rgba(255,191,105,.24); border-radius:8px; background:var(--panel);
+    box-shadow:0 28px 80px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,240,210,.05); backdrop-filter:blur(18px); }
+  .vg-settings h1, [data-kind="pause"] .vg-panel h1, [data-kind="dead"] .vg-panel h1, [data-kind="win"] .vg-panel h1 { font-size:48px; }
+  .vg-set { display:flex; align-items:center; justify-content:space-between; gap:18px; margin:12px 0; color:#d3c1a4; font-size:14px; }
+  .vg-set input[type=range] { flex:0 0 min(190px,45vw); accent-color:var(--gold); }
+  .vg-set input[type=checkbox] { accent-color:var(--gold); width:19px; height:19px; }
   @media (max-width:700px) {
     [data-vg-overlay] { align-items:end; padding:72px 18px max(24px,env(safe-area-inset-bottom)); background:linear-gradient(0deg,rgba(3,2,9,.98),rgba(3,2,9,.72) 64%,rgba(3,2,9,.26)); }
-    .vg-panel h1 { font-size:clamp(38px,11.5vw,50px); overflow-wrap:anywhere; }
+    .vg-panel h1 { font-size:42px; overflow-wrap:anywhere; }
     .vg-sub { font-size:13px; }
     .vg-controls { grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:16px; }
     .vg-control:nth-child(n+5) { display:none; }
@@ -148,12 +158,12 @@
     <button class="vg-action" type="button" data-vg-action="map">MAP</button>
   </div>
 </div>
-<script src="./engine.js?v=3.0.0"></script>
-<script src="./effects.js?v=3.0.0"></script>
-<script src="./dread.js?v=3.0.0"></script>
-<script src="./portal.js?v=3.0.0"></script>
-<script src="./world.js?v=3.0.0"></script>
-<script src="./rooms.js?v=3.0.0"></script>
-<script src="./game.js?v=3.0.0"></script>
+<script src="./engine.js?v=3.1.0"></script>
+<script src="./effects.js?v=3.1.0"></script>
+<script src="./dread.js?v=3.1.0"></script>
+<script src="./portal.js?v=3.1.0"></script>
+<script src="./world.js?v=3.1.0"></script>
+<script src="./rooms.js?v=3.1.0"></script>
+<script src="./game.js?v=3.1.0"></script>
 </body>
 </html>

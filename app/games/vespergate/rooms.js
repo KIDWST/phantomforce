@@ -80,20 +80,32 @@
   ROOMS.maren = {
     id: "maren", name: "Maren's Cottage", biome: "interior",
     map: wrap(18, 12, "H", [
-      "~~....##",
-      "",
-      "..............f",
-      "",
-      "....t",
-      "",
-      "",
-      "......f",
-      "",
+      "~~....######....",
+      "......##...#....",
+      "......##...#....",
+      "......######....",
+      "....t...........",
+      "................",
+      "................",
+      "......f.........",
+      "................",
+      "................",
     ], [{ x: 8, y: 11, c: "D" }]),
     spawn: { x: 8, y: 9 },
     exits: [{ gx: 8, gy: 11, to: "village", toSpawn: { x: 7, y: 7 } }],
     npcs: ["maren"],
-    pickups: [{ x: 5, y: 3, type: "cosmetic", slot: 4 }],
+    pickups: [
+      { x: 4, y: 6, type: "cosmetic", slot: 4 },
+      { x: 9, y: 2, type: "ember", value: 5 },
+      { x: 10, y: 2, type: "ember", value: 5 },
+      { x: 9, y: 3, type: "soul", value: 4 },
+      { x: 10, y: 3, type: "soul", value: 4 },
+    ],
+    starterCache: {
+      outsideGate: { gx: 1, gy: 1 },
+      insideGate: { gx: 8, gy: 2 },
+      loot: { embers: 10, vesperSouls: 8 },
+    },
     hint: "The hearth is warm. Maren has something for you.",
   };
   ROOMS.shop = {
@@ -238,9 +250,9 @@
     hint: "The Ossuary stair rises from the island. Liminal pillars answer the Hand across water.",
   };
 
-  /* ================= THE HOLLOW GEOMETRY (34x22) ================= */
+  /* ================= THE HOLLOW GEOMETRY ================= */
   ROOMS.hollow1 = {
-    id: "hollow1", name: "The Hollow Geometry", biome: "dungeon",
+    id: "hollow1", name: "The Hollow Geometry — Outer Measure", biome: "dungeon",
     map: wrap(34, 22, "=", [
       /* y1  */ "~..X.........................X.",
       /* y2  */ "...X..######......######......X",
@@ -265,7 +277,7 @@
     spawn: { x: 30, y: 11 },
     exits: [
       { gx: 33, gy: 11, to: "vale", toSpawn: { x: 2, y: 14 } },
-      { gx: 17, gy: 21, to: "hollowboss", toSpawn: { x: 13, y: 2 }, needBells: 2 },
+      { gx: 17, gy: 21, to: "hollow2", toSpawn: { x: 15, y: 19 }, needBells: 2, needClear: true },
     ],
     enemies: [
       { type: "guard", x: 10, y: 7 }, { type: "guard", x: 22, y: 15 }, { type: "guard", x: 8, y: 18 },
@@ -277,8 +289,107 @@
       { x: 15, y: 4, type: "cosmetic", slot: 19 },
     ],
     bells: [{ gx: 1, gy: 1 }, { gx: 29, gy: 18 }],
+    resonanceRecovery: {
+      id: "outer_measure_resonance",
+      gx: 17,
+      gy: 11,
+      radius: 20,
+      awakenWhenEnemiesCleared: true,
+      requiredUntil: { kind: "bells", count: 2 },
+      firstBanner: "THE BRASS OFFERS A HAND",
+      lesson: "The etched bells will answer touch or shot while the road is sealed.",
+    },
+    progressionObjectives: [{
+      id: "outer_measure_bells",
+      label: "Ring both etched bells",
+      requiredInteractions: ["ring_brass"],
+      requiredAbilities: ["ranged_activation"],
+      requiredResources: ["full_health_beam"],
+      requiredPlayerState: ["alive", "post_combat_clear"],
+      requiredWorldObjects: ["bell:hollow1:0", "bell:hollow1:1", "exit:hollow2"],
+      requiredEnemyState: "clear",
+      completionConditions: ["bells:hollow1:2", "exit:hollow2:unlocked"],
+      alternateCompletionMethods: ["direct_bell_interaction", "resonance_recovery_activation"],
+      recoveryMethods: ["outer_measure_resonance", "minimum_progress_shot"],
+    }],
+    persistClear: true,
+    clearFlag: "clear_hollow1",
+    clearBanner: "THE OUTER MEASURE FALLS QUIET",
+    postClearHint: "The threats are gone. Ring the two etched brass bells, then follow the open door south.",
+    solvedHint: "Both bells answer. The south door opens into the Resonant Crossing.",
     hint: "Two bells hang silent behind null iron. Ring both, and the Bellmother's door will open.",
   };
+
+  ROOMS.hollow2 = {
+    id: "hollow2", name: "The Resonant Crossing", biome: "dungeon",
+    map: wrap(32, 22, "=", [
+      /* y1  */ "..............................",
+      /* y2  */ "...~..........##..........~...",
+      /* y3  */ "...#......................#...",
+      /* y4  */ "...#.....XXXX....XXXX.....#...",
+      /* y5  */ ".........#..........#.........",
+      /* y6  */ ".........#..........#.........",
+      /* y7  */ "...######............######...",
+      /* y8  */ "..............................",
+      /* y9  */ "......^................^......",
+      /* y10 */ "..........##......##..........",
+      /* y11 */ "..........##......##..........",
+      /* y12 */ "..............~...............",
+      /* y13 */ "..............................",
+      /* y14 */ "...######............######...",
+      /* y15 */ ".........#..........#.........",
+      /* y16 */ ".........#..........#.........",
+      /* y17 */ "...#.....XXXX....XXXX.....#...",
+      /* y18 */ "...#......................#...",
+      /* y19 */ "..............................",
+      /* y20 */ "..............................",
+    ], [{ x: 15, y: 0, c: "D" }, { x: 15, y: 21, c: "D" }]),
+    spawn: { x: 15, y: 19 },
+    exits: [
+      { gx: 15, gy: 21, to: "hollow1", toSpawn: { x: 17, y: 19 } },
+      { gx: 15, gy: 0, to: "hollowboss", toSpawn: { x: 13, y: 2 }, needSequence: true, needClear: true },
+    ],
+    enemies: [
+      { type: "guard", x: 8, y: 8 }, { type: "guard", x: 23, y: 8 },
+      { type: "leech", x: 11, y: 15 }, { type: "leech", x: 20, y: 15 },
+      { type: "guard", x: 15, y: 6 },
+    ],
+    pickups: [
+      { x: 8, y: 8, type: "cosmetic", slot: 24 }, { x: 23, y: 8, type: "cosmetic", slot: 25 },
+    ],
+    bells: [{ gx: 4, gy: 2 }, { gx: 27, gy: 2 }, { gx: 15, gy: 12 }],
+    bellSequence: [0, 2, 1],
+    resonanceRecovery: {
+      id: "crossing_resonance",
+      gx: 15,
+      gy: 10,
+      radius: 20,
+      awakenWhenEnemiesCleared: true,
+      requiredUntil: { kind: "sequence" },
+      firstBanner: "THE CROSSING KEEPS THE BEAT",
+      lesson: "The numbered bells can be touched when the Hand cannot fire.",
+    },
+    progressionObjectives: [{
+      id: "crossing_chord",
+      label: "Ring the three etched bells in order",
+      requiredInteractions: ["ring_brass_sequence"],
+      requiredAbilities: ["ranged_activation"],
+      requiredResources: ["full_health_beam"],
+      requiredPlayerState: ["alive", "post_combat_clear"],
+      requiredWorldObjects: ["bell:hollow2:0", "bell:hollow2:1", "bell:hollow2:2", "exit:hollowboss"],
+      requiredEnemyState: "clear",
+      completionConditions: ["sequence:hollow2:complete", "exit:hollowboss:unlocked"],
+      alternateCompletionMethods: ["direct_bell_interaction", "resonance_recovery_activation"],
+      recoveryMethods: ["crossing_resonance", "minimum_progress_shot"],
+    }],
+    persistClear: true,
+    clearFlag: "clear_hollow2",
+    clearBanner: "THE CROSSING CAN HEAR YOU",
+    postClearHint: "The wardens are still. Strike the bells in the order of their etched marks: one, two, three.",
+    solvedHint: "The chord is whole. The north door opens to the Bronze Choirloft.",
+    hint: "Survive the Crossing. Its three bells will not hold a chord while the wardens still move.",
+  };
+
   ROOMS.hollowboss = {
     id: "hollowboss", name: "The Bronze Choirloft", biome: "dungeon",
     map: wrap(26, 18, "=", [
@@ -297,16 +408,53 @@
       /* y13 */ "...##..............##",
       /* y14 */ "...##..............##",
       /* y15 */ "",
-    ], [{ x: 13, y: 0, c: "D" }]),
+    ], [{ x: 13, y: 0, c: "D" }, { x: 13, y: 17, c: "D" }]),
     spawn: { x: 13, y: 2 },
-    exits: [{ gx: 13, gy: 0, to: "hollow1", toSpawn: { x: 17, y: 19 } }],
+    exits: [
+      { gx: 13, gy: 0, to: "hollow2", toSpawn: { x: 15, y: 3 } },
+      { gx: 13, gy: 17, to: "bronzeheart", toSpawn: { x: 11, y: 2 }, needFlag: "bellmotherSilenced" },
+    ],
     boss: { type: "bellmother", x: 13, y: 8 },
+    bossClearFlag: "bellmotherSilenced",
+    clearBanner: "THE BRONZE DOOR WAKES",
+    postClearHint: "The Bellmother is still. Follow the white-gold door south and return the village's voice.",
     hint: "BELLMOTHER, THE SAINT BENEATH THE BRONZE. Gates carry her ring back to her.",
   };
 
-  /* ================= THE GLASS OSSUARY (34x22) ================= */
+  ROOMS.bronzeheart = {
+    id: "bronzeheart", name: "The Heart of Bronze", biome: "dungeon",
+    map: wrap(22, 16, "=", [
+      "....................",
+      "....##........##....",
+      "....##........##....",
+      "....................",
+      "........~..~........",
+      ".......~....~.......",
+      ".......~....~.......",
+      "........~~~~........",
+      "....................",
+      "....##........##....",
+      "....##........##....",
+      "....................",
+      "....................",
+      "....................",
+    ], [{ x: 11, y: 0, c: "D" }, { x: 11, y: 15, c: "D" }]),
+    spawn: { x: 11, y: 2 },
+    exits: [
+      { gx: 11, gy: 0, to: "hollowboss", toSpawn: { x: 13, y: 15 } },
+      { gx: 11, gy: 15, to: "vale", toSpawn: { x: 2, y: 14 }, needFlag: "bronzeRestored", oneWay: true },
+    ],
+    sanctum: {
+      id: "bronze_memory", gx: 11, gy: 7,
+      requiresFlag: "bellmotherSilenced", completeFlag: "bronzeRestored", scene: "bronze_restoration",
+    },
+    hint: "The stolen village voice waits inside the memory bell. Touch it and carry the toll home.",
+    restoredHint: "The village bell is whole. The south gate is a direct road back to the Vale.",
+  };
+
+  /* ================= THE GLASS OSSUARY ================= */
   ROOMS.ossuary1 = {
-    id: "ossuary1", name: "The Glass Ossuary", biome: "ossuary",
+    id: "ossuary1", name: "The Glass Ossuary — Memory Nave", biome: "ossuary",
     map: wrap(34, 22, "M", [
       /* y1  */ "",
       /* y2  */ "...GG........MM........GG",
@@ -331,19 +479,121 @@
     spawn: { x: 17, y: 19 },
     exits: [
       { gx: 17, gy: 21, to: "lake", toSpawn: { x: 12, y: 11 } },
-      { gx: 16, gy: 0, to: "ossuaryboss", toSpawn: { x: 13, y: 15 }, needSigil: true },
+      { gx: 16, gy: 0, to: "ossuary2", toSpawn: { x: 17, y: 20 }, needSigil: true, needClear: true },
     ],
     enemies: [
       { type: "mourner", x: 8, y: 6 }, { type: "mourner", x: 25, y: 6 },
       { type: "mourner", x: 16, y: 13 }, { type: "guard", x: 26, y: 15 },
     ],
+    wholenessRecovery: {
+      id: "glass_memory_font",
+      gx: 17, gy: 11,
+      radius: 18,
+      awakenWhenEnemiesCleared: true,
+      requiredUntilFlag: "sigil_ossuary1",
+      clearsRoomEnemies: true,
+      firstBanner: "THE GLASS REMEMBERS",
+      lesson: "The Hand answers only while the bearer is whole.",
+    },
     pickups: [
       { x: 8, y: 6, type: "cosmetic", slot: 20 }, { x: 25, y: 6, type: "cosmetic", slot: 21 },
       { x: 16, y: 13, type: "cosmetic", slot: 22 }, { x: 26, y: 15, type: "cosmetic", slot: 23 },
     ],
     sigil: { gx: 14, gy: 6 },
+    progressionObjectives: [{
+      id: "memory_nave_sigil",
+      label: "Bank a whole beam into the marked sigil",
+      requiredInteractions: ["banked_or_folded_beam"],
+      requiredAbilities: ["ranged_activation", "reflection"],
+      requiredResources: ["full_health_beam"],
+      requiredPlayerState: ["alive", "whole"],
+      requiredWorldObjects: ["sigil:ossuary1", "recovery:glass_memory_font", "exit:ossuary2"],
+      requiredEnemyState: "clear",
+      completionConditions: ["sigil:ossuary1:lit", "exit:ossuary2:unlocked"],
+      alternateCompletionMethods: ["wholeness_recovery_font"],
+      recoveryMethods: ["glass_memory_font"],
+    }],
+    persistClear: true,
+    clearFlag: "clear_ossuary1",
+    clearBanner: "THE MEMORY FONT AWAKENS",
+    postClearHint: "The font at the room's center restores wholeness. Then bank a full-health beam into the marked sigil.",
+    solvedHint: "The sigil answers. Follow the open north door into the Mirror Processional.",
     hint: "The sigil on null iron only answers a shot that has already touched a mirror.",
   };
+
+  ROOMS.ossuary2 = {
+    id: "ossuary2", name: "The Mirror Processional", biome: "ossuary",
+    map: wrap(34, 22, "M", [
+      /* y1  */ "................................",
+      /* y2  */ "....M..........GG..........M....",
+      /* y3  */ "....M......................M....",
+      /* y4  */ "....M....MM..........MM....M....",
+      /* y5  */ ".........MM....X.....MM.........",
+      /* y6  */ "...............X................",
+      /* y7  */ "...GG......................GG...",
+      /* y8  */ "...GG......M..........M....GG...",
+      /* y9  */ "...........M..........M.........",
+      /* y10 */ "...........M..........M.........",
+      /* y11 */ "...............X................",
+      /* y12 */ "...............X................",
+      /* y13 */ "...GG......M..........M....GG...",
+      /* y14 */ "...GG......M..........M....GG...",
+      /* y15 */ ".........MM....X.....MM.........",
+      /* y16 */ "....M....MM....X.....MM....M....",
+      /* y17 */ "....M......................M....",
+      /* y18 */ "....M..........GG..........M....",
+      /* y19 */ "...............GG...............",
+      /* y20 */ "................................",
+    ], [{ x: 16, y: 0, c: "D" }, { x: 17, y: 21, c: "D" }]),
+    spawn: { x: 17, y: 20 },
+    exits: [
+      { gx: 17, gy: 21, to: "ossuary1", toSpawn: { x: 16, y: 2 } },
+      { gx: 16, gy: 0, to: "ossuaryboss", toSpawn: { x: 13, y: 15 }, needRelays: 3, needClear: true },
+    ],
+    enemies: [
+      { type: "mourner", x: 7, y: 7 }, { type: "mourner", x: 26, y: 7 },
+      { type: "guard", x: 10, y: 15 }, { type: "guard", x: 23, y: 15 },
+      { type: "leech", x: 17, y: 10 },
+    ],
+    mirrorRelays: [
+      { id: "crown", gx: 16, gy: 5 },
+      { id: "choir", gx: 16, gy: 11 },
+      { id: "root", gx: 16, gy: 15 },
+    ],
+    wholenessRecovery: {
+      id: "processional_font",
+      gx: 18, gy: 18,
+      radius: 18,
+      awakenWhenEnemiesCleared: true,
+      requiredUntilFlag: "relays_ossuary2_done",
+      clearsRoomEnemies: true,
+      firstBanner: "THE PROCESSIONAL REMEMBERS",
+      lesson: "Three reflections must carry one whole beam onward.",
+    },
+    pickups: [
+      { x: 7, y: 7, type: "cosmetic", slot: 26 }, { x: 26, y: 7, type: "cosmetic", slot: 27 },
+    ],
+    persistClear: true,
+    progressionObjectives: [{
+      id: "processional_relays",
+      label: "Light all three mirror relays",
+      requiredInteractions: ["banked_or_folded_beam"],
+      requiredAbilities: ["ranged_activation", "reflection"],
+      requiredResources: ["full_health_beam"],
+      requiredPlayerState: ["alive", "whole"],
+      requiredWorldObjects: ["relay:ossuary2:crown", "relay:ossuary2:choir", "relay:ossuary2:root", "recovery:processional_font", "exit:ossuaryboss"],
+      requiredEnemyState: "clear",
+      completionConditions: ["relays:ossuary2:3", "exit:ossuaryboss:unlocked"],
+      alternateCompletionMethods: ["wholeness_recovery_font"],
+      recoveryMethods: ["processional_font"],
+    }],
+    clearFlag: "clear_ossuary2",
+    clearBanner: "THE PROCESSIONAL IS YOURS",
+    postClearHint: "Restore wholeness at the south font. Bank beams into all three marked relays along the central spine.",
+    solvedHint: "All three memories burn. The north door opens to the Choir of Glass.",
+    hint: "Clear the Processional. Its central relays only remember beams that arrive by reflection or linked gate.",
+  };
+
   ROOMS.ossuaryboss = {
     id: "ossuaryboss", name: "The Choir of Glass", biome: "ossuary",
     map: wrap(26, 18, "M", [
@@ -362,16 +612,53 @@
       /* y13 */ "",
       /* y14 */ "....M...........M",
       /* y15 */ "",
-    ], [{ x: 13, y: 17, c: "D" }]),
+    ], [{ x: 13, y: 0, c: "D" }, { x: 13, y: 17, c: "D" }]),
     spawn: { x: 13, y: 15 },
-    exits: [{ gx: 13, gy: 17, to: "ossuary1", toSpawn: { x: 16, y: 2 } }],
+    exits: [
+      { gx: 13, gy: 17, to: "ossuary2", toSpawn: { x: 17, y: 3 } },
+      { gx: 13, gy: 0, to: "glassheart", toSpawn: { x: 11, y: 13 }, needFlag: "glassDone" },
+    ],
     enemies: [
       { type: "mourner", x: 7, y: 5, elite: true, tag: "choir" },
       { type: "mourner", x: 19, y: 5, elite: true, tag: "choir" },
       { type: "mourner", x: 13, y: 9, elite: true, tag: "choir" },
     ],
     choir: true,
+    clearFlag: "glassDone",
+    clearBanner: "THE CHOIR BREAKS",
+    postClearHint: "The litany is silent. The white-gold door north leads deeper, into the Heart of Glass.",
     hint: "Three mourners share one litany. Silence all three.",
+  };
+
+  ROOMS.glassheart = {
+    id: "glassheart", name: "The Heart of Glass", biome: "ossuary",
+    map: wrap(22, 16, "M", [
+      "....................",
+      "....GG........GG....",
+      "....GG........GG....",
+      "....................",
+      "........M..M........",
+      ".......M....M.......",
+      ".......M....M.......",
+      "........M..M........",
+      "....................",
+      "....GG........GG....",
+      "....GG........GG....",
+      "....................",
+      "....................",
+      "....................",
+    ], [{ x: 11, y: 0, c: "D" }, { x: 11, y: 15, c: "D" }]),
+    spawn: { x: 11, y: 13 },
+    exits: [
+      { gx: 11, gy: 15, to: "ossuaryboss", toSpawn: { x: 13, y: 2 } },
+      { gx: 11, gy: 0, to: "lake", toSpawn: { x: 12, y: 11 }, needFlag: "glassRestored", oneWay: true },
+    ],
+    sanctum: {
+      id: "glass_memory", gx: 11, gy: 7,
+      requiresFlag: "glassDone", completeFlag: "glassRestored", scene: "glass_restoration",
+    },
+    hint: "The lake's stolen memory waits in the saint-glass font. Return it to the water above.",
+    restoredHint: "The lake remembers its own reflection. The north gate rises directly to the island.",
   };
 
   /* ================= DATA: NPCs, quests, shop ================= */
@@ -474,7 +761,7 @@
     swiftsoles: { id: "swiftsoles", name: "Swift Soles", desc: "Move 12% faster." },
   };
 
-  /* Cosmetics: 24 findable appearance items across 4 slots. Which physical
+  /* Cosmetics: 28 findable appearance items across 4 slots. Which physical
    * glint (see room `pickups` with type "cosmetic"/slot) grants which id is
    * decided by a per-playthrough shuffle (state.flags.cosmeticOrder) built
    * once in newGame() — every id is guaranteed reachable in one run, but
@@ -504,6 +791,10 @@
     { id: "trail_frost", cat: "trail", name: "Frost Trail", color: "#8fe9ff" },
     { id: "trail_bloom", cat: "trail", name: "Bloom Trail", color: "#ff9ad0" },
     { id: "trail_umbral", cat: "trail", name: "Umbral Trail", color: "#9c8fff" },
+    { id: "accessory_chord", cat: "accessory", name: "Three-Chord Pin", color: "#fff0c2" },
+    { id: "accessory_memory", cat: "accessory", name: "Memory Prism", color: "#9deeff" },
+    { id: "trail_resonance", cat: "trail", name: "Resonance Trail", color: "#e6b95a" },
+    { id: "trail_processional", cat: "trail", name: "Processional Trail", color: "#b9dfff" },
   ];
 
   VG.ROOMS = ROOMS;

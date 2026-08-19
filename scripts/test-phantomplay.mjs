@@ -382,7 +382,7 @@ assert.match(vespergateIndex, /data-vg-fullscreen[\s\S]*data-vg-pause/u, "Vesper
 assert.match(vespergateEngine, /devicePixelRatio[\s\S]*backingScale[\s\S]*VG\.renderScale/u, "Vespergate must render through a high-density backing canvas.");
 assert.match(vespergateEngine, /requestFullscreen[\s\S]*fullscreenchange/u, "Vespergate must implement and synchronize fullscreen mode.");
 assert.match(vespergateGame, /SOUL CHAIN[\s\S]*bestCombo/u, "Vespergate must expose Soul Chain combat scoring.");
-assert.match(vespergateIndex, /engine\.js\?v=3\.0\.0[\s\S]*game\.js\?v=3\.0\.0/u, "Vespergate must load the entire 3.0.0 module graph.");
+assert.match(vespergateIndex, /engine\.js\?v=3\.1\.0[\s\S]*game\.js\?v=3\.1\.0/u, "Vespergate must load the entire 3.1.0 module graph.");
 assert.doesNotMatch(vespergateIndex, /2\.[45]\./u, "Vespergate must not retain an old 2.x module cache key.");
 assert.match(vespergateIndex, /data-vg-stick[\s\S]*data-vg-action="strike"[\s\S]*data-vg-action="map"/u, "Vespergate 3.0 must expose complete touch movement and action controls.");
 assert.match(vespergateEngine, /vespergate\.save\.v3[\s\S]*LEGACY_SAVE_KEY[\s\S]*migratedFrom:\s*2/u, "Vespergate 3.0 must migrate existing 2.x campaigns into the versioned v3 save.");
@@ -390,12 +390,18 @@ assert.match(vespergateGame, /MASTERY_RANKS[\s\S]*recordMastery\("portalCrossing
 assert.match(vespergateGame, /function drawMap\(\)[\s\S]*VESPER HAND WAYFINDER[\s\S]*state\.discovered/u, "Vespergate 3.0 must provide a persistent discovery map.");
 assert.match(vespergateGame, /function useVesperSense\(\)[\s\S]*paths revealed/u, "Vespergate 3.0 must provide the cooldown-based Vesper Sense guidance ability.");
 assert.match(vespergateGame, /d2\.type === "save-state"[\s\S]*d2\.type === "load-state"/u, "Vespergate 3.0 must exchange canonical save-state with PhantomPlay.");
+assert.match(vespergateGame, /Three split cloak tails[\s\S]*Asymmetric mantle[\s\S]*Pointed hood and narrow mask[\s\S]*profession-readable silhouette/u, "Vespergate 3.1 must retain the restored illustrated bearer and readable villagers.");
+assert.match(vespergateGame, /function roomObjectiveText[\s\S]*function setCheckpoint[\s\S]*function respawnAtCheckpoint/u, "Vespergate 3.1 must retain the restored objective and checkpoint systems.");
+assert.match(vespergateRooms, /bellSequence[\s\S]*mirrorRelays[\s\S]*sanctum/u, "Vespergate 3.1 must retain the richer room progression systems.");
+assert.match(vespergateGame, /visualProfile:\s*"living-dread-restored-v1"[\s\S]*characterProfile:\s*"pointed-hood-asymmetric-mantle-v1"/u, "Vespergate must expose its restored visual profile to native playtests.");
 const frontendVespergate = module.match(/\{\s*id:\s*"vespergate"[\s\S]*?progressSupport:\s*true,\s*scoreSupport:\s*true\s*\},/u)?.[0] || "";
 const serverVespergate = serverCatalog.match(/\{\s*id:\s*"vespergate"[\s\S]*?engine:\s*\{\s*tier:\s*"topdown-adventure"[\s\S]*?\n\s*\},/u)?.[0] || "";
 for (const [label, record] of [["frontend", frontendVespergate], ["server", serverVespergate]]) {
-  assert.match(record, /launchUrl:\s*"\/app\/games\/vespergate\/index\.html\?v=3\.0\.0"/u, `${label} catalog must launch Vespergate 3.0.0.`);
-  assert.match(record, /version:\s*"3\.0\.0"/u, `${label} catalog must advertise Vespergate 3.0.0.`);
-  assert.doesNotMatch(record, /Vespershield|doorway checkpoints|Space fires/u, `${label} catalog must not claim mechanics that are not implemented.`);
+  assert.match(record, /launchUrl:\s*"\/app\/games\/vespergate\/index\.html\?v=3\.1\.0"/u, `${label} catalog must launch Vespergate 3.1.0.`);
+  assert.match(record, /version:\s*"3\.1\.0"/u, `${label} catalog must advertise Vespergate 3.1.0.`);
+  assert.match(record, /Vespershield/u, `${label} catalog must describe the restored shield system.`);
+  assert.match(record, /checkpoints/u, `${label} catalog must describe the restored checkpoint system.`);
+  assert.doesNotMatch(record, /Space fires/u, `${label} catalog must not advertise the retired beam binding.`);
 }
 
 // Dev Mode (docs/architecture/PHANTOMPLAY_DEV_MODE.md): the entry point must

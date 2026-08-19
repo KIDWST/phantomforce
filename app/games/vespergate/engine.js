@@ -1,4 +1,4 @@
-/* VESPERGATE 3.0: LIVING DREAD — engine.js
+/* VESPERGATE 3.1: LIVING DREAD — engine.js
  * Foundations: canvas scaling, input (keyboard/mouse/gamepad), WebAudio with
  * two distinct hand voices + adaptive music layers, versioned saves, settings,
  * camera, math. No external assets, no network — everything synthesized.
@@ -114,8 +114,9 @@ window.VG = window.VG || {};
   /* ============ save (versioned, resumable, host-portable) ============ */
   /* v3 preserves the complete campaign and adds mastery/discovery state.
      Existing v2 campaigns migrate in place; v1 referenced removed rooms. */
-  const SAVE_KEY = "vespergate.save.v3";
-  const LEGACY_SAVE_KEY = "vespergate.save.v2";
+  const CAMPAIGN_RUNNER = new URLSearchParams(location.search).has("campaign-runner");
+  const SAVE_KEY = CAMPAIGN_RUNNER ? "vespergate.save.v3.campaign-runner" : "vespergate.save.v3";
+  const LEGACY_SAVE_KEY = CAMPAIGN_RUNNER ? "vespergate.save.v2.campaign-runner" : "vespergate.save.v2";
   const readStored = (key) => { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; } };
   VG.save = {
     read() {
@@ -215,7 +216,10 @@ window.VG = window.VG || {};
   };
 
   /* ============ audio: two hands, one cathedral ============ */
-  const A = { ctx: null, master: null, musicBus: null, layers: {}, muted: false, started: false };
+  const A = {
+    ctx: null, master: null, musicBus: null, layers: {}, muted: false, started: false,
+    musicState: "outdoors", musicStep: 0, musicTimer: null,
+  };
   VG.audio = A;
   function actx() {
     if (A.muted) return null;
@@ -301,7 +305,8 @@ window.VG = window.VG || {};
       });
     } catch {}
   };
-  // Adaptive music: three synth layers cross-faded by game state.
+  // Three location scores: a bright roaming theme, a low dungeon hymn, and a
+  // clipped boss pulse. Combat does not replace the current location's music.
   function makeLayer(c, freqs, type, gainBase) {
     const g = c.createGain(); g.gain.value = 0; g.connect(A.musicBus);
     const oscs = freqs.map((f, i) => {
@@ -315,16 +320,47 @@ window.VG = window.VG || {};
     });
     return { gain: g, oscs };
   }
+  function playMusicNote(freq, duration, type, volume, cutoff = 1800) {
+    if (!A.ctx || !A.musicBus || A.muted || A.ctx.state === "suspended") return;
+    try {
+      const t0 = A.ctx.currentTime;
+      const osc = A.ctx.createOscillator(); osc.type = type; osc.frequency.value = freq;
+      const filter = A.ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = cutoff;
+      const gain = A.ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(volume, t0 + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+      osc.connect(filter).connect(gain).connect(A.musicBus);
+      osc.start(t0); osc.stop(t0 + duration + 0.04);
+    } catch {}
+  }
+  function musicTick() {
+    const step = A.musicStep++;
+    if (A.musicState === "outdoors") {
+      const melody = [293.66, 369.99, 440, 369.99, 329.63, 246.94, 293.66, 220];
+      if (step % 2 === 0) playMusicNote(melody[(step / 2) % melody.length], 0.48, "triangle", 0.024, 2200);
+    } else if (A.musicState === "dungeon") {
+      const hymn = [110, 130.81, 146.83, 98];
+      if (step % 3 === 0) playMusicNote(hymn[(step / 3) % hymn.length], 0.95, "sine", 0.028, 680);
+    } else if (A.musicState === "boss") {
+      playMusicNote(step % 2 ? 55 : 65.41, 0.18, "sawtooth", 0.032, 420);
+      if (step % 4 === 0) playMusicNote(164.81, 0.32, "square", 0.016, 900);
+    }
+  }
   function startMusic() {
     const c = actx(); if (!c || A.started) return;
     A.started = true;
     try {
-      A.layers.drone = makeLayer(c, [49, 98, 147], "sine", 0.05);          // organ pedal
-      A.layers.veil = makeLayer(c, [196, 246.9, 293.7], "triangle", 0.028); // exploration veil
-      A.layers.threat = makeLayer(c, [58.3, 116.5, 174.6], "sawtooth", 0.02); // combat/boss
+      A.layers.outdoors = makeLayer(c, [73.42, 146.83, 220], "sine", 0.034);
+      A.layers.dungeon = makeLayer(c, [43.65, 65.41, 87.31], "sawtooth", 0.026);
+      A.layers.boss = makeLayer(c, [36.71, 55, 110], "sawtooth", 0.028);
       A.layers.dread = makeLayer(c, [51.9, 52.3, 155.1], "sawtooth", 0.03); // near-unison beating — the Presence
-      A.layers.drone.gain.gain.value = 1;
+      A.layers.outdoors.gain.gain.value = 1;
+      A.layers.dungeon.gain.gain.value = 0;
+      A.layers.boss.gain.gain.value = 0;
       A.layers.dread.gain.gain.value = 0;
+      if (!A.musicTimer) A.musicTimer = setInterval(musicTick, 340);
+      VG.setMusicState(A.musicState);
     } catch { A.started = false; }
   }
   // Presence system: continuous fade (not a discrete state), so the drone
@@ -363,13 +399,14 @@ window.VG = window.VG || {};
     } catch {}
   };
   VG.setMusicState = (state) => {
+    const aliases = { explore: "outdoors", shrine: "outdoors", combat: "outdoors" };
+    A.musicState = aliases[state] || state;
     if (!A.started || !A.ctx) return;
     const t = A.ctx.currentTime;
     const set = (layer, v) => { try { A.layers[layer].gain.gain.setTargetAtTime(v, t, 1.2); } catch {} };
-    if (state === "explore") { set("drone", 1); set("veil", 0.9); set("threat", 0); }
-    else if (state === "combat") { set("drone", 0.7); set("veil", 0.25); set("threat", 0.9); }
-    else if (state === "boss") { set("drone", 1); set("veil", 0.1); set("threat", 1.4); }
-    else if (state === "shrine") { set("drone", 0.8); set("veil", 1.2); set("threat", 0); }
+    set("outdoors", A.musicState === "outdoors" ? 1 : 0);
+    set("dungeon", A.musicState === "dungeon" ? 1 : 0);
+    set("boss", A.musicState === "boss" ? 1.15 : 0);
   };
   function syncSoundUi() {
     const btn = document.querySelector("[data-vg-sound]");

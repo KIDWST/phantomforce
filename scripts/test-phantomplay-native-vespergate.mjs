@@ -8,9 +8,10 @@ import { spawn } from "node:child_process";
 const root = process.cwd();
 const shellRoot = path.join(root, "packages", "phantomplay-dioxus-shell");
 const executable = [
+  process.env.PHANTOMPLAY_TEST_EXECUTABLE,
   path.join(shellRoot, "target", "release", "PhantomPlay.exe"),
   path.join(shellRoot, "target", "dx", "PhantomPlay", "release", "windows", "app", "PhantomPlay.exe"),
-].find(existsSync);
+].filter(Boolean).find(existsSync);
 assert.ok(existsSync(executable), `Build the native release first: ${executable}`);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -122,7 +123,7 @@ try {
       const before = test.state();
       test.newGame();
       test.skipScene();
-      test.grant("vespershield");
+      test.grant("hasVesperShield");
       test.maxHp(7);
       test.hp(7);
       const after = test.state();
@@ -147,12 +148,14 @@ try {
   assert.equal(typeof audit.hotVersion, "number", "The native hot-version contract is missing.");
   assert.match(audit.status, /Vespergate.*HD/u, "The current HD Vespergate surface did not render.");
   assert.ok(audit.roomCount >= 10, "The current multi-region Vespergate world did not load.");
-  assert.ok(audit.after.flags.includes("vespershield"), "The 2.5.0 Vespershield progression is missing.");
+  assert.ok(audit.after.flags.includes("hasVesperShield"), "The Vespershield progression is missing.");
   assert.equal(audit.after.hp, 7, "The current full-health beam-ready state is unavailable.");
   assert.equal(audit.after.maxHp, 7, "The current health progression did not initialize.");
   assert.ok(audit.after.renderScale >= 1, "The HD render scale is invalid.");
+  assert.equal(audit.after.visualProfile, "living-dread-restored-v1", "The restored living-world visual profile is missing.");
+  assert.equal(audit.after.characterProfile, "pointed-hood-asymmetric-mantle-v1", "The restored illustrated bearer profile is missing.");
 
-  console.log(JSON.stringify({ ok: true, runtime: "PhantomPlay 0.3.1", game: "Vespergate 2.5.0", roomCount: audit.roomCount, native: audit.native }));
+  console.log(JSON.stringify({ ok: true, runtime: "PhantomPlay", game: "Vespergate 3.1.0", roomCount: audit.roomCount, native: audit.native }));
 } finally {
   shell?.socket.close();
   game?.socket.close();

@@ -70,6 +70,18 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Vespergate 3.1 canonical recovery (2026-08-19)** — browser build
+  `phantom-live-20260819-169`. Reunified the richer Aug 9 Vespergate branch with
+  the later 3.0 systems so the illustrated pointed-hood bearer, asymmetric
+  mantle, split cloak tails, profession-readable villagers, denser living-world
+  art, expanded rooms, checkpoints, encounter objectives, bell sequences,
+  mirror relays, and sanctums ship together with mastery, wayfinding, Vesper
+  Sense, touch/gamepad controls, autosave migration, and portable saves. Added
+  visual-profile and change-memory guards so a smaller legacy source cannot
+  silently replace the canonical desktop/web build again. Vespergate world
+  verification passed 196/196, the release-critical gate passed 32/32, phone and
+  desktop gameplay/map captures passed, and the native PhantomPlay host launched
+  3.1.0 with all 14 rooms.
 - **PhantomPlay V18 recovery + Vespergate 3.0 (2026-08-19)** — product commits
   `f7a3c441` and `8eee40c5`, browser build `phantom-live-20260819-168`.
   Recovered the missing Unreal V13–V17 content and world passes, CubeTown

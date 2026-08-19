@@ -183,7 +183,10 @@
       const h = this._hash(gx, gy), v = h % 18;
       if (m === MAT.WATER) {
         // THE gleam: deep base, drifting specular bands, sparkle, shore foam
-        ctx.fillStyle = `rgb(${22 + (v >> 2)},${44 + (v >> 2)},${86 + (v >> 1)})`;
+        const restored = this.biome === "lake" && !!flags.glassRestored;
+        ctx.fillStyle = restored
+          ? `rgb(${24 + (v >> 2)},${62 + (v >> 2)},${92 + (v >> 1)})`
+          : `rgb(${22 + (v >> 2)},${44 + (v >> 2)},${86 + (v >> 1)})`;
         ctx.fillRect(x, y, T, T);
         const band = Math.sin(t * 1.3 + gx * 0.55 + gy * 1.15);
         if (band > 0.25) {
@@ -195,6 +198,13 @@
         // warm dusk sheen drifting across the whole body of water
         const sheen = Math.sin(t * 0.5 + (gx + gy) * 0.18);
         if (sheen > 0.6) { ctx.fillStyle = `rgba(255,170,110,${(sheen - 0.6) * 0.12})`; ctx.fillRect(x, y, T, T); }
+        if (restored) {
+          const memory = Math.sin(t * 1.7 + gx * 0.4 - gy * 0.7);
+          if (memory > 0.78) {
+            ctx.fillStyle = `rgba(143,233,255,${(memory - 0.78) * 0.48})`;
+            ctx.fillRect(x + 2, y + 7, T - 4, 1);
+          }
+        }
         // foam against any walkable neighbour
         const open = (ax, ay) => { const mm = this.matAt(ax, ay); return !SOLID.has(mm) && mm !== MAT.WATER; };
         ctx.fillStyle = `rgba(220,240,255,${0.35 + Math.sin(t * 2.4 + gx + gy) * 0.15})`;
@@ -279,17 +289,19 @@
         if (restored) { ctx.fillStyle = `rgba(255,226,140,${0.25 + Math.sin(t * 2.6) * 0.15})`; ctx.beginPath(); ctx.arc(x + T / 2, y + 7, 9, 0, Math.PI * 2); ctx.fill(); }
       } else if (m === MAT.GRASS_TALL) {
         const sway = Math.sin(t * 2.1 + gx * 1.7 + gy) * 1.6;
-        ctx.strokeStyle = `rgb(${44 + v},${86 + v},${40 + v})`; ctx.lineWidth = 1.4;
+        const restored = this.biome === "vale" && !!flags.orchardRestored;
+        ctx.strokeStyle = restored ? `rgb(${58 + v},${102 + v},${48 + v})` : `rgb(${44 + v},${86 + v},${40 + v})`; ctx.lineWidth = 1.4;
         for (let i = 0; i < 4; i++) {
           const bx = x + 2 + i * 4;
           ctx.beginPath(); ctx.moveTo(bx, y + T);
           ctx.quadraticCurveTo(bx + sway * 0.4, y + 8, bx + sway, y + 3 + (h >> i) % 3);
           ctx.stroke();
         }
-        ctx.fillStyle = "rgba(255,230,160,0.08)"; ctx.fillRect(x + (h % 10), y + 2, 2, 2);
+        ctx.fillStyle = restored ? "rgba(255,230,160,0.28)" : "rgba(255,230,160,0.08)"; ctx.fillRect(x + (h % 10), y + 2, 2, 2);
       } else if (m === MAT.FLOWERS) {
         const cols = ["#ff9ad0", "#ffd166", "#c9a8ff", "#8fe9ff"];
-        for (let i = 0; i < 3; i++) {
+        const bloom = this.biome === "vale" && flags.orchardRestored ? 5 : 3;
+        for (let i = 0; i < bloom; i++) {
           const fx = x + 2 + ((h >> (i * 3)) % 11), fy = y + 3 + ((h >> (i * 2 + 1)) % 10);
           ctx.fillStyle = cols[(h >> i) % 4]; ctx.fillRect(fx, fy, 2, 2);
           ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(fx, fy, 1, 1);
