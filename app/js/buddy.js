@@ -1,14 +1,16 @@
 /* PhantomForce companion.
-   One sidebar-docked Phantom system: preference-aware, drag-safe, always
-   returns home, and tied to real chat/notification states. */
+   Movable, page-aware Phantom system: preference-aware, drag-safe, and
+   tied to real chat/notification states. */
 
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-173";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
+  getCompanionPagePlacement,
   hideCompanionForSession,
   isCompanionHiddenForSession,
   loadCompanionPrefs,
+  saveCompanionPagePlacement,
   updateCompanionPrefs,
 } from "./companion-preferences.js?v=phantom-live-20260819-173";
 
@@ -17,6 +19,8 @@ const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
 const GREETED_SESSION_KEY = "pf.companion.greeted.session.v1";
 const LAST_GREETING_KEY = "pf.companion.lastGreeting.v1";
 const LAST_QUIP_KEY = "pf.companion.lastQuip.v1";
+const MIN_FREE_SIZE = 58;
+const MAX_FREE_SIZE = 220;
 
 const GREETINGS = {
   professional: ["Ready when you are.", "Your Phantom is standing by.", "Systems are ready.", "Good timing. We have work to do."],
@@ -81,6 +85,7 @@ function createBuddyController() {
   let canvas = null;
   let sayEl = null;
   let menu = null;
+  let resizeHandle = null;
   let ctx2 = null;
   let character = null;
   let eventAbort = null;
@@ -99,12 +104,15 @@ function createBuddyController() {
   let docked = true;
   let dragging = false;
   let dragged = false;
+  let resizing = false;
+  let resizeStart = null;
   let grabDX = 0;
   let grabDY = 0;
   let state = "docked";
   let stateUntil = 0;
   let pulse = 0;
   let lastPointer = { x: -9999, y: -9999 };
+  let lastPageCheckAt = 0;
   let lastHitTestAt = 0;
   let sayTimer = 0;
   let nextIdleAt = 0;
@@ -113,16 +121,46 @@ function createBuddyController() {
   let scrollHideTimer = 0;
   let revealAt = 0;
   let revealed = false;
+  let pageKey = currentPageKey();
+  let manualSizePx = null;
 
   function mobile() { return window.matchMedia("(max-width: 720px)").matches; }
   function reduceMotion() { return reduceMotionQuery.matches || prefs.motionLevel === "reduced" || prefs.motionLevel === "none"; }
   function motionAllowed() { return !reduceMotion() && prefs.motionLevel !== "none"; }
-  function roamingAllowed() { return false; }
+  function roamingAllowed() { return prefs.roamingEnabled && !mobile(); }
   function sidebarPortraitMode() { return !mobile() && prefs.dockLocation === "sidebar"; }
 
-  function sidebarRect() {
+  function clampNumber(value, min, max, fallback) {
+    if (value == null || value === "") return fallback;
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function currentPageKey() {
+    const hash = String(location.hash || "");
+    const hashMatch = hash.match(/#(?:page|ws)\/([^?&/]+)/u);
+    if (hashMatch?.[1]) return hashMatch[1];
+    try {
+      const page = new URL(location.href).searchParams.get("page");
+      if (page) return page;
+    } catch {}
+    return document.querySelector("[data-nav-id].active, [data-nav-id][aria-current='page']")?.dataset.navId || "dashboard";
+  }
+
+  function freeSizeForBase(base) {
+    return clampNumber(manualSizePx || base, MIN_FREE_SIZE, MAX_FREE_SIZE, base);
+  }
+
+  function visibleSidebarRect() {
     const sidebar = document.querySelector(".sidebar")?.getBoundingClientRect();
-    if (sidebar && sidebar.width > 120) return sidebar;
+    if (sidebar && sidebar.width > 120 && sidebar.height > 220 && sidebar.right > 120) return sidebar;
+    return null;
+  }
+
+  function sidebarRect() {
+    const sidebar = visibleSidebarRect();
+    if (sidebar) return sidebar;
     return { left: 0, top: 0, width: window.innerWidth > 900 ? 212 : 0 };
   }
 
@@ -160,8 +198,8 @@ function createBuddyController() {
   }
 
   function safeInsets() {
-    const hasSidebar = window.innerWidth > 900;
-    const inSidebarDock = hasSidebar && prefs.dockLocation === "sidebar";
+    const hasSidebar = !!visibleSidebarRect();
+    const inSidebarDock = docked && hasSidebar && prefs.dockLocation === "sidebar";
     return {
       left: inSidebarDock ? 10 : hasSidebar ? 214 : 14,
       right: 18,
@@ -181,7 +219,10 @@ function createBuddyController() {
 
   function dimensionsForPrefs() {
     const base = sizeForPrefs();
-    if (!sidebarPortraitMode()) return { width: base, height: base };
+    if (!docked || !sidebarPortraitMode()) {
+      const freeSize = freeSizeForBase(base);
+      return { width: freeSize, height: freeSize };
+    }
     const zone = sidebarDockZone();
     const width = Math.round(Math.min(Math.max(base, 64), Math.max(58, Math.min(96, zone.width - 34))));
     const idealHeight = zone.cramped ? Math.max(base + 24, 92) : Math.max(base + 46, 118);
@@ -236,7 +277,7 @@ function createBuddyController() {
     const inset = safeInsets();
     const halfX = buddyWidth / 2;
     const halfY = buddyHeight / 2;
-    if (!mobile() && prefs.dockLocation === "sidebar") {
+    if (docked && !mobile() && prefs.dockLocation === "sidebar") {
       const bounds = sidebarPatrolBounds();
       x = Math.max(bounds.minX, Math.min(bounds.maxX, x));
       y = Math.max(bounds.minY, Math.min(bounds.maxY, y));
@@ -252,7 +293,7 @@ function createBuddyController() {
     ty = dock.y;
   }
 
-  function configureCanvas({ snap = false } = {}) {
+  function configureCanvas({ snap = false, preserveTarget = false } = {}) {
     if (!canvas) return;
     size = sizeForPrefs();
     const dims = dimensionsForPrefs();
@@ -269,14 +310,53 @@ function createBuddyController() {
     layer.style.setProperty("--buddy-size", `${size}px`);
     layer.style.setProperty("--buddy-width", `${buddyWidth}px`);
     layer.style.setProperty("--buddy-height", `${buddyHeight}px`);
-    const zone = sidebarPortraitMode() ? sidebarDockZone() : null;
+    const zone = docked && sidebarPortraitMode() ? sidebarDockZone() : null;
     layer.classList.toggle("is-sidebar-cramped", !!zone?.cramped);
-    setTargetToDock();
+    if (!preserveTarget || docked || !x || !y) setTargetToDock();
     if (!x || !y || (docked && snap)) {
       x = tx;
       y = ty;
     }
     clampToSafeZone();
+  }
+
+  function saveCurrentPagePlacement() {
+    if (!prefs.rememberPagePositions || docked || mobile() || !layer) return;
+    saveCompanionPagePlacement(pageKey, {
+      x,
+      y,
+      sizePx: manualSizePx || buddyWidth,
+      savedAt: Date.now(),
+    });
+  }
+
+  function restorePagePlacement(nextPageKey) {
+    if (!prefs.rememberPagePositions || mobile() || !roamingAllowed()) return false;
+    const placement = getCompanionPagePlacement(nextPageKey);
+    if (!placement) return false;
+    docked = false;
+    manualSizePx = clampNumber(placement.sizePx, MIN_FREE_SIZE, MAX_FREE_SIZE, null);
+    configureCanvas({ preserveTarget: true });
+    x = placement.x;
+    y = placement.y;
+    tx = x;
+    ty = y;
+    clampToSafeZone();
+    setState("idle", 0);
+    applyPreferenceClasses();
+    return true;
+  }
+
+  function switchPageContext({ force = false } = {}) {
+    const nextPageKey = currentPageKey();
+    if (!force && nextPageKey === pageKey) return;
+    if (!docked) saveCurrentPagePlacement();
+    pageKey = nextPageKey;
+    if (mobile() || prefs.startDocked || !roamingAllowed()) {
+      dock();
+      return;
+    }
+    if (!restorePagePlacement(pageKey)) undock({ keepPosition: true, silent: true });
   }
 
   function createLayer() {
@@ -286,14 +366,17 @@ function createBuddyController() {
     layer.setAttribute("data-buddy", "");
     layer.innerHTML = `
       <div class="buddy-say" data-buddy-say hidden></div>
-      <canvas class="buddy-canvas" data-buddy-canvas width="10" height="10" aria-label="Phantom companion. Left-click for a quip, drag to bounce in the sidebar, right-click for controls." role="img" tabindex="0"></canvas>
+      <canvas class="buddy-canvas" data-buddy-canvas width="10" height="10" aria-label="Phantom companion. Drag to place, use the corner grip to resize, or right-click for controls." role="img" tabindex="0"></canvas>
+      <button class="buddy-resize" type="button" data-buddy-resize aria-label="Resize Phantom companion"></button>
       <div class="buddy-menu" data-buddy-menu hidden role="menu" aria-label="Phantom companion controls">
         <b>Phantom</b>
         <button type="button" data-buddy-action="ask" role="menuitem">Ask Phantom</button>
         <button type="button" data-buddy-action="notifications" role="menuitem">Show notifications</button>
         <button type="button" data-buddy-action="approvals" role="menuitem">Show approvals</button>
         <hr />
-        <button type="button" data-buddy-action="dock" role="menuitem">Return to sidebar</button>
+        <button type="button" data-buddy-action="roam" role="menuitem">Free on this page</button>
+        <button type="button" data-buddy-action="dock" role="menuitem">Return to dock</button>
+        <button type="button" data-buddy-action="reset-page" role="menuitem">Reset this page position</button>
         <button type="button" data-buddy-action="quiet" role="menuitem">Quiet mode</button>
         <button type="button" data-buddy-action="hide" role="menuitem">Hide for 30 minutes</button>
         <button type="button" data-buddy-action="disable" role="menuitem">Disable companion</button>
@@ -310,6 +393,8 @@ function createBuddyController() {
           <option value="none">None</option>
         </select></label>
         <label>Dock <select data-buddy-pref="dockLocation">
+          <option value="bottom-left">Bottom left</option>
+          <option value="bottom-right">Bottom right</option>
           <option value="sidebar">Sidebar</option>
         </select></label>
         <label>Personality <select data-buddy-pref="personality">
@@ -324,6 +409,7 @@ function createBuddyController() {
     canvas = layer.querySelector("[data-buddy-canvas]");
     sayEl = layer.querySelector("[data-buddy-say]");
     menu = layer.querySelector("[data-buddy-menu]");
+    resizeHandle = layer.querySelector("[data-buddy-resize]");
     /* The layer moves via transform, and a transformed ancestor becomes the
        containing block for position:fixed children — leaving the menu inside
        would offset its viewport coordinates by the phantom's position and
@@ -348,7 +434,7 @@ function createBuddyController() {
     }
     if (layer) layer.remove();
     if (menu) menu.remove(); // re-parented to <body>, so the layer no longer owns it
-    layer = canvas = sayEl = menu = ctx2 = character = null;
+    layer = canvas = sayEl = menu = resizeHandle = ctx2 = character = null;
     revealed = false;
     revealAt = 0;
   }
@@ -363,10 +449,12 @@ function createBuddyController() {
   function applyPreferenceClasses() {
     if (!layer) return;
     layer.classList.toggle("is-docked", docked);
-    layer.classList.toggle("is-roaming", false);
+    layer.classList.toggle("is-roaming", !docked && roamingAllowed());
+    layer.classList.toggle("is-resizing", resizing);
     layer.dataset.motion = prefs.motionLevel;
     layer.dataset.personality = prefs.personality;
     layer.dataset.dock = prefs.dockLocation;
+    layer.dataset.pageKey = pageKey;
   }
 
   function applyPreferences(nextPrefs) {
@@ -376,9 +464,14 @@ function createBuddyController() {
       return;
     }
     createLayer();
-    configureCanvas();
+    pageKey = currentPageKey();
+    if (mobile() || prefs.startDocked || !roamingAllowed()) {
+      dock();
+    } else if (!restorePagePlacement(pageKey)) {
+      undock({ silent: true });
+    }
+    configureCanvas({ preserveTarget: !docked });
     syncMenuControls();
-    dock();
     applyPreferenceClasses();
     startLoop();
     maybeGreet();
@@ -470,6 +563,8 @@ function createBuddyController() {
   }
 
   function dock() {
+    if (!docked) saveCurrentPagePlacement();
+    manualSizePx = null;
     docked = true;
     setTargetToDock();
     nextWanderAt = 0;
@@ -478,8 +573,23 @@ function createBuddyController() {
     applyPreferenceClasses();
   }
 
-  function undock() {
-    dock();
+  function undock({ keepPosition = false, silent = false } = {}) {
+    docked = false;
+    if (!keepPosition || !x || !y) {
+      const start = dockPoint();
+      x = start.x;
+      y = start.y;
+    }
+    tx = x;
+    ty = y;
+    nextWanderAt = performance.now() + 4200;
+    setState("idle", 0);
+    try { localStorage.setItem(LEGACY_DOCK_KEY, "0"); } catch {}
+    configureCanvas({ preserveTarget: true });
+    clampToSafeZone();
+    applyPreferenceClasses();
+    saveCurrentPagePlacement();
+    if (!silent) say("Saved here for this page.", 1600);
   }
 
   function pickWanderTarget(now, force = false) {
@@ -491,16 +601,22 @@ function createBuddyController() {
       nextWanderAt = now + 4200 + Math.random() * 5200;
       return;
     }
-    if (!roamingAllowed() || docked || userBusy()) {
+    if (!roamingAllowed() || docked) {
       setTargetToDock();
       nextWanderAt = now + 1600;
       return;
     }
+    if (!motionAllowed() || userBusy()) {
+      tx = x;
+      ty = y;
+      nextWanderAt = now + 1600;
+      return;
+    }
     const inset = safeInsets();
-    const minX = inset.left + size / 2;
-    const maxX = window.innerWidth - inset.right - size / 2;
-    const minY = inset.top + size / 2;
-    const maxY = window.innerHeight - inset.bottom - size / 2;
+    const minX = inset.left + buddyWidth / 2;
+    const maxX = window.innerWidth - inset.right - buddyWidth / 2;
+    const minY = inset.top + buddyHeight / 2;
+    const maxY = window.innerHeight - inset.bottom - buddyHeight / 2;
     const zone = Math.floor(Math.random() * 3);
     tx = zone === 0 ? maxX - Math.random() * Math.min(220, maxX - minX) :
       zone === 1 ? minX + Math.random() * Math.min(220, maxX - minX) :
@@ -524,6 +640,8 @@ function createBuddyController() {
     if (docked) {
       setState(prefs.personality === "playful" ? "playful" : "curious", 1200);
       if (prefs.personality === "playful" && prefs.speechEnabled) say("Still here.", 1400);
+    } else if (roamingAllowed()) {
+      setState(prefs.personality === "playful" ? "playful" : "curious", 1200);
     }
   }
 
@@ -570,7 +688,7 @@ function createBuddyController() {
     const anchorY = Number.isFinite(clientY) ? clientY : y - buddyHeight / 2;
     const gutter = 10;
     const sidebar = sidebarRect();
-    const prefersRightOfSidebar = prefs.dockLocation === "sidebar" && sidebar.width > 120;
+    const prefersRightOfSidebar = docked && prefs.dockLocation === "sidebar" && sidebar.width > 120;
     const rawLeft = prefersRightOfSidebar ? sidebar.left + sidebar.width + gutter : anchorX;
     const rawTop = prefersRightOfSidebar ? anchorY - rect.height + 18 : anchorY;
     const left = Math.max(gutter, Math.min(window.innerWidth - rect.width - gutter, rawLeft));
@@ -615,7 +733,17 @@ function createBuddyController() {
     if (action === "ask") focusChat();
     else if (action === "notifications") document.querySelector("[data-notif-btn]")?.click();
     else if (action === "approvals") openSurface("approvals");
-    else if (action === "dock") { updateCompanionPrefs({ roamingEnabled: false, startDocked: true, dockLocation: "sidebar" }); dock(); say("I'm home.", 1500); }
+    else if (action === "roam") { prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false }); undock({ keepPosition: true }); }
+    else if (action === "dock") { prefs = updateCompanionPrefs({ roamingEnabled: false, startDocked: true }); dock(); say("I'm home.", 1500); }
+    else if (action === "reset-page") {
+      manualSizePx = null;
+      prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
+      const point = dockPoint();
+      x = point.x;
+      y = point.y;
+      undock({ keepPosition: true, silent: true });
+      say("Reset here.", 1400);
+    }
     else if (action === "quiet") { updateCompanionPrefs({ personality: "quiet", motionLevel: "reduced", idleFrequency: "off", speechEnabled: false }); dock(); }
     else if (action === "hide") hideCompanionForSession();
     else if (action === "disable") updateCompanionPrefs({ enabled: false });
@@ -640,7 +768,7 @@ function createBuddyController() {
      whatever nav buttons it happens to float across. */
   function updatePointerHitState(force = false) {
     if (!canvas || !ctx2) return;
-    if (dragging || (menu && !menu.hidden)) { canvas.style.pointerEvents = "auto"; return; }
+    if (dragging || resizing || (menu && !menu.hidden)) { canvas.style.pointerEvents = "auto"; return; }
     const now = performance.now();
     if (!force && now - lastHitTestAt < 30) return;
     lastHitTestAt = now;
@@ -652,20 +780,38 @@ function createBuddyController() {
     eventAbort = new AbortController();
     const signal = eventAbort.signal;
     const hideDuringScroll = () => {
-      if (!layer || dragging || (menu && !menu.hidden)) return;
+      if (!layer || dragging || resizing || (menu && !menu.hidden)) return;
       layer.classList.add("is-scroll-hidden");
       if (canvas) canvas.style.pointerEvents = "none";
       clearTimeout(scrollHideTimer);
       scrollHideTimer = setTimeout(() => {
         if (!layer) return;
-        configureCanvas({ snap: false });
-        dock();
+        configureCanvas({ snap: false, preserveTarget: !docked });
+        if (docked || mobile() || !roamingAllowed()) dock();
+        else {
+          clampToSafeZone();
+          tx = x;
+          ty = y;
+          saveCurrentPagePlacement();
+        }
         layer.classList.remove("is-scroll-hidden");
         updatePointerHitState(true);
       }, 260);
     };
+    const queuePageSwitch = () => setTimeout(() => switchPageContext(), 80);
     window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; updatePointerHitState(); }, { passive: true, signal });
-    window.addEventListener("resize", () => { configureCanvas({ snap: true }); if (docked || mobile()) dock(); }, { passive: true, signal });
+    window.addEventListener("resize", () => {
+      configureCanvas({ snap: true, preserveTarget: !docked });
+      if (docked || mobile() || !roamingAllowed()) dock();
+      else {
+        clampToSafeZone();
+        tx = x;
+        ty = y;
+        saveCurrentPagePlacement();
+      }
+    }, { passive: true, signal });
+    window.addEventListener("hashchange", queuePageSwitch, { passive: true, signal });
+    window.addEventListener("popstate", queuePageSwitch, { passive: true, signal });
     document.addEventListener("scroll", hideDuringScroll, { passive: true, capture: true, signal });
     document.addEventListener("pointerdown", (event) => {
       openMenuFromPointerEvent(event);
@@ -675,6 +821,8 @@ function createBuddyController() {
     }, { capture: true, signal });
     document.addEventListener("click", (event) => {
       if (menu && !menu.hidden && !menu.contains(event.target) && event.target !== canvas) closeMenu();
+      const target = event.target?.closest?.("[data-nav-id], [data-open-ws], [data-page-link], a[href*='#page/'], a[href*='#ws/']");
+      if (target) queuePageSwitch();
     }, { signal });
     document.addEventListener("contextmenu", (event) => {
       openMenuFromPointerEvent(event, { requireRightButton: false });
@@ -685,13 +833,19 @@ function createBuddyController() {
 
     canvas.addEventListener("pointerdown", (event) => {
       if (event.button && event.button !== 0) return;
+      event.preventDefault();
       dragging = true;
       dragged = false;
+      if (docked) {
+        docked = false;
+        configureCanvas({ preserveTarget: true });
+      }
       grabDX = event.clientX - x;
       grabDY = event.clientY - y;
       canvas.setPointerCapture(event.pointerId);
       layer.classList.add("is-grabbed");
       setState("dragged", 99999);
+      applyPreferenceClasses();
     }, { signal });
     canvas.addEventListener("pointermove", (event) => {
       if (!dragging) return;
@@ -710,11 +864,14 @@ function createBuddyController() {
       layer.classList.remove("is-grabbed");
       if (event?.pointerId != null) { try { canvas.releasePointerCapture(event.pointerId); } catch {} }
       if (dragged) {
-        updateCompanionPrefs({ roamingEnabled: false, startDocked: true, dockLocation: "sidebar" });
-        dock();
-        say("I'll stay in the sidebar.", 1600);
+        docked = false;
+        tx = x;
+        ty = y;
+        saveCurrentPagePlacement();
+        prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
+        say("Saved here for this page.", 1600);
       } else {
-        if (sidebarPortraitMode()) {
+        if (docked && sidebarPortraitMode()) {
           setState("curious", 1100);
           pulse = Math.max(pulse, 0.18);
           say(quipText(), 1900);
@@ -729,9 +886,14 @@ function createBuddyController() {
     canvas.addEventListener("pointerup", release, { signal });
     canvas.addEventListener("pointercancel", release, { signal });
     canvas.addEventListener("dblclick", () => {
-      updateCompanionPrefs({ roamingEnabled: false, startDocked: true, dockLocation: "sidebar" });
-      dock();
-      say("Back home.", 1500);
+      if (docked) {
+        prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
+        undock({ keepPosition: true });
+      } else {
+        prefs = updateCompanionPrefs({ roamingEnabled: false, startDocked: true });
+        dock();
+        say("Back home.", 1500);
+      }
     }, { signal });
     canvas.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusChat(); }
@@ -747,8 +909,62 @@ function createBuddyController() {
     menu.addEventListener("change", (event) => {
       const field = event.target.closest("[data-buddy-pref]");
       if (!field) return;
-      updateCompanionPrefs({ [field.dataset.buddyPref]: field.value });
+      if (field.dataset.buddyPref === "size") manualSizePx = null;
+      prefs = updateCompanionPrefs({ [field.dataset.buddyPref]: field.value });
+      if (docked || mobile() || !roamingAllowed()) dock();
+      else {
+        configureCanvas({ preserveTarget: true });
+        tx = x;
+        ty = y;
+        saveCurrentPagePlacement();
+      }
     }, { signal });
+
+    resizeHandle?.addEventListener("pointerdown", (event) => {
+      if (event.button && event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      resizing = true;
+      if (docked) docked = false;
+      manualSizePx = Math.max(buddyWidth, buddyHeight);
+      resizeStart = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        size: manualSizePx,
+      };
+      resizeHandle.setPointerCapture(event.pointerId);
+      canvas.style.pointerEvents = "auto";
+      setState("dragged", 99999);
+      configureCanvas({ preserveTarget: true });
+      applyPreferenceClasses();
+    }, { signal });
+    resizeHandle?.addEventListener("pointermove", (event) => {
+      if (!resizing || !resizeStart) return;
+      event.preventDefault();
+      lastPointer = { x: event.clientX, y: event.clientY };
+      const delta = Math.max(event.clientX - resizeStart.x, event.clientY - resizeStart.y);
+      manualSizePx = clampNumber(resizeStart.size + delta, MIN_FREE_SIZE, MAX_FREE_SIZE, resizeStart.size);
+      configureCanvas({ preserveTarget: true });
+      tx = x;
+      ty = y;
+      updatePointerHitState(true);
+    }, { signal });
+    const releaseResize = (event) => {
+      if (!resizing) return;
+      resizing = false;
+      resizeStart = null;
+      if (event?.pointerId != null) { try { resizeHandle.releasePointerCapture(event.pointerId); } catch {} }
+      prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
+      tx = x;
+      ty = y;
+      saveCurrentPagePlacement();
+      setState("idle", 900);
+      applyPreferenceClasses();
+      updatePointerHitState(true);
+    };
+    resizeHandle?.addEventListener("pointerup", releaseResize, { signal });
+    resizeHandle?.addEventListener("pointercancel", releaseResize, { signal });
   }
 
   function startLoop() {
@@ -757,7 +973,11 @@ function createBuddyController() {
     const token = ++loopToken;
     const t0 = performance.now();
     let last = t0;
-    setTargetToDock();
+    if (docked) setTargetToDock();
+    else {
+      tx = x;
+      ty = y;
+    }
 
     const frame = (now) => {
       if (!running || token !== loopToken || !layer || !ctx2 || !character) return;
@@ -772,20 +992,33 @@ function createBuddyController() {
       const dt = Math.min(0.06, (now - last) * 0.001);
       last = now;
 
+      if (!dragging && !resizing && now - lastPageCheckAt > 350) {
+        lastPageCheckAt = now;
+        switchPageContext();
+      }
+
       if (stateUntil && now > stateUntil) {
         state = docked ? "docked" : "idle";
         stateUntil = 0;
       }
       if (mobile() && !docked) dock();
       if (document.body.classList.contains("overlay-open")) {
-        setTargetToDock();
-      } else if (!dragging) {
+        if (docked) setTargetToDock();
+        else {
+          tx = x;
+          ty = y;
+        }
+      } else if (!dragging && !resizing) {
         if (docked) pickWanderTarget(now);
-        else if (!roamingAllowed() || userBusy()) setTargetToDock();
+        else if (!roamingAllowed()) setTargetToDock();
+        else if (!motionAllowed() || userBusy()) {
+          tx = x;
+          ty = y;
+        }
         else pickWanderTarget(now);
       }
 
-      if (!dragging) {
+      if (!dragging && !resizing) {
         const sidebarAlive = docked && sidebarPortraitMode() && motionAllowed() && !userBusy();
         const k = docked || !roamingAllowed() || reduceMotion() ? (sidebarAlive ? 0.055 : 0.12) : 0.026;
         vx += (tx - x) * k * dt * 60;
@@ -805,9 +1038,9 @@ function createBuddyController() {
       const tilt = reduceMotion() || (docked && !sidebarAlive) ? 0 : Math.max(-10, Math.min(10, vx * 1.2));
       const dockTwirl = sidebarAlive ? Math.sin(t * 1.8) * 1.4 : 0;
       const flourish = state === "playful" && prefs.personality !== "quiet" && !reduceMotion()
-        ? Math.sin(t * 8) * (sidebarPortraitMode() ? 1.5 : 8)
+        ? Math.sin(t * 8) * (docked && sidebarPortraitMode() ? 1.5 : 8)
         : 0;
-      const rotation = sidebarPortraitMode() ? dockTwirl + flourish : tilt + dockTwirl + flourish;
+      const rotation = docked && sidebarPortraitMode() ? dockTwirl + flourish : tilt + dockTwirl + flourish;
       layer.style.transform = `translate(${(x - buddyWidth / 2).toFixed(1)}px, ${(y - buddyHeight / 2).toFixed(1)}px)`;
       canvas.style.transform = `rotate(${rotation.toFixed(1)}deg)`;
 
@@ -816,7 +1049,7 @@ function createBuddyController() {
       const py = Math.max(-0.5, Math.min(0.5, (lastPointer.y - y) / 640));
       ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx2.clearRect(0, 0, buddyWidth, buddyHeight);
-      const portrait = sidebarPortraitMode();
+      const portrait = docked && sidebarPortraitMode();
       if (portrait) {
         ctx2.save();
         ctx2.translate(buddyWidth / 2, buddyHeight * 0.58);

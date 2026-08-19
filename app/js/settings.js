@@ -7,7 +7,7 @@ import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-202608
 import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-173";
 import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260819-173";
 import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-173";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-173";
+import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-173";
 import {
   getAiRuntimeState,
   getAiProviderModelCatalog,
@@ -1196,7 +1196,7 @@ function renderCompanionTab() {
         <div>
           <p class="set-eyebrow">Living Phantom</p>
           <h3>Companion controls</h3>
-          <p class="set-note">The Phantom starts docked, stays out of controls, and only reacts to real assistant states. These settings are local UI preferences.</p>
+          <p class="set-note">The Phantom can float, resize, remember a position for each page, or stay docked when you want a quieter workspace. These settings are local UI preferences.</p>
         </div>
         <button class="btn btn-quiet" type="button" data-companion-reset>Reset companion</button>
       </div>
@@ -1204,6 +1204,8 @@ function renderCompanionTab() {
         <label class="set-inline"><input type="checkbox" data-companion-toggle="enabled" ${companion.enabled ? "checked" : ""}/> Enable companion</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="visible" ${companion.visible ? "checked" : ""}/> Visible</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="startDocked" ${companion.startDocked ? "checked" : ""}/> Start docked</label>
+        <label class="set-inline"><input type="checkbox" data-companion-toggle="roamingEnabled" ${companion.roamingEnabled ? "checked" : ""}/> Free movement</label>
+        <label class="set-inline"><input type="checkbox" data-companion-toggle="rememberPagePositions" ${companion.rememberPagePositions ? "checked" : ""}/> Remember per page</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="speechEnabled" ${companion.speechEnabled ? "checked" : ""}/> Speech bubbles</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="notificationReactions" ${companion.notificationReactions ? "checked" : ""}/> Notification reactions</label>
         <label class="set-field">
@@ -1226,6 +1228,8 @@ function renderCompanionTab() {
         <label class="set-field">
           <span>Home dock</span>
           <select data-companion-field="dockLocation">${optionList([
+            { id: "bottom-left", label: "Bottom left" },
+            { id: "bottom-right", label: "Bottom right" },
             { id: "sidebar", label: "Sidebar" },
           ], companion.dockLocation)}</select>
         </label>
@@ -1257,10 +1261,11 @@ function renderCompanionTab() {
       </div>
       <div class="set-actions-row">
         <button class="btn btn-quiet" type="button" data-companion-clear-hide>Show again this session</button>
+        <button class="btn btn-quiet" type="button" data-companion-reset-placements>Reset page positions</button>
         <button class="btn btn-quiet" type="button" data-companion-quiet>Quiet docked mode</button>
         <button class="btn btn-quiet" type="button" data-companion-disable>Disable companion</button>
       </div>
-      <p class="set-note">Essential notifications still stay in the normal notification menu if the companion is hidden or disabled.</p>
+      <p class="set-note">Drag Phantom to place him, use the corner grip to resize, or right-click him for quick controls. Essential notifications still stay in the normal notification menu if the companion is hidden or disabled.</p>
     </div>`;
 }
 
@@ -1773,7 +1778,10 @@ export function renderOperatorSettings(el, opts = {}) {
   };
 
   const saveCompanionAndRender = (patch) => {
-    saveCompanionPrefs({ ...DEFAULT_COMPANION_PREFS, ...loadCompanionPrefs(), ...(patch || {}) });
+    const next = { ...DEFAULT_COMPANION_PREFS, ...loadCompanionPrefs(), ...(patch || {}) };
+    if (patch?.roamingEnabled) next.startDocked = false;
+    if (patch?.startDocked) next.roamingEnabled = false;
+    saveCompanionPrefs(next);
     renderOperatorSettings(el, opts);
   };
 
@@ -1793,6 +1801,11 @@ export function renderOperatorSettings(el, opts = {}) {
   const companionClearHide = el.querySelector("[data-companion-clear-hide]");
   if (companionClearHide) companionClearHide.onclick = () => {
     clearCompanionSessionHide();
+    renderOperatorSettings(el, opts);
+  };
+  const companionResetPlacements = el.querySelector("[data-companion-reset-placements]");
+  if (companionResetPlacements) companionResetPlacements.onclick = () => {
+    clearCompanionPagePlacements();
     renderOperatorSettings(el, opts);
   };
   const companionQuiet = el.querySelector("[data-companion-quiet]");
