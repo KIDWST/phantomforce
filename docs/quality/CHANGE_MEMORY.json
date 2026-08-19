@@ -615,13 +615,13 @@
         },
         {
           "file": "server/src/phantom-ai/phantomplay-v2.ts",
-          "pattern": "phantom-rumble\\.html\\?v=1\\.3\\.1",
-          "description": "Server catalog points at the fixed Phantom Rumble version."
+          "pattern": "phantom-rumble\\.html\\?v=3\\.0\\.0",
+          "description": "Server catalog points at the current Phantom Rumble version."
         },
         {
           "file": "app/js/phantomplay-v2.js",
-          "pattern": "phantom-rumble\\.html\\?v=2\\.2\\.4",
-          "description": "Offline catalog cache-busts the fixed Phantom Rumble version."
+          "pattern": "phantom-rumble\\.html\\?v=3\\.0\\.0",
+          "description": "Offline catalog cache-busts the current Phantom Rumble version."
         }
       ]
     },
@@ -2023,6 +2023,76 @@
           "file": "app/js/medialab.js",
           "pattern": "querySelectorAll\\(\"\\[data-catalog-thumb\\]\"\\)\\]\\.slice",
           "description": "Thumbnail hydration cannot silently stop after an arbitrary number of cards."
+        }
+      ]
+    },
+    {
+      "id": "phantom-rumble-overdrive-wallbreaker-floor",
+      "status": "active",
+      "title": "Phantom Rumble remains the Overdrive wallbreaker build",
+      "ownerDecision": "Phantom Rumble must remain an intense, presentation-rich arena fighter. Holding smash all the way must preserve the real charge through release and arm a multi-surface WALLBREAKER ricochet chain; each collision must add damage and readable audiovisual feedback. OVERDRIVE, layered procedural combat audio, responsive desktop/mobile controls, weapons, arenas, and the 3.0.0 browser, server, and installed PhantomPlay catalog route must ship together. A stale 2.x catalog or cosmetic-only charge meter cannot replace it.",
+      "requiredPatterns": [
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "MAX_CHARGE=\\.98[\\s\\S]*function releaseCharge\\(f\\)[\\s\\S]*attack\\(f,true,heldCharge\\)[\\s\\S]*wallbreaker:full",
+          "description": "The real held charge reaches combat resolution and a full charge arms WALLBREAKER."
+        },
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "function rumbleBounce\\(f,surface[\\s\\S]*arenaScars[\\s\\S]*PHANTOM PINBALL![\\s\\S]*WALL BOUNCE ×\\$\\{r\\.bounces\\}",
+          "description": "The multi-surface ricochet chain escalates collision damage, feedback, and persistent arena scars."
+        },
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "createDynamicsCompressor[\\s\\S]*function noiseBurst[\\s\\S]*function rumbleMusicTick[\\s\\S]*function spawnRumbleBurst[\\s\\S]*kind==='feather'",
+          "description": "Layered combat audio, adaptive music, and distinct feather/spark/debris impact visuals remain together."
+        },
+        {
+          "file": "app/games/phantom-rumble.html",
+          "pattern": "OVERDRIVE![\\s\\S]*hype:0,overdrive:0[\\s\\S]*data-hype[\\s\\S]*__PhantomRumbleTest[\\s\\S]*3\\.0\\.0-overdrive",
+          "description": "OVERDRIVE stays gameplay-backed and the deterministic runtime seam protects the complete 3.0 behavior."
+        },
+        {
+          "file": "app/js/phantomplay.js",
+          "pattern": "id:\\s*\"phantom-rumble\"[\\s\\S]{0,3600}phantom-rumble\\.html\\?v=3\\.0\\.0[\\s\\S]{0,500}version:\\s*\"3\\.0\\.0\"",
+          "description": "The browser catalog launches Phantom Rumble 3.0.0."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomplay-v2.ts",
+          "pattern": "id:\\s*\"phantom-rumble\"[\\s\\S]{0,3600}phantom-rumble\\.html\\?v=3\\.0\\.0[\\s\\S]{0,500}version:\\s*\"3\\.0\\.0\"",
+          "description": "The authenticated and installed-app catalog launches Phantom Rumble 3.0.0."
+        },
+    {
+      "file": "scripts/test-phantom-rumble-overdrive.mjs",
+      "pattern": "Holding the real G input must reach MAX RUMBLE[\\s\\S]*touch held-and-released path[\\s\\S]*four collision opportunities[\\s\\S]*four readable collision scars",
+      "description": "The runtime gate proves held keyboard and touch input plus the full ricochet chain in a real browser."
+    },
+    {
+      "file": "scripts/test-phantomplay-native-rumble.mjs",
+      "pattern": "PhantomPlay\\.exe[\\s\\S]*3\\.0\\.0-overdrive[\\s\\S]*native build is missing WALLBREAKER[\\s\\S]*native build is missing the Overdrive impact VFX stack",
+      "description": "The installed Windows application must load the current game engine, ricochet physics, and impact effects."
+    },
+    {
+      "file": "app/games/phantom-rumble.html",
+      "pattern": "<script nonce=\\\"phantomplay-native-shell\\\">",
+      "description": "The game engine remains compatible with the installed PhantomPlay security wrapper."
+    },
+        {
+          "file": "app/assets/phantomplay/phantom-rumble-cover.svg",
+          "pattern": "OVERDRIVE 3\\.0[\\s\\S]*MAX RUMBLE[\\s\\S]*WALLBREAKER[\\s\\S]*CHARGE · COLLIDE · RICOCHET · OVERDRIVE",
+          "description": "The storefront retains custom chicken-ninja Overdrive art instead of generic legacy fighters."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/phantomplay.js",
+          "pattern": "id:\\s*\"phantom-rumble\"[\\s\\S]{0,2600}phantom-rumble\\.html\\?v=2\\.",
+          "description": "The primary PhantomPlay catalog cannot regress Phantom Rumble to a 2.x launch."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomplay-v2.ts",
+          "pattern": "id:\\s*\"phantom-rumble\"[\\s\\S]{0,2600}phantom-rumble\\.html\\?v=(?:1|2)\\.",
+          "description": "The authenticated catalog cannot resurrect the stale 1.x or 2.x game."
         }
       ]
     }
