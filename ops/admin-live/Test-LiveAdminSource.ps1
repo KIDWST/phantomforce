@@ -94,7 +94,9 @@ try {
   $uiHealth = Invoke-RestMethod -Uri "http://127.0.0.1:$AdminPort/health" -TimeoutSec 8
   $uiRoot = [string]$uiHealth.root
   if (-not $uiRoot) { $uiRoot = [string]$uiHealth.repo_root }
-  $states.Add((Result ($(if ($uiRoot -and $uiRoot -like "$RepoRoot*") { "OK" } elseif ($uiRoot) { "FAIL" } else { "WARN" })) "Admin static root: $uiRoot"))
+  $uiRootResolved = if ($uiRoot) { [System.IO.Path]::GetFullPath($uiRoot).TrimEnd('\', '/') } else { "" }
+  $expectedRoot = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
+  $states.Add((Result ($(if ($uiRootResolved -and $uiRootResolved -eq $expectedRoot) { "OK" } elseif ($uiRoot) { "FAIL" } else { "WARN" })) "Admin static root: $uiRoot"))
 } catch {
   $states.Add((Result "WARN" "Admin static server on $AdminPort did not answer /health."))
 }
@@ -111,6 +113,9 @@ $canonicalNeedles = @(
   $RepoRoot,
   ($RepoRoot -replace '\\', '/')
 )
+$canonicalPatterns = @($canonicalNeedles | ForEach-Object {
+  [regex]::Escape($_) + '(?=$|[\\/''"\s,;)])'
+})
 $helperPaths = @(
   (Join-Path $env:USERPROFILE "Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai\Start-PhantomForce-RemoteStack.ps1"),
   (Join-Path $env:USERPROFILE "Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai\ecosystem.config.js")
@@ -120,8 +125,8 @@ foreach ($helperPath in $helperPaths) {
   if (-not (Test-Path -LiteralPath $helperPath)) { continue }
   $helperText = Get-Content -LiteralPath $helperPath -Raw
   $pointsAtCanonical = $false
-  foreach ($needle in $canonicalNeedles) {
-    if ($helperText.Contains($needle)) { $pointsAtCanonical = $true; break }
+  foreach ($pattern in $canonicalPatterns) {
+    if ($helperText -match $pattern) { $pointsAtCanonical = $true; break }
   }
   if (-not $pointsAtCanonical) { $badHelpers += $helperPath }
 }
@@ -145,7 +150,8 @@ $fallbackPath = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\start-admin
 $fallbackWatch = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "PhantomForceAdminLiveSync" -ErrorAction SilentlyContinue).PhantomForceAdminLiveSync
 $fallbackBody = if (Test-Path -LiteralPath $fallbackPath) { Get-Content -Raw -LiteralPath $fallbackPath } else { "" }
 $fallbackActive = -not [string]::IsNullOrWhiteSpace($fallbackWatch)
-$fallbackOk = $fallbackActive -and $fallbackWatch.Contains($fallbackPath) -and $fallbackBody.Contains($RepoRoot) -and $fallbackBody.Contains("Watch-AdminMain.ps1")
+$expectedWatchScript = Join-Path $RepoRoot "ops\admin-live\Watch-AdminMain.ps1"
+$fallbackOk = $fallbackActive -and $fallbackWatch.Contains($fallbackPath) -and $fallbackBody.Contains($expectedWatchScript)
 $combinedCoverage = $combinedTaskOk -or $fallbackOk
 
 $startupTaskSpecs = @(
@@ -176,7 +182,7 @@ try {
     ($_.CommandLine -match 'Watch-AdminMain')
   }
   foreach ($serviceProcess in $serviceProcesses) {
-    if (-not $serviceProcess.CommandLine.Contains($RepoRoot)) {
+    if (-not $serviceProcess.CommandLine.Contains($expectedWatchScript)) {
       $badProcesses += "$($serviceProcess.Name):$($serviceProcess.ProcessId)"
     }
   }

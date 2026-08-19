@@ -161,6 +161,26 @@
           "file": "ops/admin-live/Sync-AdminMain.ps1",
           "pattern": "sync_status = \"ok\"",
           "description": "Every successful sync writes the status consumed by the live-source doctor."
+        },
+        {
+          "file": "ops/admin-live/Sync-AdminMain.ps1",
+          "pattern": "sync_status = \"blocked\"[\\s\\S]*deployment checkout contains tracked or untracked files",
+          "description": "A dirty deployment must report an explicit blocked state instead of a misleading stale-sync warning."
+        },
+        {
+          "file": "ops/admin-live/Register-AdminLiveSync.ps1",
+          "pattern": "Disable-ScheduledTask[\\s\\S]*non-updatable Admin Main Sync task[\\s\\S]*canonicalWatchScript",
+          "description": "Fallback registration disables an obsolete scheduled sync and retires a stale watcher before starting the canonical watcher."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Build-Flagships.ps1",
+          "pattern": "Refusing to build from the deployment checkout",
+          "description": "The flagship build entry point cannot mutate the live deployment checkout."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Tools/BuildProductionWorlds.py",
+          "pattern": "Refusing to generate Unreal assets inside a deployment checkout",
+          "description": "The Unreal world generator cannot write assets into a deployment checkout."
         }
       ],
       "liveChecks": [

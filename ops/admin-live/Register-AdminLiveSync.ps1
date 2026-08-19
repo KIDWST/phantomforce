@@ -73,6 +73,32 @@ try {
     exit 0
   } catch {
     $watchScript = Join-Path $PSScriptRoot "Watch-AdminMain.ps1"
+    # A task created by a retired checkout may be readable but not editable by
+    # this process. Disable it before starting the canonical fallback watcher;
+    # otherwise both checkouts continue firing every hour.
+    try {
+      Disable-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -ErrorAction Stop | Out-Null
+    } catch {
+      Write-Warning "Could not disable the non-updatable Admin Main Sync task: $($_.Exception.Message)"
+    }
+
+    # Release the single-instance watcher lock if an obsolete checkout still
+    # owns it. Match the full script path so a similarly prefixed directory
+    # (for example phantomforce-live-<commit>) cannot masquerade as canonical.
+    try {
+      $canonicalWatchScript = [System.IO.Path]::GetFullPath($watchScript)
+      Get-CimInstance Win32_Process | Where-Object {
+        $_.ProcessId -ne $PID -and
+        $_.CommandLine -and
+        $_.CommandLine -match 'Watch-AdminMain\.ps1' -and
+        -not $_.CommandLine.Contains($canonicalWatchScript)
+      } | ForEach-Object {
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
+      }
+    } catch {
+      Write-Warning "Could not retire an obsolete Admin Main watcher: $($_.Exception.Message)"
+    }
+
     $vbs = Join-Path $stateDir "start-admin-live-watch.vbs"
     $watchArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$watchScript`" -RepoRoot `"$repo`" -Port $Port -HermesPort $HermesPort -EveryMinutes $EveryMinutes"
     $vbsCommand = ("$ps $watchArgs").Replace('"', '""')
