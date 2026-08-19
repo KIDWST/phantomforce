@@ -119,8 +119,11 @@ void APhantomLegendsResourceNode::Configure(EPhantomLegendsResource NewType, int
     switch (ResourceType)
     {
         case EPhantomLegendsResource::Wood:
-            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B"));
+            // Use the RTS baseline forest cluster with its authored wood/foliage materials. The
+            // old generated tree had no material slots and read as a translucent egg at command zoom.
+            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"));
             if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"));
+            VisualScale = FVector(2.35f);
             break;
         case EPhantomLegendsResource::Stone:
             ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock"));
@@ -1705,6 +1708,12 @@ void APhantomLegendsDirector::BeginPlay()
 void APhantomLegendsDirector::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+    // Destroyed units are weak references, but leaving dead entries in selection/control groups makes
+    // the HUD count lie and causes command groups to feel unreliable after a battle. Prune every frame;
+    // these arrays are tiny compared with the unit simulation itself.
+    SelectedUnits.RemoveAll([](const TWeakObjectPtr<APhantomLegendsUnit>& Unit){ return !Unit.IsValid(); });
+    for (TArray<TWeakObjectPtr<APhantomLegendsUnit>>& Group : ControlGroups)
+        Group.RemoveAll([](const TWeakObjectPtr<APhantomLegendsUnit>& Unit){ return !Unit.IsValid(); });
     EconomyAccumulator += DeltaSeconds;
     SaveAccumulator += DeltaSeconds;
     if (EconomyAccumulator >= 1.0f)
@@ -1904,7 +1913,7 @@ void APhantomLegendsDirector::BuildRealm()
             const float A=J*(2.0f*PI/8.0f)+(TreeIndex%3)*0.14f;
             const float R=260.0f+(J%4)*190.0f;
             const FVector P=Center+FVector(FMath::Cos(A)*R,FMath::Sin(A)*R,18);
-            const TCHAR* Tree=J%3==0?TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A");
+            const TCHAR* Tree=J%3==0?TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A");
             SpawnStaticMeshAsset(FString::Printf(TEXT("RealmTree_%03d"),TreeIndex++),Tree,P,FVector(0.66f+(J%3)*0.06f),FRotator(0,J*31,0),false,true);
         }
     }
@@ -1996,7 +2005,7 @@ void APhantomLegendsDirector::BuildRealm()
         for(int32 J=0;J<12;++J)
         {
             const float A=J*(2.0f*PI/12.0f); const FVector P=C+FVector(FMath::Cos(A)*FMath::FRandRange(2600.0f,5200.0f),FMath::Sin(A)*FMath::FRandRange(2600.0f,5200.0f),0);
-            SpawnStaticMeshAsset(FString::Printf(TEXT("Macro%d_Tree%d"),M,J),J%2?TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B"),P,FVector(0.72f),FRotator(0,J*29.0f,0),false,true);
+            SpawnStaticMeshAsset(FString::Printf(TEXT("Macro%d_Tree%d"),M,J),J%2?TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"):TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"),P,FVector(0.72f),FRotator(0,J*29.0f,0),false,true);
         }
         const EPhantomLegendsResource Types[]={EPhantomLegendsResource::Wood,EPhantomLegendsResource::Stone,EPhantomLegendsResource::Gold,EPhantomLegendsResource::Shard};
         for(int32 J=0;J<4;++J){APhantomLegendsResourceNode* Node=GetWorld()->SpawnActor<APhantomLegendsResourceNode>(C+FVector((J-1.5f)*1100.0f,2200.0f,40),FRotator::ZeroRotator);if(Node)Node->Configure(Types[J],1000+J*250);}
@@ -2016,7 +2025,7 @@ void APhantomLegendsDirector::BuildRealm()
             const float A=J*(2.0f*PI/10.0f)+H*0.21f;
             const float R=2300.0f+(J%4)*1200.0f;
             SpawnStaticMeshAsset(FString::Printf(TEXT("StrategicHub%d_Tree%d"),H,J),
-                J%3==0?TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"),
+                J%3==0?TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"),
                 C+FVector(FMath::Cos(A)*R,FMath::Sin(A)*R,0),FVector(0.72f+(J%3)*0.08f),FRotator(0,J*31.0f,0),false,true);
         }
         SpawnStaticMeshAsset(FString::Printf(TEXT("StrategicHub%d_Ruin"),H),
@@ -2049,7 +2058,7 @@ void APhantomLegendsDirector::BuildRealm()
                 const float R=2600.0f+(J%5)*1250.0f;
                 const FVector P=C+FVector(FMath::Cos(A)*R,FMath::Sin(A)*R,0);
                 SpawnStaticMeshAsset(FString::Printf(TEXT("WorldCellTree_%03d_%02d"),DensityId,J),
-                    J%3==0?TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"),
+                    J%3==0?TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"),
                     P,FVector(0.68f+(J%4)*0.08f),FRotator(0,J*29.0f,0),false,true);
             }
             APhantomLegendsResourceNode* CellNode=GetWorld()->SpawnActor<APhantomLegendsResourceNode>(
@@ -2081,7 +2090,7 @@ void APhantomLegendsDirector::BuildRealm()
         }
     }
     SpawnInstancedMeshCluster(TEXT("LegendsRealmTreesA_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"),RealmTreesA,false);
-    SpawnInstancedMeshCluster(TEXT("LegendsRealmTreesB_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B"),RealmTreesB,false);
+    SpawnInstancedMeshCluster(TEXT("LegendsRealmTreesB_HISM"),TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"),RealmTreesB,false);
     SpawnInstancedMeshCluster(TEXT("LegendsRealmRocks_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock"),RealmRocks,false);
 
     TArray<FTransform> RealmSettlementHomes;
@@ -2574,10 +2583,15 @@ void APhantomLegendsDirector::BuildDefenseTower(APlayerController* PlayerControl
     if (!PlayerController || Wood < 120 || Stone < 80) return;
     FHitResult Hit;
     if (!PlayerController->GetHitResultUnderCursor(ECC_Visibility, true, Hit)) return;
+    APhantomLegendsStructure* Tower = GetWorld()->SpawnActor<APhantomLegendsStructure>(Hit.Location + FVector(0.0f, 0.0f, 40.0f), FRotator::ZeroRotator);
+    if (!Tower)
+    {
+        RealmStatus = TEXT("TOWER SITE BLOCKED // RESOURCES NOT SPENT");
+        return;
+    }
     Wood -= 120;
     Stone -= 80;
-    APhantomLegendsStructure* Tower = GetWorld()->SpawnActor<APhantomLegendsStructure>(Hit.Location + FVector(0.0f, 0.0f, 40.0f), FRotator::ZeroRotator);
-    if (Tower) Tower->Configure(EPhantomLegendsStructureType::DefenseTower, EPhantomLegendsFaction::Legion, StrongholdLevel);
+    Tower->Configure(EPhantomLegendsStructureType::DefenseTower, EPhantomLegendsFaction::Legion, StrongholdLevel);
     RealmStatus = TEXT("ARCANE DEFENSE TOWER RAISED");
     SaveProgress();
 }
@@ -2658,12 +2672,14 @@ void APhantomLegendsDirector::LoadProgress()
 {
     if (UPhantomLegendsSaveGame* Save = Cast<UPhantomLegendsSaveGame>(UGameplayStatics::LoadGameFromSlot(LegendsSaveSlot, 0)))
     {
-        Gold = Save->Gold;
-        Wood = Save->Wood;
-        Stone = Save->Stone;
-        LegacyShards = Save->LegacyShards;
-        StrongholdLevel = Save->StrongholdLevel;
-        HighestRaid = Save->HighestRaid;
+        // Treat save files as untrusted persistent state. Old/corrupt values should never create
+        // negative economies, impossible population caps, or absurd upgrade tiers.
+        Gold = FMath::Clamp(Save->Gold, 0, 1000000);
+        Wood = FMath::Clamp(Save->Wood, 0, 1000000);
+        Stone = FMath::Clamp(Save->Stone, 0, 1000000);
+        LegacyShards = FMath::Clamp(Save->LegacyShards, 0, 1000000);
+        StrongholdLevel = FMath::Clamp(Save->StrongholdLevel, 1, 5);
+        HighestRaid = FMath::Clamp(Save->HighestRaid, 0, 9999);
     }
 }
 

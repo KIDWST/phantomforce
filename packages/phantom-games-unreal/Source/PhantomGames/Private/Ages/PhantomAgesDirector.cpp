@@ -1249,7 +1249,7 @@ void APhantomAgesDirector::BuildBattlefield()
     {
         const float X=-17400.0f+Index*1200.0f;
         const float Y=2700.0f+(Index%4)*520.0f;
-        const TCHAR* Tree=Index%3==0 ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B")
+        const TCHAR* Tree=Index%3==0 ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A")
                                      : TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A");
         SpawnStaticMeshAsset(FString::Printf(TEXT("BattleTree_%02d"),Index),Tree,FVector(X,Y,8.0f),
             FVector(0.58f+(Index%4)*0.08f),FRotator(0.0f,Index*23.0f,0.0f),false,true);
@@ -1714,11 +1714,15 @@ void APhantomAgesDirector::CheckMatchState()
     if (EnemyTower->Health <= 0.0f)
     {
         MatchResult = TEXT("VICTORY");
+        BattleSpeed = 1.0f;
+        UGameplayStatics::SetGlobalTimeDilation(this, 1.0f);
         MatchResetRemaining = 5.0f;
     }
     else if (PlayerTower->Health <= 0.0f)
     {
         MatchResult = TEXT("DEFEAT");
+        BattleSpeed = 1.0f;
+        UGameplayStatics::SetGlobalTimeDilation(this, 1.0f);
         MatchResetRemaining = 5.0f;
     }
 }
@@ -1747,6 +1751,9 @@ void APhantomAgesDirector::ResetMatch()
     EnemyTower = nullptr;
     Gold = 300;
     EnemyGold = 300;
+    PlayerProductionQueue.Reset();
+    PlayerProductionQueueCounts.Init(0, 4);
+    PlayerProductionRemaining = 0.0f;
     Experience = 0;
     EnemyExperience = 0;
     PlayerAge = 0;
@@ -1771,8 +1778,28 @@ void APhantomAgesDirector::ResetMatch()
     for (int32 Index = 0; Index < 6; ++Index) ResearchLevels.Add(static_cast<EPhantomAgesResearch>(Index), 0);
     PlayerTower = GetWorld()->SpawnActor<APhantomAgesTower>(FVector(-15500.0f, 0.0f, 0.0f), FRotator::ZeroRotator);
     EnemyTower = GetWorld()->SpawnActor<APhantomAgesTower>(FVector(15500.0f, 0.0f, 0.0f), FRotator(0.0f, 180.0f, 0.0f));
-    if (PlayerTower) { PlayerTower->Configure(EPhantomAgesTeam::Player, PlayerAge); PlayerTower->ApplyTowerUpgrades(TowerFortificationLevel, TowerPowerLevel, TowerRangeLevel); }
-    if (EnemyTower) { EnemyTower->Configure(EPhantomAgesTeam::Enemy, EnemyAge); EnemyTower->ApplyTowerUpgrades(0, 0, 0); }
+    const bool bProductionWorld = GetWorld() && GetWorld()->GetMapName().Contains(TEXT("PhantomAges_World"));
+    if (PlayerTower)
+    {
+        PlayerTower->Configure(EPhantomAgesTeam::Player, PlayerAge);
+        PlayerTower->ApplyTowerUpgrades(TowerFortificationLevel, TowerPowerLevel, TowerRangeLevel);
+        if (bProductionWorld) PlayerTower->SetActorHiddenInGame(true);
+    }
+    if (EnemyTower)
+    {
+        EnemyTower->Configure(EPhantomAgesTeam::Enemy, EnemyAge);
+        EnemyTower->ApplyTowerUpgrades(0, 0, 0);
+        if (bProductionWorld) EnemyTower->SetActorHiddenInGame(true);
+    }
     BuildEraDecor(PlayerAge, EPhantomAgesTeam::Player);
     BuildEraDecor(EnemyAge, EPhantomAgesTeam::Enemy);
+
+    // A rematch must reopen with the same immediate battle readability as the first launch.
+    for (int32 I=0; I<18; ++I)
+    {
+        SpawnUnit(EPhantomAgesTeam::Player, (I%3==0)?EPhantomAgesUnitType::FireArcher:((I%3==1)?EPhantomAgesUnitType::SpearHunter:EPhantomAgesUnitType::Clubman), 0);
+        SpawnUnit(EPhantomAgesTeam::Enemy,  (I%3==0)?EPhantomAgesUnitType::FireArcher:((I%3==1)?EPhantomAgesUnitType::SpearHunter:EPhantomAgesUnitType::Clubman), 0);
+    }
+    Gold = FMath::Max(Gold, 520);
+    EnemyGold = FMath::Max(EnemyGold, 520);
 }

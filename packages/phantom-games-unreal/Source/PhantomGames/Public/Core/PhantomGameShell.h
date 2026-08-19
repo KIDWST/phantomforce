@@ -28,7 +28,7 @@ inline void DrawPhantomAspectFillTexture(AHUD* HUD, UTexture2D* Texture, float W
 inline bool DrawPhantomGameShell(AHUD* HUD, const APhantomGameDirectorBase* Director, float Width, float Height, const FString& Title, const FString& Subtitle, const FString& Controls, const FLinearColor& Accent)
 {
     if (!HUD || !Director || !Director->IsShellVisible()) return false;
-    const float Scale = Height <= 800.0f ? 0.80f : (Height <= 1200.0f ? 1.00f : (Height <= 1800.0f ? 1.15f : 1.35f));
+    const float Scale = Director->GetShellUIScale(Width, Height);
     const auto S = [Scale](float V){ return V * Scale; };
     const float Margin = S(54.0f);
     const float PanelW = FMath::Min(Width - Margin * 2.0f, S(1060.0f));

@@ -41,6 +41,7 @@ public:
     float GetMasterVolume() const { return MasterVolume; }
     int32 GetGraphicsQuality() const { return GraphicsQuality; }
     FString GetGraphicsQualityLabel() const;
+    float GetShellUIScale(float Width, float Height) const;
     virtual bool WantsMouseCursorInGameplay() const { return false; }
 
 protected:

@@ -110,7 +110,7 @@ function Invoke-NativeChecked([string]$Exe,[string[]]$Arguments,[string]$Label){
 
 function Test-CuratedAssetLibrary {
     $Required=@(
-        'Content\Phantom\External\CC0\Aliases\SM_CC0_Tree_A.uasset','Content\Phantom\External\CC0\Aliases\SM_CC0_Tree_B.uasset',
+        'Content\Phantom\External\CC0\Aliases\SM_CC0_Tree_A.uasset','Content\Phantom\UnityHarvest\Legends\character\U_Legends_0009_PineTrees.uasset',
         'Content\Phantom\External\CC0\Aliases\SM_CC0_Rock.uasset','Content\Phantom\External\CC0\Aliases\SM_CC0_Flower.uasset',
         'Content\Phantom\External\CC0\Aliases\SM_CC0_House_A.uasset','Content\Phantom\External\CC0\Aliases\SM_CC0_House_B.uasset',
         'Content\Phantom\External\CC0\Aliases\SM_CC0_CastleWall.uasset','Content\Phantom\External\CC0\Aliases\SM_CC0_CastleTower.uasset',
@@ -165,19 +165,21 @@ function Assert-ImportedContent {
     if($MaterialData.status -ne 'PASS'){throw "V11 PBR material import failed: status=$($MaterialData.status)"}
 
     $WorldReport=Join-Path $Saved 'PhantomProductionWorldsV11.json'
+    $PortfolioWorldReport=Join-Path $Saved 'PhantomPortfolioWorldsV13.json'
     $WorldValidation=Join-Path $Saved 'PhantomProductionWorldValidationV11.json'
-    foreach($r in @($WorldReport,$WorldValidation)){if(-not(Test-Path $r)){throw "V11 production-world proof missing: $r"}}
+    foreach($r in @($WorldReport,$PortfolioWorldReport,$WorldValidation)){if(-not(Test-Path $r)){throw "Production-world proof missing: $r"}}
     $WorldData=Get-Content $WorldReport -Raw | ConvertFrom-Json
+    $PortfolioWorldData=Get-Content $PortfolioWorldReport -Raw | ConvertFrom-Json
     $ValidationData=Get-Content $WorldValidation -Raw | ConvertFrom-Json
-    if($WorldData.status -ne 'PASS' -or $ValidationData.status -ne 'PASS'){throw 'V11 production-world build or density/occlusion validation failed.'}
+    if($WorldData.status -ne 'PASS' -or $PortfolioWorldData.status -ne 'PASS' -or $ValidationData.status -ne 'PASS'){throw 'Production-world build, V13 portfolio patch, or density/occlusion validation failed.'}
 
     $OneShot=Join-Path $Saved 'PhantomOneShotEditorPipelineV11.txt'
     if(-not(Test-Path $OneShot)){throw 'V11 one-shot Unreal content pipeline report missing.'}
     $OneShotText=Get-Content $OneShot -Raw
-    foreach($step in @('ImportOverhaulAssets.py','ImportExternalCC0Assets.py','ImportProductionCharacters.py','ImportPolyHavenProduction.py','ImportUnityBaselineAssets.py','HarvestOwnedFabAssets.py','BuildProductionWorlds.py','ValidateProductionWorlds.py')){
+    foreach($step in @('ImportOverhaulAssets.py','ImportExternalCC0Assets.py','ImportProductionCharacters.py','ImportPolyHavenProduction.py','ImportUnityBaselineAssets.py','HarvestOwnedFabAssets.py','BuildProductionWorlds.py','PatchProductionWorldsV11R7.py','PatchProductionWorldsV11R10.py','PatchCubetownFlagshipV12.py','PatchPortfolioWorldsV13.py','ValidateProductionWorlds.py')){
         if($OneShotText -notmatch [regex]::Escape("PASS $step")){throw "V11 one-shot Unreal content pipeline did not PASS $step"}
     }
-    Write-Host "V11 content gate PASS: rigged characters + real animations + PBR surfaces + Unity continuity + owned Fab preference + persistent worlds." -ForegroundColor Green
+    Write-Host "Four-game content gate PASS: CubeTown, Ages, Legends, and Strike all received the V13 density/safety layer + rigged characters + PBR surfaces + persistent worlds." -ForegroundColor Green
 }
 
 function Assert-UnityBaselineHarvest {
@@ -236,7 +238,7 @@ if($SkipContentRefresh){
     # 3) Acquire current Poly Haven CC0 PBR surfaces, then compile editor exactly once.
     Invoke-NativeChecked $BuildTool @('PhantomGamesEditor','Win64','Development',$Project,'-WaitMutex','-NoHotReload') 'UNREAL EDITOR MODULE COMPILE'
 
-    # 4) ONE UnrealEditor-Cmd session: baseline library -> creator packs -> skeletal characters -> PBR -> Unity -> owned Fab -> worlds -> validation.
+    # 4) ONE UnrealEditor-Cmd session: baseline library -> creator packs -> skeletal characters -> PBR -> Unity -> owned Fab -> base worlds -> V11R7/V11R10 -> CubeTown V12 -> four-game V13 density/safety -> validation.
     $Pipeline=Join-Path $ProjectRoot 'Tools\PhantomOneShotEditorPipeline.py'
     Remove-Item (Join-Path $Saved 'PhantomOneShotEditorPipelineV11.txt') -Force -ErrorAction SilentlyContinue
     Invoke-NativeChecked $EditorCmd @($Project,"-ExecutePythonScript=$Pipeline",'-unattended','-nop4','-nosplash','-NoSound','-utf8output') 'ONE-SHOT CONTENT IMPORT'

@@ -24,6 +24,7 @@
 #include "GameFramework/GameUserSettings.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Misc/Parse.h"
 #include "TimerManager.h"
 
@@ -52,6 +53,28 @@ void APhantomGameDirectorBase::BeginPlay()
             auto& MouseClick = InputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &APhantomGameDirectorBase::HandleShellClick); MouseClick.bExecuteWhenPaused = true; MouseClick.bConsumeInput = false;
         }
     }
+    // Respect the user's persisted Unreal scalability choice across every PhantomPlay title.
+    // Custom (-1) profiles retain the project default until the user selects a named preset.
+    if (GEngine && GEngine->GetGameUserSettings())
+    {
+        const int32 PersistedQuality = GEngine->GetGameUserSettings()->GetOverallScalabilityLevel();
+        if (PersistedQuality >= 0)
+        {
+            GraphicsQuality = FMath::Clamp(PersistedQuality, 0, 4);
+        }
+    }
+    // Master volume is a PhantomPlay-wide preference, not a per-match variable.
+    // Persist it beside Unreal's user settings so all four executables inherit the same value.
+    if (GConfig)
+    {
+        float PersistedVolume = MasterVolume;
+        if (GConfig->GetFloat(TEXT("PhantomPlay.Audio"), TEXT("MasterVolume"), PersistedVolume, GGameUserSettingsIni))
+        {
+            MasterVolume = FMath::Clamp(PersistedVolume, 0.0f, 1.0f);
+        }
+    }
+    FApp::SetVolumeMultiplier(MasterVolume);
+
     ApplyShellState();
 
     // V10 candidate QA: one packaged gameplay capture per game. This deliberately bypasses
@@ -93,6 +116,15 @@ FString APhantomGameDirectorBase::GetGraphicsQualityLabel() const
 {
     static const TCHAR* Labels[] = { TEXT("LOW"), TEXT("MEDIUM"), TEXT("HIGH"), TEXT("EPIC"), TEXT("CINEMATIC") };
     return Labels[FMath::Clamp(GraphicsQuality, 0, 4)];
+}
+
+float APhantomGameDirectorBase::GetShellUIScale(float Width, float Height) const
+{
+    // One scale contract drives both rendering and hit-testing. Previously the shared shell,
+    // CubeTown shell, and click handler each used different caps, so 1440p/4K buttons could be
+    // drawn in one place while the actual clickable rectangle remained somewhere else.
+    if (Width <= 1.0f || Height <= 1.0f) return 1.0f;
+    return FMath::Clamp(FMath::Min(Width / 1920.0f, Height / 1080.0f), 0.78f, 1.75f);
 }
 
 void APhantomGameDirectorBase::ApplyShellState()
@@ -173,6 +205,11 @@ void APhantomGameDirectorBase::HandleVolumeDown()
     if (ShellScreen != EPhantomShellScreen::Settings) return;
     MasterVolume = FMath::Clamp(MasterVolume - 0.1f, 0.0f, 1.0f);
     FApp::SetVolumeMultiplier(MasterVolume);
+    if (GConfig)
+    {
+        GConfig->SetFloat(TEXT("PhantomPlay.Audio"), TEXT("MasterVolume"), MasterVolume, GGameUserSettingsIni);
+        GConfig->Flush(false, GGameUserSettingsIni);
+    }
 }
 
 void APhantomGameDirectorBase::HandleVolumeUp()
@@ -180,20 +217,25 @@ void APhantomGameDirectorBase::HandleVolumeUp()
     if (ShellScreen != EPhantomShellScreen::Settings) return;
     MasterVolume = FMath::Clamp(MasterVolume + 0.1f, 0.0f, 1.0f);
     FApp::SetVolumeMultiplier(MasterVolume);
+    if (GConfig)
+    {
+        GConfig->SetFloat(TEXT("PhantomPlay.Audio"), TEXT("MasterVolume"), MasterVolume, GGameUserSettingsIni);
+        GConfig->Flush(false, GGameUserSettingsIni);
+    }
 }
 
 void APhantomGameDirectorBase::HandleQualityDown()
 {
     if (ShellScreen != EPhantomShellScreen::Settings) return;
     GraphicsQuality = FMath::Clamp(GraphicsQuality - 1, 0, 4);
-    if (GEngine && GEngine->GetGameUserSettings()) { GEngine->GetGameUserSettings()->SetOverallScalabilityLevel(GraphicsQuality); GEngine->GetGameUserSettings()->ApplySettings(false); }
+    if (GEngine && GEngine->GetGameUserSettings()) { GEngine->GetGameUserSettings()->SetOverallScalabilityLevel(GraphicsQuality); GEngine->GetGameUserSettings()->ApplySettings(false); GEngine->GetGameUserSettings()->SaveSettings(); }
 }
 
 void APhantomGameDirectorBase::HandleQualityUp()
 {
     if (ShellScreen != EPhantomShellScreen::Settings) return;
     GraphicsQuality = FMath::Clamp(GraphicsQuality + 1, 0, 4);
-    if (GEngine && GEngine->GetGameUserSettings()) { GEngine->GetGameUserSettings()->SetOverallScalabilityLevel(GraphicsQuality); GEngine->GetGameUserSettings()->ApplySettings(false); }
+    if (GEngine && GEngine->GetGameUserSettings()) { GEngine->GetGameUserSettings()->SetOverallScalabilityLevel(GraphicsQuality); GEngine->GetGameUserSettings()->ApplySettings(false); GEngine->GetGameUserSettings()->SaveSettings(); }
 }
 
 void APhantomGameDirectorBase::HandleShellClick()
@@ -203,7 +245,7 @@ void APhantomGameDirectorBase::HandleShellClick()
     float MX=0.0f,MY=0.0f; if(!PC->GetMousePosition(MX,MY)) return;
     int32 VW=0,VH=0; PC->GetViewportSize(VW,VH); if(VW<=0||VH<=0)return;
     const float W=static_cast<float>(VW),H=static_cast<float>(VH);
-    const float Scale=FMath::Clamp(FMath::Min(W/1920.0f,H/1080.0f),0.78f,1.18f);
+    const float Scale=GetShellUIScale(W,H);
     const auto S=[Scale](float V){return V*Scale;};
     const float Margin=S(54.0f), PanelW=FMath::Min(W-Margin*2.0f,S(1060.0f)), PanelH=FMath::Min(H-Margin*2.0f,S(650.0f));
     const float PanelX=Margin,PanelY=(H-PanelH)*0.5f,CardX=PanelX+S(44.0f),CardY=PanelY+S(154.0f),CardW=PanelW-S(88.0f),CardH=PanelH-S(202.0f);
@@ -423,7 +465,7 @@ AStaticMeshActor* APhantomGameDirectorBase::SpawnStaticMeshAsset(
     if (AssetPath.Contains(TEXT("SM_StorybookTree_A")) || AssetPath.Contains(TEXT("SM_CubetownTree")))
         PreferredAssetPath = TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A");
     else if (AssetPath.Contains(TEXT("SM_StorybookTree_B")))
-        PreferredAssetPath = TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B");
+        PreferredAssetPath = TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A");
     else if (AssetPath.Contains(TEXT("SM_RockCluster_A")))
         PreferredAssetPath = TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock");
     else if (AssetPath.Contains(TEXT("SM_Fence_A")))

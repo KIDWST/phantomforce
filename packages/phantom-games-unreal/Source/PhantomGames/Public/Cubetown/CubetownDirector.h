@@ -31,7 +31,13 @@ enum class ECubetownEchoType : uint8
 {
     Blade,
     Boulder,
-    Bloom
+    Bloom,
+    Bridge,
+    TideSpire,
+    SkyPad,
+    BlastBloom,
+    GaleTotem,
+    Climbroot
 };
 
 UENUM(BlueprintType)
@@ -92,6 +98,10 @@ public:
 
     UPROPERTY()
     bool bGuardianDefeated = false;
+
+    // V16 persistent Memorycraft discovery bitset. Bits map to ECubetownEchoType values.
+    UPROPERTY()
+    uint32 CreationUnlockMask = 0x7u;
 
     UPROPERTY()
     TArray<int32> Friendship = { 0, 0, 0 };
@@ -213,6 +223,7 @@ public:
     virtual void Tick(float DeltaSeconds) override;
     virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
     void Configure(ECubetownEchoType NewType);
+    ECubetownEchoType GetEchoType() const { return EchoType; }
 
 private:
     UPROPERTY()
@@ -389,6 +400,12 @@ private:
     void ToggleMapPanel();
     void ToggleJournalPanel();
     void SummonEcho();
+    void RecordCreation();
+    void StartWeave();
+    void StopWeave();
+    void StartReverseWeave();
+    void StopReverseWeave();
+    void ClearCreations();
     void CycleBlock();
     void CycleEcho();
     void Interact();
@@ -450,6 +467,10 @@ public:
     void CycleBlock();
     void CycleEcho();
     void SummonEcho();
+    void RecordCreationAtCursor(APlayerController* PlayerController);
+    void BeginWeave(APlayerController* PlayerController, bool bReverse);
+    void EndWeave();
+    void ClearCreations();
     void ActivateNearbyShrine(const FVector& HeroLocation);
     void InteractNearby(const FVector& HeroLocation);
     void RegisterEnemyDefeat(ECubetownEnemyType Type);
@@ -463,6 +484,12 @@ public:
     ECubetownBlockType GetSelectedBlock() const { return SelectedBlock; }
     ECubetownEchoType GetSelectedEcho() const { return SelectedEcho; }
     bool IsEchoUnlocked(ECubetownEchoType Type) const;
+    int32 GetUnlockedCreationCount() const;
+    int32 GetCreationBudgetUsed() const;
+    int32 GetCreationBudgetMax() const { return 5 + ShrinesRestored; }
+    bool IsWeaving() const { return WeaveTarget.IsValid(); }
+    bool IsReverseWeave() const { return bReverseWeave; }
+    FString GetWeaveTargetName() const;
     bool IsGuardianDefeated() const { return bGuardianDefeated; }
     const FString& GetQuestStatus() const { return QuestStatus; }
     int32 GetFriendship(int32 Index) const { return Friendship.IsValidIndex(Index) ? Friendship[Index] : 0; }
@@ -476,7 +503,13 @@ private:
     TSet<FIntVector> RemovedWorldBlocks;
     TArray<TWeakObjectPtr<ACubetownShrine>> Shrines;
     TArray<TWeakObjectPtr<ACubetownVillager>> Villagers;
-    TWeakObjectPtr<ACubetownEcho> ActiveEcho;
+    TArray<TWeakObjectPtr<ACubetownEcho>> ActiveEchoes;
+    TArray<TWeakObjectPtr<AStaticMeshActor>> ActiveCreationProps;
+    TArray<TWeakObjectPtr<AStaticMeshActor>> MemorySources;
+    TWeakObjectPtr<AActor> WeaveTarget;
+    bool bReverseWeave = false;
+    FVector WeaveRelativeOffset = FVector::ZeroVector;
+    uint32 CreationUnlockMask = 0x7u;
     ECubetownBlockType SelectedBlock = ECubetownBlockType::Grass;
     ECubetownEchoType SelectedEcho = ECubetownEchoType::Blade;
     int32 EchoEnergy = 24;
@@ -527,6 +560,12 @@ private:
     void BuildDreamWorld();
     void SpawnDreamTree(const FString& Name, const FVector& Location, float Scale, int32 PaletteVariant, bool bCollision = true);
     void SpawnDreamWorldDetails();
+    void SpawnMemorycraftTrials();
+    AStaticMeshActor* SpawnCreationProp(ECubetownEchoType Type, const FVector& Location, const FRotator& Rotation, bool bWorldSource);
+    void UpdateWeave(float DeltaSeconds);
+    void UpdateCreationUtilities(float DeltaSeconds);
+    void PruneCreations();
+    void MakeCreationRoom(int32 RequiredCost);
     void UpdateDreamEnvironment(float DeltaSeconds);
     void RegisterBuildActor(AStaticMeshActor* Actor, const FString& AssetPath);
     void PushBuildTransaction(const TArray<TWeakObjectPtr<AActor>>& Actors);

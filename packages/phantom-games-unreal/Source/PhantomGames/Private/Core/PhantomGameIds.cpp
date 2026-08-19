@@ -35,12 +35,12 @@ namespace PhantomGameIds
 
     bool IsFlagship(const FString& GameId)
     {
-        return GameId == Strike() || GameId == Ages() || GameId == Legends();
+        return GameId == Strike() || GameId == Ages() || GameId == Legends() || GameId == Cubetown();
     }
 
     bool IsNativeGame(const FString& GameId)
     {
-        return IsFlagship(GameId) || GameId == Cubetown();
+        return IsFlagship(GameId);
     }
 
     FString ResolveRequested()

@@ -1,31 +1,47 @@
-{
-  "FileVersion": 3,
-  "EngineAssociation": "5.8",
-  "Category": "Games",
-  "Description": "Unreal-native home of PhantomStrike, Phantom Ages, Phantom Legends, and Cubetown.",
-  "Modules": [
-    {
-      "Name": "PhantomGames",
-      "Type": "Runtime",
-      "LoadingPhase": "Default"
-    }
-  ],
-  "Plugins": [
-    {
-      "Name": "EnhancedInput",
-      "Enabled": true
-    },
-    {
-      "Name": "Niagara",
-      "Enabled": true
-    },
-    {
-      "Name": "PythonScriptPlugin",
-      "Enabled": true
-    },
-    {
-      "Name": "EditorScriptingUtilities",
-      "Enabled": true
-    }
-  ]
+﻿{
+    "FileVersion":  3,
+    "EngineAssociation":  "5.8",
+    "Category":  "Games",
+    "Description":  "Unreal-native home of PhantomStrike, Phantom Ages, Phantom Legends, and Cubetown.",
+    "Modules":  [
+                    {
+                        "Name":  "PhantomGames",
+                        "Type":  "Runtime",
+                        "LoadingPhase":  "Default"
+                    }
+                ],
+    "Plugins":  [
+                    {
+                        "Name":  "EnhancedInput",
+                        "Enabled":  true
+                    },
+                    {
+                        "Name":  "Niagara",
+                        "Enabled":  true
+                    },
+                    {
+                        "Name":  "PythonScriptPlugin",
+                        "Enabled":  true
+                    },
+                    {
+                        "Name":  "EditorScriptingUtilities",
+                        "Enabled":  true
+                    },
+                    {
+                        "Name":  "ModelContextProtocol",
+                        "Enabled":  true
+                    },
+                    {
+                        "Name":  "ToolsetRegistry",
+                        "Enabled":  true
+                    },
+                    {
+                        "Name":  "AllToolsets",
+                        "Enabled":  true
+                    },
+                    {
+                        "Name":  "PhantomPlayAITools",
+                        "Enabled":  true
+                    }
+                ]
 }

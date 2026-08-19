@@ -14,6 +14,7 @@
 #include "Engine/Engine.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/Texture2D.h"
+#include "Engine/World.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PointLight.h"
 #include "Components/DirectionalLightComponent.h"
@@ -36,6 +37,33 @@ namespace
         if (!Context || !Context->GetWorld()) return nullptr;
         for (TActorIterator<ACubetownDirector> It(Context->GetWorld()); It; ++It) return *It;
         return nullptr;
+    }
+
+    // V17: the hero must visibly stand on the authored world. Earlier builds spawned the capsule
+    // roughly one full capsule-height above the road, which could make the production mesh appear
+    // to hover even before CharacterMovement had a chance to resolve the floor. This traces against
+    // world geometry and places the capsule centre exactly one half-height above the hit surface.
+    bool SnapCubetownCharacterToGround(ACharacter* Character, float TraceUp = 1200.0f, float TraceDown = 6000.0f)
+    {
+        if (!Character || !Character->GetWorld() || !Character->GetCapsuleComponent()) return false;
+        const FVector Current = Character->GetActorLocation();
+        const FVector Start = Current + FVector(0.0f, 0.0f, TraceUp);
+        const FVector End = Current - FVector(0.0f, 0.0f, TraceDown);
+        FCollisionObjectQueryParams Objects;
+        Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+        Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(CubetownGroundSnap), false, Character);
+        FHitResult Hit;
+        if (!Character->GetWorld()->LineTraceSingleByObjectType(Hit, Start, End, Objects, Query)) return false;
+        FVector Grounded = Current;
+        Grounded.Z = Hit.ImpactPoint.Z + Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 1.5f;
+        Character->SetActorLocation(Grounded, false, nullptr, ETeleportType::TeleportPhysics);
+        if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+        {
+            Move->StopMovementImmediately();
+            Move->SetMovementMode(MOVE_Walking);
+        }
+        return true;
     }
 
     bool AdventureTrace(APlayerController* PlayerController, FHitResult& OutHit)
@@ -121,15 +149,90 @@ namespace
         return TEXT("BLOCK");
     }
 
+    constexpr int32 CubetownCreationTypeCount = 9;
+
+    uint32 CreationBit(ECubetownEchoType Type)
+    {
+        return 1u << static_cast<uint8>(Type);
+    }
+
     const TCHAR* EchoName(ECubetownEchoType Type)
     {
         switch (Type)
         {
-            case ECubetownEchoType::Blade: return TEXT("BLADE ECHO");
-            case ECubetownEchoType::Boulder: return TEXT("BOULDER ECHO");
-            case ECubetownEchoType::Bloom: return TEXT("BLOOM ECHO");
+            case ECubetownEchoType::Blade: return TEXT("BLADE MEMORY");
+            case ECubetownEchoType::Boulder: return TEXT("BOULDER MEMORY");
+            case ECubetownEchoType::Bloom: return TEXT("BLOOM MEMORY");
+            case ECubetownEchoType::Bridge: return TEXT("WANDER BRIDGE");
+            case ECubetownEchoType::TideSpire: return TEXT("TIDE SPIRE");
+            case ECubetownEchoType::SkyPad: return TEXT("SKY PAD");
+            case ECubetownEchoType::BlastBloom: return TEXT("BLAST BLOOM");
+            case ECubetownEchoType::GaleTotem: return TEXT("GALE TOTEM");
+            case ECubetownEchoType::Climbroot: return TEXT("CLIMBROOT");
         }
-        return TEXT("ECHO");
+        return TEXT("CREATION");
+    }
+
+    const TCHAR* CreationRole(ECubetownEchoType Type)
+    {
+        switch (Type)
+        {
+            case ECubetownEchoType::Blade: return TEXT("MELEE ALLY // CHASES CREATURES");
+            case ECubetownEchoType::Boulder: return TEXT("HEAVY ALLY // BREAKS SPACE OPEN");
+            case ECubetownEchoType::Bloom: return TEXT("RANGED ALLY // FIRES FROM SAFETY");
+            case ECubetownEchoType::Bridge: return TEXT("CROSS GAPS // STACK OR WEAVE IT");
+            case ECubetownEchoType::TideSpire: return TEXT("WATER LIFT // RIDE ITS UPDRAFT");
+            case ECubetownEchoType::SkyPad: return TEXT("MOVING STEP // RIDE-WEAVE FOR HEIGHT");
+            case ECubetownEchoType::BlastBloom: return TEXT("STRIKE TO DETONATE // AREA DAMAGE");
+            case ECubetownEchoType::GaleTotem: return TEXT("STRIKE TO PUSH // MOVE CREATURES");
+            case ECubetownEchoType::Climbroot: return TEXT("VERTICAL ROUTE // MAKE YOUR OWN LADDER");
+        }
+        return TEXT("FLEXIBLE MEMORYCRAFT TOOL");
+    }
+
+    int32 CreationCost(ECubetownEchoType Type)
+    {
+        switch (Type)
+        {
+            case ECubetownEchoType::Boulder: return 3;
+            case ECubetownEchoType::Blade:
+            case ECubetownEchoType::Bloom:
+            case ECubetownEchoType::Bridge:
+            case ECubetownEchoType::TideSpire:
+            case ECubetownEchoType::BlastBloom:
+            case ECubetownEchoType::GaleTotem:
+            case ECubetownEchoType::Climbroot: return 2;
+            case ECubetownEchoType::SkyPad: return 1;
+        }
+        return 2;
+    }
+
+    const TCHAR* CreationAssetPath(ECubetownEchoType Type)
+    {
+        switch (Type)
+        {
+            case ECubetownEchoType::Bridge: return TEXT("/Game/Phantom/Generated/Cubetown/SM_CubetownBridge.SM_CubetownBridge");
+            case ECubetownEchoType::TideSpire: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A");
+            case ECubetownEchoType::SkyPad: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFloatingIsland_A.SM_CubeDreamFloatingIsland_A");
+            case ECubetownEchoType::BlastBloom: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamMushroomCluster_A.SM_CubeDreamMushroomCluster_A");
+            case ECubetownEchoType::GaleTotem: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamWindmill_A.SM_CubeDreamWindmill_A");
+            case ECubetownEchoType::Climbroot: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamLandmarkTree_A.SM_CubeDreamLandmarkTree_A");
+            default: return TEXT("");
+        }
+    }
+
+    FVector CreationScale(ECubetownEchoType Type)
+    {
+        switch (Type)
+        {
+            case ECubetownEchoType::Bridge: return FVector(0.82f,0.82f,0.82f);
+            case ECubetownEchoType::TideSpire: return FVector(0.52f,0.52f,1.75f);
+            case ECubetownEchoType::SkyPad: return FVector(0.34f,0.34f,0.18f);
+            case ECubetownEchoType::BlastBloom: return FVector(0.68f);
+            case ECubetownEchoType::GaleTotem: return FVector(0.56f);
+            case ECubetownEchoType::Climbroot: return FVector(0.44f,0.44f,0.80f);
+            default: return FVector(1.0f);
+        }
     }
 
     const TCHAR* FriendName(ECubetownFriend Friend)
@@ -151,7 +254,7 @@ namespace
         if (!HUD || !Director || !Director->IsShellVisible()) return false;
         // Preserve a readable physical text size on high-DPI 1440p and 4K displays. The previous
         // 1.18 cap left the shell at near-1080p dimensions even when the backbuffer was twice as tall.
-        const float Scale=FMath::Clamp(FMath::Min(Width/1920.0f,Height/1080.0f),0.78f,1.75f);
+        const float Scale=Director->GetShellUIScale(Width,Height);
         const auto S=[Scale](float V){return V*Scale;};
         const float Margin=S(54.0f), PanelW=FMath::Min(Width-Margin*2.0f,S(1060.0f)), PanelH=FMath::Min(Height-Margin*2.0f,S(650.0f));
         const float PanelX=Margin, PanelY=(Height-PanelH)*0.5f;
@@ -167,7 +270,7 @@ namespace
         HUD->DrawRect(Paper,PanelX,PanelY,PanelW,PanelH);
         HUD->DrawRect(Berry,PanelX,PanelY,S(8.0f),PanelH);
         HUD->DrawRect(FLinearColor(0.95f,0.67f,0.28f,0.18f),PanelX+S(8),PanelY,S(15),PanelH);
-        HUD->DrawText(TEXT("CUBETOWN"),Cream,PanelX+S(48),PanelY+S(36),nullptr,S(1.78f));
+        HUD->DrawText(TEXT("CUBETOWN // DIORAMA ADVENTURE V17"),Cream,PanelX+S(48),PanelY+S(36),nullptr,S(1.30f));
         HUD->DrawText(TEXT("A FOUR-SEASONS DREAM // FRIENDS, CREATION, ADVENTURE"),FLinearColor(0.95f,0.70f,0.66f),PanelX+S(50),PanelY+S(98),nullptr,S(0.72f));
         HUD->DrawText(TEXT("THE RED TREES STAY"),Ruby,PanelX+PanelW-S(270),PanelY+S(48),nullptr,S(0.60f));
         const float CardX=PanelX+S(44),CardY=PanelY+S(154),CardW=PanelW-S(88),CardH=PanelH-S(202);
@@ -196,7 +299,7 @@ namespace
         else if(Screen==EPhantomShellScreen::Controls)
         {
             HUD->DrawText(TEXT("HOW TO PLAY"),Cream,CardX+S(34),CardY+S(26),nullptr,S(0.96f));
-            HUD->DrawText(TEXT("WASD move   MOUSE look   SHIFT sprint   SPACE jump/climb   CTRL crouch   ALT dodge\nLMB combo   RMB guard/parry   E interact   F lock target   HOLD Q Creation   B Build Mode\nTAB inventory   M map   J journal\nBUILD: 1 prefab  2 wall  3 room  4 fence  5 garden  6 decor   [/] catalog   Q/E rotate   CTRL+Z/Y undo/redo"),FLinearColor(0.92f,0.82f,0.72f),CardX+S(36),CardY+S(88),nullptr,S(0.70f));
+            HUD->DrawText(TEXT("WASD move   MOUSE look   SHIFT sprint   SPACE jump/climb   CTRL crouch   ALT dodge\nLMB combo   RMB guard/parry   E interact   F lock target   HOLD Q Memorycraft   C remember   X weave   G ride-weave   B Build Mode\nTAB inventory   M map   J journal\nBUILD: 1 prefab  2 wall  3 room  4 fence  5 garden  6 decor   [/] catalog   Q/E rotate   CTRL+Z/Y undo/redo"),FLinearColor(0.92f,0.82f,0.72f),CardX+S(36),CardY+S(88),nullptr,S(0.70f));
             Button(TEXT("[ENTER / ESC]  BACK"),CardY+CardH-S(76),true);
         }
         else
@@ -842,9 +945,15 @@ ACubetownHero::ACubetownHero()
     AutoPossessPlayer = EAutoReceiveInput::Player0;
     GetCapsuleComponent()->SetCapsuleRadius(38.0f);
     GetCapsuleComponent()->SetCapsuleHalfHeight(72.0f);
-    GetCharacterMovement()->MaxWalkSpeed = 520.0f;
-    GetCharacterMovement()->MaxAcceleration = 4200.0f;
-    GetCharacterMovement()->BrakingDecelerationWalking = 3000.0f;
+    GetCharacterMovement()->MaxWalkSpeed = 500.0f;
+    GetCharacterMovement()->MaxAcceleration = 5000.0f;
+    GetCharacterMovement()->BrakingDecelerationWalking = 4200.0f;
+    GetCharacterMovement()->GroundFriction = 10.0f;
+    GetCharacterMovement()->BrakingFriction = 9.0f;
+    GetCharacterMovement()->BrakingFrictionFactor = 1.5f;
+    GetCharacterMovement()->bUseSeparateBrakingFriction = true;
+    GetCharacterMovement()->AirControl = 0.24f;
+    GetCharacterMovement()->bAlwaysCheckFloor = true;
     GetCharacterMovement()->bOrientRotationToMovement = true;
     GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
     GetCharacterMovement()->JumpZVelocity = 560.0f;
@@ -855,11 +964,11 @@ ACubetownHero::ACubetownHero()
     SpringArm->SetupAttachment(GetCapsuleComponent());
     SpringArm->SetUsingAbsoluteRotation(false);
     SpringArm->bUsePawnControlRotation = true;
-    // Modern third-person adventure framing: behind the hero, not a tactical overhead camera.
-    SpringArm->TargetArmLength = 640.0f;
-    SpringArm->TargetOffset = FVector(0.0f, 0.0f, 130.0f);
-    SpringArm->SocketOffset = FVector(0.0f, 34.0f, 12.0f);
-    SpringArm->SetRelativeRotation(FRotator(-18.0f, 0.0f, 0.0f));
+    // V17 diorama-adventure framing: high, readable, toy-box composition while preserving free yaw control.
+    SpringArm->TargetArmLength = 860.0f;
+    SpringArm->TargetOffset = FVector(0.0f, 0.0f, 118.0f);
+    SpringArm->SocketOffset = FVector(0.0f, 18.0f, 8.0f);
+    SpringArm->SetRelativeRotation(FRotator(-42.0f, 0.0f, 0.0f));
     SpringArm->bDoCollisionTest = true;
     SpringArm->ProbeSize = 16.0f;
     SpringArm->bEnableCameraLag = true;
@@ -868,7 +977,7 @@ ACubetownHero::ACubetownHero()
     SpringArm->CameraRotationLagSpeed = 14.0f;
     AdventureCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("AdventureCamera"));
     AdventureCamera->SetupAttachment(SpringArm);
-    AdventureCamera->FieldOfView = 72.0f;
+    AdventureCamera->FieldOfView = 56.0f;
 
     UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
     UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -992,12 +1101,17 @@ void ACubetownHero::BeginPlay()
     }
     // Begin on the authored village road rather than just beyond its southern edge.  This gives
     // the adventure camera a clear corridor and an immediate readable town composition.
-    SetActorLocation(FVector(0.0f, -10500.0f, 145.0f));
+    SetActorLocation(FVector(0.0f, -10500.0f, 900.0f), false, nullptr, ETeleportType::TeleportPhysics);
+    if (!SnapCubetownCharacterToGround(this))
+    {
+        const float CapsuleZ = GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 2.0f;
+        SetActorLocation(FVector(0.0f, -10500.0f, CapsuleZ), false, nullptr, ETeleportType::TeleportPhysics);
+    }
     // V9: spawn facing straight into Heartstone. UE forward is +X; the village is north (+Y)
     // of the spawn. The old zero-yaw start literally pointed the hero at the emptiest side of the map.
     SetActorRotation(FRotator(0.0f, 90.0f, 0.0f));
     if (APlayerController* FirstPC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
-        FirstPC->SetControlRotation(FRotator(-8.0f, 90.0f, 0.0f));
+        FirstPC->SetControlRotation(FRotator(-42.0f, 90.0f, 0.0f));
     const bool bProductionHero = ConfigureProductionSkeletalCharacter(
         this,
         TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue"),
@@ -1049,7 +1163,7 @@ void ACubetownHero::BeginPlay()
     ApplyColor(EyeRight, FLinearColor(0.025f, 0.035f, 0.05f));
     if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
     {
-        PlayerController->SetControlRotation(FRotator(-12.0f, 90.0f, 0.0f));
+        PlayerController->SetControlRotation(FRotator(-42.0f, 90.0f, 0.0f));
         PlayerController->bShowMouseCursor = false;
         PlayerController->SetInputMode(FInputModeGameOnly());
     }
@@ -1060,7 +1174,9 @@ void ACubetownHero::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     if (GetActorLocation().Z < -200.0f)
     {
-        SetActorLocation(FVector(0.0f, -10500.0f, 145.0f), false, nullptr, ETeleportType::TeleportPhysics);
+        SetActorLocation(FVector(0.0f, -10500.0f, 900.0f), false, nullptr, ETeleportType::TeleportPhysics);
+        if (!SnapCubetownCharacterToGround(this))
+            SetActorLocation(FVector(0.0f, -10500.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 2.0f), false, nullptr, ETeleportType::TeleportPhysics);
         GetCharacterMovement()->StopMovementImmediately();
     }
     // Traversal is non-negotiable: restore walking if a launcher/map transition ever leaves CharacterMovement inactive.
@@ -1069,7 +1185,7 @@ void ACubetownHero::Tick(float DeltaSeconds)
     if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
     {
         FRotator ViewRotation = PlayerController->GetControlRotation();
-        ViewRotation.Pitch = FMath::Clamp(FRotator::NormalizeAxis(ViewRotation.Pitch), -24.0f, 8.0f);
+        ViewRotation.Pitch = FMath::Clamp(FRotator::NormalizeAxis(ViewRotation.Pitch), -52.0f, -28.0f);
         ViewRotation.Roll = 0.0f;
         PlayerController->SetControlRotation(ViewRotation);
 
@@ -1133,7 +1249,7 @@ void ACubetownHero::Tick(float DeltaSeconds)
     if (VisualModel && VisualModel->IsVisible())
     {
         const float Speed = GetVelocity().Size2D();
-        const float Bob = Speed > 40.0f ? FMath::Sin(GetWorld()->GetTimeSeconds() * 10.0f) * 2.2f : 0.0f;
+        const float Bob = Speed > 40.0f ? FMath::Sin(GetWorld()->GetTimeSeconds() * 10.0f) * 0.9f : 0.0f;
         VisualModel->SetRelativeLocation(FVector(0.0f,0.0f,-72.0f + Bob));
     }
     WandCore->AddLocalRotation(FRotator(0.0f, DeltaSeconds * 160.0f, 0.0f));
@@ -1168,6 +1284,12 @@ void ACubetownHero::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
     PlayerInputComponent->BindKey(EKeys::Q, IE_Pressed, this, &ACubetownHero::StartCreationSelect);
     PlayerInputComponent->BindKey(EKeys::Q, IE_Released, this, &ACubetownHero::FinishCreationSelect);
     PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &ACubetownHero::CycleEcho);
+    PlayerInputComponent->BindKey(EKeys::C, IE_Pressed, this, &ACubetownHero::RecordCreation);
+    PlayerInputComponent->BindKey(EKeys::X, IE_Pressed, this, &ACubetownHero::StartWeave);
+    PlayerInputComponent->BindKey(EKeys::X, IE_Released, this, &ACubetownHero::StopWeave);
+    PlayerInputComponent->BindKey(EKeys::G, IE_Pressed, this, &ACubetownHero::StartReverseWeave);
+    PlayerInputComponent->BindKey(EKeys::G, IE_Released, this, &ACubetownHero::StopReverseWeave);
+    PlayerInputComponent->BindKey(EKeys::BackSpace, IE_Pressed, this, &ACubetownHero::ClearCreations);
     PlayerInputComponent->BindKey(EKeys::B, IE_Pressed, this, &ACubetownHero::ToggleBuildMode);
     PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ACubetownHero::ToggleInventoryPanel);
     PlayerInputComponent->BindKey(EKeys::M, IE_Pressed, this, &ACubetownHero::ToggleMapPanel);
@@ -1293,6 +1415,17 @@ void ACubetownHero::SummonEcho()
     if (ACubetownDirector* Director = CubetownDirector(this)) Director->SummonEcho();
 }
 
+void ACubetownHero::RecordCreation()
+{
+    if (ACubetownDirector* Director = CubetownDirector(this))
+        if (!Director->IsBuildMode()) Director->RecordCreationAtCursor(Cast<APlayerController>(GetController()));
+}
+void ACubetownHero::StartWeave(){if(ACubetownDirector* D=CubetownDirector(this))if(!D->IsBuildMode())D->BeginWeave(Cast<APlayerController>(GetController()),false);}
+void ACubetownHero::StopWeave(){if(ACubetownDirector* D=CubetownDirector(this))D->EndWeave();}
+void ACubetownHero::StartReverseWeave(){if(ACubetownDirector* D=CubetownDirector(this))if(!D->IsBuildMode())D->BeginWeave(Cast<APlayerController>(GetController()),true);}
+void ACubetownHero::StopReverseWeave(){if(ACubetownDirector* D=CubetownDirector(this))D->EndWeave();}
+void ACubetownHero::ClearCreations(){if(ACubetownDirector* D=CubetownDirector(this))if(!D->IsBuildMode())D->ClearCreations();}
+
 void ACubetownHero::CycleBlock()
 {
     if (ACubetownDirector* Director = CubetownDirector(this)) Director->CycleBlock();
@@ -1376,19 +1509,19 @@ void ACubetownHero::ToggleCrouch()
 void ACubetownHero::RecenterCamera()
 {
     if(APlayerController* PC=Cast<APlayerController>(GetController()))
-        PC->SetControlRotation(FRotator(-10.0f,GetActorRotation().Yaw,0.0f));
+        PC->SetControlRotation(FRotator(-24.0f,GetActorRotation().Yaw,0.0f));
 }
 void ACubetownHero::SetBuildCameraMode(bool bEnabled)
 {
     if(SpringArm)
     {
-        SpringArm->TargetArmLength=bEnabled?1250.0f:560.0f;
+        SpringArm->TargetArmLength=bEnabled?1250.0f:720.0f;
         SpringArm->bDoCollisionTest=true;
     }
     if(APlayerController* PC=Cast<APlayerController>(GetController()))
     {
         const float Yaw=PC->GetControlRotation().Yaw;
-        PC->SetControlRotation(FRotator(bEnabled?-48.0f:-10.0f,Yaw,0.0f));
+        PC->SetControlRotation(FRotator(bEnabled?-48.0f:-24.0f,Yaw,0.0f));
     }
     if(VisualModel) VisualModel->SetVisibility(!bEnabled);
 }
@@ -1463,7 +1596,25 @@ float ACubetownHero::TakeDamage(
     if (Health <= 0.0f)
     {
         Health = 120.0f;
-        SetActorLocation(FVector(0.0f, -11200.0f, 145.0f));
+        Stamina = 100.0f;
+        AttackRemaining = 0.0f;
+        DashRemaining = 0.0f;
+        ComboResetRemaining = 0.0f;
+        ParryWindowRemaining = 0.0f;
+        InvulnerableRemaining = 1.0f;
+        ComboStep = 0;
+        bGuarding = false;
+        bSprinting = false;
+        LockedTarget.Reset();
+        if (bCrouchedByInput) UnCrouch();
+        bCrouchedByInput = false;
+        GetCharacterMovement()->StopMovementImmediately();
+        GetCharacterMovement()->MaxWalkSpeed = 520.0f;
+        SetActorLocation(FVector(0.0f, -11200.0f, 900.0f), false, nullptr, ETeleportType::TeleportPhysics);
+        if (!SnapCubetownCharacterToGround(this))
+            SetActorLocation(FVector(0.0f, -11200.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 2.0f), false, nullptr, ETeleportType::TeleportPhysics);
+        SetActorRotation(FRotator(0.0f, 90.0f, 0.0f));
+        if (APlayerController* PC=Cast<APlayerController>(GetController())) PC->SetControlRotation(FRotator(-42.0f,90.0f,0.0f));
         if (ACubetownDirector* Director = CubetownDirector(this)) Director->NotifyHeroDefeated();
     }
     return AppliedDamage;
@@ -1494,11 +1645,11 @@ void ACubetownHUD::DrawHUD()
     DrawLine(CX,CY+S(2.0f),CX,CY+S(8.0f),FLinearColor(0.86f,1.0f,0.94f,0.85f),2.0f);
 
     // Adventure HUD: only the information needed while moving through the world.
-    DrawRect(Panel,Pad,Pad,S(470.0f),S(104.0f));
-    DrawRect(Mint,Pad,Pad,S(5.0f),S(104.0f));
-    DrawText(FString::Printf(TEXT("CUBETOWN // %s"),*Director->GetRegionName(Hero->GetActorLocation())),FLinearColor(1.0f,0.91f,0.76f),Pad+S(20.0f),Pad+S(12.0f),Medium,S(0.82f));
-    DrawText(Director->GetQuestStatus(),FLinearColor(0.78f,0.88f,0.92f),Pad+S(20.0f),Pad+S(50.0f),Medium,S(0.58f));
-    DrawText(FString::Printf(TEXT("SHRINES %d/3   ECHO %03d   %02d:%02d   %s"),Director->GetShrinesRestored(),Director->GetEchoEnergy(),FMath::FloorToInt(Director->GetTimeOfDayHours()),FMath::FloorToInt(FMath::Fmod(Director->GetTimeOfDayHours(),1.0f)*60.0f),*Director->GetWeatherName()),FLinearColor(1.0f,0.76f,0.34f),Pad+S(20.0f),Pad+S(78.0f),Medium,S(0.52f));
+    DrawRect(Panel,Pad,Pad,S(610.0f),S(96.0f));
+    DrawRect(Mint,Pad,Pad,S(5.0f),S(96.0f));
+    DrawText(FString::Printf(TEXT("CUBETOWN // %s"),*Director->GetRegionName(Hero->GetActorLocation())),FLinearColor(1.0f,0.91f,0.76f),Pad+S(20.0f),Pad+S(13.0f),Medium,S(0.68f));
+    DrawText(Director->GetQuestStatus(),FLinearColor(0.78f,0.88f,0.92f),Pad+S(20.0f),Pad+S(45.0f),Medium,S(0.48f));
+    DrawText(FString::Printf(TEXT("SHRINES %d/3   MEMORIES %d/9   LOAD %d/%d   %02d:%02d   %s"),Director->GetShrinesRestored(),Director->GetUnlockedCreationCount(),Director->GetCreationBudgetUsed(),Director->GetCreationBudgetMax(),FMath::FloorToInt(Director->GetTimeOfDayHours()),FMath::FloorToInt(FMath::Fmod(Director->GetTimeOfDayHours(),1.0f)*60.0f),*Director->GetWeatherName()),FLinearColor(1.0f,0.76f,0.34f),Pad+S(20.0f),Pad+S(71.0f),Medium,S(0.45f));
 
     // A premium first session always answers two questions: what should I do, and what can I do here?
     // These markers are derived from live world actors, so they remain accurate after saves and progression.
@@ -1518,9 +1669,10 @@ void ACubetownHUD::DrawHUD()
     DrawRect(FLinearColor(0.07f,0.08f,0.09f),HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f),S(7.0f));
     DrawRect(FLinearColor(0.26f,0.92f,0.52f),HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f)*Hero->GetStamina()/100.0f,S(7.0f));
 
-    const float SlotW=S(112.0f), SlotGap=S(8.0f), SlotY=Height-S(82.0f), SlotStart=Width-Pad-(SlotW*3.0f+SlotGap*2.0f);
-    const FString SlotLabels[]={FString::Printf(TEXT("[Q] %s"),EchoName(Director->GetSelectedEcho())),TEXT("[B] BUILD"),TEXT("[TAB] BAG")};
-    for(int32 I=0;I<3;++I){const float X=SlotStart+I*(SlotW+SlotGap);DrawRect(Panel,X,SlotY,SlotW,S(63.0f));DrawRect(I==0?FLinearColor(0.96f,0.30f,0.40f):FLinearColor(0.96f,0.68f,0.30f),X,SlotY,SlotW,S(4.0f));DrawText(SlotLabels[I],FLinearColor(1.0f,0.91f,0.78f),X+S(11.0f),SlotY+S(20.0f),Medium,S(0.56f));}
+    const float ActionW=FMath::Min(S(720.0f),Width-S(560.0f));
+    const float ActionX=(Width-ActionW)*0.5f, ActionY=Height-S(64.0f);
+    DrawRect(Panel,ActionX,ActionY,ActionW,S(45.0f));
+    DrawText(FString::Printf(TEXT("[LMB] COMBO  [Q] CREATE %s  [C] REMEMBER  [X] WEAVE  [G] RIDE WEAVE  [BACKSPACE] CLEAR  [B] BUILD"),EchoName(Director->GetSelectedEcho())),FLinearColor(0.96f,0.84f,0.74f),ActionX+S(16.0f),ActionY+S(12.0f),Medium,S(0.44f));
 
     const FString InteractionPrompt=Director->GetInteractionPrompt(Hero->GetActorLocation());
     if(!InteractionPrompt.IsEmpty() && !Director->IsBuildMode())
@@ -1561,8 +1713,8 @@ void ACubetownHUD::DrawHUD()
         {
             DrawText(TEXT("SATCHEL & CREATIONS"),FLinearColor(1.0f,0.90f,0.72f),OX+S(34),OY+S(28),Medium,S(0.92f));
             DrawText(FString::Printf(TEXT("HERBS %d     STONE %d     AMBER %d     CRYSTAL %d     WOOD %d"),Director->GetInventory(ECubetownBlockType::Grass),Director->GetInventory(ECubetownBlockType::Stone),Director->GetInventory(ECubetownBlockType::Amber),Director->GetInventory(ECubetownBlockType::Crystal),Director->GetInventory(ECubetownBlockType::Wood)),FLinearColor(0.92f,0.82f,0.72f),OX+S(38),OY+S(96),Medium,S(0.66f));
-            DrawText(FString::Printf(TEXT("DISCOVERED CREATION: %s    ECHO ENERGY %d"),EchoName(Director->GetSelectedEcho()),Director->GetEchoEnergy()),FLinearColor(0.96f,0.45f,0.62f),OX+S(38),OY+S(154),Medium,S(0.66f));
-            DrawText(TEXT("HOLD Q in the world to call a discovered Creation. R cycles favorites."),FLinearColor(0.78f,0.72f,0.68f),OX+S(38),OY+S(220),Medium,S(0.58f));
+            DrawText(FString::Printf(TEXT("SELECTED: %s    MEMORIES %d/9    LOAD %d/%d"),EchoName(Director->GetSelectedEcho()),Director->GetUnlockedCreationCount(),Director->GetCreationBudgetUsed(),Director->GetCreationBudgetMax()),FLinearColor(0.96f,0.45f,0.62f),OX+S(38),OY+S(154),Medium,S(0.66f));
+            DrawText(TEXT("HOLD Q to choose and create. C remembers glowing examples; X weaves a target with you; G lets a moving target carry you."),FLinearColor(0.78f,0.72f,0.68f),OX+S(38),OY+S(220),Medium,S(0.58f));
         }
         else if(Director->GetActivePanel()==2)
         {
@@ -1587,20 +1739,21 @@ void ACubetownHUD::DrawHUD()
     {
         DrawRect(FLinearColor(0.035f,0.018f,0.040f,0.48f),0,0,Width,Height);
         const FVector2D Center(Width*0.5f,Height*0.5f);
-        const float Radius=S(190.0f), CardW=S(176.0f), CardH=S(82.0f);
-        const ECubetownEchoType Types[]={ECubetownEchoType::Blade,ECubetownEchoType::Boulder,ECubetownEchoType::Bloom};
-        for(int32 I=0;I<3;++I)
+        const float CardW=S(190.0f),CardH=S(72.0f),Gap=S(12.0f);
+        const ECubetownEchoType Types[]={ECubetownEchoType::Blade,ECubetownEchoType::Boulder,ECubetownEchoType::Bloom,ECubetownEchoType::Bridge,ECubetownEchoType::TideSpire,ECubetownEchoType::SkyPad,ECubetownEchoType::BlastBloom,ECubetownEchoType::GaleTotem,ECubetownEchoType::Climbroot};
+        const float GridW=CardW*3.0f+Gap*2.0f,GridH=CardH*3.0f+Gap*2.0f;
+        for(int32 I=0;I<CubetownCreationTypeCount;++I)
         {
-            const float Angle=-PI*0.5f + I*(2.0f*PI/3.0f);
-            const float X=Center.X+FMath::Cos(Angle)*Radius-CardW*0.5f;
-            const float Y=Center.Y+FMath::Sin(Angle)*Radius-CardH*0.5f;
+            const int32 Col=I%3,Row=I/3;
+            const float X=Center.X-GridW*0.5f+Col*(CardW+Gap),Y=Center.Y-GridH*0.5f+Row*(CardH+Gap);
             const bool Selected=Director->GetSelectedEcho()==Types[I];
             DrawRect(Selected?FLinearColor(0.72f,0.12f,0.28f,0.96f):FLinearColor(0.16f,0.07f,0.13f,0.92f),X,Y,CardW,CardH);
-            if(Selected) DrawRect(FLinearColor(1.0f,0.72f,0.40f),X,Y,CardW,S(5.0f));
-            DrawText(EchoName(Types[I]),FLinearColor(1.0f,0.91f,0.78f),X+S(18),Y+S(16),Medium,S(0.62f));
-            DrawText(Director->IsEchoUnlocked(Types[I])?TEXT("DISCOVERED"):TEXT("UNDISCOVERED"),Director->IsEchoUnlocked(Types[I])?FLinearColor(0.58f,1.0f,0.72f):FLinearColor(0.62f,0.55f,0.58f),X+S(18),Y+S(49),Medium,S(0.42f));
+            if(Selected)DrawRect(FLinearColor(1.0f,0.72f,0.40f),X,Y,CardW,S(5.0f));
+            DrawText(EchoName(Types[I]),FLinearColor(1.0f,0.91f,0.78f),X+S(12),Y+S(12),Medium,S(0.50f));
+            DrawText(Director->IsEchoUnlocked(Types[I])?FString::Printf(TEXT("READY // COST %d"),CreationCost(Types[I])):TEXT("FIND & REMEMBER"),Director->IsEchoUnlocked(Types[I])?FLinearColor(0.58f,1.0f,0.72f):FLinearColor(0.62f,0.55f,0.58f),X+S(12),Y+S(43),Medium,S(0.36f));
         }
-        DrawText(TEXT("CREATION MAGIC // WHEEL OR R TO CYCLE // RELEASE Q TO CALL"),FLinearColor(1.0f,0.86f,0.58f),Center.X-S(250),Center.Y+S(260),Medium,S(0.54f));
+        DrawText(TEXT("MEMORYCRAFT // R OR WHEEL CYCLES // RELEASE Q TO CREATE // C REMEMBERS WORLD EXAMPLES"),FLinearColor(1.0f,0.86f,0.58f),Center.X-S(330),Center.Y+S(185),Medium,S(0.48f));
+        DrawText(CreationRole(Director->GetSelectedEcho()),FLinearColor(0.72f,0.96f,0.88f),Center.X-S(235),Center.Y+S(218),Medium,S(0.43f));
     }
 
     if(Director->IsBuildMode())
@@ -1630,6 +1783,7 @@ void ACubetownDirector::BeginPlay()
     BuildDreamWorld();
     RestoreSavedBuilds();
     SpawnVillage();
+    SpawnMemorycraftTrials();
     RefreshStoryQuest();
     if (ShrinesRestored >= 3 && !bGuardianDefeated)
     {
@@ -1653,6 +1807,9 @@ void ACubetownDirector::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     UpdateDreamEnvironment(DeltaSeconds);
+    UpdateCreationUtilities(DeltaSeconds);
+    UpdateWeave(DeltaSeconds);
+    PruneCreations();
     if(bCreationSelecting) CreationHoldSeconds += DeltaSeconds;
     if(bBuildMode) UpdateBuildPreview(GetWorld()?GetWorld()->GetFirstPlayerController():nullptr);
     EnemyWaveRemaining -= DeltaSeconds;
@@ -1729,6 +1886,50 @@ void ACubetownDirector::SpawnDreamWorldDetails()
     SpawnStaticMeshAsset(TEXT("ForgottenPicnicCrate"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Crate.SM_CC0_Crate"),FVector(7200,8300,30),FVector(0.72f),FRotator(0,28,0),false,true);
     SpawnStaticMeshAsset(TEXT("OldGardenBench"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Bench.SM_CC0_Bench"),FVector(-5400,8200,30),FVector(0.9f),FRotator(0,-20,0),false,true);
     SpawnStaticMeshAsset(TEXT("MoonmossBrokenCart"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Cart.SM_CC0_Cart"),FVector(-15000,-8000,30),FVector(0.92f),FRotator(0,63,0),false,true);
+}
+
+AStaticMeshActor* ACubetownDirector::SpawnCreationProp(ECubetownEchoType Type, const FVector& Location, const FRotator& Rotation, bool bWorldSource)
+{
+    if(static_cast<int32>(Type)<3)return nullptr;
+    const TCHAR* AssetPath=CreationAssetPath(Type);if(!AssetPath||FCString::Strlen(AssetPath)==0)return nullptr;
+    const FString Prefix=bWorldSource?TEXT("MemorySource"):TEXT("PlayerCreation");
+    AStaticMeshActor* Actor=SpawnStaticMeshAsset(FString::Printf(TEXT("%s_%d_%08X"),*Prefix,static_cast<int32>(Type),FMath::Rand()),AssetPath,Location,CreationScale(Type),Rotation,true,true);
+    if(!Actor)return nullptr;
+    if(UStaticMeshComponent* MeshComponent=Actor->GetStaticMeshComponent())
+    {
+        // Memorycraft props must be movable: Weave manipulates them at runtime.
+        // The shared spawn helper intentionally preserves static mobility for normal world art.
+        MeshComponent->SetMobility(EComponentMobility::Movable);
+    }
+    Actor->Tags.AddUnique(TEXT("Cubetown.Weavable"));
+    Actor->Tags.AddUnique(FName(*FString::Printf(TEXT("CreationType:%d"),static_cast<int32>(Type))));
+    Actor->Tags.AddUnique(FName(*FString::Printf(TEXT("CreationCost:%d"),CreationCost(Type))));
+    Actor->Tags.AddUnique(FName(*FString::Printf(TEXT("CreationBaseZ:%d"),FMath::RoundToInt(Actor->GetActorLocation().Z))));
+    if(Type==ECubetownEchoType::BlastBloom)Actor->Tags.AddUnique(TEXT("Cubetown.BlastBloom"));
+    if(Type==ECubetownEchoType::GaleTotem)Actor->Tags.AddUnique(TEXT("Cubetown.GaleTotem"));
+    if(bWorldSource){Actor->Tags.AddUnique(TEXT("Cubetown.MemorySource"));MemorySources.Add(Actor);}else{Actor->Tags.AddUnique(TEXT("Cubetown.PlayerCreation"));ActiveCreationProps.Add(Actor);}
+    return Actor;
+}
+
+void ACubetownDirector::SpawnMemorycraftTrials()
+{
+    struct FSource{ECubetownEchoType Type;FVector Location;float Yaw;FLinearColor Glow;};
+    const FSource Sources[]={
+        {ECubetownEchoType::Bridge,FVector(1450,-9200,40),8.0f,FLinearColor(1.0f,0.62f,0.28f)},
+        {ECubetownEchoType::TideSpire,FVector(-1450,-8850,40),-12.0f,FLinearColor(0.18f,0.78f,1.0f)},
+        {ECubetownEchoType::SkyPad,FVector(3000,-7350,140),0.0f,FLinearColor(0.72f,0.58f,1.0f)},
+        {ECubetownEchoType::BlastBloom,FVector(-3050,-7200,35),0.0f,FLinearColor(1.0f,0.30f,0.48f)},
+        {ECubetownEchoType::GaleTotem,FVector(4650,-4200,35),18.0f,FLinearColor(0.58f,0.92f,0.88f)},
+        {ECubetownEchoType::Climbroot,FVector(-4700,-4000,35),-20.0f,FLinearColor(0.44f,1.0f,0.52f)}};
+    for(int32 I=0;I<UE_ARRAY_COUNT(Sources);++I)
+    {
+        if(AStaticMeshActor* Source=SpawnCreationProp(Sources[I].Type,Sources[I].Location,FRotator(0,Sources[I].Yaw,0),true))
+            if(APointLight* L=SpawnPointLight(FString::Printf(TEXT("MemoryGlow_%02d"),I),Source->GetActorLocation()+FVector(0,0,120),Sources[I].Glow,900.0f,360.0f,false))DreamNightLights.Add(L);
+    }
+    SpawnStaticMeshAsset(TEXT("MemoryTrial_RiverArch"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamAncientArch_A.SM_CubeDreamAncientArch_A"),FVector(8600,-1200,35),FVector(1.25f),FRotator(0,90,0),true,true);
+    SpawnStaticMeshAsset(TEXT("MemoryTrial_SkyIsleA"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFloatingIsland_A.SM_CubeDreamFloatingIsland_A"),FVector(-9200,5200,1050),FVector(0.72f),FRotator(0,12,0),true,false);
+    SpawnStaticMeshAsset(TEXT("MemoryTrial_SkyIsleB"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFloatingIsland_A.SM_CubeDreamFloatingIsland_A"),FVector(-7200,7000,1720),FVector(0.58f),FRotator(0,-24,0),true,false);
+    SpawnStaticMeshAsset(TEXT("MemoryTrial_WindGate"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamAncientArch_A.SM_CubeDreamAncientArch_A"),FVector(11800,7900,35),FVector(1.05f),FRotator(0,25,0),true,true);
 }
 
 void ACubetownDirector::BuildDreamWorld()
@@ -1977,7 +2178,7 @@ void ACubetownDirector::BuildDreamWorld()
         }
     }
     SpawnInstancedMeshCluster(TEXT("CubeWildTreesA_HISM"),TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"),WildTreesA,false);
-    SpawnInstancedMeshCluster(TEXT("CubeWildTreesB_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B"),WildTreesB,false);
+    SpawnInstancedMeshCluster(TEXT("CubeWildTreesB_HISM"),TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"),WildTreesB,false);
     SpawnInstancedMeshCluster(TEXT("CubeWildRocks_HISM"),TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Rock_A.SM_Cube_Rock_A"),WildRocks,false);
     SpawnInstancedMeshCluster(TEXT("CubeWildFlowers_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Flower.SM_CC0_Flower"),WildFlowers,false);
 
@@ -2156,6 +2357,11 @@ void ACubetownDirector::PrimaryAtCursor(APlayerController* PlayerController, AAc
     ACubetownHero* Hero = Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this, 0));
     if (bHasHit)
     {
+        if(AStaticMeshActor* Creation=Cast<AStaticMeshActor>(Hit.GetActor()))
+        {
+            if(Creation->ActorHasTag(TEXT("Cubetown.BlastBloom"))&&Creation->ActorHasTag(TEXT("Cubetown.PlayerCreation"))){PulseNearbyEnemies(Creation->GetActorLocation(),420.0f,64.0f,DamageCauser);ActiveCreationProps.RemoveAll([Creation](const TWeakObjectPtr<AStaticMeshActor>& Ref){return Ref.Get()==Creation;});Creation->Destroy();QuestStatus=TEXT("BLAST BLOOM BURST // CREATURES CAUGHT IN THE MEMORY SHOCKWAVE");return;}
+            if(Creation->ActorHasTag(TEXT("Cubetown.GaleTotem"))){int32 Pushed=0;for(TActorIterator<ACubetownEnemy> It(GetWorld());It;++It){const FVector Away=It->GetActorLocation()-Creation->GetActorLocation();if(Away.Size2D()>650.0f)continue;It->LaunchCharacter(Away.GetSafeNormal2D()*760.0f+FVector(0,0,180),true,true);++Pushed;}QuestStatus=FString::Printf(TEXT("GALE TOTEM PULSE // %d CREATURES PUSHED"),Pushed);return;}
+        }
         if (ACubetownEnemy* Enemy = Cast<ACubetownEnemy>(Hit.GetActor()))
         {
             if (!Hero || FVector::DistSquared2D(Hero->GetActorLocation(), Enemy->GetActorLocation()) > FMath::Square(360.0f))
@@ -2386,7 +2592,7 @@ void ACubetownDirector::RedoLastBuild()
 void ACubetownDirector::BeginCreationSelection()
 {
     if(bBuildMode||ActivePanel!=0||bCreationSelecting)return;bCreationSelecting=true;CreationHoldSeconds=0.0f;UGameplayStatics::SetGlobalTimeDilation(this,0.32f);
-    QuestStatus=FString::Printf(TEXT("CREATION WHEEL // %s // WHEEL OR R CYCLES // RELEASE Q TO CALL"),EchoName(SelectedEcho));
+    QuestStatus=FString::Printf(TEXT("MEMORYCRAFT // %s // COST %d // LOAD %d/%d // RELEASE Q TO CREATE"),EchoName(SelectedEcho),CreationCost(SelectedEcho),GetCreationBudgetUsed(),GetCreationBudgetMax());
 }
 void ACubetownDirector::EndCreationSelection()
 {
@@ -2457,31 +2663,119 @@ void ACubetownDirector::CycleBlock()
 
 void ACubetownDirector::CycleEcho()
 {
-    SelectedEcho = static_cast<ECubetownEchoType>((static_cast<int32>(SelectedEcho) + 1) % 3);
+    for(int32 Step=1;Step<=CubetownCreationTypeCount;++Step){const ECubetownEchoType Candidate=static_cast<ECubetownEchoType>((static_cast<int32>(SelectedEcho)+Step)%CubetownCreationTypeCount);if(IsEchoUnlocked(Candidate)){SelectedEcho=Candidate;break;}}
+    if(bCreationSelecting)QuestStatus=FString::Printf(TEXT("MEMORYCRAFT // %s // COST %d // LOAD %d/%d"),EchoName(SelectedEcho),CreationCost(SelectedEcho),GetCreationBudgetUsed(),GetCreationBudgetMax());
 }
 
-bool ACubetownDirector::IsEchoUnlocked(ECubetownEchoType Type) const
+bool ACubetownDirector::IsEchoUnlocked(ECubetownEchoType Type) const{return(CreationUnlockMask&CreationBit(Type))!=0u;}
+int32 ACubetownDirector::GetUnlockedCreationCount() const{int32 Count=0;for(int32 I=0;I<CubetownCreationTypeCount;++I)if((CreationUnlockMask&(1u<<I))!=0u)++Count;return Count;}
+
+int32 ACubetownDirector::GetCreationBudgetUsed() const
 {
-    if (Type == ECubetownEchoType::Blade) return bBladeUnlocked;
-    if (Type == ECubetownEchoType::Boulder) return bBoulderUnlocked;
-    return bBloomUnlocked;
+    int32 Used=0;
+    for(const TWeakObjectPtr<ACubetownEcho>& Ref:ActiveEchoes)if(const ACubetownEcho* Echo=Ref.Get())Used+=CreationCost(Echo->GetEchoType());
+    for(const TWeakObjectPtr<AStaticMeshActor>& Ref:ActiveCreationProps)if(const AStaticMeshActor* Actor=Ref.Get()){int32 Cost=1;for(const FName& Tag:Actor->Tags){const FString T=Tag.ToString();if(T.StartsWith(TEXT("CreationCost:"))){Cost=FMath::Max(1,FCString::Atoi(*T.RightChop(13)));break;}}Used+=Cost;}
+    return Used;
+}
+
+void ACubetownDirector::UpdateCreationUtilities(float DeltaSeconds)
+{
+    UWorld* World=GetWorld();if(!World)return;ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0));
+    const float T=World->GetTimeSeconds();
+    for(TWeakObjectPtr<AStaticMeshActor>& Ref:ActiveCreationProps)
+    {
+        AStaticMeshActor* Actor=Ref.Get();if(!Actor)continue;
+        int32 RawType=INDEX_NONE;int32 BaseZ=FMath::RoundToInt(Actor->GetActorLocation().Z);
+        for(const FName& Tag:Actor->Tags)
+        {
+            const FString Text=Tag.ToString();
+            if(Text.StartsWith(TEXT("CreationType:")))RawType=FCString::Atoi(*Text.RightChop(13));
+            else if(Text.StartsWith(TEXT("CreationBaseZ:")))BaseZ=FCString::Atoi(*Text.RightChop(14));
+        }
+        if(RawType<0||RawType>=CubetownCreationTypeCount)continue;
+        const ECubetownEchoType Type=static_cast<ECubetownEchoType>(RawType);
+        if(Type==ECubetownEchoType::SkyPad)
+        {
+            FVector P=Actor->GetActorLocation();const float Phase=static_cast<float>(Actor->GetUniqueID()%37)*0.29f;
+            P.Z=static_cast<float>(BaseZ)+55.0f+FMath::Sin(T*1.25f+Phase)*70.0f;
+            Actor->SetActorLocation(P,true,nullptr,ETeleportType::None);
+            Actor->AddActorWorldRotation(FRotator(0.0f,DeltaSeconds*10.0f,0.0f));
+        }
+        else if(Type==ECubetownEchoType::TideSpire && Hero)
+        {
+            const FVector Delta=Hero->GetActorLocation()-Actor->GetActorLocation();
+            if(Delta.Size2D()<215.0f && FMath::Abs(Delta.Z)<420.0f)
+            {
+                Hero->LaunchCharacter(FVector(0.0f,0.0f,560.0f),false,true);
+            }
+        }
+    }
+}
+
+void ACubetownDirector::PruneCreations(){ActiveEchoes.RemoveAll([](const TWeakObjectPtr<ACubetownEcho>& Ref){return!Ref.IsValid();});ActiveCreationProps.RemoveAll([](const TWeakObjectPtr<AStaticMeshActor>& Ref){return!Ref.IsValid();});MemorySources.RemoveAll([](const TWeakObjectPtr<AStaticMeshActor>& Ref){return!Ref.IsValid();});if(WeaveTarget.IsValid()&&WeaveTarget->IsActorBeingDestroyed())EndWeave();}
+
+void ACubetownDirector::MakeCreationRoom(int32 RequiredCost)
+{
+    PruneCreations();
+    while(GetCreationBudgetUsed()+RequiredCost>GetCreationBudgetMax())
+    {
+        if(!ActiveCreationProps.IsEmpty()){TWeakObjectPtr<AStaticMeshActor> Oldest=ActiveCreationProps[0];ActiveCreationProps.RemoveAt(0);if(AStaticMeshActor* A=Oldest.Get()){if(WeaveTarget.Get()==A)EndWeave();A->Destroy();}continue;}
+        if(!ActiveEchoes.IsEmpty()){TWeakObjectPtr<ACubetownEcho> Oldest=ActiveEchoes[0];ActiveEchoes.RemoveAt(0);if(ACubetownEcho* A=Oldest.Get()){if(WeaveTarget.Get()==A)EndWeave();A->Destroy();}continue;}
+        break;
+    }
 }
 
 void ACubetownDirector::SummonEcho()
 {
-    if (!IsEchoUnlocked(SelectedEcho) || EchoEnergy < 12) return;
-    ACubetownHero* Hero = Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this, 0));
-    if (!Hero) return;
-    if (ActiveEcho.IsValid()) ActiveEcho->Destroy();
-    EchoEnergy -= 12;
-    ACubetownEcho* Echo = GetWorld()->SpawnActor<ACubetownEcho>(Hero->GetActorLocation() + FVector(-95.0f, 105.0f, 20.0f), Hero->GetActorRotation());
-    if (Echo)
+    if(!IsEchoUnlocked(SelectedEcho)){QuestStatus=TEXT("THAT MEMORY IS UNKNOWN // FIND ITS GLOWING WORLD EXAMPLE AND PRESS C");return;}
+    ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0));if(!Hero)return;
+    const int32 Cost=CreationCost(SelectedEcho);MakeCreationRoom(Cost);
+    if(GetCreationBudgetUsed()+Cost>GetCreationBudgetMax()){QuestStatus=TEXT("MEMORY LOAD FULL // BACKSPACE CLEARS YOUR CURRENT CREATIONS");return;}
+    if(static_cast<int32>(SelectedEcho)<3)
     {
-        Echo->Configure(SelectedEcho);
-        ActiveEcho = Echo;
-        QuestStatus = FString::Printf(TEXT("%s SUMMONED // YOUR COPIED CREATURE FIGHTS BESIDE YOU"), EchoName(SelectedEcho));
+        const int32 Slot=ActiveEchoes.Num();const FVector Offset=-Hero->GetActorForwardVector()*(110.0f+Slot*22.0f)+Hero->GetActorRightVector()*((Slot%2==0)?105.0f:-105.0f)+FVector(0,0,20);
+        if(ACubetownEcho* Echo=GetWorld()->SpawnActor<ACubetownEcho>(Hero->GetActorLocation()+Offset,Hero->GetActorRotation())){Echo->Configure(SelectedEcho);ActiveEchoes.Add(Echo);QuestStatus=FString::Printf(TEXT("%s CREATED // LOAD %d/%d // CREATURE MEMORIES ACT IMMEDIATELY"),EchoName(SelectedEcho),GetCreationBudgetUsed(),GetCreationBudgetMax());}
+        return;
     }
+    FVector Place=Hero->GetActorLocation()+Hero->GetActorForwardVector()*260.0f+FVector(0,0,25);if(SelectedEcho==ECubetownEchoType::SkyPad)Place.Z+=95.0f;
+    if(SpawnCreationProp(SelectedEcho,Place,FRotator(0,Hero->GetActorRotation().Yaw,0),false))QuestStatus=FString::Printf(TEXT("%s CREATED // LOAD %d/%d // X WEAVES IT, G LETS IT CARRY YOU"),EchoName(SelectedEcho),GetCreationBudgetUsed(),GetCreationBudgetMax());
 }
+
+void ACubetownDirector::RecordCreationAtCursor(APlayerController* PlayerController)
+{
+    ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0));if(!Hero||!PlayerController)return;
+    AActor* Candidate=nullptr;FHitResult Hit;if(AdventureTrace(PlayerController,Hit))Candidate=Hit.GetActor();
+    if(!Candidate||FVector::DistSquared(Hero->GetActorLocation(),Candidate->GetActorLocation())>FMath::Square(700.0f)){Candidate=nullptr;float Best=FMath::Square(420.0f);for(const TWeakObjectPtr<AStaticMeshActor>& Ref:MemorySources)if(AStaticMeshActor* Source=Ref.Get()){const float D=FVector::DistSquared2D(Hero->GetActorLocation(),Source->GetActorLocation());if(D<Best){Best=D;Candidate=Source;}}}
+    if(!Candidate){QuestStatus=TEXT("NOTHING TO REMEMBER // LOOK AT A GLOWING MEMORYCRAFT EXAMPLE");return;}
+    int32 RawType=INDEX_NONE;for(const FName& Tag:Candidate->Tags){const FString T=Tag.ToString();if(T.StartsWith(TEXT("CreationType:"))){RawType=FCString::Atoi(*T.RightChop(13));break;}}
+    if(RawType<0||RawType>=CubetownCreationTypeCount){QuestStatus=TEXT("THIS OBJECT HAS NO MEMORYCRAFT PATTERN");return;}
+    const ECubetownEchoType Type=static_cast<ECubetownEchoType>(RawType);const uint32 Bit=CreationBit(Type);
+    if((CreationUnlockMask&Bit)!=0u){SelectedEcho=Type;QuestStatus=FString::Printf(TEXT("%s ALREADY REMEMBERED // HOLD Q TO CREATE IT"),EchoName(Type));return;}
+    CreationUnlockMask|=Bit;SelectedEcho=Type;EchoEnergy+=4;QuestStatus=FString::Printf(TEXT("%s REMEMBERED // HOLD Q TO CREATE // MEMORY LIBRARY %d/9"),EchoName(Type),GetUnlockedCreationCount());SaveProgress();
+}
+
+void ACubetownDirector::BeginWeave(APlayerController* PlayerController,bool bReverse)
+{
+    if(!PlayerController||bBuildMode||ActivePanel!=0)return;ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0));if(!Hero)return;
+    FHitResult Hit;if(!AdventureTrace(PlayerController,Hit)||!Hit.GetActor()){QuestStatus=TEXT("WEAVE FOUND NO TARGET");return;}AActor* Target=Hit.GetActor();
+    if(Target==Hero||FVector::DistSquared(Hero->GetActorLocation(),Target->GetActorLocation())>FMath::Square(1000.0f)){QuestStatus=TEXT("WEAVE TARGET IS TOO FAR AWAY");return;}
+    if(!Target->ActorHasTag(TEXT("Cubetown.Weavable"))&&!Cast<ACubetownEnemy>(Target)&&!Cast<ACubetownEcho>(Target)){QuestStatus=TEXT("THAT CANNOT BE WOVEN // TRY A CREATION, MEMORY SOURCE, OR CREATURE");return;}
+    WeaveTarget=Target;bReverseWeave=bReverse;WeaveRelativeOffset=bReverse?Target->GetActorTransform().InverseTransformPosition(Hero->GetActorLocation()):Hero->GetActorTransform().InverseTransformPosition(Target->GetActorLocation());
+    QuestStatus=FString::Printf(TEXT("%s WEAVE // %s // RELEASE %s TO LET GO"),bReverse?TEXT("RIDE"):TEXT("HAND"),*GetWeaveTargetName(),bReverse?TEXT("G"):TEXT("X"));
+}
+void ACubetownDirector::EndWeave(){if(WeaveTarget.IsValid())QuestStatus=TEXT("WEAVE RELEASED // COMBINE MEMORYCRAFT OBJECTS ANY WAY THAT WORKS");WeaveTarget.Reset();bReverseWeave=false;WeaveRelativeOffset=FVector::ZeroVector;}
+void ACubetownDirector::UpdateWeave(float DeltaSeconds)
+{
+    AActor* Target=WeaveTarget.Get();if(!Target)return;ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0));if(!Hero){EndWeave();return;}if(FVector::DistSquared(Hero->GetActorLocation(),Target->GetActorLocation())>FMath::Square(1450.0f)){EndWeave();return;}
+    if(ACharacter* C=Cast<ACharacter>(Target))if(C->GetCharacterMovement())C->GetCharacterMovement()->StopMovementImmediately();
+    if(!bReverseWeave){const FVector Desired=Hero->GetActorTransform().TransformPosition(WeaveRelativeOffset);Target->SetActorLocation(FMath::VInterpTo(Target->GetActorLocation(),Desired,DeltaSeconds,10.0f),true,nullptr,ETeleportType::None);}else{const FVector Desired=Target->GetActorTransform().TransformPosition(WeaveRelativeOffset);Hero->SetActorLocation(FMath::VInterpTo(Hero->GetActorLocation(),Desired,DeltaSeconds,8.0f),true,nullptr,ETeleportType::None);}
+}
+FString ACubetownDirector::GetWeaveTargetName() const
+{
+    const AActor* Target=WeaveTarget.Get();if(!Target)return TEXT("NONE");for(const FName& Tag:Target->Tags){const FString T=Tag.ToString();if(T.StartsWith(TEXT("CreationType:"))){const int32 Raw=FCString::Atoi(*T.RightChop(13));if(Raw>=0&&Raw<CubetownCreationTypeCount)return FString(EchoName(static_cast<ECubetownEchoType>(Raw)));}}
+    if(const ACubetownEcho* Echo=Cast<ACubetownEcho>(Target))return FString(EchoName(Echo->GetEchoType()));if(Cast<ACubetownEnemy>(Target))return TEXT("CREATURE");return Target->GetName();
+}
+void ACubetownDirector::ClearCreations(){EndWeave();int32 Removed=0;for(TWeakObjectPtr<ACubetownEcho>& Ref:ActiveEchoes)if(ACubetownEcho* A=Ref.Get()){A->Destroy();++Removed;}for(TWeakObjectPtr<AStaticMeshActor>& Ref:ActiveCreationProps)if(AStaticMeshActor* A=Ref.Get()){A->Destroy();++Removed;}ActiveEchoes.Reset();ActiveCreationProps.Reset();QuestStatus=FString::Printf(TEXT("MEMORY FIELD CLEARED // %d CREATIONS RELEASED"),Removed);}
 
 void ACubetownDirector::InteractNearby(const FVector& HeroLocation)
 {
@@ -2530,6 +2824,13 @@ void ACubetownDirector::InteractNearby(const FVector& HeroLocation)
 
 FString ACubetownDirector::GetInteractionPrompt(const FVector& HeroLocation) const
 {
+    for(const TWeakObjectPtr<AStaticMeshActor>& Ref:MemorySources)
+    {
+        const AStaticMeshActor* Source=Ref.Get();if(!Source||FVector::DistSquared2D(HeroLocation,Source->GetActorLocation())>FMath::Square(360.0f))continue;
+        int32 RawType=INDEX_NONE;for(const FName& Tag:Source->Tags){const FString T=Tag.ToString();if(T.StartsWith(TEXT("CreationType:"))){RawType=FCString::Atoi(*T.RightChop(13));break;}}
+        if(RawType>=0&&RawType<CubetownCreationTypeCount){const ECubetownEchoType Type=static_cast<ECubetownEchoType>(RawType);return IsEchoUnlocked(Type)?FString::Printf(TEXT("[X] WEAVE %s  //  [Q] CREATE"),EchoName(Type)):FString::Printf(TEXT("[C] REMEMBER %s"),EchoName(Type));}
+    }
+
     float BestVillagerDistance = FMath::Square(340.0f);
     const ACubetownVillager* BestVillager = nullptr;
     for (const TWeakObjectPtr<ACubetownVillager>& Entry : Villagers)
@@ -2758,13 +3059,13 @@ void ACubetownDirector::RegisterEnemyDefeat(ECubetownEnemyType Type)
     }
     const int32 EnergyGain = Type == ECubetownEnemyType::Roller ? 16 : (Type == ECubetownEnemyType::BloomWisp ? 14 : 10);
     EchoEnergy += EnergyGain;
-    if (Type == ECubetownEnemyType::Gloomling) bBladeUnlocked = true;
-    if (Type == ECubetownEnemyType::Roller) bBoulderUnlocked = true;
-    if (Type == ECubetownEnemyType::BloomWisp) bBloomUnlocked = true;
+    if (Type == ECubetownEnemyType::Gloomling) { bBladeUnlocked = true; CreationUnlockMask |= CreationBit(ECubetownEchoType::Blade); }
+    if (Type == ECubetownEnemyType::Roller) { bBoulderUnlocked = true; CreationUnlockMask |= CreationBit(ECubetownEchoType::Boulder); }
+    if (Type == ECubetownEnemyType::BloomWisp) { bBloomUnlocked = true; CreationUnlockMask |= CreationBit(ECubetownEchoType::Bloom); }
     const ECubetownEchoType Captured = Type == ECubetownEnemyType::Roller
         ? ECubetownEchoType::Boulder
         : (Type == ECubetownEnemyType::BloomWisp ? ECubetownEchoType::Bloom : ECubetownEchoType::Blade);
-    QuestStatus = FString::Printf(TEXT("%s LEARNED // SELECT WITH R, SUMMON WITH E"), EchoName(Captured));
+    QuestStatus = FString::Printf(TEXT("%s REMEMBERED // HOLD Q TO CREATE IT // R CYCLES MEMORIES"), EchoName(Captured));
 }
 
 void ACubetownDirector::NotifyHeroDefeated()
@@ -2828,6 +3129,10 @@ void ACubetownDirector::LoadProgress()
         bBoulderUnlocked = Save->bBoulderUnlocked;
         bBloomUnlocked = Save->bBloomUnlocked;
         bGuardianDefeated = Save->bGuardianDefeated;
+        CreationUnlockMask = Save->CreationUnlockMask;
+        if(bBladeUnlocked) CreationUnlockMask |= CreationBit(ECubetownEchoType::Blade);
+        if(bBoulderUnlocked) CreationUnlockMask |= CreationBit(ECubetownEchoType::Boulder);
+        if(bBloomUnlocked) CreationUnlockMask |= CreationBit(ECubetownEchoType::Bloom);
         Friendship = Save->Friendship;
         if (Friendship.Num() < 3) Friendship.SetNumZeroed(3);
         StoryChapter = FMath::Clamp(Save->StoryChapter, 0, 4);
@@ -2861,6 +3166,7 @@ void ACubetownDirector::SaveProgress()
     Save->bBoulderUnlocked = bBoulderUnlocked;
     Save->bBloomUnlocked = bBloomUnlocked;
     Save->bGuardianDefeated = bGuardianDefeated;
+    Save->CreationUnlockMask = CreationUnlockMask;
     Save->Friendship = Friendship;
     Save->StoryChapter = StoryChapter;
     Save->TimeOfDayHours=TimeOfDayHours; Save->BuildAssetPaths.Reset(); Save->BuildTransforms.Reset();

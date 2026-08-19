@@ -1,8 +1,11 @@
 param(
- [string]$ProjectRoot="C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal",
+ [string]$ProjectRoot='',
  [int]$CaptureDelaySeconds=12
 )
 $ErrorActionPreference='Continue'
+if([string]::IsNullOrWhiteSpace($ProjectRoot)){
+ $ProjectRoot=(Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
+}
 $Games=@(
  @{Id='phantom-strike';Exe='PhantomStrike.exe'},
  @{Id='phantom-ages';Exe='PhantomAges.exe'},
@@ -19,7 +22,7 @@ foreach($G in $Games){
  foreach($R in $Res){
    $W=$R[0];$H=$R[1]
    $Dir=Join-Path $QaRoot ($G.Id+"\"+$W+"x"+$H);New-Item -ItemType Directory -Force $Dir|Out-Null
-   $Args="-ResX=$W -ResY=$H -WINDOWED -NoSplash -ExecCmds=`"HighResShot 1`""
+   $Args="-PhantomGame=$($G.Id) -PhantomAutoStart -ResX=$W -ResY=$H -WINDOWED -NoSplash -ExecCmds=`"HighResShot 1`""
    $P=Start-Process $Exe -ArgumentList $Args -PassThru
    Start-Sleep -Seconds $CaptureDelaySeconds
    if(!$P.HasExited){Stop-Process -Id $P.Id -Force}

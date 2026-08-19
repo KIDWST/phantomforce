@@ -159,7 +159,6 @@ results = {}
 # Compatibility aliases used throughout existing directors.
 compat_specs = [
     ("SM_CC0_Tree_A", ["nature"], ["tree","oak"], ["stump","dead","log"]),
-    ("SM_CC0_Tree_B", ["nature"], ["tree","pine"], ["stump","dead","log"]),
     ("SM_CC0_Bush", ["nature"], ["bush","shrub"], ["dead"]),
     ("SM_CC0_Rock", ["nature"], ["rock","stone"], ["wall","path"]),
     ("SM_CC0_Flower", ["nature"], ["flower","plant"], ["tree"]),
@@ -240,7 +239,7 @@ for rel_alias,keys,pos,neg in curated_specs:
 # This prevents the recurring sideways/face-down character regression while preserving the complete source packs for later skeletal import.
 
 required_compat = [
-    "SM_CC0_Tree_A","SM_CC0_Tree_B","SM_CC0_Bush","SM_CC0_Rock","SM_CC0_Flower",
+    "SM_CC0_Tree_A","SM_CC0_Bush","SM_CC0_Rock","SM_CC0_Flower",
     "SM_CC0_Fence","SM_CC0_House_A","SM_CC0_House_B","SM_CC0_House_C",
     "SM_CC0_CastleWall","SM_CC0_CastleTower","SM_CC0_Gate","SM_CC0_Bridge","SM_CC0_Lantern"
 ]

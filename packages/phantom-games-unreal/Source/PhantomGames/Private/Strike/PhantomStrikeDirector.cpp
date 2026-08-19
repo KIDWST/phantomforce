@@ -283,16 +283,19 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
         SidearmBody->SetRelativeLocation(FMath::VInterpTo(SidearmBody->GetRelativeLocation(), SidearmTarget, DeltaSeconds, 16.0f));
     }
 
+    UStaticMeshComponent* ActiveWeapon = bUsingSidearm ? SidearmBody : RifleBody;
+    UStaticMeshComponent* InactiveWeapon = bUsingSidearm ? RifleBody : SidearmBody;
+    if (InactiveWeapon) InactiveWeapon->SetRelativeRotation(FRotator::ZeroRotator);
     if (bReloading)
     {
         ReloadRemaining -= DeltaSeconds;
-        RifleBody->SetRelativeRotation(FRotator(0.0f, 0.0f, FMath::Sin(ReloadRemaining * 7.0f) * 18.0f));
+        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(FRotator(0.0f, 0.0f, FMath::Sin(ReloadRemaining * 7.0f) * 18.0f));
         if (ReloadRemaining <= 0.0f) FinishReload();
     }
     else
     {
         const FRotator InspectRotation = InspectRemaining > 0.0f ? FRotator(8.0f, 32.0f, -18.0f) : FRotator::ZeroRotator;
-        RifleBody->SetRelativeRotation(FMath::RInterpTo(RifleBody->GetRelativeRotation(), InspectRotation, DeltaSeconds, 12.0f));
+        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(FMath::RInterpTo(ActiveWeapon->GetRelativeRotation(), InspectRotation, DeltaSeconds, 12.0f));
         if (bTriggerHeld && FireCooldown <= 0.0f) FireOneRound();
     }
 
@@ -352,6 +355,12 @@ void APhantomStrikeCharacter::MoveRight(float Value)
 void APhantomStrikeCharacter::StartSprint()
 {
     if (bAiming || bProne) return;
+    // Classic sprint-cancel behavior: movement wins immediately instead of forcing the player
+    // to wait for a reload/inspect animation before the game responds. Ammo is only committed
+    // in FinishReload(), so cancelling here never duplicates or loses rounds.
+    if (bReloading) { bReloading=false; ReloadRemaining=0.0f; }
+    InspectRemaining = 0.0f;
+    bTriggerHeld = false;
     if (bCrouchedByInput) { bCrouchedByInput=false; UnCrouch(); }
     bSprinting = true;
     RefreshMovementSpeed();
@@ -365,6 +374,11 @@ void APhantomStrikeCharacter::StopSprint()
 
 void APhantomStrikeCharacter::StartFire()
 {
+    if (bSprinting)
+    {
+        bSprinting = false;
+        RefreshMovementSpeed();
+    }
     bTriggerHeld = !bSemiAuto && !bUsingSidearm;
     if (FireCooldown <= 0.0f && !bReloading) FireOneRound();
 }
@@ -604,6 +618,9 @@ void APhantomStrikeCharacter::BeginReload()
 {
     if (bReloading || Ammo >= CurrentMagazineSize() || ReserveAmmo <= 0) return;
     bTriggerHeld = false;
+    bSprinting = false;
+    InspectRemaining = 0.0f;
+    RefreshMovementSpeed();
     bReloading = true;
     ReloadRemaining = bUsingSidearm ? 1.05f : StrikeReloadDuration;
 }
@@ -660,7 +677,14 @@ float APhantomStrikeCharacter::TakeDamage(
         PrimaryAmmo=32; PrimaryReserve=FMath::Max(PrimaryReserve,96); SidearmAmmo=15; SidearmReserve=FMath::Max(SidearmReserve,45);
         Ammo = bUsingSidearm ? SidearmAmmo : PrimaryAmmo; ReserveAmmo=bUsingSidearm ? SidearmReserve : PrimaryReserve;
         Grenades = FMath::Max(2, Grenades);
-        SetActorLocation(FVector(-9000.0f, 0.0f, 260.0f));
+        bTriggerHeld=false; bAiming=false; bSprinting=false; bReloading=false; bProne=false;
+        ReloadRemaining=0.0f; SlideRemaining=0.0f; InspectRemaining=0.0f; RecoilKick=0.0f; WeaponHeat=0.0f;
+        if (bCrouchedByInput) UnCrouch();
+        bCrouchedByInput=false;
+        GetCharacterMovement()->StopMovementImmediately();
+        RefreshMovementSpeed();
+        SetActorLocation(FVector(-9000.0f, 0.0f, 260.0f), false, nullptr, ETeleportType::TeleportPhysics);
+        if (AController* C=GetController()) C->SetControlRotation(FRotator(-12.0f,0.0f,0.0f));
     }
     return Applied;
 }
