@@ -78,8 +78,10 @@ import {
   setCurrentServiceTier,
   setCurrentUsage,
   setMessages,
+  setPhantomRoute,
   setSessions,
   setTerminalBackend,
+  setThinkingStatus,
   setTurnStartedAt,
   setWorkspaceCwdOwner,
   setYoloActive
@@ -227,6 +229,8 @@ const COMPACTION_RESUME_EVENT_TYPES = new Set([
   'tool.generating',
   'tool.complete'
 ])
+
+const PHANTOM_ROUTE_STATUS = /^Phantom lane · (Direct|Instant|Focus|Deep)$/i
 
 const PROVIDER_WAIT_SUPERSEDING_EVENT_TYPES = new Set([
   'error',
@@ -873,8 +877,20 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         // of the transcript. Explained provider waits are different: the core
         // emits them after prolonged silence, so name that wait in the existing
         // bottom-of-thread status row instead of leaving only an unlabeled timer.
+        const status = coerceGatewayText(payload?.text).replace(/\s+/g, ' ').trim().slice(0, 140)
+
+        if (isActiveEvent) {
+          const route = status.match(PHANTOM_ROUTE_STATUS)?.[1]?.toLowerCase()
+
+          if (route === 'direct' || route === 'instant' || route === 'focus' || route === 'deep') {
+            setPhantomRoute(route)
+          } else {
+            setThinkingStatus(status)
+          }
+        }
+
         if (sessionId) {
-          setSessionProviderWait(sessionId, providerWaitText(coerceGatewayText(payload?.text)))
+          setSessionProviderWait(sessionId, providerWaitText(status))
         }
       } else if (event.type === 'reaction') {
         // Core-detected affection (ily / <3 / good bot) on the user's message.

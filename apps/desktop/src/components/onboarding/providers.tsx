@@ -17,6 +17,8 @@ const PROVIDER_DISPLAY: Record<string, { order: number; title: string }> = {
 
 const assetPath = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
 
+// PhantomBot owns this route through its automatic desktop bridge, so hide a
+// duplicate backend OAuth row and render the bridge-native row in Picker.
 export const HIDDEN_OAUTH_PROVIDER_IDS = new Set(['openai-codex'])
 export const visibleOAuthProviders = (providers: readonly OAuthProvider[]) =>
   providers.filter(provider => !HIDDEN_OAUTH_PROVIDER_IDS.has(provider.id))
@@ -97,6 +99,16 @@ export function FireworksProviderRow({ onClick }: { onClick: () => void }) {
   const { t } = useI18n()
 
   return <KeyProviderRow onClick={onClick} pitch={t.onboarding.fireworksPitch} title="Fireworks AI" />
+}
+
+export function ChatGptSubscriptionRow({ onClick }: { onClick: () => void }) {
+  return (
+    <KeyProviderRow
+      onClick={onClick}
+      pitch="Uses the automatic desktop bridge for your ChatGPT Plus or Codex subscription"
+      title="ChatGPT or Codex Subscription"
+    />
+  )
 }
 
 export function OpenRouterProviderRow({ onClick }: { onClick: () => void }) {

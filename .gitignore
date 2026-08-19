@@ -205,3 +205,26 @@ native/fts5_cjk/*.so
 # interrupted; consumed by launch-time recovery. Never commit it (was tracked
 # by accident via 3a69e34702, removed in the #72002 salvage).
 .lazy-refresh-incomplete
+
+# PhantomBot local build, recovery, hermetic-test, and mission-intake files.
+# They remain on the machine but never ship as runtime source.
+/%SystemDrive%/
+/.artifacts/
+/artifacts/
+/backups/
+/apps/desktop/release-*/
+/.codex-pytest-*/
+/.pytest-*/
+/.tmp/
+/.tmp-*/
+/.phantombot-*-backup-*/
+/.phantombot-run-logs/
+/.phantombot-*.log
+/CODEX_LAUNCHER_PROMPT.txt
+/PHANTOMBOT_CURRENT_UI_BASELINE.png
+/PHANTOMBOT_ULTIMATE_3M_CODEX_MASTER_PROMPT.md
+/PROMPT_METADATA.json
+/README.txt
+/SCOPE_GUARD_SEED.md
+/UNLEASHED_PERSONALITY_CONTRACT.md
+/C*phantombot-pytest-*

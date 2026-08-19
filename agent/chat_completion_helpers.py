@@ -39,6 +39,7 @@ from agent.gemini_native_adapter import is_native_gemini_base_url
 from agent.model_metadata import is_local_endpoint
 from agent.message_content import flatten_message_text
 from agent.message_metadata import append_message, stamp_message_timestamp
+from agent.ollama_runtime import choose_ollama_request_num_ctx
 from agent.message_sanitization import (
     _sanitize_surrogates,
     _repair_tool_call_arguments,
@@ -64,6 +65,58 @@ _PROVIDER_STREAM_ERROR_TEXT_LIMIT = 4096
 # billing reasons keep their own 60s cooldown (set above); this is the
 # narrower non-rate-limit case.  See issue #24996.
 _FALLBACK_EXHAUSTED_COOLDOWN_S = 5.0
+
+
+def _reasoning_route_key(agent) -> tuple[str, str, str]:
+    """Stable identity for a model route's request-option capabilities."""
+    return (
+        str(getattr(agent, "provider", "") or "").strip().lower(),
+        str(getattr(agent, "base_url", "") or "").strip().rstrip("/").lower(),
+        str(getattr(agent, "model", "") or "").strip().lower(),
+    )
+
+
+def reasoning_is_suppressed_for_current_route(agent) -> bool:
+    suppressed = getattr(agent, "_reasoning_suppressed_routes", None)
+    return isinstance(suppressed, set) and _reasoning_route_key(agent) in suppressed
+
+
+def suppress_reasoning_for_current_route(agent) -> None:
+    """Remember a provider's definitive unsupported-thinking response."""
+    suppressed = getattr(agent, "_reasoning_suppressed_routes", None)
+    if not isinstance(suppressed, set):
+        suppressed = set()
+        agent._reasoning_suppressed_routes = suppressed
+    suppressed.add(_reasoning_route_key(agent))
+
+    cache = getattr(agent, "_ollama_thinking_cache", None)
+    if isinstance(cache, dict):
+        cache[(getattr(agent, "model", ""), getattr(agent, "base_url", ""))] = (
+            False,
+            time.monotonic(),
+        )
+
+
+def _ensure_explicit_phantom_runtime(agent) -> None:
+    """Cold-start Local only when this outbound request explicitly uses Phantom."""
+    try:
+        from agent.ollama_runtime import ensure_explicit_phantom_runtime
+
+        status = ensure_explicit_phantom_runtime(agent, log=logger)
+        if status.get("status") in {
+            "start_failed",
+            "start_lock_timeout",
+            "start_timeout",
+            "missing_ollama_executable",
+        }:
+            state = status.get("status")
+            logger.warning("Explicit Phantom runtime unavailable: %s", state)
+            raise RuntimeError(f"Phantom local runtime unavailable ({state})")
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        logger.debug("Explicit Phantom runtime startup failed", exc_info=True)
+        raise RuntimeError("Phantom local runtime startup failed") from exc
 
 
 def _context_thread_target(callback):

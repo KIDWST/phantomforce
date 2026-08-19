@@ -65,11 +65,9 @@ describe('resolveVersionStatus', () => {
 
   it('leads the tooltip with the apply message while applying', () => {
     expect(client({ applyMessage: 'Pulling…', applying: true, version: '0.4.2' }).tooltip).toBe(
-      'Pulling… · Hermes Desktop v0.4.2'
+      'Pulling… · PhantomBot v0.4.2'
     )
-    expect(client({ applying: true, version: '0.4.2' }).tooltip).toBe(
-      `${copy.updateInProgress} · Hermes Desktop v0.4.2`
-    )
+    expect(client({ applying: true, version: '0.4.2' }).tooltip).toBe(`${copy.updateInProgress} · PhantomBot v0.4.2`)
   })
 
   it('labels the backend target distinctly and never claims a client sha', () => {

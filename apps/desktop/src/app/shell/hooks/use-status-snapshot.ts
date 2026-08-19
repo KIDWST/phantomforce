@@ -14,7 +14,8 @@ type GatewayRequester = <T = unknown>(method: string, params?: Record<string, un
 export function useStatusSnapshot(
   gatewayState: string | undefined,
   requestGateway: GatewayRequester,
-  gatewayScope = ''
+  gatewayScope = '',
+  activeProvider?: string
 ) {
   const [statusSnapshot, setStatusSnapshot] = useState<StatusResponse | null>(null)
   const [inferenceStatus, setInferenceStatus] = useState<RuntimeReadinessResult | null>(null)
@@ -114,7 +115,7 @@ export function useStatusSnapshot(
         window.clearTimeout(timer)
       }
     }
-  }, [gatewayScope, gatewayState, requestGateway])
+  }, [activeProvider, gatewayScope, gatewayState, requestGateway])
 
   return { inferenceStatus, statusSnapshot }
 }

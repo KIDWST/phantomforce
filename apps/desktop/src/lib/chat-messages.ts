@@ -1307,6 +1307,19 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       flushPendingTools(index)
     }
 
+    // Older backends could persist the same model-switch marker more than once
+    // for a single picker action. Collapse only adjacent identical timeline
+    // events so a later intentional switch remains visible.
+    if (message.display_kind === 'model_switch') {
+      const previous = result[result.length - 1]
+
+      if (previous?.role === 'system' && chatMessageText(previous) === displayContent) {
+        activeAssistantIndex = null
+
+        return
+      }
+    }
+
     const reactions = messageReactions(message.display_metadata)
     // Gateway resume names the durable row id `row_id`; the REST transcript
     // prefetch ships the same messages.id as a numeric `id`. Either one lets

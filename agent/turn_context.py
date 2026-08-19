@@ -440,8 +440,6 @@ def build_turn_context(
     persist_user_display_kind: Optional[str] = None,
     persist_user_display_metadata: Optional[Dict[str, Any]] = None,
     *,
-    persist_user_display_kind: Optional[str] = None,
-    persist_user_display_metadata: Optional[Dict[str, Any]] = None,
     restore_or_build_system_prompt,
     install_safe_stdio,
     sanitize_surrogates,

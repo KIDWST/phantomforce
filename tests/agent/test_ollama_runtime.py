@@ -67,7 +67,7 @@ def test_request_options_do_not_use_all_cpu_threads():
         "huihui-qwen3.6-35b-uncensored:q3",
         cpu_count=32,
     )
-    assert options == {"num_thread": 4, "num_batch": 64}
+    assert options == {"num_thread": 8, "num_batch": 512}
 
 
 def test_local_aliases_are_ollama_endpoints():
@@ -88,7 +88,7 @@ def test_agent_initialization_only_configures_local_runtime(_probe, ensure):
     ensure.assert_not_called()
     assert status["status"] == "on_demand"
     assert agent._ollama_num_ctx == 65536
-    assert agent._ollama_keep_alive == "15m"
+    assert agent._ollama_keep_alive == "-1"
 
 
 @patch("agent.ollama_runtime.ensure_ollama_available")
@@ -137,7 +137,7 @@ def test_ensure_ollama_available_starts_hidden_runtime(
     assert kwargs["env"]["OLLAMA_NUM_PARALLEL"] == "1"
     assert kwargs["env"]["OLLAMA_MAX_LOADED_MODELS"] == "1"
     assert kwargs["env"]["OLLAMA_MAX_QUEUE"] == "1"
-    assert kwargs["env"]["OLLAMA_KEEP_ALIVE"] == "15m"
+    assert kwargs["env"]["OLLAMA_KEEP_ALIVE"] == "-1"
     thread.assert_called_once()
 
 

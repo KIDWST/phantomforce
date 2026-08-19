@@ -777,7 +777,7 @@ export const en: Translations = {
         'Unset HERMES_DESKTOP_REMOTE_URL and HERMES_DESKTOP_REMOTE_TOKEN to use the saved setting below.',
       modeTitle: 'Connection mode',
       localTitle: 'Local gateway',
-      localDesc: 'Start a private Hermes backend on localhost. This is the default and works offline.',
+      localDesc: 'Start the private PhantomBot backend on localhost. This is the default and works offline.',
       remoteTitle: 'Remote gateway',
       remoteDesc: 'Connect PhantomBot to a compatible remote backend.',
       remoteAuthHint: 'Hosted gateways use OAuth or a username and password; self-hosted ones may use a session token.',
@@ -1468,7 +1468,13 @@ export const en: Translations = {
     settingsFields: 'Settings fields',
     mcpServers: 'MCP servers',
     archivedChats: 'Archived chats',
-    sections: { maintenance: 'Maintenance', runs: 'Engineering runs', sessions: 'Sessions', system: 'System', usage: 'Usage' },
+    sections: {
+      maintenance: 'Maintenance',
+      runs: 'Engineering runs',
+      sessions: 'Sessions',
+      system: 'System',
+      usage: 'Usage'
+    },
     sectionDescriptions: {
       maintenance: 'Diagnostics, backups, curator, and memory data',
       runs: 'Live plans, tool evidence, checkpoints, and verification',

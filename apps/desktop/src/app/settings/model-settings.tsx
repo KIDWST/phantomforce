@@ -129,15 +129,10 @@ const AUX_TASKS: readonly AuxTaskMeta[] = [
 
 const NO_PROVIDERS: readonly ModelOptionProvider[] = [{ name: '—', slug: '', models: [] }]
 
-const SUBSCRIPTION_PROVIDER_SLUGS = new Set([
-  'nous',
-  'claude-code',
-  'minimax-oauth',
-  'qwen-oauth',
-  'xai-oauth'
-])
+const SUBSCRIPTION_PROVIDER_SLUGS = new Set(['nous', 'claude-code', 'minimax-oauth', 'qwen-oauth', 'xai-oauth'])
 
 const HIDDEN_MODEL_PROVIDER_SLUGS = new Set(['openai-codex'])
+
 const visibleModelProviders = (providers: readonly ModelOptionProvider[]) =>
   providers.filter(provider => !HIDDEN_MODEL_PROVIDER_SLUGS.has(provider.slug.trim().toLowerCase()))
 
@@ -214,6 +209,12 @@ function ProviderSelectItems({
 // curated list) would vanish — surface the active value so it stays selectable.
 export const withActive = (models: readonly string[], active: string): readonly string[] =>
   active && !models.includes(active) ? [active, ...models] : models
+
+const modelSelectLabel = (model: string): string => {
+  const base = model.trim().toLowerCase().split('/').at(-1)?.split(':')[0]
+
+  return base === 'phantom' || base === 'phantom-v1' || base === 'phantom-unleashed' ? displayModelName(model) : model
+}
 
 // A slot is complete when both halves are chosen. Changing a slot's provider
 // intentionally clears its model (see updateMoaSlot), so every provider change
@@ -931,7 +932,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile = null }: Model
                 <SelectContent>
                   {withActive(selectedProviderModels, selectedModel).map(model => (
                     <SelectItem key={model} value={model}>
-                      {displayModelName(model)}
+                      {modelSelectLabel(model)}
                     </SelectItem>
                   ))}
                 </SelectContent>

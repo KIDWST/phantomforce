@@ -136,13 +136,14 @@ describe('useStatusSnapshot', () => {
         return { provider_configured: true } as never
       }
 
-      return (params?.provider === 'phantom'
-        ? { ok: true }
-        : { error: 'The global provider is disabled.', ok: false }) as never
+      return (
+        params?.provider === 'phantom' ? { ok: true } : { error: 'The global provider is disabled.', ok: false }
+      ) as never
     })
+
     const requestGateway = requestGatewayMock as unknown as GatewayRequester
 
-    const { result } = renderHook(() => useStatusSnapshot('open', requestGateway, 'phantom'))
+    const { result } = renderHook(() => useStatusSnapshot('open', requestGateway, '', 'phantom'))
 
     await flushAsync()
 

@@ -2766,7 +2766,7 @@ def list_authenticated_providers(
             return False
 
     data = (
-        fetch_models_dev(allow_background_refresh=False)
+        fetch_models_dev(allow_network=False)
         if effective_no_network
         else fetch_models_dev()
     )
@@ -2960,7 +2960,7 @@ def list_authenticated_providers(
             top = model_ids[:max_models] if max_models is not None else model_ids
 
         pinfo = (
-            _mdev_pinfo(mdev_id, allow_background_refresh=False)
+            _mdev_pinfo(mdev_id, allow_network=False)
             if effective_no_network
             else _mdev_pinfo(mdev_id)
         )

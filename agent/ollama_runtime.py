@@ -450,7 +450,13 @@ def is_long_context_coding_model(model: str | None) -> bool:
     value = _model_lower(model)
     return value == "phantom" or any(
         marker in value
-        for marker in ("phantom:", "phantom-v1", "phantom 1.0")
+        for marker in (
+            "phantom:",
+            "phantom-v1",
+            "phantom 1.0",
+            "phantom-unleashed",
+            "phantombot-unleashed",
+        )
     )
 
 

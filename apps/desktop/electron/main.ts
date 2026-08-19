@@ -18,6 +18,7 @@ import {
   globalShortcut,
   ipcMain,
   Menu,
+  nativeImage,
   nativeTheme,
   Notification,
   powerMonitor,
@@ -229,6 +230,7 @@ import {
 import { runNativeLogin } from './native-oauth-login'
 import { loadNativeTokenSet, type NativeTokenStoreIo, persistNativeTokenSet } from './native-token-store'
 import { serializeJsonBody, setJsonRequestHeaders } from './oauth-net-request'
+import { findAncestorSourceRoot } from './packaged-source-root'
 import {
   createParentStartMarkerResolver,
   electronProcessStartMarker,
@@ -251,6 +253,8 @@ import {
   runPrimaryBackendStartup
 } from './primary-backend-startup'
 import { rehomePrimaryConnection } from './primary-connection-rehome'
+import { installProcessOutputGuards } from './process-output-guard'
+import { PRODUCT_IDENTITY } from './product-identity'
 import {
   assertLocalProfileCanStart,
   decideProfileDeleteAction,
@@ -280,13 +284,6 @@ import {
 } from './remote-liveness'
 import { missingRendererAssets } from './renderer-bundle'
 import { attachRendererConsoleCapture, formatRendererBoundaryReport } from './renderer-log'
-import {
-  createPackagedSourceIdentity,
-  createRuntimeIdentity,
-  parseAheadBehind,
-  parseRuntimeUrl,
-  resolveRuntimeMode
-} from './runtime-identity'
 import {
   buildSessionWindowUrl,
   chatWindowWebPreferences,
@@ -6059,11 +6056,13 @@ function getAppIconPath() {
 
 function getAppIcon() {
   const iconPath = getAppIconPath()
+
   if (!iconPath) {
     return undefined
   }
 
   const icon = nativeImage.createFromPath(iconPath)
+
   return icon.isEmpty() ? undefined : icon
 }
 
@@ -15463,9 +15462,12 @@ ipcMain.handle('hermes:vscode-theme:search', async (_event, query) => searchMark
 // running app. Three delivery paths: macOS 'open-url',
 // Win/Linux running-app 'second-instance' (argv), Win/Linux cold-start argv.
 // ---------------------------------------------------------------------------
+const PHANTOMBOT_PROTOCOL = 'phantombot'
+
 const HERMES_PROTOCOL = DEV_SERVER ? 'hermes-dev' : 'hermes'
+
 /** Schemes accepted when parsing inbound URLs (dev accepts both). */
-const DEEPLINK_SCHEMES = DEV_SERVER ? ['hermes-dev', 'hermes'] : ['hermes']
+const DEEPLINK_SCHEMES = DEV_SERVER ? ['phantombot', 'hermes-dev', 'hermes'] : ['phantombot', 'hermes']
 let _pendingDeepLink = null
 let _rendererReadyForDeepLink = false
 
@@ -15553,11 +15555,13 @@ function registerDeepLinkProtocol() {
       // `electron .` from apps/desktop — resolve against cwd.
       const entry = path.resolve(process.argv[1])
       app.setAsDefaultProtocolClient(HERMES_PROTOCOL, process.execPath, [entry])
+      app.setAsDefaultProtocolClient(PHANTOMBOT_PROTOCOL, process.execPath, [entry])
     } else {
+      app.setAsDefaultProtocolClient(HERMES_PROTOCOL)
       app.setAsDefaultProtocolClient(PHANTOMBOT_PROTOCOL)
     }
 
-    rememberLog(`[deeplink] registered ${HERMES_PROTOCOL}:// handler`)
+    rememberLog(`[deeplink] registered ${HERMES_PROTOCOL}:// and ${PHANTOMBOT_PROTOCOL}:// handlers`)
   } catch (err) {
     rememberLog(`[deeplink] protocol registration failed: ${err.message}`)
   }

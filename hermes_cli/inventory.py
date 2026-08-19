@@ -462,7 +462,7 @@ def _apply_capabilities(rows: list[dict], *, allow_network: bool = True) -> None
                     meta = get_model_capabilities(
                         slug,
                         model,
-                        allow_background_refresh=allow_network,
+                        allow_network=allow_network,
                     )
                     if meta is not None:
                         reasoning = bool(meta.supports_reasoning)
