@@ -925,7 +925,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile = null }: Model
                 <SelectContent>
                   {withActive(selectedProviderModels, selectedModel).map(model => (
                     <SelectItem key={model} value={model}>
-                      {model}
+                      {modelSelectLabel(model)}
                     </SelectItem>
                   ))}
                 </SelectContent>

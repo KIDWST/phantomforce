@@ -766,10 +766,7 @@ export const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sess
     <ComposerPrimitive.Root className="contents" data-slot="aui_edit-composer-root">
       <StickyHumanMessageContainer>
         <div
-          className="composer-human-message-container human-execution-message-top relative flex w-full items-start rounded-md bg-(--ui-chat-surface-background)"
-          // A raised box over the transcript field: under window glass it keeps
-          // a near-opaque fill instead of thinning with the field behind it.
-          data-glass-raised=""
+          className="composer-human-message-container human-execution-message-top relative ml-auto flex w-full max-w-[min(88%,46rem)] items-start bg-transparent"
           onBlur={handleEditBlur}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}

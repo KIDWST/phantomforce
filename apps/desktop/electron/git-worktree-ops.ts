@@ -381,10 +381,20 @@ async function listBranches(repoPath, gitBin) {
   }
 
   try {
-    const [localOut, remoteOut] = await Promise.all([
+    const [localResult, remoteResult] = await Promise.allSettled([
       runGit(gitBin, ['for-each-ref', '--format=%(refname:short)', '--sort=-committerdate', 'refs/heads'], resolved),
       runGit(gitBin, ['for-each-ref', '--format=%(refname:short)', '--sort=-committerdate', 'refs/remotes'], resolved)
     ])
+
+    // Promise.all would return as soon as the first Git probe rejects, leaving
+    // its sibling process alive with this directory as its cwd. On Windows that
+    // also keeps the folder locked. Always wait for both probes to finish.
+    if (localResult.status !== 'fulfilled' || remoteResult.status !== 'fulfilled') {
+      return []
+    }
+
+    const localOut = localResult.value
+    const remoteOut = remoteResult.value
 
     const trees = await listWorktrees(resolved, gitBin)
     const pathByBranch = new Map(trees.filter(tree => tree.branch).map(tree => [tree.branch, tree.path]))
