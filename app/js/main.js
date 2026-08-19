@@ -77,6 +77,7 @@ const WORKSPACE_STYLE_BUNDLES = Object.freeze({
   ],
   media: ["/app/creator-studio.css?v=phantom-live-20260819-166"],
   content: ["/app/creator-studio.css?v=phantom-live-20260819-166"],
+  sites: ["/app/site-studio-responsive.css?v=site-studio-responsive-20260723-01"],
 });
 
 const workspaceStylePromises = new Map();

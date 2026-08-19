@@ -1909,8 +1909,8 @@
         },
         {
           "file": "app/js/settings.js",
-          "pattern": "AI control center[\\s\\S]*DeepSeek V4 Flash[\\s\\S]*renderAiRouteCard\\(\\\"platform\\\"[\\s\\S]*renderAiRouteCard\\(\\\"phantombot\\\"",
-          "description": "Settings visibly separates the platform brain from the PhantomBot model and presents the recommended DeepSeek route."
+          "pattern": "Gateway control center[\\s\\S]*title: \\\"DeepSeek\\\"[\\s\\S]*title: \\\"OpenRouter\\\"[\\s\\S]*OpenRouter model catalogue[\\s\\S]*renderAiRouteCard\\(\\\"platform\\\"[\\s\\S]*renderAiRouteCard\\(\\\"phantombot\\\"[\\s\\S]*renderGatewayLoopControls",
+          "description": "Gateway Settings visibly separates the platform brain from PhantomBot, provides encrypted DeepSeek and OpenRouter setup, exposes the live OpenRouter catalogue, and keeps loop routing optional."
         },
         {
           "file": "server/src/connectors/customer-connection-catalog.ts",
@@ -1944,7 +1944,7 @@
         },
         {
           "file": "server/src/index.ts",
-          "pattern": "\\/api\\/phantomplay\\/ai-models[\\s\\S]{0,3000}getLocalOllamaStatus[\\s\\S]{0,5000}fetchOpenRouterModelsForPhantomPlay",
+          "pattern": "\\/api\\/phantomplay\\/ai-models[\\s\\S]{0,3000}getLocalOllamaStatus[\\s\\S]{0,5000}fetchOpenRouterModels\\(",
           "description": "The native picker can resolve current installed Ollama models and the live OpenRouter catalog with safe fallbacks."
         }
       ],

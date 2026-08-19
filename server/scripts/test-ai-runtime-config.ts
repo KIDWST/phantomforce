@@ -19,6 +19,7 @@ import { claudeModelArgs, resolveClaudeModel } from "../src/phantom-ai/providers
 import { callDeepSeekV4Flash } from "../src/phantom-ai/providers/deepseek-v4-transport.js";
 import { callLocalOllamaChat } from "../src/phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "../src/phantom-ai/providers/openrouter-live-transport.js";
+import { fetchOpenRouterModels, parseOpenRouterModels } from "../src/phantom-ai/providers/openrouter-models.js";
 
 const root = await mkdtemp(join(tmpdir(), "phantom-ai-runtime-test-"));
 const credentialRoot = await mkdtemp(join(tmpdir(), "phantom-ai-credentials-test-"));
@@ -107,6 +108,8 @@ try {
   assert.deepEqual(claudeModelArgs("sonnet"), ["--model", "sonnet"]);
 
   let openRouterRequest: Record<string, unknown> = {};
+  let openRouterAuthorization = "";
+  const rawOpenRouterCredential = "sk-or-test-openrouter-1234567890";
   const openRouter = await callOpenRouterGlm52(
     {
       requestId: "runtime-openrouter-model",
@@ -119,13 +122,14 @@ try {
       adminOperatorLane: true,
     },
     {
+      credential: rawOpenRouterCredential,
+      modelId: "anthropic/claude-sonnet-4",
       env: {
         PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
         PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
-        OPENROUTER_API_KEY: "test-only-not-a-real-key",
-        OPENROUTER_MODEL: "anthropic/claude-sonnet-4",
       },
       fetchImpl: async (_url, init) => {
+        openRouterAuthorization = init.headers.Authorization;
         openRouterRequest = JSON.parse(init.body);
         return {
           ok: true,
@@ -136,6 +140,7 @@ try {
       },
     },
   );
+  assert.equal(openRouterAuthorization, `Bearer ${rawOpenRouterCredential}`);
   assert.equal(openRouterRequest.model, "anthropic/claude-sonnet-4");
   assert.equal(openRouter.model_id, "anthropic/claude-sonnet-4");
   assert.equal(openRouter.status, "called");
@@ -153,8 +158,43 @@ try {
   assert.equal(credentialStatus.configured, true);
   assert.equal(credentialStatus.secret_returned, false);
   assert.equal(await getAiProviderCredential("org-a", "deepseek_api", { root: credentialRoot, env: credentialEnv }), rawCredential);
+  const openRouterCredentialStatus = await saveAiProviderCredential({
+    tenantId: "org-a",
+    providerId: "openrouter_glm",
+    credential: rawOpenRouterCredential,
+    actor: "owner-a",
+    root: credentialRoot,
+    env: credentialEnv,
+  });
+  assert.equal(openRouterCredentialStatus.configured, true);
+  assert.equal(await getAiProviderCredential("org-a", "openrouter_glm", { root: credentialRoot, env: credentialEnv }), rawOpenRouterCredential);
   const encryptedDocument = await readFile(join(credentialRoot, "org-a.json"), "utf8");
   assert.doesNotMatch(encryptedDocument, new RegExp(rawCredential, "u"));
+  assert.doesNotMatch(encryptedDocument, new RegExp(rawOpenRouterCredential, "u"));
+
+  const parsedOpenRouterModels = parseOpenRouterModels({
+    data: [
+      { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash", context_length: 163840, pricing: { prompt: "0.0000002", completion: "0.0000004" } },
+      { id: "deepseek/deepseek-v4-flash", name: "Duplicate" },
+      { id: "invalid model id", name: "Invalid" },
+    ],
+  });
+  assert.equal(parsedOpenRouterModels.length, 1);
+  assert.equal(parsedOpenRouterModels[0]?.context_length, 163840);
+  let modelCatalogueAuthorization = "";
+  const openRouterModels = await fetchOpenRouterModels({
+    credential: rawOpenRouterCredential,
+    fetchImpl: async (_url, init) => {
+      modelCatalogueAuthorization = init.headers.Authorization;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash", context_length: 163840 }] }),
+      };
+    },
+  });
+  assert.equal(modelCatalogueAuthorization, `Bearer ${rawOpenRouterCredential}`);
+  assert.equal(openRouterModels[0]?.id, "deepseek/deepseek-v4-flash");
 
   let deepSeekRequest: Record<string, unknown> = {};
   let deepSeekAuthorization = "";
@@ -192,6 +232,8 @@ try {
   assert.equal(deepSeek.raw_secret_exposed, false);
   await deleteAiProviderCredential("org-a", "deepseek_api", { root: credentialRoot, env: credentialEnv });
   assert.equal((await getAiProviderCredentialStatus("org-a", { root: credentialRoot, env: credentialEnv })).deepseek_api.configured, false);
+  await deleteAiProviderCredential("org-a", "openrouter_glm", { root: credentialRoot, env: credentialEnv });
+  assert.equal((await getAiProviderCredentialStatus("org-a", { root: credentialRoot, env: credentialEnv })).openrouter_glm.configured, false);
 
   let localRequest: Record<string, unknown> = {};
   const localAuto = await callLocalOllamaChat(

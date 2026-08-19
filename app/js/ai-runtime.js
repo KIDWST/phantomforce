@@ -37,6 +37,17 @@ const runtimeState = {
   audit: [],
 };
 
+const providerModelCatalogs = {
+  openrouter_glm: {
+    loaded: false,
+    loading: false,
+    error: null,
+    configured: false,
+    dynamic: false,
+    models: [],
+  },
+};
+
 let pendingSave = Promise.resolve(null);
 let pendingLoad = null;
 
@@ -246,6 +257,36 @@ export async function removeAiProviderCredential(providerId) {
   });
   await loadAiRuntimeConfig({ force: true });
   return payload;
+}
+
+export function getAiProviderModelCatalog(providerId) {
+  const state = providerModelCatalogs[providerId];
+  return state
+    ? { ...state, models: state.models.map((model) => ({ ...model, pricing: { ...(model.pricing || {}) } })) }
+    : { loaded: false, loading: false, error: "This provider does not publish a model catalogue.", configured: false, dynamic: false, models: [] };
+}
+
+export async function loadAiProviderModels(providerId, { force = false } = {}) {
+  const state = providerModelCatalogs[providerId];
+  if (!state) throw new Error("This provider does not publish a model catalogue.");
+  if (state.loading) return getAiProviderModelCatalog(providerId);
+  if (!force && state.loaded && !state.error) return getAiProviderModelCatalog(providerId);
+  state.loading = true;
+  state.error = null;
+  try {
+    const payload = await request(`/phantom-ai/runtime/models?tenant_id=${encodeURIComponent(currentTenantId())}&provider_id=${encodeURIComponent(providerId)}`);
+    state.loaded = true;
+    state.loading = false;
+    state.configured = Boolean(payload.configured);
+    state.dynamic = Boolean(payload.dynamic);
+    state.models = Array.isArray(payload.models) ? payload.models.filter((model) => model && typeof model.id === "string") : [];
+    return getAiProviderModelCatalog(providerId);
+  } catch (error) {
+    state.loaded = true;
+    state.loading = false;
+    state.error = error instanceof Error ? error.message : "Provider models could not be loaded.";
+    throw error;
+  }
 }
 
 export function getAiRuntimeState() {

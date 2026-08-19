@@ -31,6 +31,7 @@ const pages = [
   { id: "media", label: "media-lab" },
   { id: "content", label: "content-hub" },
   { id: "analytics", label: "analytics" },
+  { id: "sites", label: "websites" },
   { id: "phantomplay", label: "phantomplay" },
   { id: "phantomstore", label: "phantomstore" },
   { id: "settings", label: "settings" },
