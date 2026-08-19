@@ -21,7 +21,6 @@ import {
   RefreshCw,
   Search,
   Settings2,
-  SlidersHorizontal,
   Upload,
   Wrench,
   Zap
@@ -194,6 +193,13 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
         id: 'billing',
         label: t.settings.nav.billing,
         onSelect: () => setActiveView('billing')
+      },
+      {
+        active: activeView === 'chatgpt-plus',
+        icon: Brain,
+        id: 'chatgpt-plus',
+        label: t.settings.nav.chatgptPlus,
+        onSelect: () => setActiveView('chatgpt-plus')
       },
       {
         active: activeView === 'providers',
@@ -410,6 +416,8 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
       <NotificationsSettings />
     ) : activeView === 'billing' ? (
       <BillingSettings />
+    ) : activeView === 'chatgpt-plus' ? (
+      <ChatGptPlusSettings />
     ) : activeView === 'plugins' ? (
       <PluginsSettings />
     ) : (

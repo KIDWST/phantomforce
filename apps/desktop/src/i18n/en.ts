@@ -1475,9 +1475,16 @@ export const en: Translations = {
     settingsFields: 'Settings fields',
     mcpServers: 'MCP servers',
     archivedChats: 'Archived chats',
-    sections: { maintenance: 'Maintenance', sessions: 'Sessions', system: 'System', usage: 'Usage' },
+    sections: {
+      maintenance: 'Maintenance',
+      runs: 'Engineering runs',
+      sessions: 'Sessions',
+      system: 'System',
+      usage: 'Usage'
+    },
     sectionDescriptions: {
       maintenance: 'Diagnostics, backups, curator, and memory data',
+      runs: 'Review durable runs, changes, tool results, and verification evidence',
       sessions: 'Search and manage sessions',
       system: 'Status, logs, and system actions',
       usage: 'Token, cost, and skill activity over time'

@@ -3,8 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getStatus } from '@/hermes'
 
-import { deferred } from '../../../test/deferred'
-
 import { useStatusSnapshot } from './use-status-snapshot'
 
 vi.mock('@/hermes', () => ({
@@ -12,6 +10,18 @@ vi.mock('@/hermes', () => ({
 }))
 
 type GatewayRequester = <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined
+  let reject: (reason?: unknown) => void = () => undefined
+
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+
+  return { promise, reject, resolve }
+}
 
 async function flushAsync() {
   await act(async () => {
@@ -118,6 +128,36 @@ describe('useStatusSnapshot', () => {
       reason: expect.stringContaining('No usable credentials found for nous.'),
       source: 'runtime_check'
     })
+  })
+
+  it('reports active-session health separately from a broken global default', async () => {
+    const requestGatewayMock = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'setup.status') {
+        return { provider_configured: true } as never
+      }
+
+      return (
+        params?.provider === 'phantom' ? { ok: true } : { error: 'The global provider is disabled.', ok: false }
+      ) as never
+    })
+
+    const requestGateway = requestGatewayMock as unknown as GatewayRequester
+
+    const { result } = renderHook(() => useStatusSnapshot('open', requestGateway, '', 'phantom'))
+
+    await flushAsync()
+
+    expect(result.current.inferenceStatus).toMatchObject({
+      activeProvider: 'phantom',
+      configurationDrift: true,
+      globalDefault: {
+        ready: false,
+        reason: expect.stringContaining('global provider is disabled')
+      },
+      ready: true
+    })
+    expect(requestGatewayMock).toHaveBeenCalledWith('setup.runtime_check', { provider: 'phantom' })
+    expect(requestGatewayMock).toHaveBeenCalledWith('setup.runtime_check', undefined)
   })
 
   it('clears readiness immediately when the gateway disconnects', async () => {

@@ -67,6 +67,25 @@ logger = logging.getLogger("run_agent")
 _warned_unavailable_providers: set[str] = set()
 
 
+def _default_continuity_tail_user_messages(provider: Any, model: Any) -> int:
+    """Keep recent intent anchors for Phantom's compact local runtimes."""
+    provider_id = str(provider or "").strip().lower()
+    model_id = str(model or "").strip().lower()
+    is_phantom_runtime = provider_id in {
+        "phantom",
+        "custom:phantom",
+        "qwen3-coder-local",
+        "kimi-k3-direct",
+    } or (
+        model_id == "phantom"
+        or model_id.startswith("phantom:")
+        or model_id.startswith("phantom-unleashed")
+        or model_id.startswith("phantom-v1")
+        or model_id.startswith("kimi-k3-hf")
+    )
+    return 3 if is_phantom_runtime else 1
+
+
 def _warn_memory_provider_unavailable(name: str, reason: str = "") -> None:
     """Warn (once per provider) when a configured memory provider is unavailable.
 

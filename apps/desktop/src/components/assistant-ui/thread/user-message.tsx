@@ -443,8 +443,11 @@ export const UserMessage: FC<{
         }
         messageId={messageId}
       >
-        <ActionBarPrimitive.Root className="relative w-full max-w-full" data-slot="aui_user-bubble-actions">
-          <div className="human-message-with-todos-wrapper flex w-full flex-col gap-0">
+        <ActionBarPrimitive.Root
+          className="relative flex w-full max-w-full justify-end"
+          data-slot="aui_user-bubble-actions"
+        >
+          <div className="human-message-with-todos-wrapper flex w-full flex-col items-end gap-0">
             <ReactionPicker
               onOpenChange={setPickerOpen}
               onSelect={pickEmoji}
@@ -452,7 +455,7 @@ export const UserMessage: FC<{
               selected={shownReactions.find(reaction => reaction.author === 'user')?.emoji}
             >
               <div
-                className="relative w-full"
+                className="relative w-fit max-w-[min(88%,46rem)]"
                 // The app context menu skips PLAIN right-clicks here (the
                 // attr below) so this handler keeps the picker gesture; a
                 // link/image/selection inside the bubble still gets the app

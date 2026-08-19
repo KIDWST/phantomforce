@@ -17,6 +17,7 @@ import { $backgroundResume } from '@/store/background-delegation'
 import { sessionCompacting } from '@/store/compaction'
 import { sessionAwaitingInput } from '@/store/prompts'
 import { sessionProviderWait } from '@/store/provider-wait'
+import { $phantomRoute, $thinkingStatus, type PhantomRoute } from '@/store/session'
 import { type DraftingTool, sessionDraftingTool } from '@/store/tool-drafting'
 
 // A status line is scaffolding like any other — "Editing" while the model
@@ -46,6 +47,17 @@ const StatusRow: FC<{ children: ReactNode; label: string } & React.ComponentProp
 
 // Fixed label while auto-compaction runs — decoupled from backend status text.
 const COMPACTION_LABEL = 'Summarizing thread'
+
+export const PHANTOM_THINKING_QUIPS = [
+  '*byting chips*',
+  '*phoning home*',
+  '*asking the void nicely*',
+  '*untangling ghost wires*',
+  '*consulting the tiny council*',
+  '*dusting the neural attic*',
+  '*shaking the answer tree*',
+  '*feeding the compute hamsters*'
+] as const
 
 const HintText: FC<{ children: ReactNode }> = ({ children }) => (
   <span className={cn(SCAFFOLD_LABEL_CLASS, 'shimmer min-w-0 flex-1 truncate')}>{children}</span>
@@ -121,6 +133,63 @@ function useStatusHint(compacting: boolean, drafting: DraftingTool | null, provi
   return revealed && name ? toolPresentVerb(name) : ''
 }
 
+function usePhantomThinkingQuip(active: boolean): string {
+  const backendStatus = useStore($thinkingStatus)
+  const [index, setIndex] = useState(0)
+
+  const phrases = useMemo(
+    () =>
+      backendStatus
+        ? [backendStatus, ...PHANTOM_THINKING_QUIPS.filter(quip => quip !== backendStatus)]
+        : PHANTOM_THINKING_QUIPS,
+    [backendStatus]
+  )
+
+  useEffect(() => {
+    setIndex(0)
+
+    if (!active) {
+      return
+    }
+
+    const timer = window.setInterval(() => setIndex(current => current + 1), 3200)
+
+    return () => window.clearInterval(timer)
+  }, [active, backendStatus])
+
+  return phrases[index % phrases.length] ?? PHANTOM_THINKING_QUIPS[0]
+}
+
+const ThinkingQuip: FC<{ children: string }> = ({ children }) => (
+  <span className="shimmer min-w-0 truncate text-muted-foreground/60">{children}</span>
+)
+
+const ROUTE_LABELS: Record<PhantomRoute, string> = {
+  deep: 'Deep',
+  direct: 'Direct',
+  focus: 'Focus',
+  instant: 'Instant'
+}
+
+const PhantomRouteBadge: FC = () => {
+  const route = useStore($phantomRoute)
+
+  if (!route) {
+    return null
+  }
+
+  return (
+    <span
+      className="phantom-route-badge shrink-0"
+      data-route={route}
+      title={`Phantom adaptive lane: ${ROUTE_LABELS[route]}`}
+    >
+      <span aria-hidden="true" className="phantom-route-badge__pulse" />
+      {ROUTE_LABELS[route]}
+    </span>
+  )
+}
+
 export const CenteredThreadSpinner: FC = () => {
   const { t } = useI18n()
 
@@ -147,6 +216,7 @@ export const ResponseLoadingIndicator: FC = () => {
   const { compacting, drafting, providerWait, turnStartedAt } = useThreadSessionStatus()
   const elapsed = useElapsedSeconds(true, undefined, turnStartedAt)
   const hint = useStatusHint(compacting, drafting, providerWait)
+  const quip = usePhantomThinkingQuip(!compacting && !hint)
 
   return (
     <StatusRow data-slot="aui_response-loading" label={hint || t.assistant.thread.loadingResponse}>
@@ -155,7 +225,8 @@ export const ResponseLoadingIndicator: FC = () => {
         className="dither inline-block size-3 rounded-[2px] text-midground/80"
         kind="opacity"
       />
-      {hint && <HintText>{hint}</HintText>}
+      <PhantomRouteBadge />
+      {hint ? <HintText>{hint}</HintText> : <ThinkingQuip>{quip}</ThinkingQuip>}
       <ActivityTimerText seconds={elapsed} />
     </StatusRow>
   )
@@ -242,6 +313,7 @@ export const TurnActivityIndicator: FC = () => {
   // question the user is answering, and a tool call carrying its own timer.
   const working = busy || messageRunning
   const active = working && !awaitingInput && !toolNarrating && (Boolean(hint) || quietSince !== undefined)
+  const quip = usePhantomThinkingQuip(active && !hint)
 
   // Compaction owns the whole turn, so it keeps counting from the turn's start;
   // anything else counts from the moment the turn last produced something — the
@@ -263,7 +335,8 @@ export const TurnActivityIndicator: FC = () => {
         className="dither inline-block size-3 rounded-[2px] text-midground/80"
         kind="opacity"
       />
-      {hint && <HintText>{hint}</HintText>}
+      <PhantomRouteBadge />
+      {hint ? <HintText>{hint}</HintText> : <ThinkingQuip>{quip}</ThinkingQuip>}
       <ActivityTimerText seconds={elapsed} />
     </StatusRow>
   )

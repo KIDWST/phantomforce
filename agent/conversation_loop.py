@@ -1483,6 +1483,168 @@ def _rewrite_system_content_blocks(system_message: dict, effective: str) -> bool
     return False
 
 
+def _tool_schema_for_name(tools: Any, name: str) -> dict:
+    """Return the advertised parameters schema for ``name`` (or ``{}`)."""
+    for entry in tools or []:
+        if not isinstance(entry, dict):
+            continue
+        function = entry.get("function")
+        if not isinstance(function, dict) or function.get("name") != name:
+            continue
+        schema = function.get("parameters")
+        return schema if isinstance(schema, dict) else {}
+    return {}
+
+
+def _json_value_matches_type(value: Any, expected: Any) -> bool:
+    if isinstance(expected, list):
+        return any(_json_value_matches_type(value, item) for item in expected)
+    return {
+        "object": lambda: isinstance(value, dict),
+        "array": lambda: isinstance(value, list),
+        "string": lambda: isinstance(value, str),
+        "integer": lambda: isinstance(value, int) and not isinstance(value, bool),
+        "number": lambda: isinstance(value, (int, float))
+        and not isinstance(value, bool),
+        "boolean": lambda: isinstance(value, bool),
+        "null": lambda: value is None,
+    }.get(str(expected), lambda: True)()
+
+
+def _validate_tool_call_arguments(
+    tools: Any,
+    tool_name: str,
+    raw_arguments: Any,
+) -> tuple[Optional[dict], Optional[str], dict]:
+    """Parse and validate model arguments before they reach a tool handler."""
+    schema = _tool_schema_for_name(tools, tool_name)
+    if isinstance(raw_arguments, dict):
+        parsed = raw_arguments
+    else:
+        raw = (
+            "{}"
+            if raw_arguments is None or not str(raw_arguments).strip()
+            else str(raw_arguments)
+        )
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, TypeError) as exc:
+            return None, f"arguments are not valid JSON: {exc}", schema
+    if not isinstance(parsed, dict):
+        return None, "arguments must be a JSON object", schema
+
+    if schema:
+        try:
+            from jsonschema import validators
+
+            validator_cls = validators.validator_for(schema)
+            validator_cls.check_schema(schema)
+            errors = sorted(
+                validator_cls(schema).iter_errors(parsed),
+                key=lambda item: list(item.absolute_path),
+            )
+            if errors:
+                first = errors[0]
+                path = ".".join(str(part) for part in first.absolute_path)
+                location = f" at '{path}'" if path else ""
+                return (
+                    None,
+                    f"schema validation failed{location}: {first.message}",
+                    schema,
+                )
+            return parsed, None, schema
+        except Exception:
+            pass
+
+    required = schema.get("required") if isinstance(schema, dict) else None
+    if isinstance(required, list):
+        missing = [str(key) for key in required if str(key) not in parsed]
+        if missing:
+            return None, f"missing required properties: {', '.join(missing)}", schema
+
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    if isinstance(properties, dict):
+        for key, value in parsed.items():
+            prop = properties.get(key)
+            if not isinstance(prop, dict):
+                continue
+            expected = prop.get("type")
+            if expected is not None and not _json_value_matches_type(value, expected):
+                return None, f"property '{key}' must have type {expected}", schema
+            enum = prop.get("enum")
+            if isinstance(enum, list) and value not in enum:
+                return None, f"property '{key}' must be one of {enum}", schema
+    return parsed, None, schema
+
+
+def _tool_argument_error_content(tool_name: str, error: str, schema: dict) -> str:
+    rendered = json.dumps(
+        schema or {"type": "object"}, ensure_ascii=False, sort_keys=True
+    )
+    return (
+        f"Error: Invalid arguments for tool '{tool_name}'; tool was not executed. "
+        f"{error}. Retry the same tool with arguments matching this JSON schema: "
+        f"{rendered}"
+    )
+
+
+def _phantom_forced_tool_repair_supported(agent: Any) -> bool:
+    """Keep forced repair narrow to the small local Phantom profile."""
+    model = str(getattr(agent, "model", "") or "").lower().split("/")[-1]
+    return (
+        (model == "phantom" or model.startswith("phantom:"))
+        and not model.startswith("phantom-unleashed")
+        and getattr(agent, "api_mode", "chat_completions") == "chat_completions"
+        and not getattr(agent, "_force_text_tool_bridge", False)
+    )
+
+
+def _force_same_tool_choice(api_kwargs: dict, agent: Any, tool_name: str) -> bool:
+    """Apply a provider-supported one-call tool choice to the wire payload."""
+    if (
+        not tool_name
+        or getattr(agent, "api_mode", "") != "chat_completions"
+        or not api_kwargs.get("tools")
+    ):
+        return False
+    api_kwargs["tool_choice"] = {
+        "type": "function",
+        "function": {"name": tool_name},
+    }
+    return True
+
+
+def _append_tool_argument_recovery(
+    agent: Any,
+    assistant_message: Any,
+    finish_reason: str,
+    messages: list[dict],
+    failures: dict[str, tuple[str, dict]],
+) -> None:
+    """Pair every rejected call with a tool result; execute none of the batch."""
+    append_message(
+        messages, agent._build_assistant_message(assistant_message, finish_reason)
+    )
+    for call in assistant_message.tool_calls:
+        failure = failures.get(str(call.id))
+        if failure is None:
+            content = (
+                "Skipped: another tool call in this response had invalid arguments."
+            )
+        else:
+            error, schema = failure
+            content = _tool_argument_error_content(call.function.name, error, schema)
+        append_message(
+            messages,
+            {
+                "role": "tool",
+                "name": call.function.name,
+                "tool_call_id": call.id,
+                "content": content,
+            },
+        )
+
+
 def _sync_failover_system_message(agent, api_messages, active_system_prompt):
     """Refresh the in-flight system message after a provider failover.
 
@@ -2914,6 +3076,13 @@ def run_conversation(
                         api_messages,
                         tools_for_api=tools_for_api,
                     )
+                if forced_tool_repair_pending:
+                    _repair_name = forced_tool_repair_pending
+                    forced_tool_repair_pending = None
+                    if _force_same_tool_choice(api_kwargs, agent, _repair_name):
+                        agent._emit_status(
+                            f"↻ Repairing invalid {_repair_name} arguments with its schema"
+                        )
                 # Outbound-request surrogate chokepoint (#50959): the messages
                 # were scrubbed above, but the rest of the request body —
                 # tool/function descriptions (session_search's ±-heavy text is

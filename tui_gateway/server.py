@@ -5220,42 +5220,38 @@ def _sync_agent_model_with_config(sid: str, session: dict) -> None:
         )
 
 
-def _apply_pending_model_switch(sid: str, session: dict) -> None:
-    """Apply a model switch queued while a turn was running.
-
-    ``config.set model`` on a busy session doesn't mutate the live agent (the
-    worker thread is reading model/client mid-request); it stashes the pick in
-    ``session["pending_model_switch"]``.  This runs on the TURN thread at turn
-    start — before the first model call, nothing in flight — so the in-place
-    swap (client rebuild, the slow part) is safe here.  A failed switch keeps
-    the current model and never blocks the turn, matching
-    ``_sync_agent_model_with_config``.
-    """
-    pending = session.pop("pending_model_switch", None)
-    if not pending or session.get("agent") is None:
-        return
+def _apply_pending_model_switch(sid: str, session: dict) -> bool:
+    """Apply one model switch queued while a turn was running."""
+    pending = session.get("pending_model_switch")
+    if not isinstance(pending, dict) or session.get("agent") is None:
+        return False
+    raw_input = str(pending.get("raw_input") or pending.get("raw") or "").strip()
+    if not raw_input:
+        session.pop("pending_model_switch", None)
+        return False
     try:
         result = _apply_model_switch(
             sid,
             session,
-            pending["raw"],
+            raw_input,
             confirm_expensive_model=bool(pending.get("confirm_expensive_model")),
+            emit_session_info=False,
         )
-        # A queued pick is a deliberate user action; honour the expensive-model
-        # confirm by NOT applying it silently — surface the warning and drop the
-        # switch rather than spend on a pricey model the user never confirmed.
         if result.get("confirm_required"):
-            _emit(
-                "error",
-                sid,
-                {"message": result.get("confirm_message") or result.get("warning") or ""},
+            raise ValueError(
+                result.get("confirm_message")
+                or result.get("warning")
+                or "model switch requires confirmation"
             )
-    except Exception as e:
-        _emit(
-            "error",
-            sid,
-            {"message": f"Could not switch model: {e}"},
-        )
+        return True
+    except Exception as exc:
+        logger.warning("queued model switch failed for %s: %s", sid, exc)
+        _emit("error", sid, {"message": f"queued model switch failed: {exc}"})
+        return False
+    finally:
+        # Keep pending identity authoritative throughout the in-place switch;
+        # clear it only after the attempt, before the settled session snapshot.
+        session.pop("pending_model_switch", None)
 
 
 class CompressionLockHeld(Exception):
@@ -5709,14 +5705,15 @@ def _session_info(agent, session: dict | None = None) -> dict:
         yolo = bool(_YOLO_MODE_FROZEN) or session_yolo or approval_mode == "off"
     except Exception:
         yolo = False
-    # A model switch queued mid-turn (pending_model_switch) applies at the next
-    # turn start, so agent.model still reads the OLD model until then. Report the
-    # pending pick instead — it's the model the next turn will run, and it stops
-    # the end-of-turn settle from blipping the UI back to the old model before
-    # the switch lands. Cleared once _apply_pending_model_switch consumes it.
-    pending_switch = (session or {}).get("pending_model_switch") or {}
-    pending_model = str(pending_switch.get("display_model") or "").strip()
-    pending_provider = str(pending_switch.get("display_provider") or "").strip()
+    active_model = mirror.get("model", getattr(agent, "model", ""))
+    active_provider = mirror.get("provider", getattr(agent, "provider", ""))
+    pending_switch = (session or {}).get("pending_model_switch")
+    if not isinstance(pending_switch, dict):
+        pending_switch = {}
+    pending_model = pending_switch.get("model") or pending_switch.get("display_model")
+    pending_provider = pending_switch.get("provider") or pending_switch.get(
+        "display_provider"
+    )
     # Epoch seconds the current turn started, or None when idle. Lets the
     # desktop preserve the turn-elapsed timer across session switches (cold
     # resume path) instead of resetting it to 0:00.
@@ -5728,9 +5725,14 @@ def _session_info(agent, session: dict | None = None) -> dict:
     )
 
     info: dict = {
-        "model": pending_model or mirror.get("model", getattr(agent, "model", "")),
-        "provider": pending_provider
-        or mirror.get("provider", getattr(agent, "provider", "")),
+        # Legacy fields remain the route that is actually active. Explicit
+        # pending fields let clients render a queued transition truthfully.
+        "model": active_model,
+        "provider": active_provider,
+        "active_model": active_model,
+        "active_provider": active_provider,
+        "pending_model": pending_model,
+        "pending_provider": pending_provider,
         "reasoning_effort": reasoning_effort,
         "service_tier": service_tier,
         "fast": service_tier == "priority",
@@ -11923,6 +11925,216 @@ def _respond(rid, params, key, *, allow_expired=False):
     return _ok(rid, {"status": "ok"})
 
 
+@method("engineering.runs")
+def _(rid, params: dict) -> dict:
+    """List durable engineering runs for the active profile."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        runs = default_store().list_runs(
+            project_key=str(params.get("project_key") or ""),
+            limit=int(params.get("limit") or 50),
+        )
+        return _ok(rid, {"runs": runs})
+    except (OSError, TypeError, ValueError) as exc:
+        logger.exception("engineering.runs failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.run")
+def _(rid, params: dict) -> dict:
+    """Return one run with its tasks, changes, tool results, and evidence."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        run_id = str(params.get("run_id") or "").strip()
+        if not run_id:
+            return _err(rid, -32602, "run_id is required")
+        return _ok(rid, {"run": default_store().get_run(run_id)})
+    except (OSError, ValueError) as exc:
+        logger.exception("engineering.run failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.repo_status")
+def _(rid, params: dict) -> dict:
+    """Read the cached repository-index status without probing the worktree."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        cwd = str(params.get("cwd") or "").strip()
+        if not cwd:
+            return _err(rid, -32602, "cwd is required")
+        return _ok(rid, {"index": default_store().repo_status(cwd)})
+    except (OSError, ValueError) as exc:
+        logger.exception("engineering.repo_status failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.repo_index")
+def _(rid, params: dict) -> dict:
+    """Build the profile-local file and symbol index for one repository."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        cwd = str(params.get("cwd") or "").strip()
+        if not cwd:
+            return _err(rid, -32602, "cwd is required")
+        return _ok(rid, {"index": default_store().index_repository(cwd)})
+    except (OSError, ValueError) as exc:
+        logger.exception("engineering.repo_index failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.repo_symbols")
+def _(rid, params: dict) -> dict:
+    """Search symbols from a previously built repository index."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        cwd = str(params.get("cwd") or "").strip()
+        if not cwd:
+            return _err(rid, -32602, "cwd is required")
+        matches = default_store().search_symbols(
+            cwd,
+            str(params.get("query") or ""),
+            int(params.get("limit") or 50),
+        )
+        return _ok(rid, {"matches": matches})
+    except (OSError, TypeError, ValueError) as exc:
+        logger.exception("engineering.repo_symbols failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.memory")
+def _(rid, params: dict) -> dict:
+    """Read sanitized project memory from the active profile."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        project_key = str(params.get("project_key") or "").strip()
+        if not project_key:
+            return _err(rid, -32602, "project_key is required")
+        memories = default_store().search_memory(
+            project_key,
+            str(params.get("query") or ""),
+            int(params.get("limit") or 50),
+        )
+        return _ok(rid, {"memories": memories})
+    except (OSError, TypeError, ValueError) as exc:
+        logger.exception("engineering.memory failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.tool_results")
+def _(rid, params: dict) -> dict:
+    """Expose the normalized in-process tool result stream (metadata only)."""
+    try:
+        from tools.tool_bus import tool_result_bus
+
+        return _ok(
+            rid,
+            {"results": tool_result_bus.recent(int(params.get("limit") or 100))},
+        )
+    except (TypeError, ValueError) as exc:
+        logger.exception("engineering.tool_results failed")
+        return _err(rid, -32000, str(exc))
+
+
+def _diagnostics_snapshot(session: dict | None) -> dict:
+    """Return a fast, read-only runtime snapshot without live probes."""
+    session = session or {}
+    agent = session.get("agent")
+    mirror = _metadata_mirror(session)
+    active_model = mirror.get("model", getattr(agent, "model", ""))
+    active_provider = mirror.get("provider", getattr(agent, "provider", ""))
+    pending = session.get("pending_model_switch")
+    if not isinstance(pending, dict):
+        pending = {}
+
+    cfg = _load_cfg()
+    context_cfg = cfg.get("context_limits") if isinstance(cfg, dict) else {}
+    if not isinstance(context_cfg, dict):
+        context_cfg = {}
+    usage = _session_usage_snapshot(session)
+    estimated_context = int(
+        usage.get("context_used")
+        or usage.get("prompt_tokens")
+        or usage.get("prompt")
+        or usage.get("input")
+        or getattr(getattr(agent, "context_compressor", None), "last_prompt_tokens", 0)
+        or 0
+    )
+
+    ollama_thinking = getattr(agent, "_ollama_thinking_cache", None)
+    ollama_entries = len(ollama_thinking) if isinstance(ollama_thinking, dict) else 0
+    ollama_route_cached = False
+    ollama_thinking_supported = None
+    if isinstance(ollama_thinking, dict):
+        route_key = (
+            str(active_model or ""),
+            str(getattr(agent, "base_url", "") or ""),
+        )
+        cached_value = ollama_thinking.get(route_key)
+        if cached_value is None:
+            cached_value = ollama_thinking.get(str(active_model or ""))
+        if cached_value is not None:
+            ollama_route_cached = True
+            if isinstance(cached_value, (tuple, list)) and cached_value:
+                cached_value = cached_value[0]
+            if cached_value is None or isinstance(cached_value, bool):
+                ollama_thinking_supported = cached_value
+
+    try:
+        from agent.models_dev import get_models_dev_refresh_state
+
+        models_dev_state = get_models_dev_refresh_state()
+    except Exception as exc:
+        models_dev_state = {"error": str(exc)}
+    try:
+        from hermes_cli.codex_models import get_codex_refresh_state
+
+        codex_state = get_codex_refresh_state()
+    except Exception as exc:
+        codex_state = {"error": str(exc)}
+
+    return {
+        "active_model": active_model,
+        "active_provider": active_provider,
+        "pending_model": pending.get("model") or pending.get("display_model"),
+        "pending_provider": pending.get("provider")
+        or pending.get("display_provider"),
+        "turn_tool_call_count": int(
+            getattr(agent, "_turn_tool_call_count", 0) or 0
+        ),
+        "max_turns": int(
+            getattr(agent, "max_iterations", 0)
+            or _cfg_max_turns(cfg if isinstance(cfg, dict) else {}, 300)
+        ),
+        "context": {
+            "target": int(context_cfg.get("target_input_tokens") or 40_000),
+            "hard": int(context_cfg.get("hard_input_tokens") or 110_000),
+            "estimated": max(0, estimated_context),
+        },
+        "ollama": {
+            "thinking_cache_present": bool(ollama_thinking),
+            "thinking_cache_entries": ollama_entries,
+            "current_route_cached": ollama_route_cached,
+            "thinking_supported": ollama_thinking_supported,
+        },
+        "models_dev": models_dev_state,
+        "codex": codex_state,
+    }
+
+
+@method("diagnostics.get")
+def _(rid, params: dict) -> dict:
+    return _ok(
+        rid,
+        _diagnostics_snapshot(_sessions.get(params.get("session_id", ""))),
+    )
+
+
 # ── Methods: config ──────────────────────────────────────────────────
 
 
@@ -11953,24 +12165,29 @@ def _(rid, params: dict) -> dict:
                 # the new model without waiting for the swap or interrupting.
                 if session.get("running"):
                     parsed = parse_model_switch_args(value)
-                    try:
-                        pending_model = parsed.model_input
-                    except Exception:
-                        pending_model = str(value)
+                    pending_model = str(
+                        getattr(parsed, "model_input", "") or ""
+                    ).strip()
+                    if not pending_model:
+                        return _err(rid, 4002, "model value required")
+                    pending_provider = str(
+                        getattr(parsed, "explicit_provider", "")
+                        or getattr(session.get("agent"), "provider", "")
+                        or ""
+                    ).strip()
                     session["pending_model_switch"] = {
-                        "raw": value,
+                        "raw_input": str(value),
+                        "model": pending_model,
+                        "provider": pending_provider or None,
                         "confirm_expensive_model": bool(
                             params.get("confirm_expensive_model", False)
                         ),
-                        # The resolved model/provider the next turn will run on.
-                        # _session_info reports these while the switch is pending
-                        # so the end-of-turn settle keeps showing the user's pick
-                        # instead of blipping back to the still-live old model.
-                        "display_model": pending_model,
-                        "display_provider": (
-                            getattr(parsed, "explicit_provider", "") or ""
-                        ).strip(),
                     }
+                    _emit(
+                        "session.info",
+                        params.get("session_id", ""),
+                        _session_info(session.get("agent"), session),
+                    )
                     return _ok(
                         rid,
                         {
@@ -11980,6 +12197,7 @@ def _(rid, params: dict) -> dict:
                             "confirm_required": False,
                             "confirm_message": "",
                             "scope": "session",
+                            "pending": True,
                             "deferred": True,
                         },
                     )

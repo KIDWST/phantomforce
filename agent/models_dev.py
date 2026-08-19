@@ -577,6 +577,26 @@ def _start_background_refresh_models_dev() -> None:
         logger.debug("Failed to start models.dev refresh thread: %s", e)
 
 
+def _maybe_start_background_refresh() -> None:
+    """Compatibility entry point retained for cache-only inventory callers."""
+    _start_background_refresh_models_dev()
+
+
+def get_models_dev_refresh_state() -> dict[str, Any]:
+    """Return cache/refresh diagnostics without performing network or disk I/O."""
+    now = time.time()
+    with _models_dev_refresh_lock:
+        refresh_in_progress = bool(_models_dev_refresh_in_flight)
+    return {
+        "cache_present": bool(_models_dev_cache),
+        "cache_age_seconds": max(0.0, now - _models_dev_cache_time)
+        if _models_dev_cache and _models_dev_cache_time
+        else None,
+        "refresh_in_progress": refresh_in_progress,
+        "retry_after_seconds": max(0.0, _models_dev_retry_after - now),
+    }
+
+
 def fetch_models_dev(
     force_refresh: bool = False, *, allow_network: bool = True
 ) -> Dict[str, Any]:

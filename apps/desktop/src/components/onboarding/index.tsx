@@ -30,6 +30,7 @@ import type { ModelOptionProvider, OAuthProvider } from '@/types/hermes'
 
 import { DocsLink, FlowPanel, Status } from './flow'
 import {
+  ChatGptSubscriptionRow,
   FeaturedProviderRow,
   FireworksProviderRow,
   OpenRouterProviderRow,
@@ -38,6 +39,7 @@ import {
 } from './providers'
 
 export {
+  ChatGptSubscriptionRow,
   FeaturedProviderRow,
   FireworksProviderRow,
   KeyProviderRow,
@@ -465,6 +467,11 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
   }
 
   const select = (p: OAuthProvider) => void startProviderOAuth(p, ctx)
+
+  const startChatGptBridge = () => {
+    void window.hermesDesktop?.chatgptPlus?.start().catch(() => undefined)
+  }
+
   const featured = ordered.find(p => p.id === FEATURED_ID) ?? null
   const rest = featured ? ordered.filter(p => p.id !== FEATURED_ID) : ordered
   // Collapse the secondary providers behind a disclosure whenever Nous Portal
@@ -483,6 +490,7 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
             {/* Fireworks leads the expanded list, matching CANONICAL_PROVIDERS
                 (Nous → Fireworks), but stays hidden until the user opens it. */}
             <FireworksProviderRow onClick={() => openKeyForm('FIREWORKS_API_KEY')} />
+            <ChatGptSubscriptionRow onClick={startChatGptBridge} />
             {rest.map(p => (
               <ProviderRow key={p.id} onSelect={select} provider={p} />
             ))}

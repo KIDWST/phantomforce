@@ -36,6 +36,8 @@ import {
   sessionPinId,
   setCurrentCwd,
   setCurrentCwdTransient,
+  setCurrentModel,
+  setCurrentProvider,
   setRememberedRoute,
   setRememberedSessionId,
   setSelectedStoredSessionId,
