@@ -76,6 +76,14 @@
   uninstaller, desktop/Start shortcuts, and Windows Apps registration. The packaged
   and installed identity gates passed, 34 native shell tests passed, and a live
   installed-app capture verified the current 35-project library and Vespergate 3.1.
+- **Unrestricted internal admin products (2026-08-19)** — commit `643a4d11`,
+  browser build `phantom-live-20260819-170`. The authenticated platform admin
+  now opens every available PhantomForce product and all ten AI workspaces on
+  `admin.phantomforce.online` without checkout or fabricated purchase records.
+  Customer ownership remains purchase-gated on `app.phantomforce.online`.
+  Release-critical passed 32/32; live authenticated probes confirmed 15 admin
+  library products, 10 runnable admin AI products, zero admin commerce controls,
+  and zero unpurchased AI products for the customer account.
 - **Vespergate 3.1 canonical recovery (2026-08-19)** — browser build
   `phantom-live-20260819-169`. Reunified the richer Aug 9 Vespergate branch with
   the later 3.0 systems so the illustrated pointed-hood bearer, asymmetric
