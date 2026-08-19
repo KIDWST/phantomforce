@@ -158,7 +158,11 @@ async function exists(path: string) {
 }
 
 async function readJson(path: string): Promise<JsonRecord> {
-  const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
+  // Unreal project descriptors and other Windows-authored manifests may include
+  // a UTF-8 byte-order marker. Node decodes it as U+FEFF, which JSON.parse does
+  // not accept even though the owning applications treat the file as valid.
+  const source = (await readFile(path, "utf8")).replace(/^\uFEFF/u, "");
+  const parsed = JSON.parse(source) as unknown;
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`invalid_json_object:${path}`);
   return parsed as JsonRecord;
 }

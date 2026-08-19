@@ -1,18 +1,18 @@
-# Phantom Codex Checkpoint — 2026-08-19 V18R1 candidates
+# Phantom Codex Checkpoint — 2026-08-19 V18R1 installed release
 
 ## State
 
 - Release branch: `agent/phantomplay-unreal-recovery-20260819`; final `main` commit is recorded by Git history.
 - Exact Unreal project: `packages/phantom-games-unreal/PhantomGames.uproject`.
 - Engine used for production work: Unreal Engine 5.8.1 at `H:\UE_5.8`.
-- Status: four V18R1 Windows Shipping candidates passed packaging, automated visual acceptance, and human screenshot review. The installed four-game set intentionally remains V11R15 until the repository's literal `PROMOTE` authorization is supplied.
-- Native PhantomPlay desktop shell: installed and launched at version `0.3.0`.
-- Installed shell SHA-256: `C00B308E08801A224B86C4A48B82C1DB233330E22EB42D0C35B0736B56743E97`.
-- Recoverable pre-promotion backup: `C:\Users\jorda\Documents\Codex\backups\phantomplay-v11r15-20260817-145647`.
+- Status: the exact literal `PROMOTE` authorization was supplied. All four reviewed V18R1 Windows Shipping builds are now installed under `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows`, were launched from that installed location, and passed fresh 4/4 gameplay capture, automated visual acceptance, and human frame review.
+- Native PhantomPlay desktop shell: installed, launched, and left ready at version `0.3.2`.
+- Installed shell SHA-256: `1501D25DA79F005B81ED0AF93AA4A1CA590E614BC37D40E9CF57EF0497594F09`.
+- Atomic V11R15 rollback checkpoint: `C:\Users\jorda\Documents\Codex\backups\phantomplay-unreal-v11r15-to-v18r1-20260819-065922\Windows`.
 
 ## Completed work groups
 
-Native PhantomPlay desktop shell and project history; Unreal, Unity, and Panda3D launch surfaces; four differentiated Unreal flagships; production registries and control plane; knowledge discovery; AI-assisted edit contracts; native and desktop mod loading; recovered V13–V17 world and gameplay upgrades; CubeTown Memorycraft V16 and Diorama Adventure V17; PhantomPlay AI V18 provider routing; four-game V18R1 Shipping packaging; candidate gameplay capture; automated and human visual acceptance; and preserved V11R15 rollback state.
+Native PhantomPlay desktop shell and project history; Unreal, Unity, and Panda3D launch surfaces; four differentiated Unreal flagships; production registries and control plane; knowledge discovery; AI-assisted edit contracts; native and desktop mod loading; recovered V13–V17 world and gameplay upgrades; CubeTown Memorycraft V16 and Diorama Adventure V17; PhantomPlay AI V18 provider routing; four-game V18R1 Shipping packaging; candidate and installed gameplay capture; automated and human visual acceptance; atomic installed-set promotion; and preserved V11R15 rollback state.
 
 Repository verification completed on this release candidate:
 
@@ -23,17 +23,20 @@ Repository verification completed on this release candidate:
 - Unreal one-shot production validation: character, material, external-asset, world, V13, and CubeTown V17 gates passed.
 - Unreal Shipping packaging: all four V18R1 archives passed with 4,810 runtime packages and 8,955 container chunks per game.
 - PhantomPlay catalog: 37 built-in games verified.
+- Native PhantomPlay desktop shell contract: 34/34 passed after promotion, including installed-build discovery, Unreal preference, Vespergate, engine detection, save/reload, and project-history recovery.
 - Desktop mods: 12 checks passed; native mods: 7 checks passed.
 - Filesystem and strict repository-history secret scans passed with 0 findings; the strict scan is rerun after the final rebase before push.
 
 The canonical game bible remains a product specification and reference. Its full set of work packages and long-run dossiers is not individually certified complete by this checkpoint.
 
-## V18R1 candidate builds
+## V18R1 installed builds
 
-- `CandidateBuilds/V18R1/cubetown/Cubetown.exe` — 31 files, 1,043,014,022 bytes; launcher SHA-256 `693F901BF7B4F9DF9E2FF7954E66BF0443F431A16EE5F6E265351C430A6FF2D5`.
-- `CandidateBuilds/V18R1/phantom-ages/PhantomAges.exe` — 31 files, 1,043,014,035 bytes; launcher SHA-256 `448E8C37DD4B0650D610303DD9FD22161E393DF0CFD4866858519E2C8319A588`.
-- `CandidateBuilds/V18R1/phantom-legends/PhantomLegends.exe` — 31 files, 1,043,014,047 bytes; launcher SHA-256 `779EC14423CB1C05A4117285A60C174D95C42FD2B7D94B6CA0B7096C198F4E3D`.
-- `CandidateBuilds/V18R1/phantom-strike/PhantomStrike.exe` — 31 files, 1,043,014,043 bytes; launcher SHA-256 `5458645F838E1E9BA22CF5F8BA9EFFD34987F40B8A2AC73907056921F96B1EA0`.
+- `%LOCALAPPDATA%/PhantomPlay/Games/Unreal/Windows/cubetown/Cubetown.exe` — 31 files, 1,043,014,022 bytes; launcher SHA-256 `693F901BF7B4F9DF9E2FF7954E66BF0443F431A16EE5F6E265351C430A6FF2D5`.
+- `%LOCALAPPDATA%/PhantomPlay/Games/Unreal/Windows/phantom-ages/PhantomAges.exe` — 31 files, 1,043,014,035 bytes; launcher SHA-256 `448E8C37DD4B0650D610303DD9FD22161E393DF0CFD4866858519E2C8319A588`.
+- `%LOCALAPPDATA%/PhantomPlay/Games/Unreal/Windows/phantom-legends/PhantomLegends.exe` — 31 files, 1,043,014,047 bytes; launcher SHA-256 `779EC14423CB1C05A4117285A60C174D95C42FD2B7D94B6CA0B7096C198F4E3D`.
+- `%LOCALAPPDATA%/PhantomPlay/Games/Unreal/Windows/phantom-strike/PhantomStrike.exe` — 31 files, 1,043,014,043 bytes; launcher SHA-256 `5458645F838E1E9BA22CF5F8BA9EFFD34987F40B8A2AC73907056921F96B1EA0`.
+
+The installed `PHANTOMPLAY_BUILDSET.json` reports revision `V18R1`, Unreal Engine 5.8.1, exact 4/4 installed hashes, and the rollback path above. `Tools/Promote-InstalledBuildSet.ps1` now fail-closes on any authorization other than exact `PROMOTE`, verifies candidate/package/evidence hashes before mutation, moves the prior set intact, restores it automatically on a failed install, and re-verifies the installed trees before writing the live marker.
 
 ## Visual acceptance evidence
 
@@ -53,16 +56,23 @@ Installed-build captures in `Saved/PhantomGameplayProofInstalledV11R15` also pas
 - `phantom-strike-GAMEPLAY.png` — SHA-256 `56E276CCC45BBE5B719872FB10A465CB34234790DC2366C84C6848128B95B3B1`.
 - Gate CSV SHA-256: `E0D59449FCEB5A6B0AB64DABB7F2D3911E4425FE9B6E0AF8298E666C90342BBE`.
 
+Fresh post-promotion captures from the installed V18R1 executables in `Saved/PhantomGameplayProofInstalledV18R1` passed 4/4 at 1920 × 1080 and were individually reviewed:
+
+- `cubetown-GAMEPLAY.png` — SHA-256 `FA113D13BCEDE70E2663401127D78380364CD563357582C72F2061C710E5D773`.
+- `phantom-ages-GAMEPLAY.png` — SHA-256 `CB2782CC5DF81457C81DCCCC8571E34C942C4419400C4B4BB8E3CCAAE518EA1C`.
+- `phantom-legends-GAMEPLAY.png` — SHA-256 `77B0AF8B4EA12A6C4495F10EFA0FF1805B041048046DD619FB779CA910076317`.
+- `phantom-strike-GAMEPLAY.png` — SHA-256 `08E6D6BBC9E862EA40E26428363ED720A41DD5320CB4FF3BEC3D0A1E18EB343D`.
+- Gate CSV SHA-256: `A2A3F70D53777BFF4267DD78F6F74A03F34EB13B899B9228F0A62B05AB023772`.
+
 ## Open work and truthful limitations
 
 - Complete performance and soak telemetry remains open.
 - Full human playtest convergence and every canonical-bible dossier remain open.
-- V18R1 is a reviewed candidate set, not the installed set. Promotion requires the exact literal user authorization `PROMOTE`; until then, installed gameplay and rollback claims remain V11R15 only.
 - Editor-dependent Unreal/Unity authoring and PhantomFlow provider operations remain unavailable when their local editor or provider runtime is absent; the production report exposes these as blocked instead of simulating success.
 - Production OAuth/accounting behavior still depends on the selected provider completing its normal browser authorization, but the product now initiates that work through a single `Connect` action rather than asking users to perform manual configuration.
 
 ## Recovery and next gates
 
-If V11R15 must be rolled back, restore the installed build set and desktop shell from `C:\Users\jorda\Documents\Codex\backups\phantomplay-v11r15-20260817-145647`, then rerun installed-build capture and the 4/4 visual gate before relaunching.
+If V18R1 must be rolled back, close PhantomPlay and the four games, move the current installed `Windows` directory aside, restore `C:\Users\jorda\Documents\Codex\backups\phantomplay-unreal-v11r15-to-v18r1-20260819-065922\Windows` to `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows`, then rerun installed-build capture and the 4/4 visual gate before relaunching.
 
 Next production priorities are performance/soak telemetry, human playtesting, and continued game-bible dossier convergence. New revisions must package to a new candidate directory, pass all four visual gates, preserve a rollback snapshot, and only then replace the installed build set.

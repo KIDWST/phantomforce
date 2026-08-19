@@ -70,6 +70,15 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **PhantomPlay V18R1 installed promotion (2026-08-19)** — exact user
+  authorization `PROMOTE` replaced the installed V11R15 four-game set with the
+  reviewed V18R1 Windows Shipping builds through an atomic, fail-closed promotion.
+  Every installed launcher matches its reviewed SHA-256; all four installed games
+  launched into real gameplay, generated fresh 1920 × 1080 captures, passed the
+  4/4 flat/blank/prototype visual gate, and passed human frame review. PhantomPlay
+  shell `0.3.2` launched against the V18R1 marker and its native contract passed
+  34/34. The prior installed set is recoverable at
+  `C:\Users\jorda\Documents\Codex\backups\phantomplay-unreal-v11r15-to-v18r1-20260819-065922\Windows`.
 - **Phantom Rumble 3.0: Overdrive (2026-08-19)** — browser build
   `phantom-live-20260819-171`. Rebuilt held SMASH into a real keyboard, touch,
   and gamepad charge/release seam that arms four-impact WALLBREAKER ricochet
