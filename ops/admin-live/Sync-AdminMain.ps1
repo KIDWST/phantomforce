@@ -21,18 +21,36 @@ function Invoke-Git {
 }
 
 function Write-Manifest {
-  param([string]$Commit, [string]$Branch)
+  param(
+    [string]$Commit,
+    [string]$Branch,
+    [ValidateSet("ok", "blocked")][string]$Status = "ok",
+    [string]$Reason = ""
+  )
   $manifestPath = Join-Path $RepoRoot "app\.phantomforce-sync.json"
+  $attemptedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+  $syncedAt = $attemptedAt
+  if ($Status -eq "blocked" -and (Test-Path -LiteralPath $manifestPath)) {
+    try {
+      $previous = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+      if ($previous.synced_at) { $syncedAt = [string]$previous.synced_at }
+    } catch {}
+  }
   $payload = [ordered]@{
     source = (Join-Path $RepoRoot "app")
     live = (Join-Path $RepoRoot "app")
     branch = $Branch
     commit = $Commit
-    synced_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    synced_at = $syncedAt
+    attempted_at = $attemptedAt
     sync_status = "ok"
     sync_reason = ""
     served_direct = $true
     port = $Port
+  }
+  if ($Status -eq "blocked") {
+    $payload.sync_status = "blocked"
+    $payload.sync_reason = $Reason
   }
   $payload | ConvertTo-Json | Set-Content -LiteralPath $manifestPath -Encoding ascii
 }
@@ -67,10 +85,11 @@ try {
     return
   }
 
-  $dirty = (Invoke-Git status --porcelain --untracked-files=no).Trim()
+  $dirty = (Invoke-Git status --porcelain --untracked-files=normal).Trim()
   if ($dirty) {
     $local = (Invoke-Git rev-parse HEAD).Trim()
-    Write-Manifest -Commit $local -Branch $branch
+    $reason = "Git sync paused because the deployment checkout contains tracked or untracked files. Preserve that work in a development worktree or recovery stash, then retry."
+    Write-Manifest -Commit $local -Branch $branch -Status "blocked" -Reason $reason
 
     $uiStarted = $false
     if (@(Get-ListeningPids -LocalPort $Port).Count -eq 0) {
@@ -88,7 +107,7 @@ try {
       }
     }
 
-    $summary = "skipped git pull: tracked files are dirty; local services checked$(if ($uiStarted) { ' (ui started)' } else { '' })$(if ($hermesStarted) { ' (hermes started)' } else { '' })"
+    $summary = "skipped git pull: deployment checkout is dirty; local services checked$(if ($uiStarted) { ' (ui started)' } else { '' })$(if ($hermesStarted) { ' (hermes started)' } else { '' })"
     Write-SyncLog $summary
     Write-Output "PhantomForce admin main $summary."
     return

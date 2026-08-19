@@ -14,6 +14,11 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if($SkipGameplayProof){throw 'V11 production approval cannot skip actual packaged gameplay proof. Remove -SkipGameplayProof.'}
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot = Split-Path -Parent (Split-Path -Parent $ProjectRoot)
+$RepoParent = Split-Path -Parent ([System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/'))
+if ((Split-Path -Leaf $RepoParent) -ieq 'deployments') {
+    throw "Refusing to build from the deployment checkout '$RepoRoot'. Create or use a development worktree, then run this build there."
+}
 $Project = Join-Path $ProjectRoot 'PhantomGames.uproject'
 $Saved = Join-Path $ProjectRoot 'Saved'
 New-Item -ItemType Directory -Force -Path $Saved | Out-Null

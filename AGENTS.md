@@ -25,6 +25,13 @@
   sync fast-forwards that checkout to `origin/main`; do not serve an arbitrary
   feature worktree. Before declaring a change live, verify `/health` reports the
   deployment root and its commit matches `origin/main`.
+- The deployment checkout is **serve/sync only**. Never run Unreal Editor,
+  cook/package jobs, asset generators, recovery pipelines, or feature editing
+  from `...\Codex\deployments\phantomforce-live`. Use a dedicated development
+  worktree, commit and push the verified result, then let the clean deployment
+  checkout fast-forward. If the deployment is dirty, stop the writer, preserve
+  the work in a named recovery stash, restore cleanliness, and run the source
+  doctor before claiming that sync is healthy.
 - The Windows remote-stack watchdog also starts the admin services. Its host files
   live outside this repo at:
   `C:\Users\jorda\Documents\PhantomForce-Infrastructure\windows-host-pangolin-ai`.

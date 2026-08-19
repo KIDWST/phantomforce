@@ -9,6 +9,13 @@ from __future__ import annotations
 import json, math, os, random, traceback
 import unreal
 
+PROJECT_DIR = os.path.abspath(unreal.Paths.project_dir())
+if "/deployments/" in PROJECT_DIR.replace("\\", "/").casefold():
+    raise RuntimeError(
+        "Refusing to generate Unreal assets inside a deployment checkout. "
+        "Open this project from a development worktree instead."
+    )
+
 SAVED=os.path.abspath(unreal.Paths.project_saved_dir())
 REPORT=os.path.join(SAVED,'PhantomProductionWorldsV11.json')
 WORLD_ROOT='/Game/Phantom/Worlds'
