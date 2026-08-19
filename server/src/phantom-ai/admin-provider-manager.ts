@@ -4,8 +4,8 @@ import { promisify } from "node:util";
 import { checkAgentAssistBridgeHealth, getAgentAssistBridgeStatus } from "./agent-assist-bridge.js";
 import { sanitizeProviderDetail } from "./provider-error.js";
 
-export type AdminProviderId = "codex_cli" | "claude_cli" | "chatgpt_bridge" | "openrouter_glm" | "local_ollama";
-export type PublicAdminProviderId = "private" | "claude" | "chatgpt" | "openrouter" | "local";
+export type AdminProviderId = "deepseek_api" | "codex_cli" | "claude_cli" | "chatgpt_bridge" | "openrouter_glm" | "local_ollama";
+export type PublicAdminProviderId = "deepseek" | "private" | "claude" | "chatgpt" | "openrouter" | "local";
 export type AdminProviderAvailability = "unknown" | "online" | "offline" | "checking";
 export type AdminProviderQuota = "unknown" | "available" | "exhausted";
 
@@ -41,7 +41,7 @@ export type PublicAdminProviderState = Pick<
 };
 
 const execFileAsync = promisify(execFile);
-const PROVIDER_PRIORITY: AdminProviderId[] = ["codex_cli", "claude_cli", "chatgpt_bridge", "openrouter_glm", "local_ollama"];
+const PROVIDER_PRIORITY: AdminProviderId[] = ["deepseek_api", "codex_cli", "claude_cli", "chatgpt_bridge", "openrouter_glm", "local_ollama"];
 const DEFAULT_CLAUDE_PS1 = "C:\\Users\\jorda\\AppData\\Local\\hermes\\node\\claude.ps1";
 
 function initialState(providerId: AdminProviderId): AdminProviderState {
@@ -80,6 +80,7 @@ function quotaFromFailure(detail: string): AdminProviderQuota {
 }
 
 function publicProviderMeta(providerId: AdminProviderId): { display_id: PublicAdminProviderId; display_name: string } {
+  if (providerId === "deepseek_api") return { display_id: "deepseek", display_name: "DeepSeek" };
   if (providerId === "codex_cli") return { display_id: "private", display_name: "Codex CLI" };
   if (providerId === "claude_cli") return { display_id: "claude", display_name: "Claude" };
   if (providerId === "chatgpt_bridge") return { display_id: "chatgpt", display_name: "ChatGPT Bridge" };
@@ -189,6 +190,15 @@ async function fetchHealth(url: string, init: RequestInit = {}) {
 }
 
 async function checkProvider(providerId: AdminProviderId) {
+  if (providerId === "deepseek_api") {
+    const key = process.env.DEEPSEEK_API_KEY?.trim();
+    if (!key) return { online: false, latencyMs: 0, detail: "DeepSeek needs an API key for this organization." };
+    const baseUrl = process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
+    return timedCheck(
+      () => fetchHealth(`${baseUrl.replace(/\/$/, "")}/models`, { headers: { Authorization: `Bearer ${key}` } }),
+      "DeepSeek API is reachable.",
+    );
+  }
   if (providerId === "codex_cli") {
     return timedCheck(async () => {
       await execFileAsync("powershell.exe", ["-NoProfile", "-Command", "codex login status"], {

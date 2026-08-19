@@ -9,24 +9,24 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260817-163";
+} from "./store.js?v=phantom-live-20260817-164";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260817-163";
+} from "./orgs.js?v=phantom-live-20260817-164";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260817-163";
+} from "./proposalpipeline.js?v=phantom-live-20260817-164";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260817-163";
+} from "./approvalpipeline.js?v=phantom-live-20260817-164";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -34,9 +34,9 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260817-163";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260817-163";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260817-163";
+} from "./financeledger.js?v=phantom-live-20260817-164";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260817-164";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260817-164";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1633,7 +1633,7 @@ function renderMoney(el, rerender) {
         }
         currentConnector.status = payload.state === "connected" ? "connected" : "requested";
         currentConnector.requestedAt = payload.request?.requestedAt || new Date().toISOString();
-        financeUi.notice = payload.customerMessage || "Connection requested. Nothing else is needed from you.";
+        financeUi.notice = payload.customerMessage || "Secure provider sign-in opened. Finish approval, then refresh connection status.";
         pushActivity("Accounting Ledger", `${currentConnector.name} connection requested.`, ws);
         store.save();
       } catch (error) {
@@ -1864,7 +1864,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260817-163")
+      import("./brain.js?v=phantom-live-20260817-164")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

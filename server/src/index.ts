@@ -518,17 +518,26 @@ import {
 } from "./phantom-ai/windows-media-session.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
+import { callDeepSeekV4Flash } from "./phantom-ai/providers/deepseek-v4-transport.js";
 import { callLocalOllamaChat, getLocalOllamaStatus } from "./phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
 import { sanitizeProviderDetail } from "./phantom-ai/provider-error.js";
 import {
   AI_RUNTIME_PROVIDER_IDS,
   aiRuntimeProviderModel,
+  aiRuntimeRouteForSurface,
   getAiRuntimeConfig,
   saveAiRuntimeConfig,
   type AiRuntimeConfig,
   type AiRuntimeProviderId,
 } from "./phantom-ai/ai-runtime-config.js";
+import {
+  AI_CREDENTIAL_PROVIDER_IDS,
+  deleteAiProviderCredential,
+  getAiProviderCredential,
+  getAiProviderCredentialStatus,
+  saveAiProviderCredential,
+} from "./phantom-ai/ai-provider-credentials.js";
 import {
   adminProviderAttemptOrder,
   getAdminProviderManagerStatus,
@@ -774,13 +783,12 @@ const CustomerConnectionStartSchema = z.object({
 const AiRuntimeProviderIdSchema = z.enum(AI_RUNTIME_PROVIDER_IDS);
 const AiRuntimeModelIdSchema = z.string().trim().min(1).max(100).regex(/^[\w./:@+~-]+$/);
 const AiRuntimeQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
-const AiRuntimeUpdateSchema = z.object({
-  tenant_id: z.string().trim().max(80).optional(),
-  expected_version: z.number().int().positive().optional(),
+const AiRuntimeRouteUpdateSchema = z.object({
   mode: z.enum(["single", "multiple", "smart"]),
   primary_provider_id: AiRuntimeProviderIdSchema,
   allowed_provider_ids: z.array(AiRuntimeProviderIdSchema).min(1).max(AI_RUNTIME_PROVIDER_IDS.length),
   models: z.object({
+    deepseek_api: AiRuntimeModelIdSchema,
     local_ollama: AiRuntimeModelIdSchema,
     codex_cli: AiRuntimeModelIdSchema,
     claude_cli: AiRuntimeModelIdSchema,
@@ -788,6 +796,20 @@ const AiRuntimeUpdateSchema = z.object({
     chatgpt_bridge: AiRuntimeModelIdSchema,
   }),
   fallback_enabled: z.boolean(),
+});
+const AiRuntimeUpdateSchema = AiRuntimeRouteUpdateSchema.extend({
+  tenant_id: z.string().trim().max(80).optional(),
+  expected_version: z.number().int().positive().optional(),
+  phantom_bot: AiRuntimeRouteUpdateSchema,
+});
+const AiProviderCredentialSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  provider_id: z.enum(AI_CREDENTIAL_PROVIDER_IDS),
+  api_key: z.string().trim().min(12).max(512),
+});
+const AiProviderCredentialDeleteSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  provider_id: z.enum(AI_CREDENTIAL_PROVIDER_IDS),
 });
 
 function safeCustomizationTenantId(value: unknown, fallback: string) {
@@ -4432,7 +4454,7 @@ function parsePhantomAiChatProvider(value: unknown) {
   return value === "openrouter_glm" ? "openrouter_glm" : "phantom";
 }
 
-type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli" | "chatgpt_bridge" | "local_ollama";
+type AdminPhantomAiModelLane = "deepseek_v4" | "codex" | "glm_5_2" | "claude_cli" | "chatgpt_bridge" | "local_ollama";
 /* "mission" never takes the actionFreeConversation fast path (see the
    isSafe*ConversationRequest gates below) — a mission proposal needs full
    business context and, above everything else, the approval gate, so it
@@ -4441,6 +4463,7 @@ type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli" | "chatgpt_bri
 type AdminPhantomAiRouteTier = "instant" | "reasoning" | "advisory" | "standard" | "deep" | "mission";
 
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
+  if (value === "deepseek_v4" || value === "deepseek_api" || value === "deepseek" || value === "deepseek-v4-flash") return "deepseek_v4";
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
   if (value === "local_ollama" || value === "ollama" || value === "local" || value === "kimi" || value === "kimi_k3_hf") return "local_ollama";
   if (value === "claude_cli" || value === "claude") return "claude_cli";
@@ -4476,6 +4499,7 @@ function parseAllowProviderFallback(value: unknown, routeTier: AdminPhantomAiRou
 }
 
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
+  if (lane === "deepseek_v4") return "DeepSeek V4 Flash";
   if (lane === "glm_5_2") return "OpenRouter";
   if (lane === "local_ollama") return "Local Ollama";
   if (lane === "claude_cli") return "Claude CLI";
@@ -4488,6 +4512,7 @@ function publicAdminPhantomAiModelLane(lane: AdminPhantomAiModelLane) {
 }
 
 function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
+  if (lane === "deepseek_v4") return "router" as const;
   if (lane === "local_ollama") return "local" as const;
   if (lane === "glm_5_2") return "openrouter_glm" as const;
   if (lane === "claude_cli") return "claude" as const;
@@ -4505,11 +4530,12 @@ type AdminPhantomAiProviderId = AdminProviderId;
 function parseAllowedAdminProviders(value: unknown): AdminPhantomAiProviderId[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const providers = Array.from(new Set(value.filter((item: unknown): item is AdminPhantomAiProviderId =>
-    item === "codex_cli" || item === "claude_cli" || item === "chatgpt_bridge" || item === "openrouter_glm" || item === "local_ollama")));
+    item === "deepseek_api" || item === "codex_cli" || item === "claude_cli" || item === "chatgpt_bridge" || item === "openrouter_glm" || item === "local_ollama")));
   return providers.length ? providers : undefined;
 }
 
 function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPhantomAiProviderId {
+  if (lane === "deepseek_v4") return "deepseek_api";
   if (lane === "claude_cli") return "claude_cli";
   if (lane === "chatgpt_bridge") return "chatgpt_bridge";
   if (lane === "local_ollama") return "local_ollama";
@@ -4518,6 +4544,7 @@ function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPh
 }
 
 function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): AdminPhantomAiModelLane {
+  if (providerId === "deepseek_api") return "deepseek_v4";
   if (providerId === "claude_cli") return "claude_cli";
   if (providerId === "chatgpt_bridge") return "chatgpt_bridge";
   if (providerId === "codex_cli") return "codex";
@@ -4526,6 +4553,7 @@ function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): 
 }
 
 function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
+  if (providerId === "deepseek_api") return "DeepSeek V4 Flash";
   if (providerId === "codex_cli") return "Codex CLI";
   if (providerId === "claude_cli") return "Claude CLI";
   if (providerId === "chatgpt_bridge") return "ChatGPT Bridge";
@@ -4535,6 +4563,7 @@ function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
 
 type AdminPhantomAiChatContext = {
   requestId: string;
+  tenantId: string;
   businessName: string;
   taskType: string;
   userMessage: string;
@@ -4555,6 +4584,7 @@ type AdminPhantomAiChatContext = {
    worst-case total stays inside the frontend's chat request timeout instead of
    quietly burning minutes before the user sees anything. */
 const ADMIN_CHAT_FALLBACK_TIMEOUT_MS = {
+  deepseek_api: 30000,
   codex_cli: 30000,
   claude_cli: 30000,
   chatgpt_bridge: 120000,
@@ -4563,6 +4593,7 @@ const ADMIN_CHAT_FALLBACK_TIMEOUT_MS = {
 } as const;
 
 const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
+  deepseek_api: 20000,
   codex_cli: 30000,
   claude_cli: 30000,
   chatgpt_bridge: 120000,
@@ -4575,6 +4606,7 @@ const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
 } as const;
 
 const ADMIN_CHAT_REASONING_TIMEOUT_MS = {
+  deepseek_api: 20000,
   codex_cli: 12000,
   claude_cli: 12000,
   chatgpt_bridge: 120000,
@@ -4597,6 +4629,27 @@ function adminPhantomAiProviderTimeoutMs(providerId: AdminPhantomAiProviderId, c
 
 async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, ctx: AdminPhantomAiChatContext) {
   const timeoutMs = adminPhantomAiProviderTimeoutMs(providerId, ctx);
+  if (providerId === "deepseek_api") {
+    const credential = await getAiProviderCredential(ctx.tenantId, "deepseek_api");
+    return callDeepSeekV4Flash(
+      {
+        requestId: ctx.requestId,
+        businessName: ctx.businessName,
+        taskType: ctx.taskType,
+        userMessage: ctx.userMessage,
+        compactContext: ctx.compactContext,
+        sensitivityLevel: ctx.sensitivityLevel,
+        approvalRequired: ctx.approvalRequired,
+        executionMode: ctx.executionMode,
+        adminOperatorLane: true,
+      },
+      {
+        credential,
+        modelId: ctx.requestedModelId || ctx.requestedModel,
+        env: { ...process.env, PHANTOM_DEEPSEEK_TIMEOUT_MS: String(timeoutMs) },
+      },
+    );
+  }
   if (providerId === "codex_cli") {
     return callCodexCliChat(
       {
@@ -5318,8 +5371,9 @@ function getSendReadinessStatus() {
   };
 }
 
-function publicAiRuntimeState(config: AiRuntimeConfig) {
+async function publicAiRuntimeState(config: AiRuntimeConfig) {
   const providerIdByDisplayId = {
+    deepseek: "deepseek_api",
     private: "codex_cli",
     claude: "claude_cli",
     chatgpt: "chatgpt_bridge",
@@ -5327,18 +5381,27 @@ function publicAiRuntimeState(config: AiRuntimeConfig) {
     local: "local_ollama",
   } as const;
   const manager = getPublicAdminProviderManagerStatus();
+  const providerCredentials = await getAiProviderCredentialStatus(config.tenant_id);
   return {
     config,
+    provider_credentials: providerCredentials,
     provider_manager: {
       ...manager,
       providers: manager.providers.map((provider) => {
         const providerId = providerIdByDisplayId[provider.display_id];
+        const credentialConfigured = providerId === "deepseek_api" && providerCredentials.deepseek_api.configured;
         return {
           ...provider,
-          selected: config.allowed_provider_ids.includes(providerId),
+          selected: config.allowed_provider_ids.includes(providerId) || config.phantom_bot.allowed_provider_ids.includes(providerId),
+          selected_for_platform: config.allowed_provider_ids.includes(providerId),
+          selected_for_phantombot: config.phantom_bot.allowed_provider_ids.includes(providerId),
           selected_model: aiRuntimeProviderModel(config, providerId),
+          phantombot_selected_model: aiRuntimeProviderModel(config.phantom_bot, providerId),
+          credential_configured: credentialConfigured,
           truth_state: provider.status === "online"
             ? provider.display_id === "claude" && !provider.last_success_at ? "degraded" : "real"
+            : credentialConfigured
+              ? "configured"
             : provider.status === "offline"
               ? "unavailable"
               : "degraded",
@@ -5350,6 +5413,7 @@ function publicAiRuntimeState(config: AiRuntimeConfig) {
       sandbox: "Provider sandbox was called and persisted.",
       mock: "Mock-only result; no provider was called.",
       degraded: "Configuration exists, but live health is not yet confirmed.",
+      configured: "Credential is encrypted on the server; send a request or run a provider check to confirm it.",
       unavailable: "Provider is not configured, authenticated, or reachable.",
     },
   };
@@ -5369,7 +5433,7 @@ app.get("/phantom-ai/runtime/config", async (request, reply) => {
       source: state.source,
       can_manage: canManageWorkspaceModules(session, tenantId),
       audit: state.audit.slice(-20),
-      ...publicAiRuntimeState(state.config),
+      ...(await publicAiRuntimeState(state.config)),
       provider_called: false,
       model_called: false,
       secrets_returned: false,
@@ -5379,6 +5443,64 @@ app.get("/phantom-ai/runtime/config", async (request, reply) => {
       ? Number((error as { statusCode: number }).statusCode)
       : 500;
     return reply.status(statusCode).send({ ok: false, error: error instanceof Error ? error.message : "AI runtime configuration could not be read." });
+  }
+});
+
+app.put("/phantom-ai/runtime/credentials", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = AiProviderCredentialSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  try {
+    const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+    if (!canManageWorkspaceModules(session, tenantId)) {
+      return reply.status(403).send({ ok: false, error: "Managing organization AI credentials requires an owner or administrator." });
+    }
+    const status = await saveAiProviderCredential({
+      tenantId,
+      providerId: parsed.data.provider_id,
+      credential: parsed.data.api_key,
+      actor: session.id,
+    });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      provider_id: parsed.data.provider_id,
+      credential: status,
+      secret_returned: false,
+      secrets_stored_encrypted: true,
+    };
+  } catch (error) {
+    const statusCode = typeof (error as { statusCode?: unknown }).statusCode === "number"
+      ? Number((error as { statusCode: number }).statusCode)
+      : 500;
+    return reply.status(statusCode).send({ ok: false, error: error instanceof Error ? error.message : "The AI credential could not be saved." });
+  }
+});
+
+app.delete("/phantom-ai/runtime/credentials", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = AiProviderCredentialDeleteSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  try {
+    const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+    if (!canManageWorkspaceModules(session, tenantId)) {
+      return reply.status(403).send({ ok: false, error: "Managing organization AI credentials requires an owner or administrator." });
+    }
+    const status = await deleteAiProviderCredential(tenantId, parsed.data.provider_id);
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      provider_id: parsed.data.provider_id,
+      credential: status,
+      secret_returned: false,
+    };
+  } catch (error) {
+    const statusCode = typeof (error as { statusCode?: unknown }).statusCode === "number"
+      ? Number((error as { statusCode: number }).statusCode)
+      : 500;
+    return reply.status(statusCode).send({ ok: false, error: error instanceof Error ? error.message : "The AI credential could not be removed." });
   }
 });
 
@@ -5437,7 +5559,7 @@ app.put("/phantom-ai/runtime/config", async (request, reply) => {
       source: saved.source,
       can_manage: true,
       audit_entry: saved.audit_entry,
-      ...publicAiRuntimeState(saved.config),
+      ...(await publicAiRuntimeState(saved.config)),
       provider_called: false,
       model_called: false,
       secrets_stored: false,
@@ -5463,7 +5585,7 @@ app.post("/phantom-ai/runtime/providers/refresh", async (request, reply) => {
     tenant_id: tenantId,
     source: state.source,
     can_manage: true,
-    ...publicAiRuntimeState(state.config),
+    ...(await publicAiRuntimeState(state.config)),
     provider_called: false,
     model_called: false,
     health_checks_performed: true,
@@ -11748,7 +11870,11 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     }
   }
   const runtimeConfig = runtimeConfigState?.source === "saved" ? runtimeConfigState.config : null;
-  const runtimePrimaryProviderId = runtimeConfig?.primary_provider_id as AiRuntimeProviderId | undefined;
+  const runtimeSurface = typeof body.runtime_surface === "string"
+    ? body.runtime_surface.trim().replace(/[^a-zA-Z0-9_.:-]+/g, "-").slice(0, 80) || "unknown"
+    : "unknown";
+  const runtimeRoute = runtimeConfig ? aiRuntimeRouteForSurface(runtimeConfig, runtimeSurface) : null;
+  const runtimePrimaryProviderId = runtimeRoute?.primary_provider_id as AiRuntimeProviderId | undefined;
   const adminModelLane = runtimePrimaryProviderId
     ? adminPhantomAiLaneForProviderId(runtimePrimaryProviderId)
     : parseAdminPhantomAiModelLane(body.admin_model ?? body.model_lane ?? body.provider);
@@ -11756,19 +11882,16 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const adminModelLabel = adminPhantomAiModelLabel(adminModelLane);
   const adminExecutionMode = body.execution_mode === "auto" ? "auto" : "approval";
   const adminRouteTier = parseAdminPhantomAiRouteTier(body.route_tier);
-  const requestedModelId = runtimeConfig && runtimePrimaryProviderId
-    ? parseRequestedAdminModel(aiRuntimeProviderModel(runtimeConfig, runtimePrimaryProviderId))
+  const requestedModelId = runtimeRoute && runtimePrimaryProviderId
+    ? parseRequestedAdminModel(aiRuntimeProviderModel(runtimeRoute, runtimePrimaryProviderId))
     : parseRequestedAdminModel(body.requested_model);
   const maxProviderMs = parseAdminMaxProviderMs(body.max_provider_ms);
-  const allowProviderFallback = runtimeConfig
-    ? runtimeConfig.fallback_enabled && runtimeConfig.mode !== "single"
+  const allowProviderFallback = runtimeRoute
+    ? runtimeRoute.fallback_enabled && runtimeRoute.mode !== "single"
     : parseAllowProviderFallback(body.allow_provider_fallback, adminRouteTier);
-  const requestedAllowedAdminProviders = runtimeConfig
-    ? runtimeConfig.allowed_provider_ids
+  const requestedAllowedAdminProviders = runtimeRoute
+    ? runtimeRoute.allowed_provider_ids
     : parseAllowedAdminProviders(body.allowed_providers);
-  const runtimeSurface = typeof body.runtime_surface === "string"
-    ? body.runtime_surface.trim().replace(/[^a-zA-Z0-9_.:-]+/g, "-").slice(0, 80) || "unknown"
-    : "unknown";
   /* Ghost Mode overrides whatever the client asked for - it is a hard,
      server-side privacy floor, not a preference the request body can widen. */
   const ghostModeActive = await isGhostModeEnabled(session);
@@ -11933,7 +12056,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
           surface: runtimeSurface,
           config_source: runtimeConfigState?.source,
           config_version: runtimeConfig.version,
-          mode: runtimeConfig.mode,
+          mode: runtimeRoute?.mode,
           requested_provider_id: actionFreeRequestedProviderId,
           requested_model_id: actionFreeModelId,
           responding_provider_id: "deterministic_tool",
@@ -11961,11 +12084,12 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         ? normalized.user_request
         : buildInstantConversationUserMessage(recentConversation, normalized.user_request),
       compactContext: actionFreeContext,
+      tenantId: runtimeTenantId,
       sensitivityLevel: normalized.sensitivity_level,
       approvalRequired: false,
       executionMode: adminExecutionMode,
       requestedModelId: actionFreeModelId,
-      requestedModelIds: runtimeConfig?.models,
+      requestedModelIds: runtimeRoute?.models,
       routeTier: adminRouteTier,
       maxProviderMs,
     }, runtimeConfig ? allowedAdminProviders : ["local_ollama"], { allowFallback: runtimeConfig ? allowProviderFallback : false });
@@ -12062,6 +12186,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       external_action_executed: false,
       route_tier: adminRouteTier,
       provider_timeout_ms: adminPhantomAiProviderTimeoutMs(respondingProviderId, {
+        tenantId: runtimeTenantId,
         requestId: normalized.request_id,
         businessName: normalized.business_name,
         taskType: normalized.task_type,
@@ -12080,7 +12205,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         tenant_id: runtimeTenantId,
         config_source: runtimeConfigState?.source,
         config_version: runtimeConfig.version,
-        mode: runtimeConfig.mode,
+        mode: runtimeRoute?.mode,
         requested_provider_id: actionFreeRequestedProviderId,
         requested_model_id: actionFreeModelId,
         responding_provider_id: respondingProviderId,
@@ -12295,11 +12420,12 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       taskType: normalized.task_type,
       userMessage: normalized.user_request,
       compactContext: memoryContext.augmented_context_preview,
+      tenantId: runtimeTenantId,
       sensitivityLevel: preview.decision.sensitivity_level,
       approvalRequired,
       executionMode: adminExecutionMode,
       requestedModelId,
-      requestedModelIds: runtimeConfig?.models,
+      requestedModelIds: runtimeRoute?.models,
       routeTier: adminRouteTier,
       maxProviderMs,
     }, allowedAdminProviders, { allowFallback: allowProviderFallback });
@@ -12476,7 +12602,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         tenant_id: runtimeTenantId,
         config_source: runtimeConfigState?.source,
         config_version: runtimeConfig.version,
-        mode: runtimeConfig.mode,
+        mode: runtimeRoute?.mode,
         requested_provider_id: runtimePrimaryProviderId,
         requested_model_id: requestedModelId,
         responding_provider_id: respondingProviderId,

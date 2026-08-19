@@ -7,9 +7,9 @@
  * and its OAuth/Hermes bridge machinery — no media generation.
  */
 
-import { session as accessSession, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260817-163";
-import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260817-163";
-import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260817-163";
+import { session as accessSession, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260817-164";
+import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260817-164";
+import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260817-164";
 
 const SOCIAL_LOGIN_URLS = {
   instagram: "https://www.instagram.com/accounts/login/",
@@ -85,7 +85,7 @@ async function requestSocialOAuthStart(platform) {
   const json = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(String(json?.error || `Account connection failed (${response.status}).`));
   if (json?.oauth?.authorizationUrl) return { mode: "oauth", oauth: json.oauth, message: "" };
-  if (json?.connect_request) return { mode: "requested", request: json.connect_request, message: json.customer_message || "Connection requested. Nothing else is needed from you." };
+  if (json?.connect_request) return { mode: "requested", request: json.connect_request, message: json.customer_message || "Secure provider sign-in is ready. Finish approval with the provider, then refresh connection status." };
   throw new Error("The secure account connection could not start.");
 }
 function openSocialAuthWindow(accountName = "account") {

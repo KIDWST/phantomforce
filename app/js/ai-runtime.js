@@ -1,6 +1,7 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260817-163";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260817-164";
 
 export const AI_PUBLIC_TO_BACKEND = Object.freeze({
+  deepseek: "deepseek_api",
   local: "local_ollama",
   private: "codex_cli",
   claude: "claude_cli",
@@ -13,6 +14,7 @@ export const AI_BACKEND_TO_PUBLIC = Object.freeze(Object.fromEntries(
 ));
 
 const BACKEND_DEFAULT_MODELS = Object.freeze({
+  deepseek_api: "deepseek-v4-flash",
   local_ollama: "local-auto",
   codex_cli: "gpt-5.5",
   claude_cli: "default",
@@ -31,6 +33,7 @@ const runtimeState = {
   tenantId: "",
   config: null,
   providerManager: null,
+  providerCredentials: null,
   audit: [],
 };
 
@@ -45,8 +48,8 @@ function headers(json = false) {
   };
 }
 
-function modelFor(settings, publicId, backendId) {
-  const selected = String(settings?.models?.[publicId] || "").trim();
+function modelFor(route, publicId, backendId) {
+  const selected = String(route?.models?.[publicId] || "").trim();
   if (publicId === "private") {
     if (selected === "private-default") return "gpt-5.5";
     if (selected === "private-fast") return "gpt-5.5-instant";
@@ -61,38 +64,54 @@ function modelFor(settings, publicId, backendId) {
   return selected || BACKEND_DEFAULT_MODELS[backendId];
 }
 
-function selectedPublicProviders(settings) {
-  const configured = Array.isArray(settings?.selectedProviders) && settings.selectedProviders.length
-    ? settings.selectedProviders
-    : [settings?.provider || "local"];
+function selectedPublicProviders(route) {
+  const configured = Array.isArray(route?.selectedProviders) && route.selectedProviders.length
+    ? route.selectedProviders
+    : [route?.provider || "local"];
   const selected = [...new Set(configured.filter((id) => AI_PUBLIC_TO_BACKEND[id]))];
-  if (settings?.providerMode === "smart") return Object.keys(AI_PUBLIC_TO_BACKEND);
-  if (settings?.providerMode === "single") return [AI_PUBLIC_TO_BACKEND[settings?.provider] ? settings.provider : "local"];
+  if (route?.providerMode === "smart") return Object.keys(AI_PUBLIC_TO_BACKEND);
+  if (route?.providerMode === "single") return [AI_PUBLIC_TO_BACKEND[route?.provider] ? route.provider : "local"];
   return selected.length ? selected : ["local"];
 }
 
-export function buildAiRuntimeConfig(settings = {}) {
-  const publicProviders = selectedPublicProviders(settings);
-  const primaryPublicId = publicProviders.includes(settings.provider) ? settings.provider : publicProviders[0];
+function buildRouteConfig(route = {}) {
+  const publicProviders = selectedPublicProviders(route);
+  const primaryPublicId = publicProviders.includes(route.provider) ? route.provider : publicProviders[0];
   const primaryProviderId = AI_PUBLIC_TO_BACKEND[primaryPublicId] || "local_ollama";
   const models = Object.fromEntries(Object.entries(AI_PUBLIC_TO_BACKEND).map(([publicId, backendId]) => [
     backendId,
-    modelFor(settings, publicId, backendId),
+    modelFor(route, publicId, backendId),
   ]));
   return {
-    tenant_id: currentTenantId(),
-    mode: ["single", "multiple", "smart"].includes(settings.providerMode) ? settings.providerMode : "smart",
+    mode: ["single", "multiple", "smart"].includes(route.providerMode) ? route.providerMode : "smart",
     primary_provider_id: primaryProviderId,
     allowed_provider_ids: publicProviders.map((id) => AI_PUBLIC_TO_BACKEND[id]),
     models,
-    fallback_enabled: settings.providerMode !== "single",
+    fallback_enabled: route.providerMode !== "single",
   };
+}
+
+export function buildAiRuntimeConfig(settings = {}) {
+  return {
+    tenant_id: currentTenantId(),
+    ...buildRouteConfig(settings),
+    phantom_bot: buildRouteConfig(settings.phantomBot || settings),
+  };
+}
+
+function routeForSurface(config, surface) {
+  const normalized = String(surface || "").trim().toLowerCase();
+  return normalized === "phantombot" || normalized.startsWith("phantombot:")
+    ? config.phantom_bot
+    : config;
 }
 
 export function buildAiRuntimeRequest(settings, surface) {
   const config = buildAiRuntimeConfig(settings);
-  const primaryPublicId = AI_BACKEND_TO_PUBLIC[config.primary_provider_id] || "local";
+  const route = routeForSurface(config, surface);
+  const primaryPublicId = AI_BACKEND_TO_PUBLIC[route.primary_provider_id] || "local";
   const laneByPublicId = {
+    deepseek: "deepseek_v4",
     local: "local_ollama",
     private: "codex",
     claude: "claude_cli",
@@ -102,12 +121,12 @@ export function buildAiRuntimeRequest(settings, surface) {
   return {
     runtime_config: true,
     runtime_surface: String(surface || "unknown").slice(0, 80),
-    provider: config.primary_provider_id === "openrouter_glm" ? "openrouter_glm" : "phantom",
+    provider: route.primary_provider_id === "openrouter_glm" ? "openrouter_glm" : "phantom",
     admin_model: laneByPublicId[primaryPublicId],
     model_lane: laneByPublicId[primaryPublicId],
-    requested_model: config.models[config.primary_provider_id],
-    allow_provider_fallback: config.fallback_enabled,
-    allowed_providers: config.allowed_provider_ids,
+    requested_model: route.models[route.primary_provider_id],
+    allow_provider_fallback: route.fallback_enabled,
+    allowed_providers: route.allowed_provider_ids,
   };
 }
 
@@ -122,6 +141,7 @@ function applyPayload(payload) {
   runtimeState.tenantId = payload?.tenant_id || currentTenantId();
   runtimeState.config = payload?.config || null;
   runtimeState.providerManager = payload?.provider_manager || null;
+  runtimeState.providerCredentials = payload?.provider_credentials || runtimeState.providerCredentials;
   runtimeState.audit = Array.isArray(payload?.audit) ? payload.audit : runtimeState.audit;
   return payload;
 }
@@ -210,29 +230,63 @@ export async function refreshAiRuntimeProviders() {
   }
 }
 
+export async function saveAiProviderCredential(providerId, apiKey) {
+  const payload = await request("/phantom-ai/runtime/credentials", {
+    method: "PUT",
+    body: JSON.stringify({ tenant_id: currentTenantId(), provider_id: providerId, api_key: apiKey }),
+  });
+  await loadAiRuntimeConfig({ force: true });
+  return payload;
+}
+
+export async function removeAiProviderCredential(providerId) {
+  const payload = await request("/phantom-ai/runtime/credentials", {
+    method: "DELETE",
+    body: JSON.stringify({ tenant_id: currentTenantId(), provider_id: providerId }),
+  });
+  await loadAiRuntimeConfig({ force: true });
+  return payload;
+}
+
 export function getAiRuntimeState() {
   return {
     ...runtimeState,
-    config: runtimeState.config ? { ...runtimeState.config, models: { ...runtimeState.config.models } } : null,
+    config: runtimeState.config ? {
+      ...runtimeState.config,
+      models: { ...runtimeState.config.models },
+      phantom_bot: runtimeState.config.phantom_bot ? {
+        ...runtimeState.config.phantom_bot,
+        models: { ...runtimeState.config.phantom_bot.models },
+        allowed_provider_ids: [...(runtimeState.config.phantom_bot.allowed_provider_ids || [])],
+      } : null,
+    } : null,
     providerManager: runtimeState.providerManager ? { ...runtimeState.providerManager, providers: [...(runtimeState.providerManager.providers || [])] } : null,
+    providerCredentials: runtimeState.providerCredentials ? { ...runtimeState.providerCredentials } : null,
     audit: [...runtimeState.audit],
   };
 }
 
 export function settingsFromAiRuntimeConfig(settings, config) {
   if (!config) return settings;
-  const publicProvider = AI_BACKEND_TO_PUBLIC[config.primary_provider_id] || settings.provider || "local";
-  const selectedProviders = (config.allowed_provider_ids || []).map((id) => AI_BACKEND_TO_PUBLIC[id]).filter(Boolean);
-  const models = { ...(settings.models || {}) };
-  for (const [backendId, model] of Object.entries(config.models || {})) {
-    const publicId = AI_BACKEND_TO_PUBLIC[backendId];
-    if (publicId) models[publicId] = model;
-  }
+  const applyRoute = (current, route) => {
+    const publicProvider = AI_BACKEND_TO_PUBLIC[route?.primary_provider_id] || current?.provider || "local";
+    const selectedProviders = (route?.allowed_provider_ids || []).map((id) => AI_BACKEND_TO_PUBLIC[id]).filter(Boolean);
+    const models = { ...(current?.models || {}) };
+    for (const [backendId, model] of Object.entries(route?.models || {})) {
+      const publicId = AI_BACKEND_TO_PUBLIC[backendId];
+      if (publicId) models[publicId] = model;
+    }
+    return {
+      ...current,
+      provider: publicProvider,
+      providerMode: route?.mode || current?.providerMode,
+      selectedProviders: selectedProviders.length ? selectedProviders : [publicProvider],
+      models,
+    };
+  };
+  const platform = applyRoute(settings, config);
   return {
-    ...settings,
-    provider: publicProvider,
-    providerMode: config.mode || settings.providerMode,
-    selectedProviders: selectedProviders.length ? selectedProviders : [publicProvider],
-    models,
+    ...platform,
+    phantomBot: applyRoute(settings.phantomBot || settings, config.phantom_bot || config),
   };
 }

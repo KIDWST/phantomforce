@@ -1,20 +1,22 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260817-163";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260817-163";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260817-163";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260817-163";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260817-163";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260817-163";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260817-163";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260817-164";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260817-164";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260817-164";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260817-164";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260817-164";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260817-164";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260817-164";
 import {
   getAiRuntimeState,
   loadAiRuntimeConfig,
   persistAiRuntimeConfig,
+  removeAiProviderCredential,
   refreshAiRuntimeProviders,
+  saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260817-163";
+} from "./ai-runtime.js?v=phantom-live-20260817-164";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -57,6 +59,15 @@ const KIMI_OLLAMA_MODEL = "kimi-k3-hf:latest";
 const KIMI_OLLAMA_ALIASES = new Set(["kimi-k3-hf", KIMI_OLLAMA_MODEL]);
 
 const PROVIDERS = [
+  {
+    id: "deepseek",
+    name: "DeepSeek V4 Flash",
+    short: "DS",
+    role: "Fast organization-wide reasoning, planning, and platform control",
+    models: ["deepseek-v4-flash"],
+    allowCustomModel: true,
+    recommended: true,
+  },
   {
     id: "claude",
     name: "Claude",
@@ -155,17 +166,26 @@ function providerModels(provider) {
   return [...new Set(["local-auto", ...installed])];
 }
 
+const DEFAULT_MODELS = {
+  deepseek: "deepseek-v4-flash",
+  claude: "default",
+  private: "gpt-5.5",
+  chatgpt: "chatgpt-standard",
+  openrouter: "openrouter/auto",
+  local: "local-auto",
+};
+
 const DEFAULT_SETTINGS = {
-  provider: "local",
+  provider: "deepseek",
   providerMode: "smart",
-  selectedProviders: ["local", "chatgpt"],
+  selectedProviders: PROVIDERS.map((provider) => provider.id),
   brainMode: "subscription",
-  models: {
-    claude: "default",
-    private: "gpt-5.5",
-    chatgpt: "chatgpt-standard",
-    openrouter: "openrouter/auto",
-    local: "local-auto",
+  models: { ...DEFAULT_MODELS },
+  phantomBot: {
+    provider: "local",
+    providerMode: "smart",
+    selectedProviders: ["local", "chatgpt"],
+    models: { ...DEFAULT_MODELS },
   },
   responseStyle: "operator",
   responseLength: "balanced",
@@ -225,13 +245,12 @@ function cleanLocalProviderMessage(value) {
   return text.slice(0, 160);
 }
 
-function normalizeSettings(value) {
+function normalizeRouteSettings(value, defaults) {
   const input = value && typeof value === "object" ? value : {};
   const migratedInputProvider = input.provider === "kimi" ? "local" : input.provider;
-  const provider = PROVIDERS.some((item) => item.id === migratedInputProvider) ? migratedInputProvider : DEFAULT_SETTINGS.provider;
-  const providerMode = PROVIDER_MODES.some((item) => item.id === input.providerMode) ? input.providerMode : DEFAULT_SETTINGS.providerMode;
-  const brainMode = ["local", "api", "subscription"].includes(input.brainMode) ? input.brainMode : DEFAULT_SETTINGS.brainMode;
-  const models = { ...DEFAULT_SETTINGS.models, ...(input.models || {}) };
+  const provider = PROVIDERS.some((item) => item.id === migratedInputProvider) ? migratedInputProvider : defaults.provider;
+  const providerMode = PROVIDER_MODES.some((item) => item.id === input.providerMode) ? input.providerMode : defaults.providerMode;
+  const models = { ...DEFAULT_MODELS, ...(defaults.models || {}), ...(input.models || {}) };
   if (input.provider === "kimi" || KIMI_OLLAMA_ALIASES.has(models.kimi)) models.local = KIMI_OLLAMA_MODEL;
   delete models.kimi;
   for (const option of PROVIDERS) {
@@ -239,7 +258,7 @@ function normalizeSettings(value) {
       models[option.id] = option.models[0];
     }
   }
-  const requestedProviders = Array.isArray(input.selectedProviders) ? input.selectedProviders.map((id) => id === "kimi" ? "local" : id) : DEFAULT_SETTINGS.selectedProviders;
+  const requestedProviders = Array.isArray(input.selectedProviders) ? input.selectedProviders.map((id) => id === "kimi" ? "local" : id) : defaults.selectedProviders;
   let selectedProviders = [...new Set(requestedProviders.filter((id) => PROVIDERS.some((providerOption) => providerOption.id === id)))];
   if (providerMode === "smart") selectedProviders = PROVIDERS.map((item) => item.id);
   if (providerMode === "single") selectedProviders = [provider];
@@ -249,13 +268,23 @@ function normalizeSettings(value) {
   }
   const preferredProvider = selectedProviders.includes(provider) ? provider : selectedProviders[0];
   return {
-    ...DEFAULT_SETTINGS,
+    ...defaults,
     ...input,
     provider: preferredProvider,
     providerMode,
     selectedProviders,
-    brainMode,
     models,
+  };
+}
+
+function normalizeSettings(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const platform = normalizeRouteSettings(input, DEFAULT_SETTINGS);
+  const brainMode = ["local", "api", "subscription"].includes(input.brainMode) ? input.brainMode : DEFAULT_SETTINGS.brainMode;
+  return {
+    ...platform,
+    brainMode,
+    phantomBot: normalizeRouteSettings(input.phantomBot, DEFAULT_SETTINGS.phantomBot),
   };
 }
 
@@ -288,15 +317,16 @@ export async function hydrateOperatorRuntimeSettings() {
   return getAiRuntimeState();
 }
 
-export function getOperatorInfrastructureStatus() {
+export function getOperatorInfrastructureStatus(surface = "platform") {
   const settings = loadOperatorSettings();
-  const activeProvider = providerFor(settings.provider);
+  const route = surface === "phantombot" ? settings.phantomBot : settings;
+  const activeProvider = providerFor(route.provider);
   const activeModels = providerModels(activeProvider);
-  const activeModel = settings.models[activeProvider.id] || activeModels[0] || activeProvider.models[0] || "";
+  const activeModel = route.models[activeProvider.id] || activeModels[0] || activeProvider.models[0] || "";
   const modelLabel = activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel);
   const runtime = getAiRuntimeState();
-  const allowedStates = (runtime.providerManager?.providers || []).filter((provider) => settings.selectedProviders.includes(provider.display_id));
-  const activeState = allowedStates.find((provider) => provider.display_id === settings.provider);
+  const allowedStates = (runtime.providerManager?.providers || []).filter((provider) => route.selectedProviders.includes(provider.display_id));
+  const activeState = allowedStates.find((provider) => provider.display_id === route.provider);
   if (!activeProvider?.id || !activeModel) {
     return {
       label: "Choose model",
@@ -305,7 +335,7 @@ export function getOperatorInfrastructureStatus() {
       configured: false,
     };
   }
-  if (settings.providerMode === "smart") {
+  if (route.providerMode === "smart") {
     const online = allowedStates.filter((provider) => provider.status === "online");
     if (!online.length && allowedStates.length && allowedStates.every((provider) => provider.status === "offline")) {
       return {
@@ -392,6 +422,7 @@ function runtimeProviderStatus(providerId) {
   const runtime = getAiRuntimeState();
   const provider = runtime.providerManager?.providers?.find((item) => item.display_id === providerId);
   if (!provider) return { state: runtime.loading ? "checking" : "unknown", label: runtime.loading ? "Checking" : "Not checked", detail: runtime.error || "Run a provider check to confirm availability." };
+  if (provider.truth_state === "configured") return { state: "configured", label: "Configured", detail: provider.detail || "Credential is encrypted on the server; send a request to confirm it." };
   if (provider.truth_state === "degraded") return { state: "checking", label: "Degraded", detail: provider.detail || "The provider exists, but a real model response has not been confirmed." };
   if (provider.status === "online") return { state: "real", label: "Real", detail: provider.detail || "Health check passed." };
   if (provider.status === "offline") return { state: "unavailable", label: "Unavailable", detail: provider.detail || "Not authenticated or reachable." };
@@ -400,13 +431,13 @@ function runtimeProviderStatus(providerId) {
 
 export function getOperatorBrainChoices() {
   const settings = loadOperatorSettings();
-  const infrastructure = getOperatorInfrastructureStatus();
-  const activeProvider = providerFor(settings.provider);
-  const explicitModel = settings.models[activeProvider.id] || providerModels(activeProvider)[0] || "";
-  const current = settings.providerMode === "smart"
+  const bot = settings.phantomBot;
+  const activeProvider = providerFor(bot.provider);
+  const explicitModel = bot.models[activeProvider.id] || providerModels(activeProvider)[0] || "";
+  const current = bot.providerMode === "smart"
     ? { provider: "Phantom Hybrid", model: "Automatic routing", automatic: true }
-    : settings.providerMode === "multiple"
-      ? { provider: "Phantom Blend", model: `${settings.selectedProviders.length} providers`, automatic: false }
+    : bot.providerMode === "multiple"
+      ? { provider: "Phantom Blend", model: `${bot.selectedProviders.length} providers`, automatic: false }
       : {
           provider: activeProvider.name,
           model: activeProvider.id === "local" ? localModelLabel(explicitModel) : modelDisplayLabel(explicitModel),
@@ -415,14 +446,14 @@ export function getOperatorBrainChoices() {
   return {
     current,
     automatic: {
-      selected: settings.providerMode === "smart",
-      state: infrastructure.tone === "ok" ? "real" : infrastructure.tone === "error" ? "unavailable" : "checking",
-      label: infrastructure.label,
-      detail: infrastructure.detail,
+      selected: bot.providerMode === "smart",
+      state: "checking",
+      label: "PhantomBot Hybrid",
+      detail: "PhantomBot uses its own model route and does not change the platform brain.",
     },
     providers: PROVIDERS.map((provider) => {
       const runtime = runtimeProviderStatus(provider.id);
-      const selectedModel = settings.models[provider.id] || providerModels(provider)[0] || provider.models[0] || "";
+      const selectedModel = bot.models[provider.id] || providerModels(provider)[0] || provider.models[0] || "";
       const models = [...new Set([selectedModel, ...providerModels(provider)].filter(Boolean))];
       return {
         id: provider.id,
@@ -434,7 +465,7 @@ export function getOperatorBrainChoices() {
         models: models.map((model) => ({
           id: model,
           label: provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model),
-          selected: settings.providerMode === "single" && settings.provider === provider.id && selectedModel === model,
+          selected: bot.providerMode === "single" && bot.provider === provider.id && selectedModel === model,
         })),
       };
     }),
@@ -447,8 +478,11 @@ export async function setOperatorBrainChoice({ automatic = false, provider: prov
   if (automatic) {
     next = normalizeSettings({
       ...previous,
-      providerMode: "smart",
-      selectedProviders: PROVIDERS.map((provider) => provider.id),
+      phantomBot: {
+        ...previous.phantomBot,
+        providerMode: "smart",
+        selectedProviders: PROVIDERS.map((provider) => provider.id),
+      },
     });
   } else {
     const provider = PROVIDERS.find((item) => item.id === providerId);
@@ -459,10 +493,13 @@ export async function setOperatorBrainChoice({ automatic = false, provider: prov
     }
     next = normalizeSettings({
       ...previous,
-      provider: provider.id,
-      providerMode: "single",
-      selectedProviders: [provider.id],
-      models: { ...previous.models, [provider.id]: selectedModel },
+      phantomBot: {
+        ...previous.phantomBot,
+        provider: provider.id,
+        providerMode: "single",
+        selectedProviders: [provider.id],
+        models: { ...previous.phantomBot.models, [provider.id]: selectedModel },
+      },
     });
   }
   saveOperatorSettings(next);
@@ -475,14 +512,14 @@ export async function setOperatorBrainChoice({ automatic = false, provider: prov
   }
 }
 
-function renderProviderCards(settings) {
+function renderProviderCards(route, routeId) {
   return PROVIDERS.map((provider) => {
     const runtime = runtimeProviderStatus(provider.id);
     return `
-    <button class="set-model-card ${settings.selectedProviders.includes(provider.id) ? "is-active" : ""} ${settings.provider === provider.id ? "is-preferred" : ""} is-${runtime.state}" type="button" data-ai-provider="${esc(provider.id)}" aria-pressed="${settings.selectedProviders.includes(provider.id) ? "true" : "false"}">
+    <button class="set-model-card ${route.selectedProviders.includes(provider.id) ? "is-active" : ""} ${route.provider === provider.id ? "is-preferred" : ""} is-${runtime.state}" type="button" data-ai-route="${esc(routeId)}" data-ai-provider="${esc(provider.id)}" aria-pressed="${route.selectedProviders.includes(provider.id) ? "true" : "false"}">
       <span class="set-provider-mark">${esc(provider.short)}</span>
-      <span class="set-provider-copy"><b>${esc(provider.name)} <em class="set-runtime-state is-${runtime.state}">${esc(runtime.label)}</em></b><i>${esc(provider.id === "local" ? localProviderStatusText() : `${provider.role} · ${runtime.detail}`)}</i></span>
-      <span class="set-provider-check">${settings.selectedProviders.includes(provider.id) ? "✓" : "+"}</span>
+      <span class="set-provider-copy"><b>${esc(provider.name)} ${provider.recommended ? '<em class="set-recommended">Recommended</em>' : ""} <em class="set-runtime-state is-${runtime.state}">${esc(runtime.label)}</em></b><i>${esc(provider.id === "local" ? localProviderStatusText() : `${provider.role} · ${runtime.detail}`)}</i></span>
+      <span class="set-provider-check">${route.selectedProviders.includes(provider.id) ? "✓" : "+"}</span>
     </button>`;
   }).join("");
 }
@@ -497,23 +534,23 @@ function localProviderStatusText() {
   return "Installed Ollama models on this machine";
 }
 
-function renderProviderModeCards(settings) {
+function renderProviderModeCards(route, routeId) {
   return PROVIDER_MODES.map((mode) => `
-    <button class="set-choice-card ${settings.providerMode === mode.id ? "is-active" : ""}" type="button" data-provider-mode="${mode.id}" aria-pressed="${settings.providerMode === mode.id ? "true" : "false"}">
+    <button class="set-choice-card ${route.providerMode === mode.id ? "is-active" : ""}" type="button" data-ai-route="${esc(routeId)}" data-provider-mode="${mode.id}" aria-pressed="${route.providerMode === mode.id ? "true" : "false"}">
       <b>${esc(mode.name)}</b><i>${esc(mode.note)}</i>
     </button>`).join("");
 }
 
-function renderSelectedModelControls(settings) {
-  return settings.selectedProviders.map((providerId) => {
+function renderSelectedModelControls(route, routeId) {
+  return route.selectedProviders.map((providerId) => {
     const provider = providerFor(providerId);
-    const selectedModel = settings.models[provider.id] || provider.models[0];
+    const selectedModel = route.models[provider.id] || provider.models[0];
     const models = providerModels(provider);
     const listId = `ai-models-${provider.id}`;
     const control = provider.allowCustomModel
-      ? `<input type="text" list="${listId}" data-ai-provider-model="${provider.id}" value="${esc(selectedModel)}" autocomplete="off" spellcheck="false" aria-label="${esc(provider.name)} model ID"/>
+      ? `<input type="text" list="${listId}" data-ai-route="${esc(routeId)}" data-ai-provider-model="${provider.id}" value="${esc(selectedModel)}" autocomplete="off" spellcheck="false" aria-label="${esc(provider.name)} model ID"/>
          <datalist id="${listId}">${models.map((model) => `<option value="${esc(model)}">${esc(provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}</datalist>`
-      : `<select data-ai-provider-model="${provider.id}">
+      : `<select data-ai-route="${esc(routeId)}" data-ai-provider-model="${provider.id}">
           ${models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(modelDisplayLabel(model))}</option>`).join("")}
         </select>`;
     return `<label class="set-control set-provider-model"><span>${esc(provider.name)} model</span>
@@ -591,15 +628,22 @@ function renderSafetySummary(settings) {
     blocked: "External actions blocked",
     owner_rules: "Use owner rules",
   }[settings.externalActionMode] || "External actions ask first";
-  const routingLabel = {
-    local: "Ghost Mode local-only",
-    api: "Phantom Hybrid backend",
-    subscription: "Subscription managed",
-  }[settings.brainMode] || "Instant routing (no backend)";
+  const routingLabel = settings.providerMode === "smart"
+    ? "Hybrid"
+    : settings.providerMode === "multiple"
+      ? "Multiple providers"
+      : settings.provider === "deepseek" || settings.provider === "openrouter"
+        ? "Server API key"
+        : settings.provider === "local"
+          ? "Local"
+          : settings.provider === "chatgpt"
+            ? "Subscription bridge"
+            : "Signed-in CLI";
   return `
     <div class="set-status-grid">
       <span><b>Loop</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Off"}</i></span>
-      <span><b>Routing</b><i>${esc(routingLabel)} · ${esc(providerFor(settings.provider).name)}</i></span>
+      <span><b>Platform brain</b><i>${esc(routingLabel)} · ${esc(providerFor(settings.provider).name)}${settings.providerMode === "smart" ? " primary" : ""}</i></span>
+      <span><b>PhantomBot</b><i>${esc(providerFor(settings.phantomBot.provider).name)}</i></span>
       <span><b>Autopilot</b><i>${settings.autopilotScope === "safe_repeat" ? "Safe repeat work only" : "Manual only"}</i></span>
       <span><b>Boundary</b><i>${esc(externalLabel)}</i></span>
     </div>`;
@@ -622,14 +666,15 @@ function saveMiniAndRender(el, opts, settings) {
 export function renderOperatorMiniSettings(el, opts = {}) {
   if (!el) return;
   const settings = loadOperatorSettings();
-  const activeProvider = providerFor(settings.provider);
+  const bot = settings.phantomBot;
+  const activeProvider = providerFor(bot.provider);
   const activeProviderModels = providerModels(activeProvider);
-  const activeModel = settings.models[activeProvider.id] || activeProviderModels[0] || activeProvider.models[0];
+  const activeModel = bot.models[activeProvider.id] || activeProviderModels[0] || activeProvider.models[0];
   const loop = loadPhantomLoop();
-  const brainLabel = settings.providerMode === "smart"
+  const brainLabel = bot.providerMode === "smart"
     ? "Phantom Hybrid"
-    : settings.providerMode === "multiple"
-      ? `${settings.selectedProviders.length} providers`
+    : bot.providerMode === "multiple"
+      ? `${bot.selectedProviders.length} providers`
       : activeProvider.name;
   const loopModel = LOOP_PROVIDERS.find((p) => p.id === loop.targetProvider) || LOOP_PROVIDERS[0];
 
@@ -641,20 +686,20 @@ export function renderOperatorMiniSettings(el, opts = {}) {
         <em class="chat-mini-saved" data-mini-saved hidden>Saved — applies to the next message</em>
       </div>
       <div class="chat-mini-summary">
-        <span><b>Brain</b><i>${esc(brainLabel)} · ${settings.providerMode === "smart" ? "automatic fallback" : `${esc(activeProvider.name)} / ${esc(activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel))}`}</i></span>
+        <span><b>Brain</b><i>${esc(brainLabel)} · ${bot.providerMode === "smart" ? "automatic fallback" : `${esc(activeProvider.name)} / ${esc(activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel))}`}</i></span>
         <span><b>Loop</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Off"}</i></span>
         <span><b>Hands</b><i>${settings.externalActionMode === "owner_rules" ? "Autopilot rules" : settings.externalActionMode === "blocked" ? "Blocked" : "Approval gated"}</i></span>
       </div>
       <div class="chat-mini-fields">
         <label class="chat-mini-field"><span>AI routing</span>
           <select data-mini-provider>
-            <option value="smart" ${settings.providerMode === "smart" ? "selected" : ""}>Phantom Hybrid</option>
-            ${PROVIDERS.map((provider) => `<option value="${esc(provider.id)}" ${settings.providerMode === "single" && provider.id === settings.provider ? "selected" : ""}>${esc(provider.name)} only</option>`).join("")}
-            <option value="multiple" ${settings.providerMode === "multiple" ? "selected" : ""}>Multiple providers</option>
+            <option value="smart" ${bot.providerMode === "smart" ? "selected" : ""}>Phantom Hybrid</option>
+            ${PROVIDERS.map((provider) => `<option value="${esc(provider.id)}" ${bot.providerMode === "single" && provider.id === bot.provider ? "selected" : ""}>${esc(provider.name)} only</option>`).join("")}
+            <option value="multiple" ${bot.providerMode === "multiple" ? "selected" : ""}>Multiple providers</option>
           </select>
         </label>
         <label class="chat-mini-field chat-mini-wide"><span>Preferred model</span>
-          <select data-mini-model ${settings.providerMode === "smart" ? "disabled" : ""}>${activeProviderModels.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(activeProvider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}</select>
+          <select data-mini-model ${bot.providerMode === "smart" ? "disabled" : ""}>${activeProviderModels.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(activeProvider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}</select>
         </label>
       </div>
       <div class="chat-mini-loop">
@@ -716,22 +761,22 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   if (providerSelect) providerSelect.onchange = () => {
     const value = providerSelect.value;
     if (value === "smart") {
-      settings.providerMode = "smart";
-      settings.selectedProviders = PROVIDERS.map((provider) => provider.id);
+      bot.providerMode = "smart";
+      bot.selectedProviders = PROVIDERS.map((provider) => provider.id);
     } else if (value === "multiple") {
-      settings.providerMode = "multiple";
-      if (settings.selectedProviders.length < 2) settings.selectedProviders = [settings.provider, "claude"].filter((id, index, list) => list.indexOf(id) === index);
+      bot.providerMode = "multiple";
+      if (bot.selectedProviders.length < 2) bot.selectedProviders = [bot.provider, "local"].filter((id, index, list) => list.indexOf(id) === index);
     } else {
-      settings.providerMode = "single";
-      settings.provider = value;
-      settings.selectedProviders = [value];
+      bot.providerMode = "single";
+      bot.provider = value;
+      bot.selectedProviders = [value];
     }
     saveMiniAndRender(el, opts, settings);
   };
 
   const modelSelect = el.querySelector("[data-mini-model]");
   if (modelSelect) modelSelect.onchange = () => {
-    settings.models[settings.provider] = modelSelect.value;
+    bot.models[bot.provider] = modelSelect.value;
     saveMiniAndRender(el, opts, settings);
   };
 
@@ -771,7 +816,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
     if (typeof opts.openSettings === "function") opts.openSettings();
   };
 
-  if (settings.provider === "local" && settings.providerMode !== "smart" && !localModelStatus.loaded && !localModelStatus.loading) {
+  if (bot.provider === "local" && bot.providerMode !== "smart" && !localModelStatus.loaded && !localModelStatus.loading) {
     refreshLocalModels(el, opts, false).then(() => {
       if (el?.isConnected) renderOperatorMiniSettings(el, opts);
     });
@@ -858,9 +903,31 @@ function renderGhostModeSection() {
     </div>`;
 }
 
-function renderModelTab(settings, activeProvider, activeModel) {
-  const mode = PROVIDER_MODES.find((item) => item.id === settings.providerMode) || PROVIDER_MODES[0];
+function renderAiRouteCard(routeId, route, title, note) {
+  const mode = PROVIDER_MODES.find((item) => item.id === route.providerMode) || PROVIDER_MODES[0];
+  return `
+    <section class="set-route-card" data-route-card="${esc(routeId)}">
+      <header class="set-route-head">
+        <div><p class="set-eyebrow">${routeId === "platform" ? "Primary route" : "Independent chat route"}</p><h4>${esc(title)}</h4><p>${esc(note)}</p></div>
+        <span class="set-route-current">${esc(providerFor(route.provider).name)}</span>
+      </header>
+      <div class="set-choice-grid">${renderProviderModeCards(route, routeId)}</div>
+      <div class="set-selection-summary">
+        <span><b>${esc(mode.name)}</b><i>${esc(mode.note)}</i></span>
+        <em>${route.selectedProviders.length} provider${route.selectedProviders.length === 1 ? "" : "s"} enabled</em>
+      </div>
+      <div class="set-model-grid">${renderProviderCards(route, routeId)}</div>
+      ${route.providerMode === "multiple" ? `
+        <label class="set-control set-preferred-provider"><span>Try first</span>
+          <select data-ai-route="${esc(routeId)}" data-ai-preferred>${route.selectedProviders.map((id) => `<option value="${id}" ${id === route.provider ? "selected" : ""}>${esc(providerFor(id).name)}</option>`).join("")}</select>
+        </label>` : ""}
+      <div class="set-control-grid set-provider-models">${renderSelectedModelControls(route, routeId)}</div>
+    </section>`;
+}
+
+function renderModelTab(settings) {
   const runtime = getAiRuntimeState();
+  const deepSeekCredential = runtime.providerCredentials?.deepseek_api || {};
   const persistenceLabel = runtime.saving
     ? "Saving organization brain…"
     : runtime.error
@@ -872,32 +939,36 @@ function renderModelTab(settings, activeProvider, activeModel) {
           : "Local choice ready to sync";
   return `
       ${renderGhostModeSection()}
-      <div class="set-section">
+      <div class="set-section set-ai-control-center">
         <div class="set-sec-head">
           <div>
-            <h3>AI models</h3>
-            <p class="set-note">Choose the provider and exact model that powers PhantomBot, Prompt the Outcome, page intelligence, and prompt-driven automation planning. The choice is organization-wide and persisted on the server.</p>
+            <p class="set-eyebrow">AI control center</p>
+            <h3>Choose the brain for each part of PhantomForce</h3>
+            <p class="set-note">The platform brain controls pages, planning, workspace intelligence, and automations. PhantomBot has its own model choice, so changing chat never silently changes the rest of the business.</p>
           </div>
         </div>
         <div class="set-selection-summary set-runtime-summary">
           <span><b>Runtime truth</b><i>${esc(persistenceLabel)}</i></span>
           <button class="btn btn-quiet" type="button" data-ai-runtime-refresh ${runtime.refreshing ? "disabled" : ""}>${runtime.refreshing ? "Checking…" : "Check providers now"}</button>
         </div>
-        <p class="set-label">How Phantom chooses</p>
-        <div class="set-choice-grid">${renderProviderModeCards(settings)}</div>
-        <div class="set-selection-summary">
-          <span><b>${esc(mode.name)}</b><i>${esc(mode.note)}</i></span>
-          <em>${settings.selectedProviders.length} of ${PROVIDERS.length} providers enabled</em>
+        <div class="set-deepseek-setup ${deepSeekCredential.configured ? "is-configured" : ""}">
+          <div class="set-deepseek-copy">
+            <span class="set-provider-mark">DS</span>
+            <span><b>DeepSeek V4 Flash</b><i>${deepSeekCredential.configured ? `Connected ${esc(deepSeekCredential.key_hint || "")}` : "Add an API key once; it is encrypted on the server and never returned to this browser."}</i></span>
+          </div>
+          <div class="set-deepseek-actions">
+            <input type="password" data-deepseek-api-key placeholder="DeepSeek API key" autocomplete="new-password" spellcheck="false" aria-label="DeepSeek API key"/>
+            <button class="btn btn-primary" type="button" data-deepseek-save>${deepSeekCredential.configured ? "Replace key" : "Connect DeepSeek"}</button>
+            ${deepSeekCredential.removable ? '<button class="btn btn-quiet" type="button" data-deepseek-remove>Remove</button>' : ""}
+            <button class="btn btn-quiet" type="button" data-deepseek-platform>Use for platform</button>
+          </div>
+          <p class="set-credential-message" data-deepseek-message></p>
         </div>
-        <p class="set-label">Providers</p>
-        <div class="set-model-grid">${renderProviderCards(settings)}</div>
-        ${settings.providerMode === "multiple" ? `
-          <label class="set-control set-preferred-provider"><span>Try this provider first</span>
-            <select data-ai-preferred>${settings.selectedProviders.map((id) => `<option value="${id}" ${id === settings.provider ? "selected" : ""}>${esc(providerFor(id).name)}</option>`).join("")}</select>
-          </label>` : ""}
-        <p class="set-label">Models</p>
-        <div class="set-control-grid set-provider-models">${renderSelectedModelControls(settings)}</div>
-        ${settings.selectedProviders.includes("local") ? `
+        <div class="set-route-grid">
+          ${renderAiRouteCard("platform", settings, "Platform brain", "Controls every AI-assisted page, planning flow, automation draft, workspace decision, and Prompt the Outcome request.")}
+          ${renderAiRouteCard("phantombot", settings.phantomBot, "PhantomBot", "Controls PhantomBot conversations only. It can use a faster, local, subscription, or API model without changing the platform brain.")}
+        </div>
+        ${settings.selectedProviders.includes("local") || settings.phantomBot.selectedProviders.includes("local") ? `
           <div class="set-rule-list">
             <span>Local uses Ollama on this machine (${esc(localModelStatus.baseUrl)}). A named model is usable only when Ollama reports it as installed.</span>
             <span>${esc(localProviderStatusText())}</span>
@@ -920,7 +991,7 @@ function renderModelTab(settings, activeProvider, activeModel) {
             ], settings.responseLength)}</select>
           </label>
         </div>
-        <p class="set-footnote">Real means a live health check passed. Unavailable means the provider is not authenticated or reachable. Hybrid and Multiple may use another enabled provider and show the fallback in the response receipt; Selected-provider-only never switches silently.</p>
+        <p class="set-footnote">Configured means a credential is safely stored. Real means a provider health check or model request passed. Hybrid and Multiple may use another enabled provider and record that fallback; provider-only never switches silently.</p>
       </div>`;
 }
 
@@ -1444,20 +1515,22 @@ export function renderOperatorSettings(el, opts = {}) {
       .catch(() => { if (el.isConnected && loadSettingsTab() === "model") renderOperatorSettings(el, opts); });
     renderOperatorSettings(el, opts);
   };
+  const routeForElement = (element) => element?.dataset?.aiRoute === "phantombot" ? settings.phantomBot : settings;
 
   el.querySelectorAll("[data-ai-provider]").forEach((button) => {
     button.onclick = () => {
+      const route = routeForElement(button);
       const id = button.dataset.aiProvider || DEFAULT_SETTINGS.provider;
-      if (settings.providerMode === "smart") return;
-      if (settings.providerMode === "single") {
-        settings.provider = id;
-        settings.selectedProviders = [id];
-      } else if (settings.selectedProviders.includes(id)) {
-        if (settings.selectedProviders.length <= 2) return;
-        settings.selectedProviders = settings.selectedProviders.filter((providerId) => providerId !== id);
-        if (settings.provider === id) settings.provider = settings.selectedProviders[0];
+      if (route.providerMode === "smart") return;
+      if (route.providerMode === "single") {
+        route.provider = id;
+        route.selectedProviders = [id];
+      } else if (route.selectedProviders.includes(id)) {
+        if (route.selectedProviders.length <= 2) return;
+        route.selectedProviders = route.selectedProviders.filter((providerId) => providerId !== id);
+        if (route.provider === id) route.provider = route.selectedProviders[0];
       } else {
-        settings.selectedProviders = [...settings.selectedProviders, id];
+        route.selectedProviders = [...route.selectedProviders, id];
       }
       saveAndRender();
     };
@@ -1465,11 +1538,12 @@ export function renderOperatorSettings(el, opts = {}) {
 
   el.querySelectorAll("[data-provider-mode]").forEach((button) => {
     button.onclick = () => {
-      settings.providerMode = button.dataset.providerMode || "smart";
-      if (settings.providerMode === "smart") settings.selectedProviders = PROVIDERS.map((provider) => provider.id);
-      if (settings.providerMode === "single") settings.selectedProviders = [settings.provider];
-      if (settings.providerMode === "multiple" && settings.selectedProviders.length < 2) {
-        settings.selectedProviders = [settings.provider, settings.provider === "claude" ? "private" : "claude"];
+      const route = routeForElement(button);
+      route.providerMode = button.dataset.providerMode || "smart";
+      if (route.providerMode === "smart") route.selectedProviders = PROVIDERS.map((provider) => provider.id);
+      if (route.providerMode === "single") route.selectedProviders = [route.provider];
+      if (route.providerMode === "multiple" && route.selectedProviders.length < 2) {
+        route.selectedProviders = [route.provider, route.provider === "deepseek" ? "local" : "deepseek"];
       }
       saveAndRender();
     };
@@ -1477,7 +1551,8 @@ export function renderOperatorSettings(el, opts = {}) {
 
   el.querySelectorAll("[data-ai-provider-model]").forEach((select) => {
     const commitModel = () => {
-      settings.models[select.dataset.aiProviderModel] = select.value;
+      const route = routeForElement(select);
+      route.models[select.dataset.aiProviderModel] = select.value;
       saveAndRender();
     };
     select.onchange = commitModel;
@@ -1489,9 +1564,52 @@ export function renderOperatorSettings(el, opts = {}) {
     }
   });
 
-  const preferred = el.querySelector("[data-ai-preferred]");
-  if (preferred) preferred.onchange = () => {
-    settings.provider = preferred.value;
+  el.querySelectorAll("[data-ai-preferred]").forEach((preferred) => {
+    preferred.onchange = () => {
+      routeForElement(preferred).provider = preferred.value;
+      saveAndRender();
+    };
+  });
+
+  const deepSeekMessage = el.querySelector("[data-deepseek-message]");
+  const deepSeekSave = el.querySelector("[data-deepseek-save]");
+  if (deepSeekSave) deepSeekSave.onclick = async () => {
+    const input = el.querySelector("[data-deepseek-api-key]");
+    const apiKey = String(input?.value || "").trim();
+    if (!apiKey) {
+      if (deepSeekMessage) deepSeekMessage.textContent = "Enter the DeepSeek API key first.";
+      input?.focus();
+      return;
+    }
+    deepSeekSave.disabled = true;
+    if (deepSeekMessage) deepSeekMessage.textContent = "Encrypting and saving on the server…";
+    try {
+      await saveAiProviderCredential("deepseek_api", apiKey);
+      if (input) input.value = "";
+      if (deepSeekMessage) deepSeekMessage.textContent = "DeepSeek is connected. The key was not kept in this browser.";
+      if (el.isConnected) renderOperatorSettings(el, opts);
+    } catch (error) {
+      deepSeekSave.disabled = false;
+      if (deepSeekMessage) deepSeekMessage.textContent = error instanceof Error ? error.message : "DeepSeek could not be connected.";
+    }
+  };
+  const deepSeekRemove = el.querySelector("[data-deepseek-remove]");
+  if (deepSeekRemove) deepSeekRemove.onclick = async () => {
+    deepSeekRemove.disabled = true;
+    try {
+      await removeAiProviderCredential("deepseek_api");
+      if (el.isConnected) renderOperatorSettings(el, opts);
+    } catch (error) {
+      deepSeekRemove.disabled = false;
+      if (deepSeekMessage) deepSeekMessage.textContent = error instanceof Error ? error.message : "DeepSeek could not be disconnected.";
+    }
+  };
+  const deepSeekPlatform = el.querySelector("[data-deepseek-platform]");
+  if (deepSeekPlatform) deepSeekPlatform.onclick = () => {
+    settings.provider = "deepseek";
+    settings.providerMode = "multiple";
+    settings.selectedProviders = ["deepseek", "local", "private"];
+    settings.models.deepseek = "deepseek-v4-flash";
     saveAndRender();
   };
 

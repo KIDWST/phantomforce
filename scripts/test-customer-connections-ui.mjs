@@ -15,6 +15,10 @@ assert.match(settings, /label: "Connections"/u);
 assert.match(center, /One-click connections/u);
 assert.match(center, /data-connection-start/u);
 assert.match(center, /\/api\/connections\/start/u);
+assert.match(center, /configuration_required/u);
+assert.match(center, /Needs configuration/u);
+assert.match(center, /<details class="set-connect-group"/u, "Connection categories must collapse instead of rendering one endless wall.");
+assert.match(center, /busy \|\| needsConfiguration \? "disabled"/u, "Unavailable sign-in buttons must be disabled until the real broker is configured.");
 assert.match(social, /Connect \$\{account\.name\}/u);
 assert.match(accounting, /data-act="connector"[\s\S]{0,180}>\$\{connector\.status === "connected" \? "Manage" : "Connect"\}/u);
 assert.match(accounting, /const currentFinance = financeNow\(\)[\s\S]*currentConnector\.status = payload\.state[\s\S]*store\.save\(\)/u,
@@ -22,7 +26,7 @@ assert.match(accounting, /const currentFinance = financeNow\(\)[\s\S]*currentCon
 assert.match(customerView, /nothing else is needed from you/u);
 assert.match(planner, /data-settings-target="media">Connect</u);
 assert.match(account, /data-settings-target="media">Connect payments</u);
-assert.doesNotMatch(customerSurface, /Needs configuration|Set up now|Open setup guide|Developer provider setup|Client secret|App secret|backend credentials|No live payment connector|Not wired here/iu);
+assert.doesNotMatch(customerSurface, /Connection requested\. Nothing else is needed|Set up now|Open setup guide|Client secret|App secret|No live payment connector|Not wired here/iu);
 assert.doesNotMatch(customerSurface, /data-oauth-client-id|data-oauth-client-secret/iu);
 
 console.log("One-click customer connection UI checks passed.");

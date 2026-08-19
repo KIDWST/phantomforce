@@ -1,9 +1,9 @@
 /* One customer-facing connection contract for every external account.
-   The browser never asks for developer credentials. Connect either opens a
-   server-created authorization handoff or records a tenant-scoped request. */
+   The browser never asks for developer credentials. Connect is enabled only
+   when the server can create a real, signed authorization handoff. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260817-163";
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260817-163";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260817-164";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260817-164";
 
 let connectionState = { loaded: false, loading: false, error: "", connectors: [], notice: "", busyId: "" };
 let connectionMount = null;
@@ -45,9 +45,9 @@ async function refreshConnections({ force = false } = {}) {
 
 function connectionCard(connector) {
   const connected = connector.state === "connected";
-  const requested = connector.state === "requested";
-  const status = connected ? "Connected" : requested ? "Connection requested" : "Ready to connect";
-  const button = connected ? "Manage" : "Connect";
+  const needsConfiguration = connector.state === "configuration_required";
+  const status = connected ? "Connected" : needsConfiguration ? "Needs configuration" : "Ready to connect";
+  const button = connected ? "Manage" : needsConfiguration ? "Needs configuration" : "Connect";
   const busy = connectionState.busyId === connector.id;
   return `<article class="set-connect-card is-${esc(connector.state || "disconnected")}">
     <div class="set-connect-card-top">
@@ -55,7 +55,7 @@ function connectionCard(connector) {
       <span><b>${esc(connector.name)}</b><i>${esc(connector.detail)}</i></span>
     </div>
     <div class="set-connect-state"><span>${esc(status)}</span><i>${esc(connector.customerMessage || "Choose Connect to continue.")}</i></div>
-    <button class="btn ${connected ? "btn-quiet" : "btn-primary"}" type="button" data-connection-start="${esc(connector.id)}" ${busy ? "disabled" : ""}>${busy ? "Opening…" : esc(button)}</button>
+    <button class="btn ${connected || needsConfiguration ? "btn-quiet" : "btn-primary"}" type="button" data-connection-start="${esc(connector.id)}" ${busy || needsConfiguration ? "disabled" : ""}>${busy ? "Opening…" : esc(button)}</button>
   </article>`;
 }
 
@@ -67,10 +67,10 @@ function connectionGroups() {
     grouped.get(group).push(connector);
   });
   if (!grouped.size && connectionState.loading) return `<div class="set-connect-loading">Checking your connections…</div>`;
-  return [...grouped.entries()].map(([group, connectors]) => `<section class="set-connect-group">
-    <div class="set-connect-group-head"><h3>${esc(group)}</h3><span>${connectors.filter((item) => item.connected).length}/${connectors.length} connected</span></div>
+  return [...grouped.entries()].map(([group, connectors], index) => `<details class="set-connect-group" ${index === 0 ? "open" : ""}>
+    <summary class="set-connect-group-head"><h3>${esc(group)}</h3><span>${connectors.filter((item) => item.connected).length}/${connectors.length} connected</span></summary>
     <div class="set-connect-grid">${connectors.map(connectionCard).join("")}</div>
-  </section>`).join("");
+  </details>`).join("");
 }
 
 export function renderConnectionCenter(el, opts = {}) {
@@ -101,7 +101,7 @@ export function renderConnectionCenter(el, opts = {}) {
           body: JSON.stringify({ tenant_id: currentTenantId(), connector_id: connectorId }),
         });
         if (payload.authorizationUrl) window.open(payload.authorizationUrl, "_blank", "noopener,noreferrer");
-        connectionState.notice = payload.customerMessage || "Connection requested. Nothing else is needed from you.";
+        connectionState.notice = payload.customerMessage || "Secure provider sign-in opened. Return here after approval.";
         connectionState.loaded = false;
         await refreshConnections({ force: true });
       } catch (error) {

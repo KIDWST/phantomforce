@@ -9,22 +9,22 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260817-163";
-import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260817-163";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260817-163";
-import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260817-163";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260817-163";
+} from "./imagefilters.js?v=phantom-live-20260817-164";
+import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260817-164";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260817-164";
+import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260817-164";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260817-164";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260817-163";
+} from "./content-editor.js?v=phantom-live-20260817-164";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260817-163";
-import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260817-163";
+} from "./store.js?v=phantom-live-20260817-164";
+import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260817-164";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -4014,7 +4014,7 @@ function wireAnalyticsActions(el, accounts, opts) {
         analyticsNotice = `${connectorStatus(platform)?.name || platform} sign-in opened. Approve it once; PhantomForce will refresh this page when the callback returns.`;
         startAnalyticsOAuthPolling(platform);
       } else if (response?.connect_request) {
-        analyticsNotice = response.customer_message || "Connection requested. Nothing else is needed from you.";
+        analyticsNotice = response.customer_message || "Secure provider sign-in opened. Finish approval, then refresh connection status.";
       } else {
         analyticsNotice = "The secure account connection could not start.";
       }

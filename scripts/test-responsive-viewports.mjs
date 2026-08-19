@@ -50,6 +50,7 @@ const requestedPages = new Set(String(process.env.PHANTOMFORCE_RESPONSIVE_PAGES 
 if (requestedPages.size) pages.splice(0, pages.length, ...pages.filter((page) => requestedPages.has(page.id) || requestedPages.has(page.label)));
 const requestedWidths = new Set(String(process.env.PHANTOMFORCE_RESPONSIVE_WIDTHS || "").split(",").map((value) => value.trim()).filter(Boolean).map(Number).filter(Number.isFinite));
 if (requestedWidths.size) viewports.splice(0, viewports.length, ...viewports.filter((viewport) => requestedWidths.has(viewport.width)));
+const requestedSettingsTab = String(process.env.PHANTOMFORCE_RESPONSIVE_SETTINGS_TAB || "").trim();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -685,6 +686,14 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
   // audited workspace instead of capturing startup chrome.
   await evaluate(cdp, `(() => { document.querySelector(".os-poweron")?.click(); return true; })()`);
   await sleep(720);
+  if (page.id === "settings" && requestedSettingsTab) {
+    await evaluate(cdp, `(() => {
+      const button = document.querySelector(${JSON.stringify(`[data-set-tab="${requestedSettingsTab}"]`)});
+      button?.click();
+      return !!button;
+    })()`);
+    await sleep(180);
+  }
   if (page.id === "dashboard") {
     await evaluate(cdp, `(${injectDashboardDecisionFixture.toString()})()`);
   }

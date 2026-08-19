@@ -653,6 +653,535 @@ html[data-command-os="2040"] .page-worker-output {
   html[data-command-os="2040"] .page-worker { width: 100%; }
 }
 
+/* ================= Settings control center =================
+   Final authority for settings surfaces. Legacy skins define several of these
+   components with pale glass fills, so keep this block after the shared app
+   rules and force every settings surface back onto the Command OS palette. */
+.settings-operator {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  color: var(--pf-ink);
+}
+
+.settings-operator :where(h2, h3, h4, p, span, b, i, em, label, button, input, select, textarea) {
+  letter-spacing: 0;
+}
+
+.settings-operator .set-section,
+.settings-operator .set-panel-heading,
+.settings-operator .set-route-card,
+.settings-operator .set-module-card,
+.settings-operator .client-setup-console,
+.settings-operator .customization-studio > :where(section, div),
+.settings-operator .set-connect-card {
+  color: var(--pf-ink);
+}
+
+.settings-operator .set-section {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--pf-line);
+  border-radius: 8px;
+  background: rgba(2, 10, 6, .7);
+  box-shadow: none;
+}
+
+.settings-operator .set-ai-hero {
+  display: grid;
+  grid-template-columns: minmax(300px, .95fr) minmax(420px, 1.05fr);
+  gap: 20px;
+  align-items: center;
+  min-height: 152px;
+  padding: 22px;
+  border-color: rgba(24, 242, 143, .28);
+  background:
+    linear-gradient(90deg, rgba(24, 242, 143, .06), transparent 48%),
+    rgba(2, 9, 6, .9);
+  box-shadow: inset 3px 0 var(--pf-green);
+}
+
+.settings-operator .set-ai-hero h3,
+.settings-operator .set-panel-heading h3,
+.settings-operator .set-section h3,
+.settings-operator .set-section h4 {
+  margin: 0;
+  color: var(--pf-ink);
+  font-weight: 760;
+}
+
+.settings-operator .set-ai-hero h3 { font-size: clamp(20px, 2vw, 28px); }
+.settings-operator .set-note { margin: 6px 0 0; color: var(--pf-muted); font-size: 12px; line-height: 1.55; }
+.settings-operator .set-eyebrow,
+.settings-operator .cust-kicker {
+  margin: 0 0 6px;
+  color: var(--pf-green);
+  font: 700 9px "Spline Sans Mono", monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.settings-operator .set-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-operator .set-status-grid span {
+  min-width: 0;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 7px;
+  background: rgba(0, 5, 3, .68);
+}
+.settings-operator .set-status-grid b {
+  display: block;
+  margin-bottom: 4px;
+  color: #729084;
+  font: 700 8px "Spline Sans Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.settings-operator .set-status-grid i { display: block; color: #d7e4dd; font-size: 11px; font-style: normal; }
+
+.settings-operator .set-settings-layout {
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  min-width: 0;
+}
+
+.settings-operator .set-category-nav {
+  position: sticky;
+  top: 84px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-operator .set-category {
+  overflow: hidden;
+  border: 1px solid var(--pf-line);
+  border-radius: 7px;
+  background: rgba(2, 9, 6, .78);
+}
+.settings-operator .set-category summary {
+  min-height: 42px;
+  padding: 10px 11px;
+  color: #c9d8d1;
+  font: 700 9px "Spline Sans Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.settings-operator .set-category summary span:last-child {
+  width: 21px;
+  height: 21px;
+  border-color: rgba(24, 242, 143, .2);
+  border-radius: 50%;
+  background: rgba(24, 242, 143, .055);
+  color: var(--pf-green);
+}
+.settings-operator .set-category-options { gap: 4px; padding: 0 7px 7px; }
+.settings-operator .set-category-options button {
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #7f978c;
+  font-size: 11px;
+}
+.settings-operator .set-category-options button:hover {
+  border-color: var(--pf-line);
+  background: rgba(255, 255, 255, .025);
+  color: var(--pf-ink);
+}
+.settings-operator .set-category-options button.is-active {
+  border-color: rgba(24, 242, 143, .4);
+  background: rgba(24, 242, 143, .08);
+  box-shadow: inset 2px 0 var(--pf-green);
+  color: var(--pf-green);
+}
+
+.settings-operator .set-tab-panel { display: grid; gap: 12px; min-width: 0; }
+.settings-operator .set-panel-heading {
+  padding: 4px 2px 10px;
+  border-bottom: 1px solid var(--pf-line);
+  background: transparent;
+}
+
+.settings-operator :where(input, select, textarea),
+.settings-operator .cust-form-grid :where(input, select),
+.settings-operator .cust-ai textarea,
+.settings-operator .cust-object-form input {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--pf-line);
+  border-radius: 6px;
+  background: #020805;
+  color: var(--pf-ink);
+  font: 500 12px "Instrument Sans", sans-serif;
+  box-shadow: none;
+}
+.settings-operator textarea { resize: vertical; }
+.settings-operator :where(input, select, textarea):focus {
+  border-color: rgba(24, 242, 143, .58);
+  box-shadow: 0 0 0 2px rgba(24, 242, 143, .08);
+  outline: none;
+}
+
+.settings-operator .set-ai-control-center { display: grid; gap: 14px; }
+.settings-operator .set-sec-head,
+.settings-operator .set-section-head,
+.settings-operator .set-card-head,
+.settings-operator .set-route-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0;
+}
+
+.settings-operator .set-runtime-summary,
+.settings-operator .set-selection-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .018);
+}
+.settings-operator .set-selection-summary b { color: var(--pf-green); font-size: 11px; }
+.settings-operator .set-selection-summary i,
+.settings-operator .set-selection-summary em { color: var(--pf-muted); font-size: 10px; font-style: normal; }
+
+.settings-operator .set-deepseek-setup {
+  display: grid;
+  grid-template-columns: minmax(220px, .55fr) minmax(360px, 1fr);
+  gap: 10px 16px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(245, 183, 67, .28);
+  border-radius: 7px;
+  background: rgba(245, 183, 67, .035);
+}
+.settings-operator .set-deepseek-setup.is-configured {
+  border-color: rgba(24, 242, 143, .36);
+  background: rgba(24, 242, 143, .035);
+}
+.settings-operator .set-deepseek-copy { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.settings-operator .set-deepseek-copy > span:last-child { display: grid; gap: 3px; min-width: 0; }
+.settings-operator .set-deepseek-copy b { color: var(--pf-ink); font-size: 13px; }
+.settings-operator .set-deepseek-copy i { color: var(--pf-muted); font-size: 10px; font-style: normal; line-height: 1.4; }
+.settings-operator .set-deepseek-actions { display: grid; grid-template-columns: minmax(150px, 1fr) repeat(3, auto); gap: 7px; align-items: center; }
+.settings-operator .set-credential-message { grid-column: 1 / -1; min-height: 0; margin: 0; color: var(--pf-green); font-size: 10px; }
+
+.settings-operator .set-route-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.settings-operator .set-route-card {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--pf-line);
+  border-radius: 7px;
+  background: #020905;
+}
+.settings-operator .set-route-head h4 { margin: 0; font-size: 15px; }
+.settings-operator .set-route-head p:not(.set-eyebrow) { max-width: 62ch; margin: 5px 0 0; color: var(--pf-muted); font-size: 10.5px; line-height: 1.45; }
+.settings-operator .set-route-current {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid rgba(24, 242, 143, .25);
+  border-radius: 999px;
+  color: var(--pf-green);
+  font: 700 8px "Spline Sans Mono", monospace;
+}
+
+.settings-operator .set-choice-grid,
+.settings-operator .set-model-grid,
+.settings-operator .set-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+.settings-operator .set-choice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.settings-operator .set-choice-card,
+.settings-operator .set-model-card {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--pf-line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .018);
+  color: var(--pf-ink);
+  box-shadow: none;
+  transform: none;
+}
+.settings-operator .set-choice-card:hover,
+.settings-operator .set-choice-card.is-active,
+.settings-operator .set-model-card:hover,
+.settings-operator .set-model-card.is-active {
+  border-color: rgba(24, 242, 143, .42);
+  background: rgba(24, 242, 143, .055);
+  box-shadow: inset 2px 0 var(--pf-green);
+  transform: none;
+}
+.settings-operator .set-choice-card b,
+.settings-operator .set-model-card b { color: var(--pf-ink); font-size: 11px; }
+.settings-operator .set-choice-card i,
+.settings-operator .set-model-card i { margin-top: 3px; color: var(--pf-muted); font-size: 9px; line-height: 1.35; }
+.settings-operator .set-model-card { grid-template-columns: 32px minmax(0, 1fr) 20px; gap: 8px; }
+.settings-operator .set-provider-mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid rgba(24, 242, 143, .24);
+  border-radius: 6px;
+  background: rgba(24, 242, 143, .055);
+  color: var(--pf-green);
+  font: 800 9px "Spline Sans Mono", monospace;
+}
+.settings-operator .set-provider-check {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid var(--pf-line);
+  border-radius: 50%;
+  color: var(--pf-muted);
+}
+.settings-operator .set-model-card.is-active .set-provider-check { border-color: var(--pf-green); background: var(--pf-green); color: #011209; }
+.settings-operator .set-recommended,
+.settings-operator .set-runtime-state { color: #91aa9e; font-size: 8px; font-style: normal; }
+.settings-operator .set-runtime-state.is-online,
+.settings-operator .set-runtime-state.is-configured { color: var(--pf-green); }
+.settings-operator .set-provider-models { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.settings-operator .set-control { display: grid; gap: 5px; min-width: 0; }
+.settings-operator .set-control > span,
+.settings-operator .set-field > span {
+  color: #779286;
+  font: 700 8px "Spline Sans Mono", monospace;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.settings-operator .org-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+.settings-operator .org-summary > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--pf-line);
+  border-radius: 6px;
+  background: #020805;
+}
+.settings-operator .org-summary b {
+  color: #779286;
+  font: 700 8px "Spline Sans Mono", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.settings-operator .org-summary i {
+  overflow: hidden;
+  color: var(--pf-ink);
+  font-size: 11px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-operator .org-type-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+.settings-operator .org-type-option {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 6px;
+  background: #020805;
+  color: var(--pf-ink);
+  text-align: left;
+}
+.settings-operator .org-type-option:hover,
+.settings-operator .org-type-option.is-active {
+  border-color: rgba(24, 242, 143, .44);
+  background: rgba(24, 242, 143, .055);
+  box-shadow: inset 2px 0 var(--pf-green);
+}
+.settings-operator .org-type-option b { color: var(--pf-ink); font-size: 12px; }
+.settings-operator .org-type-option i { color: var(--pf-muted); font-size: 9px; font-style: normal; line-height: 1.4; }
+.settings-operator .org-member,
+.settings-operator .org-invite-row {
+  border-color: var(--pf-line);
+  border-radius: 7px;
+  background: #020805;
+}
+.settings-operator :where(.org-role-pick select, .org-invite input[type="email"], .org-invite select) {
+  border-color: var(--pf-line);
+  border-radius: 6px;
+  background: #020805;
+  color: var(--pf-ink);
+}
+.settings-operator .org-remove { border-radius: 6px; }
+
+.settings-operator .customization-studio {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 0 18px;
+}
+.settings-operator .customization-studio :where(.cust-hero, .cust-ai, .cust-panel, .cust-publish) {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--pf-line);
+  border-radius: 7px;
+  background: rgba(2, 10, 6, .78);
+  box-shadow: none;
+  color: var(--pf-ink);
+}
+.settings-operator .cust-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 260px); align-items: center; gap: 18px; }
+.settings-operator .cust-hero h2 { margin: 0; color: var(--pf-ink); font-size: clamp(20px, 2vw, 30px); }
+.settings-operator .cust-scope { padding: 12px; border: 1px solid var(--pf-line); border-radius: 6px; background: #020805; }
+.settings-operator .cust-ai { display: grid; grid-template-columns: minmax(220px, .65fr) minmax(320px, 1.35fr); gap: 16px; }
+.settings-operator .cust-ai form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.settings-operator .cust-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.settings-operator .cust-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.settings-operator .cust-hero :where(p, i),
+.settings-operator .cust-ai p,
+.settings-operator .cust-panel p { color: var(--pf-muted); }
+.settings-operator .cust-panel h3,
+.settings-operator .cust-ai h3,
+.settings-operator .cust-publish h3 { color: var(--pf-ink); }
+.settings-operator .cust-publish {
+  position: sticky;
+  bottom: 54px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  backdrop-filter: blur(16px);
+}
+
+.settings-operator .set-connection-center { display: grid; gap: 12px; }
+.settings-operator .set-connect-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.settings-operator .set-connect-group {
+  overflow: hidden;
+  border: 1px solid var(--pf-line);
+  border-radius: 7px;
+  background: rgba(2, 9, 6, .7);
+}
+.settings-operator .set-connect-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 13px;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  list-style: none;
+}
+.settings-operator .set-connect-group[open] .set-connect-group-head { border-bottom-color: var(--pf-line); }
+.settings-operator .set-connect-group-head::-webkit-details-marker { display: none; }
+.settings-operator .set-connect-group-head::before { content: "+"; color: var(--pf-green); font: 800 14px "Spline Sans Mono", monospace; }
+.settings-operator .set-connect-group[open] .set-connect-group-head::before { content: "−"; }
+.settings-operator .set-connect-group-head h3 { flex: 1; margin: 0; color: var(--pf-ink); font-size: 13px; }
+.settings-operator .set-connect-group-head span { color: var(--pf-muted); font-size: 10px; }
+.settings-operator .set-connect-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 9px; }
+.settings-operator .set-connect-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 6px;
+  background: #020805;
+  box-shadow: none;
+}
+.settings-operator .set-connect-card.is-connected { border-color: rgba(24, 242, 143, .34); background: rgba(24, 242, 143, .035); }
+.settings-operator .set-connect-card-top { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.settings-operator .set-connect-card-top > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.settings-operator .set-connect-card-top b { color: var(--pf-ink); font-size: 12px; }
+.settings-operator .set-connect-card-top i,
+.settings-operator .set-connect-state i { color: var(--pf-muted); font-size: 9px; font-style: normal; line-height: 1.4; }
+.settings-operator .set-connect-mark { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 6px; background: rgba(24, 242, 143, .07); color: var(--pf-green); }
+.settings-operator .set-connect-state { grid-column: 1 / -1; display: grid; gap: 2px; }
+.settings-operator .set-connect-state span { color: #99aea4; font: 700 8px "Spline Sans Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+
+.settings-operator .client-setup-console {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.settings-operator .client-setup-console :where(.client-setup-card, .client-slot, .client-setup-section) {
+  border-color: var(--pf-line);
+  border-radius: 7px;
+  background: rgba(2, 9, 6, .75);
+  box-shadow: none;
+}
+
+@media (max-width: 1380px) {
+  .settings-operator .set-ai-hero { grid-template-columns: 1fr; }
+  .settings-operator .set-route-grid { grid-template-columns: 1fr; }
+  .settings-operator .set-deepseek-setup { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 980px) {
+  .settings-operator .set-settings-layout { grid-template-columns: 1fr; }
+  .settings-operator .set-category-nav { position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .settings-operator .set-category-options button { min-height: 42px; }
+  .settings-operator .cust-grid,
+  .settings-operator .cust-ai,
+  .settings-operator .cust-hero { grid-template-columns: 1fr; }
+  .settings-operator .set-connect-grid { grid-template-columns: 1fr; }
+  .settings-operator .org-summary,
+  .settings-operator .org-type-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 680px) {
+  .settings-operator .set-ai-hero,
+  .settings-operator .set-section,
+  .settings-operator .customization-studio :where(.cust-hero, .cust-ai, .cust-panel, .cust-publish) { padding: 14px; }
+  .settings-operator .set-category-nav { grid-template-columns: 1fr; }
+  .settings-operator .set-status-grid,
+  .settings-operator .set-choice-grid,
+  .settings-operator .set-model-grid,
+  .settings-operator .set-control-grid,
+  .settings-operator .set-provider-models { grid-template-columns: 1fr; }
+  .settings-operator .set-deepseek-actions { grid-template-columns: 1fr; }
+  .settings-operator .org-summary,
+  .settings-operator .org-type-picker { grid-template-columns: 1fr; }
+  .settings-operator .set-connect-hero,
+  .settings-operator .cust-publish { align-items: stretch; flex-direction: column; }
+  .settings-operator .cust-ai form { grid-template-columns: 1fr; }
+  .settings-operator .cust-publish-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+}
+
 @media (max-width: 440px) {
   .planner-metrics,
   .planner-days { grid-template-columns: 1fr; }

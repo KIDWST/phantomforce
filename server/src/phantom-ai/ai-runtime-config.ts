@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const AI_RUNTIME_PROVIDER_IDS = [
+  "deepseek_api",
   "local_ollama",
   "codex_cli",
   "claude_cli",
@@ -14,14 +15,18 @@ export const AI_RUNTIME_PROVIDER_IDS = [
 export type AiRuntimeProviderId = (typeof AI_RUNTIME_PROVIDER_IDS)[number];
 export type AiRuntimeMode = "single" | "multiple" | "smart";
 
-export type AiRuntimeConfig = {
-  tenant_id: string;
-  version: number;
+export type AiRuntimeRouteConfig = {
   mode: AiRuntimeMode;
   primary_provider_id: AiRuntimeProviderId;
   allowed_provider_ids: AiRuntimeProviderId[];
   models: Record<AiRuntimeProviderId, string>;
   fallback_enabled: boolean;
+};
+
+export type AiRuntimeConfig = AiRuntimeRouteConfig & {
+  tenant_id: string;
+  version: number;
+  phantom_bot: AiRuntimeRouteConfig;
   updated_at: string;
   updated_by: string;
 };
@@ -41,12 +46,12 @@ type AiRuntimeDocument = {
   audit: AiRuntimeAuditEntry[];
 };
 
-export type AiRuntimeConfigInput = Partial<Pick<
-  AiRuntimeConfig,
-  "mode" | "primary_provider_id" | "allowed_provider_ids" | "models" | "fallback_enabled"
->>;
+export type AiRuntimeConfigInput = Partial<AiRuntimeRouteConfig> & {
+  phantom_bot?: Partial<AiRuntimeRouteConfig>;
+};
 
 const DEFAULT_MODELS: Record<AiRuntimeProviderId, string> = {
+  deepseek_api: "deepseek-v4-flash",
   local_ollama: "local-auto",
   codex_cli: "gpt-5.5",
   claude_cli: "default",
@@ -91,16 +96,55 @@ function normalizeProviderModel(providerId: AiRuntimeProviderId, value: unknown)
 }
 
 export function defaultAiRuntimeConfig(tenantId: string, actor = "system"): AiRuntimeConfig {
-  return {
-    tenant_id: safeTenantId(tenantId),
-    version: 1,
+  const platformRoute: AiRuntimeRouteConfig = {
     mode: "smart",
-    primary_provider_id: "local_ollama",
+    primary_provider_id: "deepseek_api",
     allowed_provider_ids: [...AI_RUNTIME_PROVIDER_IDS],
     models: { ...DEFAULT_MODELS },
     fallback_enabled: true,
+  };
+  return {
+    tenant_id: safeTenantId(tenantId),
+    version: 1,
+    ...platformRoute,
+    phantom_bot: {
+      mode: "smart",
+      primary_provider_id: "local_ollama",
+      allowed_provider_ids: ["local_ollama", "chatgpt_bridge"],
+      models: { ...DEFAULT_MODELS },
+      fallback_enabled: true,
+    },
     updated_at: new Date().toISOString(),
     updated_by: actor.slice(0, 120) || "system",
+  };
+}
+
+function normalizeRoute(
+  input: Partial<AiRuntimeRouteConfig> | undefined,
+  base: AiRuntimeRouteConfig,
+): AiRuntimeRouteConfig {
+  const mode: AiRuntimeMode = input?.mode === "single" || input?.mode === "multiple" || input?.mode === "smart"
+    ? input.mode
+    : base.mode;
+  const primaryProviderId = isProviderId(input?.primary_provider_id)
+    ? input.primary_provider_id
+    : base.primary_provider_id;
+  const requestedAllowed = Array.isArray(input?.allowed_provider_ids)
+    ? Array.from(new Set(input.allowed_provider_ids.filter(isProviderId)))
+    : base.allowed_provider_ids.filter(isProviderId);
+  let allowedProviderIds = requestedAllowed.length ? requestedAllowed : [primaryProviderId];
+  if (!allowedProviderIds.includes(primaryProviderId)) allowedProviderIds = [primaryProviderId, ...allowedProviderIds];
+  if (mode === "single") allowedProviderIds = [primaryProviderId];
+  const models = Object.fromEntries(AI_RUNTIME_PROVIDER_IDS.map((providerId) => [
+    providerId,
+    normalizeProviderModel(providerId, input?.models?.[providerId] ?? base.models?.[providerId]),
+  ])) as Record<AiRuntimeProviderId, string>;
+  return {
+    mode,
+    primary_provider_id: primaryProviderId,
+    allowed_provider_ids: allowedProviderIds,
+    models,
+    fallback_enabled: mode !== "single" && input?.fallback_enabled !== false,
   };
 }
 
@@ -111,30 +155,16 @@ export function normalizeAiRuntimeConfig(
   previous?: AiRuntimeConfig,
 ): AiRuntimeConfig {
   const base = previous ?? defaultAiRuntimeConfig(tenantId, actor);
-  const mode: AiRuntimeMode = input.mode === "single" || input.mode === "multiple" || input.mode === "smart"
-    ? input.mode
-    : base.mode;
-  const primaryProviderId = isProviderId(input.primary_provider_id)
-    ? input.primary_provider_id
-    : base.primary_provider_id;
-  const requestedAllowed = Array.isArray(input.allowed_provider_ids)
-    ? Array.from(new Set(input.allowed_provider_ids.filter(isProviderId)))
-    : base.allowed_provider_ids.filter(isProviderId);
-  let allowedProviderIds = requestedAllowed.length ? requestedAllowed : [primaryProviderId];
-  if (!allowedProviderIds.includes(primaryProviderId)) allowedProviderIds = [primaryProviderId, ...allowedProviderIds];
-  if (mode === "single") allowedProviderIds = [primaryProviderId];
-  const models = Object.fromEntries(AI_RUNTIME_PROVIDER_IDS.map((providerId) => [
-    providerId,
-    normalizeProviderModel(providerId, input.models?.[providerId] ?? base.models[providerId]),
-  ])) as Record<AiRuntimeProviderId, string>;
+  const platformRoute = normalizeRoute(input, base);
+  const defaultPhantomBot = defaultAiRuntimeConfig(tenantId, actor).phantom_bot;
+  const basePhantomBot = base.phantom_bot
+    ? normalizeRoute(base.phantom_bot, defaultPhantomBot)
+    : defaultPhantomBot;
   return {
     tenant_id: safeTenantId(tenantId),
     version: previous ? previous.version + 1 : base.version,
-    mode,
-    primary_provider_id: primaryProviderId,
-    allowed_provider_ids: allowedProviderIds,
-    models,
-    fallback_enabled: mode !== "single" && input.fallback_enabled !== false,
+    ...platformRoute,
+    phantom_bot: normalizeRoute(input.phantom_bot, basePhantomBot),
     updated_at: new Date().toISOString(),
     updated_by: actor.slice(0, 120) || "system",
   };
@@ -164,7 +194,20 @@ export async function readAiRuntimeDocument(tenantId: string, root?: string): Pr
   try {
     const parsed = JSON.parse(await readFile(documentPath(tenantId, root), "utf8")) as AiRuntimeDocument;
     if (!parsed?.current || parsed.current.tenant_id !== safeTenantId(tenantId)) return null;
-    return parsed;
+    const hydrated = normalizeAiRuntimeConfig(
+      tenantId,
+      parsed.current.updated_by || "system",
+      parsed.current as AiRuntimeConfigInput,
+    );
+    return {
+      ...parsed,
+      current: {
+        ...hydrated,
+        version: parsed.current.version,
+        updated_at: parsed.current.updated_at,
+        updated_by: parsed.current.updated_by,
+      },
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
@@ -202,7 +245,7 @@ export async function saveAiRuntimeConfig(options: {
       actor: options.actor.slice(0, 120) || "system",
       event_type: existing ? "updated" : "created",
       version: current.version,
-      summary: `${current.mode} routing; primary ${current.primary_provider_id}; ${current.allowed_provider_ids.length} allowed provider(s).`,
+      summary: `Platform ${current.mode}/${current.primary_provider_id}; PhantomBot ${current.phantom_bot.mode}/${current.phantom_bot.primary_provider_id}.`,
       created_at: current.updated_at,
     };
     const document: AiRuntimeDocument = {
@@ -218,6 +261,13 @@ export async function saveAiRuntimeConfig(options: {
   });
 }
 
-export function aiRuntimeProviderModel(config: AiRuntimeConfig, providerId = config.primary_provider_id) {
-  return config.models[providerId] || DEFAULT_MODELS[providerId];
+export function aiRuntimeRouteForSurface(config: AiRuntimeConfig, surface: unknown): AiRuntimeRouteConfig {
+  const normalized = typeof surface === "string" ? surface.trim().toLowerCase() : "";
+  return normalized === "phantombot" || normalized.startsWith("phantombot:")
+    ? config.phantom_bot
+    : config;
+}
+
+export function aiRuntimeProviderModel(route: AiRuntimeRouteConfig, providerId = route.primary_provider_id) {
+  return route.models[providerId] || DEFAULT_MODELS[providerId];
 }

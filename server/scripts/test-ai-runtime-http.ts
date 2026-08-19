@@ -15,7 +15,10 @@ const ollamaRequests: Array<Record<string, unknown>> = [];
 const mockOllama = createServer((request, response) => {
   if (request.method === "GET" && request.url === "/api/tags") {
     response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ models: [{ name: "runtime-test:latest", model: "runtime-test:latest" }] }));
+    response.end(JSON.stringify({ models: [
+      { name: "runtime-platform:latest", model: "runtime-platform:latest" },
+      { name: "runtime-bot:latest", model: "runtime-bot:latest" },
+    ] }));
     return;
   }
   if (request.method === "POST" && request.url === "/api/chat") {
@@ -66,8 +69,10 @@ async function startServer(): Promise<ChildProcess> {
       PHANTOMFORCE_ENABLE_DEMO_AUTH: "true",
       PHANTOMFORCE_SKIP_SERVER_DOTENV: "true",
       PHANTOMFORCE_AI_RUNTIME_DIR: runtimeRoot,
+      PHANTOMFORCE_AI_CREDENTIALS_DIR: join(runtimeRoot, "credentials"),
+      PHANTOMFORCE_AI_CREDENTIALS_SECRET: "test-only-runtime-credential-secret",
       OLLAMA_BASE_URL: ollamaBaseUrl,
-      PHANTOM_OLLAMA_MODEL: "runtime-test:latest",
+      PHANTOM_OLLAMA_MODEL: "runtime-platform:latest",
       PHANTOM_OLLAMA_TIMEOUT_MS: "3000",
       PHANTOM_FORCE_OPENROUTER_GLM: "false",
       OPENROUTER_API_KEY: "",
@@ -109,11 +114,20 @@ function promptIntegrity(message: string, id: string) {
 }
 
 const models = {
-  local_ollama: "runtime-test:latest",
+  deepseek_api: "deepseek-v4-flash",
+  local_ollama: "runtime-platform:latest",
   codex_cli: "gpt-5.6-sol",
   claude_cli: "sonnet",
   openrouter_glm: "openrouter/auto",
   chatgpt_bridge: "chatgpt-standard",
+};
+
+const phantomBotRoute = {
+  mode: "single",
+  primary_provider_id: "local_ollama",
+  allowed_provider_ids: ["local_ollama"],
+  models: { ...models, local_ollama: "runtime-bot:latest" },
+  fallback_enabled: false,
 };
 
 const child = await startServer();
@@ -141,6 +155,7 @@ try {
       allowed_provider_ids: ["local_ollama"],
       models,
       fallback_enabled: false,
+      phantom_bot: phantomBotRoute,
     }),
   });
   assert.equal(saveLocalResponse.ok, true, `Local runtime save failed: HTTP ${saveLocalResponse.status}`);
@@ -177,15 +192,15 @@ try {
   const chat = await chatResponse.json() as Record<string, any>;
   assert.equal(chatResponse.ok, true, `Runtime chat failed: HTTP ${chatResponse.status} ${JSON.stringify(chat)}`);
   assert.equal(ollamaRequests.length, 1);
-  assert.equal(ollamaRequests[0].model, "runtime-test:latest");
-  assert.equal(chat.model_id, "runtime-test:latest");
+  assert.equal(ollamaRequests[0].model, "runtime-platform:latest");
+  assert.equal(chat.model_id, "runtime-platform:latest");
   assert.equal(chat.ai_runtime.state, "real");
   assert.equal(chat.ai_runtime.surface, "prompt_outcome");
   assert.equal(chat.ai_runtime.tenant_id, tenantId);
   assert.equal(chat.ai_runtime.config_source, "saved");
   assert.equal(chat.ai_runtime.requested_provider_id, "local_ollama");
   assert.equal(chat.ai_runtime.responding_provider_id, "local_ollama");
-  assert.equal(chat.ai_runtime.responding_model_id, "runtime-test:latest");
+  assert.equal(chat.ai_runtime.responding_model_id, "runtime-platform:latest");
   assert.equal(chat.ai_runtime.provider_called, true);
   assert.equal(chat.ai_runtime.fallback_used, false);
 
@@ -208,6 +223,7 @@ try {
       allowed_provider_ids: ["local_ollama"],
       models,
       fallback_enabled: false,
+      phantom_bot: phantomBotRoute,
     }),
   });
   assert.equal(saveClientRuntimeResponse.ok, true);
@@ -228,15 +244,15 @@ try {
   });
   const clientChat = await clientChatResponse.json() as Record<string, any>;
   assert.equal(clientChatResponse.ok, true, `Client runtime chat failed: HTTP ${clientChatResponse.status} ${JSON.stringify(clientChat)}`);
-  assert.equal(ollamaRequests.length, 2, "A workspace member's standard chat must invoke the organization's saved provider.");
-  assert.equal(ollamaRequests[1].model, "runtime-test:latest");
-  assert.equal(clientChat.model_id, "runtime-test:latest");
+  assert.equal(ollamaRequests.length, 2, "A workspace member's standard chat must invoke the organization's saved PhantomBot provider.");
+  assert.equal(ollamaRequests[1].model, "runtime-bot:latest");
+  assert.equal(clientChat.model_id, "runtime-bot:latest");
   assert.equal(clientChat.ai_runtime.state, "real");
   assert.equal(clientChat.ai_runtime.tenant_id, clientTenantId);
   assert.equal(clientChat.ai_runtime.config_source, "saved");
   assert.equal(clientChat.ai_runtime.requested_provider_id, "local_ollama");
   assert.equal(clientChat.ai_runtime.responding_provider_id, "local_ollama");
-  assert.equal(clientChat.ai_runtime.responding_model_id, "runtime-test:latest");
+  assert.equal(clientChat.ai_runtime.responding_model_id, "runtime-bot:latest");
   assert.equal(clientChat.ai_runtime.provider_called, true);
 
   const saveFallbackResponse = await fetch(`${appBaseUrl}/phantom-ai/runtime/config`, {
@@ -250,6 +266,7 @@ try {
       allowed_provider_ids: ["openrouter_glm", "local_ollama"],
       models,
       fallback_enabled: true,
+      phantom_bot: phantomBotRoute,
     }),
   });
   assert.equal(saveFallbackResponse.ok, true);
@@ -275,11 +292,11 @@ try {
   const fallback = await fallbackResponse.json() as Record<string, any>;
   assert.equal(fallbackResponse.ok, true, `Provider-model fallback failed: HTTP ${fallbackResponse.status} ${JSON.stringify(fallback)}`);
   assert.equal(ollamaRequests.length, 3);
-  assert.equal(ollamaRequests[2].model, "runtime-test:latest", "Fallback must use the responding provider's saved model, not the primary provider's model.");
+  assert.equal(ollamaRequests[2].model, "runtime-platform:latest", "Platform fallback must use the platform route's saved local model, not PhantomBot's model.");
   assert.equal(fallback.ai_runtime.requested_provider_id, "openrouter_glm");
   assert.equal(fallback.ai_runtime.requested_model_id, "openrouter/auto");
   assert.equal(fallback.ai_runtime.responding_provider_id, "local_ollama");
-  assert.equal(fallback.ai_runtime.responding_model_id, "runtime-test:latest");
+  assert.equal(fallback.ai_runtime.responding_model_id, "runtime-platform:latest");
   assert.equal(fallback.ai_runtime.fallback_used, true);
   assert.equal(fallback.ai_runtime.state, "real");
 
@@ -297,6 +314,7 @@ try {
       allowed_provider_ids: ["local_ollama"],
       models,
       fallback_enabled: false,
+      phantom_bot: phantomBotRoute,
     }),
   });
   assert.equal(clientWrite.status, 403);
@@ -312,6 +330,13 @@ try {
       allowed_provider_ids: ["openrouter_glm"],
       models,
       fallback_enabled: false,
+      phantom_bot: {
+        mode: "single",
+        primary_provider_id: "openrouter_glm",
+        allowed_provider_ids: ["openrouter_glm"],
+        models,
+        fallback_enabled: false,
+      },
     }),
   });
   assert.equal(saveUnavailableResponse.ok, true);
@@ -347,7 +372,9 @@ try {
     ok: true,
     suite: "ai-runtime-http",
     persisted_override: true,
-    exact_model_called: "runtime-test:latest",
+    platform_model_called: "runtime-platform:latest",
+    phantombot_model_called: "runtime-bot:latest",
+    independent_surface_routing: true,
     workspace_member_runtime_called: true,
     provider_specific_fallback_model_called: true,
     runtime_receipt: true,

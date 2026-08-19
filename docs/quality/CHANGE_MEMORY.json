@@ -1539,7 +1539,7 @@
       "id": "customer-connections-are-one-click-not-configuration",
       "status": "active",
       "title": "External accounts use one-click Connect",
-      "ownerDecision": "Customers never configure provider apps, developer credentials, callback URLs, API keys, or connector infrastructure. Social, accounting, payments, calendar, email, and CRM surfaces present Connect; the server either opens secure provider authorization or persists an organization-scoped connection request without claiming a connection.",
+      "ownerDecision": "Customers never configure provider apps, developer credentials, callback URLs, API keys, or connector infrastructure. Social, accounting, payments, calendar, email, and CRM surfaces present Connect when the secure broker is ready and a truthful needs-configuration state when it is not. The server never fabricates a completed handoff or exposes technical credential fields.",
       "requiredPatterns": [
         {
           "file": "app/js/settings.js",
@@ -1575,8 +1575,8 @@
         },
         {
           "file": "app/js/connection-center.js",
-          "pattern": "Needs configuration|Setup required|Client secret|App secret",
-          "description": "The customer connection center cannot ask for technical configuration."
+          "pattern": "Setup required|Client secret|App secret",
+          "description": "The customer connection center cannot expose technical configuration fields."
         }
       ]
     },
@@ -1861,6 +1861,41 @@
         }
       ],
       "forbiddenPatterns": []
+    },
+    {
+      "id": "platform-and-phantombot-independent-ai-control-floor",
+      "status": "active",
+      "title": "Platform AI and PhantomBot have independent, truthful model control",
+      "ownerDecision": "Owners can select one organization-wide AI brain for PhantomForce and a separate model route for PhantomBot. DeepSeek V4 Flash is the recommended platform brain, provider credentials are encrypted server-side and are never returned to the browser, and customer connection screens must report missing broker configuration honestly instead of pretending a request was completed.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/ai-runtime-config.ts",
+          "pattern": "phantom_bot: AiRuntimeRouteConfig[\\s\\S]*export function aiRuntimeRouteForSurface[\\s\\S]*config\\.phantom_bot",
+          "description": "The persisted organization configuration retains independent platform and PhantomBot routes."
+        },
+        {
+          "file": "server/src/phantom-ai/ai-provider-credentials.ts",
+          "pattern": "aes-256-gcm[\\s\\S]*saveAiProviderCredential[\\s\\S]*getAiProviderCredentialStatus",
+          "description": "API credentials stay encrypted in the tenant-scoped server vault and only sanitized status leaves it."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "AI control center[\\s\\S]*DeepSeek V4 Flash[\\s\\S]*renderAiRouteCard\\(\\\"platform\\\"[\\s\\S]*renderAiRouteCard\\(\\\"phantombot\\\"",
+          "description": "Settings visibly separates the platform brain from the PhantomBot model and presents the recommended DeepSeek route."
+        },
+        {
+          "file": "server/src/connectors/customer-connection-catalog.ts",
+          "pattern": "createHmac[\\s\\S]*PHANTOMFORCE_CONNECTION_BROKER_URL[\\s\\S]*configuration_required",
+          "description": "Connection handoffs require a configured, signed broker rather than a simulated request."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/connection-center.js",
+          "pattern": "Connection requested\\. Nothing else is needed from you",
+          "description": "The connection center cannot claim success before a real broker and provider authorization exist."
+        }
+      ]
     }
   ]
 }
