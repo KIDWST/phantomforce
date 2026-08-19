@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260819-169";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260819-170";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const CATEGORIES = ["All", "AI Tool", "Agent", "CLI", "Library", "Extension", "Model", "Template", "Dataset"];
@@ -496,6 +496,10 @@ function hasActiveProductAccess(productId) {
   return libraryEntry(productId)?.entitlement?.status === "active";
 }
 
+function hasInternalAdminProductAccess() {
+  return ui.snapshot?.internalAdminUnrestricted === true;
+}
+
 function fallbackProductImage(product = {}) {
   const haystack = `${product.name || ""} ${product.summary || ""} ${product.description || ""} ${product.category || ""}`.trim();
   return PRODUCT_ART_FALLBACKS.find(([pattern]) => pattern.test(haystack))?.[1] || "";
@@ -539,7 +543,7 @@ function productCard(product) {
         <h3>${esc(product.name)}</h3>
         <i class="ps-domain">${esc(productDomain(product))}</i>
       </div>
-      <span>${esc(product.priceLabel || "Contact")}</span>
+      <span>${hasInternalAdminProductAccess() && activeAccess ? "Included" : esc(product.priceLabel || "Contact")}</span>
     </header>
     <p>${esc(product.summary)}</p>
     <div class="ps-product-proof">
@@ -554,7 +558,9 @@ function productCard(product) {
         ? activeAccess
           ? `<button type="button" class="ps-primary" data-ps-launch-ai="${esc(product.workspaceProductId)}" ${available ? "" : "disabled"}>Open owned app</button>`
           : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Opening secure checkout…" : "Buy & unlock"}</button>`
-        : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>`}
+        : activeAccess
+          ? `<button type="button" class="ps-primary" data-ps-open-library="${esc(product.id)}">Use product</button>`
+          : `<button type="button" class="ps-primary" data-ps-buy="${esc(product.id)}" ${available ? "" : "disabled"}>${isBuying ? "Preparing..." : esc(product.buyLabel || "Buy now")}</button>`}
       ${owned ? `<button type="button" class="ps-secondary" data-ps-open-library="${esc(product.id)}">In your library</button>` : ""}
       ${ui.snapshot?.canModerate && available && !owned && !product.workspaceProductId ? `<button type="button" class="ps-secondary" data-ps-grant-test="${esc(product.id)}">Grant owner test access</button>` : ""}
       ${buyUrl ? `<a class="ps-secondary" href="${esc(buyUrl)}" target="_blank" rel="noopener noreferrer">Product page</a>` : ""}
@@ -1000,10 +1006,11 @@ function selectedAiUseCase(product = selectedAiProduct()) {
 
 function renderAiHubCard(product) {
   const active = hasActiveProductAccess(product.id);
+  const internalAdminAccess = hasInternalAdminProductAccess();
   const useCases = Array.isArray(product.useCases) ? product.useCases : [];
   return `<article class="ps-ai-hub-card ${active ? "is-owned" : "is-locked"}" style="--ai-accent:${esc(product.accent || "#42e9ff")}">
     ${workspaceProductArt(product)}
-    <div class="ps-ai-hub-card-copy"><p class="ps-kicker">${active ? "OWNED ACCOUNT APP" : esc(product.priceLabel || "PAID LICENSE")}</p><h3>${esc(product.name)}</h3><p>${esc(product.summary)}</p></div>
+    <div class="ps-ai-hub-card-copy"><p class="ps-kicker">${internalAdminAccess ? "INTERNAL ADMIN ACCESS" : active ? "OWNED ACCOUNT APP" : esc(product.priceLabel || "PAID LICENSE")}</p><h3>${esc(product.name)}</h3><p>${esc(product.summary)}</p></div>
     <div class="ps-ai-usecase-strip">${useCases.slice(0, 3).map((useCase) => `<span><b>${esc(useCase.title)}</b><small>${esc(useCase.audience)}</small></span>`).join("")}</div>
     <div class="ps-tags">${(product.badges || []).map((tag) => `<em>${esc(tag)}</em>`).join("")}</div>
     ${active
@@ -1015,12 +1022,14 @@ function renderAiHubCard(product) {
 
 function renderAiHub() {
   const products = aiWorkspaceListings();
+  const internalAdminAccess = hasInternalAdminProductAccess();
+  const activeProductCount = products.filter((product) => hasActiveProductAccess(product.id)).length;
   return `<section class="ps-ai-hub">
     <header class="ps-ai-hub-head">
-      <div><p class="ps-kicker">TEN ACCOUNT-OWNED APPLICATIONS</p><h2>Buy once. Unlock on desktop and web.</h2></div>
-      <span>${products.filter((product) => hasActiveProductAccess(product.id)).length} owned / ${products.length}</span>
+      <div><p class="ps-kicker">${internalAdminAccess ? "INTERNAL PRODUCT SUITE" : "TEN ACCOUNT-OWNED APPLICATIONS"}</p><h2>${internalAdminAccess ? "Every PhantomForce workspace is ready to use." : "Buy once. Unlock on desktop and web."}</h2></div>
+      <span>${internalAdminAccess ? `${activeProductCount} available` : `${activeProductCount} owned / ${products.length}`}</span>
     </header>
-    <p class="ps-ai-hub-copy">Every product has its own operational cockpit, real use-case workflows, private versioned work, inspectable calculations, and a permanent account library. Workspace APIs reject access until a verified purchase entitlement is active.</p>
+    <p class="ps-ai-hub-copy">${internalAdminAccess ? "This is the internal PhantomForce builder layer. Product workspaces open directly without checkout; customer ownership and billing remain enforced on app.phantomforce.online." : "Every product has its own operational cockpit, real use-case workflows, private versioned work, inspectable calculations, and a permanent account library. Workspace APIs reject access until a verified purchase entitlement is active."}</p>
     <div class="ps-ai-hub-grid">${products.map(renderAiHubCard).join("")}</div>
   </section>`;
 }

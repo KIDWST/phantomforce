@@ -56,12 +56,18 @@ async function ensureWorkspace(session: AccessSession) {
   const platform = await integratedPlatform();
   const identity = mappedSession(session);
   const access = await getPhantomStoreWorkspaceProductAccessMap(session);
+  const internalAdminUnrestricted = Object.values(access).some((entry) => entry.accessSource === "platform_admin");
   await platform.mutate((document) => {
     const timestamp = new Date().toISOString();
     const entitlements = Object.fromEntries(PRODUCT_IDS.map((id) => {
       const paid = access[id];
       return [id, paid?.active
-        ? { status: "active", plan: "phantomstore_paid_account", purchaseProductId: paid.productId, grantedAt: paid.entitlement?.grantedAt || timestamp }
+        ? {
+            status: "active",
+            plan: paid.accessSource === "platform_admin" ? "platform_admin_unrestricted" : "phantomstore_paid_account",
+            purchaseProductId: paid.productId,
+            grantedAt: paid.entitlement?.grantedAt || timestamp,
+          }
         : { status: "expired", plan: "purchase_required", purchaseProductId: paid?.productId || null, grantedAt: null }];
     }));
     const flags = Object.fromEntries(PRODUCT_IDS.map((id) => [id, {
@@ -70,7 +76,7 @@ async function ensureWorkspace(session: AccessSession) {
       jobsEnabled: Boolean(access[id]?.active),
       expensiveOperationsEnabled: Boolean(access[id]?.active),
       externalProvidersEnabled: false,
-      rollout: "paid_account_release",
+      rollout: access[id]?.accessSource === "platform_admin" ? "internal_admin" : "paid_account_release",
       analysisPath: "deterministic-domain-v1",
     }]));
     const consent = Object.fromEntries(PRODUCT_IDS.map((id) => [id, { status: "not_requested", updatedAt: timestamp }]));
@@ -90,25 +96,29 @@ async function ensureWorkspace(session: AccessSession) {
     document.workspaces[identity.workspaceId] = workspace;
     return true;
   });
-  return { platform, identity };
+  return { platform, identity, internalAdminUnrestricted };
 }
 
-function integratedSnapshot(snapshot: Record<string, any>) {
+function integratedSnapshot(snapshot: Record<string, any>, internalAdminUnrestricted: boolean) {
+  const deployment = internalAdminUnrestricted
+    ? "served_phantomstore_admin_unrestricted_release"
+    : "served_phantomstore_paid_account_release";
   return {
     ...snapshot,
-    deployment: "served_phantomstore_paid_account_release",
+    deployment,
+    internalAdminUnrestricted,
     products: (snapshot.products || []).map((product: Record<string, any>) => ({
       ...product,
       store: {
         ...(product.store || {}),
-        state: "paid_account_product",
+        state: internalAdminUnrestricted ? "platform_admin_product" : "paid_account_product",
         route: `/app/index.html#phantomstore/${product.id}`,
-        commerceActive: true,
+        commerceActive: !internalAdminUnrestricted,
       },
     })),
     diagnostics: {
       ...(snapshot.diagnostics || {}),
-      deployment: "served_phantomstore_paid_account_release",
+      deployment,
       externalModelsActive: false,
       externalSpendUsd: 0,
     },
@@ -116,8 +126,8 @@ function integratedSnapshot(snapshot: Record<string, any>) {
 }
 
 export async function getIntegratedAiProductsSnapshot(session: AccessSession) {
-  const { platform, identity } = await ensureWorkspace(session);
-  return integratedSnapshot(platform.snapshot(identity));
+  const { platform, identity, internalAdminUnrestricted } = await ensureWorkspace(session);
+  return integratedSnapshot(platform.snapshot(identity), internalAdminUnrestricted);
 }
 
 export async function setIntegratedAiProductConsent(session: AccessSession, productId: string, input: Record<string, unknown>) {

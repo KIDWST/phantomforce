@@ -140,6 +140,8 @@ for (const productId of integratedProductIds) {
 assert.match(backendSource, /const AI_WORKSPACE_PRODUCTS/u, "The served marketplace must seed the AI workspace collection.");
 assert.match(storeSource, /hasActiveProductAccess/u, "AI product cards must distinguish owned access from locked checkout.");
 assert.match(storeSource, /Buy & unlock/u, "Unowned AI applications must present paid account unlocks.");
+assert.match(backendSource, /hasUnrestrictedPlatformAdminAccess[\s\S]*platform-admin-unrestricted/u, "Platform-admin access must be explicit and must not masquerade as a purchase.");
+assert.match(storeSource, /hasInternalAdminProductAccess[\s\S]*Every PhantomForce workspace is ready to use/u, "The internal admin Store must present direct product access instead of checkout copy.");
 assert.match(storeSource, /function renderAiHub\(\)/u, "PhantomStore must render an in-store AI workspace directory.");
 assert.match(storeSource, /function renderAiWorkspace\(\)/u, "PhantomStore must render the complete product workflow in place.");
 assert.match(storeSource, /Complete product workflow/u, "The in-store workspace must expose product input, analysis, and review as one workflow.");
@@ -152,6 +154,7 @@ assert.match(aiBridgeSource, /@phantomforce\/phantomstore-ai-products\/platform/
 assert.match(aiBridgeSource, /createHash\("sha256"\)/u, "Integrated workspace actor and tenant identifiers must be pseudonymized at the product boundary.");
 assert.match(aiBridgeSource, /served_phantomstore_paid_account_release/u, "Product status must identify the paid account release honestly.");
 assert.match(aiBridgeSource, /getPhantomStoreWorkspaceProductAccessMap/u, "Every product workspace request must synchronize server-owned purchase entitlements.");
+assert.match(aiBridgeSource, /platform_admin_unrestricted[\s\S]*purchase_required/u, "The product bridge must distinguish unrestricted internal admins from purchase-gated customers.");
 assert.ok(serverIndexSource.includes('/api/phantomstore/products/:id/checkout-session'), "PhantomStore must expose secure one-time product Checkout Sessions.");
 assert.match(stripeProductCheckoutSource, /payment_status !== "paid"/u, "Unpaid Checkout events must never grant account ownership.");
 assert.match(stripeProductCheckoutSource, /fulfillPhantomStoreProductPurchase/u, "Signed paid Checkout events must fulfill the durable marketplace entitlement.");

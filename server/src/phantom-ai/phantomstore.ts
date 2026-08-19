@@ -621,9 +621,56 @@ function activeEntitlementFor(store: PhantomStoreStore, tenantId: string, actorI
   ) || null;
 }
 
-function libraryFor(store: PhantomStoreStore, tenantId: string, actorId: string) {
-  return store.entitlements
-    .filter((entry) => entry.tenantId === tenantId && entry.actorId === actorId)
+function hasUnrestrictedPlatformAdminAccess(session: AccessSession) {
+  return session.isSuperAdmin === true || (session.role === "admin" && session.canManageAccess === true);
+}
+
+function platformAdminEntitlement(tenantId: string, actorId: string, productId: string): PhantomStoreEntitlement {
+  const timestamp = now();
+  return {
+    id: `platform-admin-${productId}`,
+    tenantId,
+    actorId,
+    productId,
+    purchaseReference: "platform-admin-unrestricted",
+    status: "active",
+    grantedAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function effectiveProductAccess(
+  store: PhantomStoreStore,
+  session: AccessSession,
+  tenantId: string,
+  actorId: string,
+  productId: string,
+) {
+  if (hasUnrestrictedPlatformAdminAccess(session)) {
+    return {
+      entitlement: platformAdminEntitlement(tenantId, actorId, productId),
+      active: true,
+      accessSource: "platform_admin" as const,
+    };
+  }
+  const entitlement = activeEntitlementFor(store, tenantId, actorId, productId);
+  if (entitlement) return { entitlement, active: true, accessSource: "entitlement" as const };
+  return { entitlement: null, active: false, accessSource: "none" as const };
+}
+
+function libraryFor(store: PhantomStoreStore, session: AccessSession, tenantId: string, actorId: string) {
+  const entitlements = new Map(
+    store.entitlements
+      .filter((entry) => entry.tenantId === tenantId && entry.actorId === actorId)
+      .map((entry) => [entry.productId, entry]),
+  );
+  if (hasUnrestrictedPlatformAdminAccess(session)) {
+    for (const product of SEEDED_PRODUCTS.filter((entry) => entry.status === "available")) {
+      const access = effectiveProductAccess(store, session, tenantId, actorId, product.id);
+      if (access.entitlement) entitlements.set(product.id, access.entitlement);
+    }
+  }
+  return [...entitlements.values()]
     .map((entitlement) => {
       const product = productForLifecycle(entitlement.productId);
       const installation = store.installations.find((entry) =>
@@ -840,9 +887,10 @@ export async function getPhantomStoreSnapshot(session: AccessSession, options: {
     sellers: marketplace.sellers,
     products: marketplace.products,
     submissions: (canModerate ? store.tools : mine).slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-    library: libraryFor(store, tenantId, actorId),
+    library: libraryFor(store, session, tenantId, actorId),
     pendingReviewCount: store.tools.filter((tool) => tool.status === "submitted").length,
     canModerate,
+    internalAdminUnrestricted: hasUnrestrictedPlatformAdminAccess(session),
     submissionLimit: MAX_SUBMISSIONS_PER_DEVELOPER,
   };
 }
@@ -943,16 +991,11 @@ export async function fulfillPhantomStoreProductPurchase(input: {
 
 export async function getPhantomStoreWorkspaceProductAccess(session: AccessSession, workspaceProductId: string) {
   const product = SEEDED_PRODUCTS.find((entry) => entry.workspaceProductId === workspaceProductId) || null;
-  if (!product) return { product: null, entitlement: null, active: false };
+  if (!product) return { product: null, entitlement: null, active: false, accessSource: "none" as const };
   const tenantId = tenantIdFor(session);
   const actorId = actorIdFor(session);
   const store = await readStore();
-  const entitlement = store.entitlements.find((entry) =>
-    entry.tenantId === tenantId
-    && entry.actorId === actorId
-    && entry.productId === product.id
-  ) || null;
-  return { product, entitlement, active: entitlement?.status === "active" };
+  return { product, ...effectiveProductAccess(store, session, tenantId, actorId, product.id) };
 }
 
 export async function getPhantomStoreWorkspaceProductAccessMap(session: AccessSession) {
@@ -960,12 +1003,10 @@ export async function getPhantomStoreWorkspaceProductAccessMap(session: AccessSe
   const actorId = actorIdFor(session);
   const store = await readStore();
   return Object.fromEntries(AI_WORKSPACE_PRODUCTS.map((product) => {
-    const entitlement = store.entitlements.find((entry) =>
-      entry.tenantId === tenantId
-      && entry.actorId === actorId
-      && entry.productId === product.id
-    ) || null;
-    return [product.workspaceProductId || product.id, { productId: product.id, entitlement, active: entitlement?.status === "active" }];
+    return [
+      product.workspaceProductId || product.id,
+      { productId: product.id, ...effectiveProductAccess(store, session, tenantId, actorId, product.id) },
+    ];
   }));
 }
 
@@ -1004,7 +1045,7 @@ export async function mutatePhantomStoreInstallation(session: AccessSession, pro
     throw new Error("Choose install, update, uninstall, or restore.");
   }
   const store = await readStore();
-  const entitlement = activeEntitlementFor(store, tenantId, actorId, productId);
+  const entitlement = effectiveProductAccess(store, session, tenantId, actorId, productId).entitlement;
   if (!entitlement) throw new Error("An active product entitlement is required.");
   const requestedPlatform = safePlatform(input.platform || product.compatiblePlatforms[0]);
   if (!product.compatiblePlatforms.includes(requestedPlatform)) {

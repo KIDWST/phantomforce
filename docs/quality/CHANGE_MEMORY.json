@@ -111,7 +111,7 @@
       "id": "phantomstore-ai-products-served-integration",
       "status": "active",
       "title": "The ten AI products live inside the served PhantomStore",
-      "ownerDecision": "PHANTOM ORACLE, CHRONICLE, FOUNDRY, TWIN, DEALROOM, BLUEPRINT, TERRAIN, PROOF, LOOM, and CAUSAL must appear in the actual PhantomStore catalog as paid products that unlock for the verified purchasing account on desktop and web. A local preview package, route shortcut, or automatic grant does not satisfy this requirement. Each workspace must persist source artifacts, run its distinct deterministic core loop, and record human review through the served application.",
+      "ownerDecision": "PHANTOM ORACLE, CHRONICLE, FOUNDRY, TWIN, DEALROOM, BLUEPRINT, TERRAIN, PROOF, LOOM, and CAUSAL must appear in the actual PhantomStore catalog as paid products that unlock for verified customer purchases on app.phantomforce.online. The authenticated platform administrator on admin.phantomforce.online has unrestricted internal access to every PhantomForce product without purchasing it. Admin authority must be represented explicitly and never stored as a fake purchase. Each workspace must persist source artifacts, run its distinct deterministic core loop, and record human review through the served application.",
       "requiredPatterns": [
         {
           "file": "server/src/phantom-ai/phantomstore.ts",
@@ -130,8 +130,18 @@
         },
         {
           "file": "server/src/phantom-ai/phantomstore-ai-products.ts",
-          "pattern": "getPhantomStoreWorkspaceProductAccessMap[\\s\\S]*plan: \"purchase_required\"",
-          "description": "Workspace access synchronizes from account ownership and fails closed when the product has not been purchased."
+          "pattern": "getPhantomStoreWorkspaceProductAccessMap[\\s\\S]*platform_admin_unrestricted[\\s\\S]*plan: \"purchase_required\"",
+          "description": "Workspace access distinguishes platform-admin authority from customer ownership and still fails closed for unpurchased customer products."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomstore.ts",
+          "pattern": "hasUnrestrictedPlatformAdminAccess[\\s\\S]*purchaseReference: \"platform-admin-unrestricted\"[\\s\\S]*internalAdminUnrestricted",
+          "description": "The server exposes unrestricted internal admin product access without persisting a fabricated purchase."
+        },
+        {
+          "file": "app/js/phantomstore.js",
+          "pattern": "hasInternalAdminProductAccess[\\s\\S]*Every PhantomForce workspace is ready to use[\\s\\S]*customer ownership and billing remain enforced on app.phantomforce.online",
+          "description": "The admin Store presents direct internal access while naming the customer commerce boundary."
         },
         {
           "file": "server/src/commerce/stripe-product-checkout.ts",

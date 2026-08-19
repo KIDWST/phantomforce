@@ -34,6 +34,19 @@ try {
   assert(integratedProducts.length === 10, "PhantomStore should serve exactly ten integrated AI workspace listings.");
   assert(integratedProducts.every((product: { buyLabel?: string; priceLabel?: string; imageUrl?: string; useCases?: unknown[] }) => product.buyLabel === "Buy & unlock" && /one-time/u.test(product.priceLabel || "") && /ai-workspaces/u.test(product.imageUrl || "") && (product.useCases?.length || 0) >= 3), "Every AI product should be paid and ship custom art plus real use cases.");
   assert(initial.library.length === 0, "AI workspaces must not be silently unlocked for a new account.");
+  assert(initial.internalAdminUnrestricted === false, "Customer accounts must not inherit internal admin product access.");
+  const ownerInitial = await store.getPhantomStoreSnapshot(owner);
+  const ownerAiLibrary = ownerInitial.library.filter((entry: { product?: { workspaceProductId?: string }; entitlement?: { status?: string } }) => entry.product?.workspaceProductId && entry.entitlement?.status === "active");
+  assert(ownerInitial.internalAdminUnrestricted === true && ownerAiLibrary.length === 10, "The platform admin must receive every internal AI workspace without a purchase.");
+  const ownerAccess = await store.getPhantomStoreWorkspaceProductAccessMap(owner);
+  assert(Object.values(ownerAccess).every((entry) => entry.active && entry.accessSource === "platform_admin"), "Admin AI workspace access must resolve from platform authority, not checkout state.");
+  const customerAccess = await store.getPhantomStoreWorkspaceProductAccessMap(devA);
+  assert(Object.values(customerAccess).every((entry) => !entry.active && entry.accessSource === "none"), "A customer without purchases must remain locked out of paid AI workspaces.");
+  const firstInternalProduct = integratedProducts[0] as { id: string; compatiblePlatforms: string[] };
+  const adminInstall = await store.mutatePhantomStoreInstallation(owner, firstInternalProduct.id, { action: "install", platform: firstInternalProduct.compatiblePlatforms[0] });
+  assert(adminInstall.installation.status === "installed", "A platform admin must be able to install an internal product without minting a purchase entitlement.");
+  const postAdminAccessStore = JSON.parse(await readFile(process.env.PHANTOMFORCE_PHANTOMSTORE_PATH, "utf8")) as { entitlements: Array<{ actorId: string }> };
+  assert(!postAdminAccessStore.entitlements.some((entry) => entry.actorId === "owner-user"), "Internal admin access must never be persisted as a fake purchase entitlement.");
   const unpaid = await stripeProducts.processVerifiedStripeProductCheckout({ type: "checkout.session.completed", data: { object: { id: "cs_unpaid_proof", payment_status: "unpaid", metadata: { phantomforce_purchase_type: "phantomstore_product", phantomforce_product_id: "product-ai-proof", phantomforce_tenant_id: "unpaid-account", phantomforce_actor_id: "unpaid-user" } } } } as any);
   assert(unpaid?.outcome === "payment_pending", "An unpaid Checkout session must never create ownership.");
   const suiteBuyer: AccessSession = { id: "suite-user", userId: "suite-user", label: "Suite buyer", role: "client", canManageAccess: false, orgId: "suite-account", orgRole: "member" };
@@ -41,6 +54,8 @@ try {
     const result = await stripeProducts.processVerifiedStripeProductCheckout({ type: "checkout.session.completed", data: { object: { id: `cs_paid_${product.id}`, payment_status: "paid", metadata: { phantomforce_purchase_type: "phantomstore_product", phantomforce_product_id: product.id, phantomforce_tenant_id: "suite-account", phantomforce_actor_id: "suite-user" } } } } as any);
     assert(result?.outcome === "entitlement_granted", `${product.id} should unlock from its own verified paid Checkout receipt.`);
   }
+  const duplicateSuitePurchase = await stripeProducts.processVerifiedStripeProductCheckout({ type: "checkout.session.completed", data: { object: { id: `cs_paid_${integratedProducts[0].id}`, payment_status: "paid", metadata: { phantomforce_purchase_type: "phantomstore_product", phantomforce_product_id: integratedProducts[0].id, phantomforce_tenant_id: "suite-account", phantomforce_actor_id: "suite-user" } } } } as any);
+  assert(duplicateSuitePurchase?.duplicate === true, "Replaying a customer paid Checkout event must remain idempotent.");
   const suiteAccess = await store.getPhantomStoreWorkspaceProductAccessMap(suiteBuyer);
   assert(Object.values(suiteAccess).filter((entry) => entry.active).length === 10, "All ten paid products must map to durable account access.");
   assert(!initial.products.some((product: { id?: string }) => product.id === "product-phantomforce-os"), "PhantomForce OS must not be sold inside the store users are already using.");
@@ -225,24 +240,13 @@ try {
   const ownerToken = await login("admin-jordan");
   const devToken = await login("client-sports-demo");
   const ownerView = await app.inject({ method: "GET", url: "/api/phantomstore", headers: { Authorization: `Bearer ${ownerToken}` } });
-  assert(ownerView.statusCode === 200 && ownerView.json().canModerate === true, "Platform admin sessions should receive moderation access via the route.");
+  assert(ownerView.statusCode === 200 && ownerView.json().canModerate === true && ownerView.json().internalAdminUnrestricted === true, "Platform admin sessions should receive moderation and unrestricted internal product access via the route.");
   const devView = await app.inject({ method: "GET", url: "/api/phantomstore", headers: { Authorization: `Bearer ${devToken}` } });
-  assert(devView.statusCode === 200 && devView.json().canModerate === false, "A free-plan client session should still be able to view the catalog, without moderation access.");
-  const lockedAiWorkspaceView = await app.inject({ method: "GET", url: "/api/phantomstore/ai-products", headers: { Authorization: `Bearer ${ownerToken}` } });
-  assert(lockedAiWorkspaceView.statusCode === 200 && lockedAiWorkspaceView.json().products.length === 0, "A signed-in account without a purchase must receive no runnable AI products.");
-  const lockedConsent = await app.inject({ method: "POST", url: "/api/phantomstore/ai-products/phantom-oracle/consent", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { status: "granted", purpose: "Unauthorized attempt" } });
-  assert(lockedConsent.statusCode === 403 && lockedConsent.json().error.code === "ENTITLEMENT_REQUIRED", "Direct workspace API calls must fail closed before purchase.");
-  const paidEvent = {
-    type: "checkout.session.completed",
-    data: { object: { id: "cs_paid_oracle_owner", payment_status: "paid", metadata: { phantomforce_purchase_type: "phantomstore_product", phantomforce_product_id: "product-ai-oracle", phantomforce_tenant_id: "admin-jordan", phantomforce_actor_id: "admin-jordan" } } },
-  } as any;
-  const paidFulfillment = await stripeProducts.processVerifiedStripeProductCheckout(paidEvent);
-  assert(paidFulfillment?.outcome === "entitlement_granted", "A verified paid Stripe event should unlock exactly the purchased product.");
-  const repeatedFulfillment = await stripeProducts.processVerifiedStripeProductCheckout(paidEvent);
-  assert(repeatedFulfillment?.duplicate === true, "Replaying a paid Checkout event must be idempotent.");
+  assert(devView.statusCode === 200 && devView.json().canModerate === false && devView.json().internalAdminUnrestricted === false, "A free-plan client session should still be able to view the catalog without internal product authority.");
   const aiWorkspaceView = await app.inject({ method: "GET", url: "/api/phantomstore/ai-products", headers: { Authorization: `Bearer ${ownerToken}` } });
-  assert(aiWorkspaceView.statusCode === 200 && aiWorkspaceView.json().products.length === 1, "The authenticated product service should expose only account-owned AI products.");
-  assert(aiWorkspaceView.json().deployment === "served_phantomstore_paid_account_release", "The product service should report its paid account release state.");
+  assert(aiWorkspaceView.statusCode === 200 && aiWorkspaceView.json().products.length === 10, "The authenticated admin product service should expose every internal AI product.");
+  assert(aiWorkspaceView.json().deployment === "served_phantomstore_admin_unrestricted_release" && aiWorkspaceView.json().internalAdminUnrestricted === true, "The product service should report its unrestricted internal admin state honestly.");
+  assert(aiWorkspaceView.json().products.every((product: { store?: { state?: string; commerceActive?: boolean } }) => product.store?.state === "platform_admin_product" && product.store?.commerceActive === false), "Internal admin products must open as included products without commerce controls.");
   const oracle = aiWorkspaceView.json().products.find((product: { id: string }) => product.id === "phantom-oracle");
   assert(Boolean(oracle?.sample), "PHANTOM ORACLE should ship a usable in-store demo fixture.");
   const consentRoute = await app.inject({
