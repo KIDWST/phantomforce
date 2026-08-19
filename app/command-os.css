@@ -5579,7 +5579,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
   display: block;
   width: 100%;
   height: 100%;
-  opacity: .34;
+  opacity: .22;
   mix-blend-mode: screen;
   filter:
     saturate(.92)
@@ -5593,7 +5593,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
 .phantombot-presence-canvas[data-phantom-state="thinking"],
 .phantombot-presence-canvas[data-phantom-state="building"],
 .phantombot-presence-canvas[data-phantom-state="looping"] {
-  opacity: .39;
+  opacity: .27;
   filter:
     saturate(1.02)
     contrast(1.1)
@@ -5605,7 +5605,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
 .phantombot-presence-canvas[data-phantom-state="success"],
 .phantombot-presence-canvas[data-phantom-state="warning"],
 .phantombot-presence-canvas[data-phantom-state="error"] {
-  opacity: .44;
+  opacity: .32;
 }
 
 .phantombot-presence-live {

@@ -2034,8 +2034,8 @@
       "requiredPatterns": [
         {
           "file": "app/command-os.css",
-          "pattern": "\\.phantombot-presence\\s*\\{[\\s\\S]*width: clamp\\(430px, 46vw, 680px\\)[\\s\\S]*height: clamp\\(380px, 52vh, 560px\\)[\\s\\S]*\\.phantombot-presence-canvas\\s*\\{[\\s\\S]*opacity: \\.34[\\s\\S]*mix-blend-mode: screen",
-          "description": "The shared PhantomBot empty state renders a huge translucent apparition instead of an opaque avatar."
+          "pattern": "\\.phantombot-presence\\s*\\{[\\s\\S]*width: clamp\\(430px, 46vw, 680px\\)[\\s\\S]*height: clamp\\(380px, 52vh, 560px\\)[\\s\\S]*\\.phantombot-presence-canvas\\s*\\{[\\s\\S]*opacity: \\.22[\\s\\S]*mix-blend-mode: screen",
+          "description": "The shared PhantomBot empty state renders a huge, deeply translucent apparition instead of an opaque avatar."
         },
         {
           "file": "app/js/phantom-presence.js",

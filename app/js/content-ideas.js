@@ -1,4 +1,4 @@
-import { workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-172";
+import { workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-173";
 const IDEA_AUTOMATION_KEY = "pf.contenthub.dailyIdeas.v1";
 const DAY = 864e5;
 
