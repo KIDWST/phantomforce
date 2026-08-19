@@ -1,4 +1,4 @@
-"""Hard V11 persistent-world gate.
+"""Hard V18 persistent-world gate.
 
 This is deliberately stricter than the old actor-count gate. It verifies *where* useful content is,
 rejects Engine BasicShapes in persistent maps, rejects a blocked PhantomStrike spawn, and requires
@@ -12,9 +12,10 @@ SAVED=os.path.abspath(unreal.Paths.project_saved_dir())
 REPORT=os.path.join(SAVED,'PhantomProductionWorldValidationV11.json')
 level=unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 actorsys=unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-if not level or not actorsys:raise RuntimeError('V11 validation requires editor subsystems')
+if not level or not actorsys:raise RuntimeError('V18 validation requires editor subsystems')
 
 PATCH_TAG='PhantomPortfolioWorldV13'
+V17_TAG='PhantomProductionWorldV17'
 V13_MIN={'cubetown':50,'phantom-ages':50,'phantom-legends':70,'phantom-strike':60}
 
 specs={
@@ -76,6 +77,7 @@ for game,(path,start,radius,min_total,min_near,min_real_near) in specs.items():
     production=[a for a in aa if any(str(t)=='PhantomProductionWorldV11' for t in (a.get_editor_property('tags') or []))]
     player_starts=[a for a in aa if isinstance(a,unreal.PlayerStart)]
     v13=[a for a in production if any(str(t)==PATCH_TAG for t in (a.get_editor_property('tags') or []))]
+    v17=[a for a in aa if any(str(t)==V17_TAG for t in (a.get_editor_property('tags') or []))]
     near=[a for a in production if dist2d(a,start)<=radius]
     paths=[mesh_path(a) for a in production]
     basic=[(label(a),mesh_path(a)) for a in production if '/Engine/BasicShapes/' in mesh_path(a)]
@@ -85,13 +87,20 @@ for game,(path,start,radius,min_total,min_near,min_real_near) in specs.items():
     max_nonterrain=[]
     for a in production:
         l=label(a).lower()
-        if 'terrain' in l or 'road_' in l or 'stream_' in l or 'river_' in l:continue
+        mesh=mesh_path(a)
+        mesh_lower=mesh.lower()
+        # Long, flat V11R10 lane/shoulder/grass bands deliberately use the shared ground-patch
+        # mesh. Classify terrain by both actor label and source mesh so these authored floor
+        # ribbons do not masquerade as camera-blocking structures.
+        if ('terrain' in l or 'road_' in l or 'stream_' in l or 'river_' in l
+                or 'groundpatch' in mesh_lower or 'ground_plane' in mesh_lower):continue
         d=dims(a)
-        if max(d)>8000:max_nonterrain.append((label(a),d,mesh_path(a)))
-    r={'actors':len(production),'player_starts':[label(a) for a in player_starts],'v13_actors':len(v13),'near_start':len(near),'real_near_start':len(real_near),'authored_material_real_near':len(authored_material_near),'basic_shapes':basic[:20],'rejected_aliases':rejected_aliases[:20],'oversize_nonterrain':max_nonterrain[:20]}
+        if max(d)>8000:max_nonterrain.append((label(a),d,mesh))
+    r={'actors':len(production),'player_starts':[label(a) for a in player_starts],'v13_actors':len(v13),'v17_actors':len(v17),'near_start':len(near),'real_near_start':len(real_near),'authored_material_real_near':len(authored_material_near),'basic_shapes':basic[:20],'rejected_aliases':rejected_aliases[:20],'oversize_nonterrain':max_nonterrain[:20]}
     if not player_starts:fail.append(f'{game}: no PlayerStart; default pawn/HUD cannot initialize reliably')
     if len(production)<min_total:fail.append(f'{game}: actors {len(production)} < {min_total}')
     if len(v13)<V13_MIN[game]:fail.append(f'{game}: V13 portfolio actors {len(v13)} < {V13_MIN[game]}')
+    if game=='cubetown' and len(v17)<30:fail.append(f'cubetown: V17 diorama actors {len(v17)} < 30')
     if len(near)<min_near:fail.append(f'{game}: near-start actors {len(near)} < {min_near}')
     if len(real_near)<min_real_near:fail.append(f'{game}: imported/non-generated near-start art {len(real_near)} < {min_real_near}')
     if basic:fail.append(f'{game}: persistent world contains {len(basic)} Engine BasicShape actors')
@@ -111,8 +120,8 @@ for game,(path,start,radius,min_total,min_near,min_real_near) in specs.items():
             if required not in labels:fail.append('phantom-ages: missing '+required)
     results[game]=r
 
-summary={'schema':11,'status':'PASS' if not fail else 'FAIL','failures':fail,'results':results}
+summary={'schema':18,'status':'PASS' if not fail else 'FAIL','failures':fail,'results':results}
 with open(REPORT,'w',encoding='utf-8') as f:json.dump(summary,f,indent=2)
 if fail:
-    raise RuntimeError('V11 production world gate FAILED: '+' | '.join(fail)+'; see '+REPORT)
-unreal.log('PHANTOM V11 PRODUCTION WORLD GATE PASS '+json.dumps(results))
+    raise RuntimeError('V18 production world gate FAILED: '+' | '.join(fail)+'; see '+REPORT)
+unreal.log('PHANTOM V18 PRODUCTION WORLD GATE PASS '+json.dumps(results))

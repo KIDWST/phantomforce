@@ -207,7 +207,7 @@ void APhantomStrikeCharacter::BeginPlay()
     // frame instead of devoting a third of the view to empty sky.
     if (AController* C=GetController())
     {
-        C->SetControlRotation(FRotator(-9.0f,0.0f,0.0f));
+        C->SetControlRotation(FRotator(-17.5f,0.0f,0.0f));
         bInitialViewApplied = true;
     }
     if (!bUsingImportedRifle)
@@ -228,7 +228,7 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
     {
         if (AController* C = GetController())
         {
-            C->SetControlRotation(FRotator(-9.0f, 0.0f, 0.0f));
+            C->SetControlRotation(FRotator(-17.5f, 0.0f, 0.0f));
             bInitialViewApplied = true;
         }
     }
@@ -988,7 +988,7 @@ void APhantomStrikeHUD::DrawHUD()
     DrawRect(FLinearColor(0.008f, 0.014f, 0.019f, 0.84f), 24.0f * UIScale, 22.0f * UIScale, 438.0f * UIScale, 78.0f * UIScale);
     DrawRect(FLinearColor(0.18f, 0.82f, 0.72f), 24.0f * UIScale, 22.0f * UIScale, 5.0f * UIScale, 78.0f * UIScale);
     DrawText(TEXT("PHANTOMSTRIKE"), FLinearColor::White, 42.0f * UIScale, 31.0f * UIScale, nullptr, 0.98f * UIScale);
-    DrawText(TEXT("BLACKRIDGE // SECURE THE EXTRACTION LINE"), FLinearColor(0.62f, 0.82f, 0.78f), 42.0f * UIScale, 65.0f * UIScale, nullptr, 0.64f * UIScale);
+    DrawText(TEXT("OBJECTIVE: BREAK THE HELIX LINE AND SECURE EXTRACTION"), FLinearColor(0.62f, 0.82f, 0.78f), 42.0f * UIScale, 65.0f * UIScale, nullptr, 0.64f * UIScale);
     const FString WaveText = Director->IsMissionComplete()
         ? TEXT("MISSION COMPLETE // BLACKRIDGE SECURED")
         : (Director->IsExtractionOpen() ? TEXT("EXTRACTION OPEN // MOVE TO GREEN ZONE") : FString::Printf(TEXT("WAVE %d / %d    HOSTILES %02d"), Director->GetWave(), Director->GetTotalWaves(), Director->GetRemainingEnemies()));

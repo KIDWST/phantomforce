@@ -123,7 +123,6 @@ void APhantomLegendsResourceNode::Configure(EPhantomLegendsResource NewType, int
             // old generated tree had no material slots and read as a translucent egg at command zoom.
             ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"));
             if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"));
-            VisualScale = FVector(2.35f);
             break;
         case EPhantomLegendsResource::Stone:
             ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock"));

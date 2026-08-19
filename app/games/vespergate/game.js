@@ -1,4 +1,4 @@
-/* VESPERGATE: THE VESPER HAND — game.js
+/* VESPERGATE 3.0: LIVING DREAD — game.js
  * Top-down action-adventure: Duskhollow village, the open Vale, the Vesper
  * Hand (strike / cinder bolt / linked gates), NPCs + dialogue + quests +
  * inventory + shop, two dungeons with bosses, and the evensong ending.
@@ -16,7 +16,7 @@
 
   /* ================= state ================= */
   const state = {
-    phase: "title",   // title | playing | dialog | inventory | shop | scene | paused | dead | win
+    phase: "title",   // title | playing | dialog | inventory | map | shop | scene | paused | dead | win
     room: null, roomId: "maren",
     t: 0, score: 0, kills: 0,
     quests: {}, flags: {}, shopBought: {},
@@ -27,6 +27,9 @@
     dawn: 0, dawnTransition: false,           // 0 = full night, 1 = daylight restored (evensong)
     vesperHearts: 0, heartsTotal: 2,
     soulTiers: {},                             // id -> true once a Vesper Soul power-up tier is unlocked
+    mastery: { portalCrossings: 0, foldshots: 0, perfectRooms: 0 },
+    discovered: {}, playSeconds: 0,
+    focusCd: 0, focusT: 0, autosaveT: 0,
   };
   VG.state = state;
   for (const q of Object.keys(D.QUESTS)) state.quests[q] = "locked";
@@ -71,6 +74,32 @@
     return { bellRestored: !!state.flags.bellRestored, fencesFixed: rep() >= 2, lanternsLit: state.flags.bellRestored ? true : rep() >= 1 || true };
   }
   function progressPct() { return Math.round(questsDone() / 6 * 100); }
+  const MASTERY_RANKS = [
+    { at: 0, name: "UNAWAKENED" }, { at: 8, name: "GATEBOUND" },
+    { at: 24, name: "FOLDWALKER" }, { at: 52, name: "VESPER ADEPT" },
+    { at: 90, name: "EIGHTH BEARER" },
+  ];
+  function masteryScore() {
+    return state.mastery.portalCrossings + state.mastery.foldshots * 2 + questsDone() * 6 + state.mastery.perfectRooms * 4;
+  }
+  function masteryRank() {
+    const score = masteryScore();
+    return [...MASTERY_RANKS].reverse().find((rank) => score >= rank.at) || MASTERY_RANKS[0];
+  }
+  function nextMasteryRank() { return MASTERY_RANKS.find((rank) => rank.at > masteryScore()) || null; }
+  function recordMastery(kind) {
+    const before = masteryRank().name;
+    state.mastery[kind] = (state.mastery[kind] || 0) + 1;
+    const after = masteryRank().name;
+    if (after !== before) { banner("VESPER MASTERY — " + after); VG.sfxBell(330, 0.14); saveGame(); }
+  }
+  function useVesperSense() {
+    if (!state.flags.hasHand || state.focusCd > 0) return;
+    state.focusCd = 8; state.focusT = 1.4;
+    VG.fx.spawnShockwave(player.x, player.y, { maxR: 360, speed: 240, color: "143,233,255" });
+    VG.sfxBell(260, 0.08);
+    toast("VESPER SENSE — paths revealed", player.x, player.y - 20, "#8fe9ff");
+  }
 
   /* ================= quests ================= */
   function acceptQuest(id) {
@@ -660,6 +689,7 @@
       bonusMeleeDmg: player.bonusMeleeDmg, bonusStrikeCdMul: player.bonusStrikeCdMul,
       bonusBeamDmg: player.bonusBeamDmg, bonusReach: player.bonusReach, bonusMagnetMul: player.bonusMagnetMul,
       cosmetics: player.cosmetics,
+      mastery: state.mastery, discovered: state.discovered, playSeconds: Math.round(state.playSeconds),
     });
   }
   function restoreSave(s) {
@@ -678,6 +708,9 @@
     player.bonusMeleeDmg = s.bonusMeleeDmg || 0; player.bonusStrikeCdMul = s.bonusStrikeCdMul ?? 1;
     player.bonusBeamDmg = s.bonusBeamDmg || 0; player.bonusReach = s.bonusReach || 0; player.bonusMagnetMul = s.bonusMagnetMul ?? 1;
     player.cosmetics = s.cosmetics || { owned: [], equipped: { cloak: null, glow: null, accessory: null, trail: null } };
+    state.mastery = Object.assign({ portalCrossings: 0, foldshots: 0, perfectRooms: 0 }, s.mastery || {});
+    state.discovered = s.discovered || {};
+    state.playSeconds = Number(s.playSeconds) || 0;
   }
 
   /* ================= room loading ================= */
@@ -685,6 +718,7 @@
     const def = VG.ROOMS[id];
     state.room = new VG.Room(def);
     state.roomId = id;
+    state.discovered[id] = true;
     VG.dread.onRoomEnter(id, (VG.BIOMES[def.biome] || {}).warm !== false);
     wrongVisitRoomId = (VG.dread.consumeBacktrack() && Math.random() < 0.45) ? id : null;
     VG.camera.setRoom(state.room.pxW, state.room.pxH);
@@ -746,11 +780,13 @@
     const pressed = VG.input.pressed, pad = VG.input.pad;
 
     /* movement */
+    const touch = VG.input.touchMove;
     const left = VG.input.keys.has("KeyA") || VG.input.keys.has("ArrowLeft") || (pad && pad.lx < -0.3);
     const right = VG.input.keys.has("KeyD") || VG.input.keys.has("ArrowRight") || (pad && pad.lx > 0.3);
     const up = VG.input.keys.has("KeyW") || VG.input.keys.has("ArrowUp") || (pad && pad.ly < -0.3);
     const down = VG.input.keys.has("KeyS") || VG.input.keys.has("ArrowDown") || (pad && pad.ly > 0.3);
-    let mx = (right ? 1 : 0) - (left ? 1 : 0), my = (down ? 1 : 0) - (up ? 1 : 0);
+    let mx = touch.active ? touch.x : (right ? 1 : 0) - (left ? 1 : 0);
+    let my = touch.active ? touch.y : (down ? 1 : 0) - (up ? 1 : 0);
     const mlen = Math.hypot(mx, my) || 1; mx /= mlen; my /= mlen;
     if (mx || my) { player.fx = mx; player.fy = my; }
     const roomWarm = (VG.BIOMES[state.room.biome] || {}).warm !== false;
@@ -784,7 +820,7 @@
     // teleport BEFORE collision so inward velocity survives (the order bug fix)
     const tp = portals.tryTeleport(player, "player", { strain: 0.05 });
     if (tp === "critical") doCollapse();
-    else if (tp) VG.camera.jolt(0.1);
+    else if (tp) { VG.camera.jolt(0.1); recordMastery("portalCrossings"); }
     moveBody(player, dt);
     if (state.room.spikeAtPx(player.x, player.y) && player.iframe <= 0) hurtPlayer(1, 0, 0);
     if (state.room.tallGrassAtPx(player.x, player.y) && (mx || my) && Math.random() < dt * 6) {
@@ -821,6 +857,14 @@
     if (pressed.has("KeyR") || pressed.has("PadY")) portals.vent();
     if (pressed.has("KeyE") || pressed.has("PadA")) tryInteract();
     if (pressed.has("Tab") || pressed.has("KeyI") || pressed.has("PadBack")) { state.phase = "inventory"; }
+    if (pressed.has("Space")) useVesperSense();
+    if (pressed.has("KeyM") || pressed.has("PadRB")) { state.phase = "map"; }
+
+    state.focusCd = Math.max(0, state.focusCd - dt);
+    state.focusT = Math.max(0, state.focusT - dt);
+    state.playSeconds += dt;
+    state.autosaveT += dt;
+    if (state.autosaveT >= 20) { state.autosaveT = 0; saveGame(); }
 
     player.strikeCd = Math.max(0, player.strikeCd - dt);
     player.strikeT = Math.max(0, player.strikeT - dt);
@@ -835,7 +879,10 @@
       const px = sh.x, py = sh.y;
       sh.x += sh.vx * dt; sh.y += sh.vy * dt;
       const tpz = portals.tryTeleport(sh, sh.key, { strain: 0.03 });
-      if (tpz) { sh.foldshot = true; sh.dmg *= 1.25; sh.pierce += 1; spawnParticles(sh.x, sh.y, "#8fe9ff", 3); }
+      if (tpz) {
+        if (!sh.foldshot) recordMastery("foldshots");
+        sh.foldshot = true; sh.dmg *= 1.25; sh.pierce += 1; spawnParticles(sh.x, sh.y, "#8fe9ff", 3);
+      }
       if (solidShot(sh.x, sh.y)) {
         if (state.room.reflectAtPx(sh.x, sh.y) && (sh._bounces || 0) < 3) {
           sh._bounces++;
@@ -1190,6 +1237,7 @@
       ctx.beginPath(); ctx.arc(sh.x, sh.y, sh.r, 0, Math.PI * 2); ctx.fill();
     }
     drawGates();
+    drawVesperSense();
     for (const p of particles) { ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.color; ctx.fillRect(p.x - 1, p.y - 1, 2, 2); ctx.globalAlpha = 1; }
     VG.fx.drawAtmosphere(ctx, VG.camera);
     // dusk light pass
@@ -1556,6 +1604,20 @@
     }
   }
 
+  function drawVesperSense() {
+    if (state.focusT <= 0 || !state.room) return;
+    const alpha = Math.min(1, state.focusT) * (0.55 + Math.sin(state.t * 8) * 0.15);
+    const mark = (x, y, color, label) => {
+      ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, 8 + (1.4 - state.focusT) * 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.font = "700 5px monospace"; ctx.textAlign = "center"; ctx.fillStyle = color; ctx.fillText(label, x, y - 12);
+      ctx.restore(); ctx.textAlign = "left";
+    };
+    for (const ex of (VG.ROOMS[state.roomId].exits || [])) mark(ex.gx * T + 8, ex.gy * T + 8, "#8fe9ff", "PATH");
+    for (const npc of npcs) mark(npc.px, npc.py, "#ffcf6b", npc.name.toUpperCase());
+    for (const pickup of pickups) if (["quest", "pulse", "cosmetic"].includes(pickup.type)) mark(pickup.x, pickup.y, "#ff9ad0", "RESONANCE");
+  }
+
   /* ================= HUD & panels ================= */
   /* Presence system: HUD panels get torn, uneven edges instead of clean
      rectangles — same footprint/readability, just not a machined box. */
@@ -1668,6 +1730,15 @@
       ctx.fillStyle = portals.selected === 0 ? "#8fe9ff" : "#ff9ad0";
       ctx.fillText(portals.selected === 0 ? "NEXT GATE: DAWN" : "NEXT GATE: DUSK", VG.W - 8, portals.gates.some((g) => g.active) ? gateY + 22 : gateY + 6);
       ctx.textAlign = "left";
+    }
+    if (state.flags.hasHand) {
+      const focusReady = state.focusCd <= 0;
+      const fw = 70, fx = VG.W - fw - 8, fy = portals.gates.some((g) => g.active) ? gateY + 27 : gateY + 12;
+      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(fx, fy, fw, 3);
+      ctx.fillStyle = focusReady ? "#8fe9ff" : "#615b84";
+      ctx.fillRect(fx, fy, fw * (focusReady ? 1 : 1 - state.focusCd / 8), 3);
+      ctx.textAlign = "right"; ctx.font = "5px monospace"; ctx.fillStyle = focusReady ? "#8fe9ff" : "#8a9ac0";
+      ctx.fillText(focusReady ? "SPACE · VESPER SENSE" : `SENSE ${state.focusCd.toFixed(1)}s`, VG.W - 8, fy + 10); ctx.textAlign = "left";
     }
     // quest tracker
     const tq = trackedQuest();
@@ -1826,6 +1897,57 @@
     ctx.fillText("TAB / I / ESC — close · click a relic to equip · ◂▸ to change appearance", x + w / 2, y + h - 8);
     ctx.textAlign = "left";
   }
+  const MAP_NODES = {
+    maren: [112, 93], shop: [220, 92], inn: [328, 93], village: [220, 145],
+    vale: [230, 218], hollow1: [104, 252], hollowboss: [60, 310],
+    lake: [326, 236], ossuary1: [348, 278], ossuaryboss: [372, 320],
+  };
+  function drawMap() {
+    ctx.fillStyle = "rgba(3,2,9,0.94)"; ctx.fillRect(0, 0, VG.W, VG.H);
+    const x = 24, y = 18, w = VG.W - 48, h = VG.H - 36;
+    parchmentPanel(x, y, w, h, { seed: 9, fill: "rgba(9,7,22,0.97)", stroke: "rgba(143,233,255,0.36)" });
+    ctx.fillStyle = "#8fe9ff"; ctx.font = "700 7px monospace"; ctx.fillText("VESPER HAND WAYFINDER · LIVING ROUTES", x + 16, y + 18);
+    ctx.fillStyle = "#eef4ff"; ctx.font = "700 15px Georgia, serif"; ctx.fillText("Duskhollow and the folds below", x + 16, y + 39);
+    ctx.fillStyle = "#8a9ac0"; ctx.font = "6px monospace";
+    ctx.fillText(`${Object.keys(state.discovered).length}/10 places found · ${questsDone()}/6 quests · ${Math.floor(state.playSeconds / 60)}m in this tale`, x + 16, y + 52);
+
+    const links = [];
+    for (const [id, room] of Object.entries(VG.ROOMS)) for (const ex of (room.exits || [])) {
+      if (MAP_NODES[id] && MAP_NODES[ex.to] && id < ex.to) links.push([id, ex.to]);
+    }
+    ctx.lineWidth = 2;
+    for (const [a, b] of links) {
+      const pa = MAP_NODES[a], pb = MAP_NODES[b], known = state.discovered[a] && state.discovered[b];
+      ctx.strokeStyle = known ? "rgba(143,233,255,0.34)" : "rgba(90,98,124,0.13)";
+      ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]); ctx.stroke();
+    }
+    for (const [id, pos] of Object.entries(MAP_NODES)) {
+      const known = !!state.discovered[id], current = id === state.roomId;
+      const pulse = 1 + Math.sin(state.t * 4) * 0.12;
+      ctx.save(); ctx.translate(pos[0], pos[1]); if (current) ctx.scale(pulse, pulse);
+      ctx.fillStyle = current ? "#8fe9ff" : known ? "#201d38" : "#0b0a14";
+      ctx.strokeStyle = current ? "#d9f8ff" : known ? "#756da0" : "#302d42"; ctx.lineWidth = current ? 2 : 1;
+      ctx.beginPath(); ctx.arc(0, 0, current ? 8 : 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = current ? "#061018" : known ? "#eaf2ff" : "#5a6075";
+      ctx.font = "700 5px monospace"; ctx.textAlign = "center"; ctx.fillText(current ? "YOU" : known ? "◆" : "?", 0, 2);
+      ctx.fillStyle = known ? "#c9d6e8" : "#51566a"; ctx.font = "6px Georgia, serif";
+      ctx.fillText(known ? VG.ROOMS[id].name : "Unknown", 0, -11); ctx.restore();
+    }
+
+    const sx = 392, sy = 60, sw = 178;
+    const rank = masteryRank(), next = nextMasteryRank();
+    parchmentPanel(sx, sy, sw, 116, { seed: 10, fill: "rgba(5,4,13,0.78)", stroke: "rgba(255,207,107,0.26)" });
+    ctx.fillStyle = "#ffcf6b"; ctx.font = "700 6px monospace"; ctx.fillText("VESPER MASTERY", sx + 12, sy + 15);
+    ctx.fillStyle = "#fff4d8"; ctx.font = "700 12px Georgia, serif"; ctx.fillText(rank.name, sx + 12, sy + 34);
+    ctx.fillStyle = "#8a9ac0"; ctx.font = "6px monospace";
+    ctx.fillText(`${state.mastery.portalCrossings} crossings · ${state.mastery.foldshots} foldshots`, sx + 12, sy + 50);
+    ctx.fillText(`${masteryScore()} resonance${next ? ` · ${next.at - masteryScore()} to ${next.name}` : " · mastery complete"}`, sx + 12, sy + 61);
+    const tq = trackedQuest();
+    ctx.fillStyle = "#8fe9ff"; ctx.fillText("CURRENT THREAD", sx + 12, sy + 80);
+    ctx.fillStyle = "#eaf2ff"; ctx.font = "700 7px Georgia, serif"; ctx.fillText(tq ? tq.title : "Evensong restored", sx + 12, sy + 94);
+    ctx.fillStyle = "#8a9ac0"; ctx.font = "6px monospace"; ctx.fillText("M / RB / ESC — return", sx + 12, sy + 108);
+  }
+
   let shopRects = [];
   function drawShop() {
     ctx.fillStyle = "rgba(3,2,9,0.88)"; ctx.fillRect(0, 0, VG.W, VG.H);
@@ -1865,10 +1987,10 @@
     if (kind === "title") {
       const cont = VG.save.read();
       el.innerHTML = `<div class="vg-panel">
-        <p class="vg-kick">A DUSKHOLLOW TALE · THE VESPER HAND</p>
+        <p class="vg-kick">VESPERGATE 3.0 · LIVING DREAD</p>
         <h1>VESPERGATE</h1>
-        <p class="vg-sub">The village bell is silent. The lake sings back. Tonight your grandmother passes down a gauntlet that folds space through every wall that remembers being a door.</p>
-        <div class="vg-campaign"><span>Open world</span><span>6 quests</span><span>2 dungeons</span><span>Linked portals</span></div>
+        <p class="vg-sub">The village bell is silent. The lake sings back. Master the Vesper Hand, fold momentum through linked gates, and bring three lost voices home before the Presence learns yours.</p>
+        <div class="vg-campaign"><span>Living world</span><span>6 quests</span><span>2 dungeons</span><span>Portal mastery</span><span>Full touch + gamepad</span></div>
         <div class="vg-btns">
           ${cont ? `<button class="vg-btn vg-primary" data-vg-continue>Continue in ${VG.ROOMS[cont.roomId] ? VG.ROOMS[cont.roomId].name : "Duskhollow"}</button>` : `<button class="vg-btn vg-primary" data-vg-new>Begin the tale</button>`}
           ${cont ? `<button class="vg-btn" data-vg-new>New tale</button>` : ""}
@@ -1878,7 +2000,7 @@
           <span class="vg-control"><b>WASD</b>Move</span><span class="vg-control"><b>LEFT CLICK</b>Strike</span>
           <span class="vg-control"><b>F</b>Beam (full HP only)</span><span class="vg-control"><b>RIGHT CLICK</b>Place gate</span>
           <span class="vg-control"><b>Q / R</b>Swap / vent</span><span class="vg-control"><b>SHIFT</b>Roll</span>
-          <span class="vg-control"><b>E</b>Talk / use</span><span class="vg-control"><b>TAB</b>Inventory</span>
+          <span class="vg-control"><b>SPACE</b>Vesper Sense</span><span class="vg-control"><b>M / TAB</b>Map / inventory</span>
         </div>
       </div>`;
     } else if (kind === "dead") {
@@ -1894,12 +2016,12 @@
         ${row("Screenshake", "shake", 0, 1, 0.1)}${row("Motion", "motion", 0.3, 1, 0.1)}
         ${row("Darkness", "lighting", 0, 1, 0.1)}
         ${row("Damage taken", "damageTaken", 0.25, 1, 0.25)}
-        ${chk("Reduced effects", "reducedEffects")}${chk("Crisp HD rendering", "sharpRender")}
+        ${chk("Reduced effects", "reducedEffects")}${chk("High-contrast guidance", "highContrast")}${chk("Crisp HD rendering", "sharpRender")}
         <div class="vg-btns"><button class="vg-btn vg-primary" data-vg-settings-back>Back</button></div></div>`;
     } else if (kind === "pause") {
       const quest = trackedQuest();
       el.innerHTML = `<div class="vg-panel"><p class="vg-kick">${VG.ROOMS[state.roomId]?.name || "Duskhollow"}</p><h1>Paused</h1>
-        <p class="vg-sub">${quest ? `Current quest: ${quest.title}.` : "The road is quiet for a moment."} Score ${state.score} · Best chain ${state.bestCombo}.</p>
+        <p class="vg-sub">${quest ? `Current quest: ${quest.title}.` : "The road is quiet for a moment."} ${masteryRank().name} · Score ${state.score} · Best chain ${state.bestCombo}.</p>
         <div class="vg-btns"><button class="vg-btn vg-primary" data-vg-resume>Return to Duskhollow</button><button class="vg-btn" data-vg-settings>Settings</button><button class="vg-btn" data-vg-title>Title</button></div></div>`;
     }
   }
@@ -1946,6 +2068,8 @@
     state.score = 0; state.kills = 0; state.completeSent = false;
     state.combo = 0; state.comboT = 0; state.bestCombo = 0; state.damageFlash = 0;
     state.dawn = 0; state.dawnTransition = false; state.vesperHearts = 0; state.soulTiers = {};
+    state.mastery = { portalCrossings: 0, foldshots: 0, perfectRooms: 0 };
+    state.discovered = {}; state.playSeconds = 0; state.focusCd = 0; state.focusT = 0; state.autosaveT = 0;
     startGame("maren", null);
   }
   function startGame(roomId, spawn) {
@@ -1980,6 +2104,14 @@
     if (d2.type === "pause" && state.phase === "playing") { state.phase = "paused"; showOverlay("pause"); const p = $("[data-vg-pause]"); if (p) p.textContent = "RESUME"; }
     if (d2.type === "resume" && state.phase === "paused") { state.phase = "playing"; hideOverlay(); const p = $("[data-vg-pause]"); if (p) p.textContent = "PAUSE"; }
     if (d2.type === "restart") newGame();
+    if (d2.type === "save-state") {
+      saveGame();
+      host("progress", { score: state.score, progress: progressPct(), state: VG.save.read() });
+    }
+    if ((d2.type === "load-state" || d2.type === "restore") && d2.state && VG.save.import(d2.state)) {
+      const restored = VG.save.read();
+      if (restored) { restoreSave(restored); startGame(VG.ROOMS[restored.roomId] ? restored.roomId : "village", null); }
+    }
   });
 
   /* ================= main loop ================= */
@@ -2000,7 +2132,7 @@
       const pauseButton = $("[data-vg-pause]");
       if (state.phase === "playing") { state.phase = "paused"; showOverlay("pause"); if (pauseButton) pauseButton.textContent = "RESUME"; }
       else if (state.phase === "paused") { state.phase = "playing"; hideOverlay(); if (pauseButton) pauseButton.textContent = "PAUSE"; }
-      else if (state.phase === "inventory" || state.phase === "shop") state.phase = "playing";
+      else if (state.phase === "inventory" || state.phase === "map" || state.phase === "shop") state.phase = "playing";
       pressed.delete("Escape");
     }
     if (state.phase === "playing") { simulate(VG.fx.scaleDt(dt)); pressed.clear(); }
@@ -2010,9 +2142,10 @@
         if (state.dialog) advanceDialog(); else advanceScene();
       }
       pressed.clear();
-    } else if (state.phase === "inventory" || state.phase === "shop") {
+    } else if (state.phase === "inventory" || state.phase === "map" || state.phase === "shop") {
       state.t += dt;
-      if (pressed.has("Tab") || pressed.has("KeyI") || pressed.has("PadBack")) state.phase = "playing";
+      if (state.phase === "map" && (pressed.has("KeyM") || pressed.has("PadRB"))) state.phase = "playing";
+      else if (state.phase === "inventory" && (pressed.has("Tab") || pressed.has("KeyI") || pressed.has("PadBack"))) state.phase = "playing";
       pressed.clear();
     } else {
       if (state.phase === "title" || state.phase === "dead" || state.phase === "win") state.t += dt;
@@ -2030,6 +2163,7 @@
       drawScreenFx();
       if (state.phase === "dialog" || state.phase === "scene") drawDialog();
       if (state.phase === "inventory") drawInventory();
+      if (state.phase === "map") drawMap();
       if (state.phase === "shop") drawShop();
     } else drawTitleBackdrop();
     requestAnimationFrame(frame);
@@ -2038,7 +2172,7 @@
   /* ================= boot ================= */
   VG.fit();
   showOverlay("title");
-  host("ready", { title: "Vespergate: The Vesper Hand" });
+  host("ready", { title: "Vespergate 3.0: Living Dread", version: "3.0.0", capabilities: ["save-state", "touch", "gamepad", "map", "mastery"] });
   requestAnimationFrame(frame);
 
   /* ================= test hook ================= */
@@ -2056,6 +2190,8 @@
       combo: state.combo, bestCombo: state.bestCombo,
       renderScale: +(VG.renderScale || 1).toFixed(2),
       fullscreen: !!document.fullscreenElement || document.body.classList.contains("is-vg-theater"),
+      mastery: { ...state.mastery, score: masteryScore(), rank: masteryRank().name },
+      discovered: Object.keys(state.discovered), focusReady: state.focusCd <= 0,
     }),
     newGame: () => newGame(),
     warp: (room, gx, gy) => { loadRoom(room, gx != null ? { x: gx, y: gy } : null); state.phase = "playing"; hideOverlay(); },

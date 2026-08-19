@@ -1,0 +1,13 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "18.0",
+  "FriendlyName": "PhantomPlay AI Tools",
+  "Description": "Portfolio-aware Unreal MCP tools for PhantomStrike, Phantom Ages, Phantom Legends, and CubeTown.",
+  "Category": "AI",
+  "CreatedBy": "PhantomPlay",
+  "CanContainContent": true,
+  "IsBetaVersion": true,
+  "EnabledByDefault": true,
+  "Modules": []
+}

@@ -36,7 +36,7 @@
       "id": "phantompet-full-presence-and-vespergate-current-build",
       "status": "active",
       "title": "PhantomPet stays full-body and Vespergate stays on its current build",
-      "ownerDecision": "PhantomPet must appear as the transparent painted full-body character, never clipped inside a circular orb. Vespergate must launch the same current 2.5.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app; an old catalog response or cached desktop shell must not resurrect 2.4.3.",
+      "ownerDecision": "PhantomPet must appear as the transparent painted full-body character, never clipped inside a circular orb. Vespergate must launch the same current 3.0.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app; an old catalog response or cached desktop shell must not resurrect 2.x.",
       "requiredPatterns": [
         {
           "file": "app/index.html",
@@ -50,18 +50,18 @@
         },
         {
           "file": "app/js/phantomplay.js",
-          "pattern": "id:\\s*\"vespergate\"[\\s\\S]{0,2200}index\\.html\\?v=2\\.5\\.0[\\s\\S]{0,500}version:\\s*\"2\\.5\\.0\"",
-          "description": "The browser catalog launches Vespergate 2.5.0."
+          "pattern": "id:\\s*\"vespergate\"[\\s\\S]{0,2600}index\\.html\\?v=3\\.0\\.0[\\s\\S]{0,500}version:\\s*\"3\\.0\\.0\"",
+          "description": "The browser catalog launches Vespergate 3.0.0."
         },
         {
           "file": "app/games/vespergate/index.html",
-          "pattern": "engine\\.js\\?v=2\\.5\\.0[\\s\\S]*game\\.js\\?v=2\\.5\\.0",
-          "description": "The Vespergate document loads the complete 2.5.0 game module graph."
+          "pattern": "engine\\.js\\?v=3\\.0\\.0[\\s\\S]*game\\.js\\?v=3\\.0\\.0",
+          "description": "The Vespergate document loads the complete 3.0.0 game module graph."
         },
         {
           "file": "server/src/phantom-ai/phantomplay.ts",
-          "pattern": "id:\\s*\"vespergate\"[\\s\\S]{0,2600}index\\.html\\?v=2\\.5\\.0[\\s\\S]{0,500}version:\\s*\"2\\.5\\.0\"",
-          "description": "The authenticated server catalog launches Vespergate 2.5.0."
+          "pattern": "id:\\s*\"vespergate\"[\\s\\S]{0,3000}index\\.html\\?v=3\\.0\\.0[\\s\\S]{0,500}version:\\s*\"3\\.0\\.0\"",
+          "description": "The authenticated server catalog launches Vespergate 3.0.0."
         },
         {
           "file": "packages/phantomplay-dioxus-shell/src/main.rs",

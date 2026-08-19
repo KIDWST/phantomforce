@@ -24,7 +24,10 @@ namespace
 {
     const FVector FixedBattlefieldCameraLocation(0.0f, -18500.0f, 12500.0f);
     const FRotator FixedBattlefieldCameraRotation(-34.0f, 90.0f, 0.0f);
-    constexpr float FixedBattlefieldOrthoWidth = 34500.0f;
+    // Keep the whole one-screen battlefield legible without exposing the empty world
+    // outside the authored combat diorama.  The former 34.5 km framing made the real
+    // armies and V13-V17 set dressing read like a small prototype island.
+    constexpr float FixedBattlefieldOrthoWidth = 27500.0f;
 
     APhantomAgesDirector* AgesDirector(const UObject* Context)
     {

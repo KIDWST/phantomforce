@@ -37,6 +37,7 @@ function catalogGames() {
 }
 
 const gameFilter = process.env.GAME_FILTER;
+const visualState = process.env.GAME_VISUAL_STATE || "play";
 const games = gameFilter ? catalogGames().filter((game) => game.id === gameFilter) : catalogGames();
 assert.ok(games.length > 0, `No PhantomPlay games matched GAME_FILTER=${gameFilter}`);
 
@@ -151,12 +152,16 @@ async function evaluate(cdp, expression) {
   return result.result?.value;
 }
 
-async function auditGame(cdp, url, viewport, screenshotPath) {
+async function auditGame(cdp, gameId, url, viewport, screenshotPath) {
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: viewport.width,
     height: viewport.height,
     deviceScaleFactor: viewport.id === "phone" ? 2 : 1,
     mobile: viewport.id === "phone",
+  });
+  await cdp.send("Emulation.setTouchEmulationEnabled", {
+    enabled: viewport.id === "phone",
+    maxTouchPoints: viewport.id === "phone" ? 5 : 1,
   });
   await cdp.send("Page.navigate", { url });
   const started = Date.now();
@@ -189,6 +194,10 @@ async function auditGame(cdp, url, viewport, screenshotPath) {
     return false;
   }).toString()})()`);
   await sleep(500);
+  if (visualState === "map" && gameId === "vespergate") {
+    await evaluate(cdp, "window.VG?.input?.pressed?.add('KeyM')");
+    await sleep(300);
+  }
   const audit = await evaluate(cdp, `(${(() => {
     const visible = (el) => {
       const style = getComputedStyle(el);
@@ -255,7 +264,7 @@ try {
     for (const viewport of viewports) {
       console.log(`[game-visual] ${game.id} ${viewport.id}`);
       const screenshot = path.join(outDir, "screenshots", `${game.id}-${viewport.id}.png`);
-      const audit = await auditGame(cdp, `${baseUrl}${game.path}`, viewport, screenshot);
+      const audit = await auditGame(cdp, game.id, `${baseUrl}${game.path}`, viewport, screenshot);
       audits.push({ game: game.id, viewport, screenshot, audit });
       assert.equal(audit.ready, "complete", `${game.id} ${viewport.id}: document must load.`);
       assert.equal(audit.tooLight, false, `${game.id} ${viewport.id}: game must not boot into a plain light/white surface.`);

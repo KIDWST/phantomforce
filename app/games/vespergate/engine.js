@@ -1,4 +1,4 @@
-/* VESPERGATE: THE HOLLOW GEOMETRY — engine.js
+/* VESPERGATE 3.0: LIVING DREAD — engine.js
  * Foundations: canvas scaling, input (keyboard/mouse/gamepad), WebAudio with
  * two distinct hand voices + adaptive music layers, versioned saves, settings,
  * camera, math. No external assets, no network — everything synthesized.
@@ -56,13 +56,14 @@ window.VG = window.VG || {};
   VG.fit = fit;
 
   /* ============ settings (persisted, accessibility-first) ============ */
-  const SETTINGS_KEY = "vespergate.settings.v1";
+  const SETTINGS_KEY = "vespergate.settings.v2";
+  const LEGACY_SETTINGS_KEY = "vespergate.settings.v1";
   VG.settings = Object.assign({
     volume: 0.8, music: 0.7, shake: 1, flash: 1, motion: 1,
     snapStrength: 1, aimAssist: 0.5, softScale: false, sharpRender: true,
     reducedEffects: false, holdToCharge: true, damageTaken: 1, timingWindow: 1,
-    lighting: 1, speedMul: 1, damageDealtMul: 1,
-  }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); } catch { return {}; } })());
+    lighting: 1, speedMul: 1, damageDealtMul: 1, highContrast: false,
+  }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(LEGACY_SETTINGS_KEY) || "{}"); } catch { return {}; } })());
   VG.saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(VG.settings)); } catch {} };
 
   /* ============ fullscreen + lightweight game chrome ============ */
@@ -110,14 +111,27 @@ window.VG = window.VG || {};
   });
   addEventListener("focus", syncFullscreenUi);
 
-  /* ============ save (versioned, resumable) ============ */
-  /* v2: the top-down Vesper Hand rebuild. v1 saves reference platformer rooms
-     that no longer exist, so they are deliberately not migrated. */
-  const SAVE_KEY = "vespergate.save.v2";
+  /* ============ save (versioned, resumable, host-portable) ============ */
+  /* v3 preserves the complete campaign and adds mastery/discovery state.
+     Existing v2 campaigns migrate in place; v1 referenced removed rooms. */
+  const SAVE_KEY = "vespergate.save.v3";
+  const LEGACY_SAVE_KEY = "vespergate.save.v2";
+  const readStored = (key) => { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; } };
   VG.save = {
-    read() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); return s && s.version === 2 ? s : null; } catch { return null; } },
-    write(data) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 2, at: Date.now(), ...data })); } catch {} },
-    clear() { try { localStorage.removeItem(SAVE_KEY); } catch {} },
+    read() {
+      const current = readStored(SAVE_KEY);
+      if (current && current.version === 3) return current;
+      const legacy = readStored(LEGACY_SAVE_KEY);
+      if (legacy && legacy.version === 2) return { ...legacy, version: 3, migratedFrom: 2 };
+      return null;
+    },
+    write(data) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 3, at: Date.now(), ...data })); } catch {} },
+    clear() { try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(LEGACY_SAVE_KEY); } catch {} },
+    import(data) {
+      if (!data || typeof data !== "object" || !data.roomId || !data.quests) return false;
+      VG.save.write(data);
+      return true;
+    },
   };
 
   /* ============ input ============ */
@@ -126,6 +140,7 @@ window.VG = window.VG || {};
     keys,
     mx: VG.W / 2, my: VG.H / 2,           // mouse in internal coords
     fireHeld: false, gateHeld: false,
+    touchMove: { active: false, id: null, x: 0, y: 0 },
     pad: null, padAim: { x: 1, y: 0 }, usingPad: false,
     pressed: new Set(),                     // edge-triggered this frame
   };
@@ -153,6 +168,30 @@ window.VG = window.VG || {};
     if (e.button === 2) VG.input.gateHeld = false;
   });
   addEventListener("blur", () => { keys.clear(); VG.input.fireHeld = false; VG.input.gateHeld = false; });
+  const stick = document.querySelector("[data-vg-stick]");
+  const updateStick = (e) => {
+    if (!stick) return;
+    const r = stick.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const max = Math.max(24, r.width * 0.36), len = Math.hypot(dx, dy) || 1;
+    VG.input.touchMove.x = Math.max(-1, Math.min(1, dx / max));
+    VG.input.touchMove.y = Math.max(-1, Math.min(1, dy / max));
+    if (len < max * 0.16) { VG.input.touchMove.x = 0; VG.input.touchMove.y = 0; }
+  };
+  if (stick) {
+    stick.addEventListener("pointerdown", (e) => { e.preventDefault(); stick.setPointerCapture(e.pointerId); VG.input.touchMove.active = true; VG.input.touchMove.id = e.pointerId; updateStick(e); });
+    stick.addEventListener("pointermove", (e) => { if (VG.input.touchMove.active && VG.input.touchMove.id === e.pointerId) updateStick(e); });
+    const releaseStick = (e) => { if (VG.input.touchMove.id !== e.pointerId) return; VG.input.touchMove = { active: false, id: null, x: 0, y: 0 }; };
+    stick.addEventListener("pointerup", releaseStick); stick.addEventListener("pointercancel", releaseStick);
+  }
+  const touchActions = { strike: "M1", beam: "KeyF", gate: "M2", roll: "ShiftLeft", use: "KeyE", map: "KeyM" };
+  document.querySelectorAll("[data-vg-action]").forEach((button) => {
+    button.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const code = touchActions[button.dataset.vgAction];
+      if (code) VG.input.pressed.add(code);
+    });
+  });
   const dz = (v) => Math.abs(v) < 0.18 ? 0 : v;
   let padPrev = {};
   VG.pollPad = () => {

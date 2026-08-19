@@ -6,7 +6,7 @@ param(
     [switch]$SkipExternalCC0Assets,
     [switch]$SkipGameplayProof,
     [switch]$KeepExistingUnrealProcesses,
-    [ValidatePattern('^[A-Za-z0-9._-]+$')][string]$CandidateLabel = 'V12',
+    [ValidatePattern('^V[0-9]+R[0-9]+$')][string]$CandidateLabel = 'V18R1',
     [switch]$CandidateOnly,
     [switch]$SkipContentRefresh,
     [ValidateRange(2,16)][int]$MaxParallelActions = 8,
@@ -15,7 +15,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-if($SkipGameplayProof){throw 'V11 production approval cannot skip actual packaged gameplay proof. Remove -SkipGameplayProof.'}
+if($SkipGameplayProof){throw 'Production approval cannot skip actual packaged gameplay proof. Remove -SkipGameplayProof.'}
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $ProjectRoot)
 $RepoParent = Split-Path -Parent ([System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/'))
@@ -108,6 +108,15 @@ function Invoke-NativeChecked([string]$Exe,[string[]]$Arguments,[string]$Label){
     if($LASTEXITCODE -ne 0){throw "$Label failed with exit code $LASTEXITCODE"}
 }
 
+function Invoke-PortfolioStaticValidators {
+    $Python = Get-Command python.exe -ErrorAction SilentlyContinue
+    if(-not $Python){throw 'Python 3 is required for the PhantomPlay portfolio validators.'}
+    foreach($Validator in @('ValidatePortfolioGameplayV14.py','ValidateCubetownMemorycraftV16.py')){
+        $Path = Join-Path $ProjectRoot ("Tools\"+$Validator)
+        Invoke-NativeChecked $Python.Source @($Path) ("STATIC PORTFOLIO GATE "+$Validator)
+    }
+}
+
 function Test-CuratedAssetLibrary {
     $Required=@(
         'Content\Phantom\External\CC0\Aliases\SM_CC0_Tree_A.uasset','Content\Phantom\UnityHarvest\Legends\character\U_Legends_0009_PineTrees.uasset',
@@ -166,20 +175,37 @@ function Assert-ImportedContent {
 
     $WorldReport=Join-Path $Saved 'PhantomProductionWorldsV11.json'
     $PortfolioWorldReport=Join-Path $Saved 'PhantomPortfolioWorldsV13.json'
+    $CubeTownV17Report=Join-Path $Saved 'CubeTownV17DioramaPatch.json'
     $WorldValidation=Join-Path $Saved 'PhantomProductionWorldValidationV11.json'
-    foreach($r in @($WorldReport,$PortfolioWorldReport,$WorldValidation)){if(-not(Test-Path $r)){throw "Production-world proof missing: $r"}}
+    foreach($r in @($WorldReport,$PortfolioWorldReport,$CubeTownV17Report,$WorldValidation)){if(-not(Test-Path $r)){throw "Production-world proof missing: $r"}}
     $WorldData=Get-Content $WorldReport -Raw | ConvertFrom-Json
     $PortfolioWorldData=Get-Content $PortfolioWorldReport -Raw | ConvertFrom-Json
+    $CubeTownV17Data=Get-Content $CubeTownV17Report -Raw | ConvertFrom-Json
     $ValidationData=Get-Content $WorldValidation -Raw | ConvertFrom-Json
-    if($WorldData.status -ne 'PASS' -or $PortfolioWorldData.status -ne 'PASS' -or $ValidationData.status -ne 'PASS'){throw 'Production-world build, V13 portfolio patch, or density/occlusion validation failed.'}
+    if($WorldData.status -ne 'PASS' -or $PortfolioWorldData.status -ne 'PASS' -or $CubeTownV17Data.status -ne 'PASS' -or $ValidationData.status -ne 'PASS'){throw 'Production-world build, V13 portfolio patch, CubeTown V17 diorama patch, or density/occlusion validation failed.'}
 
     $OneShot=Join-Path $Saved 'PhantomOneShotEditorPipelineV11.txt'
     if(-not(Test-Path $OneShot)){throw 'V11 one-shot Unreal content pipeline report missing.'}
     $OneShotText=Get-Content $OneShot -Raw
-    foreach($step in @('ImportOverhaulAssets.py','ImportExternalCC0Assets.py','ImportProductionCharacters.py','ImportPolyHavenProduction.py','ImportUnityBaselineAssets.py','HarvestOwnedFabAssets.py','BuildProductionWorlds.py','PatchProductionWorldsV11R7.py','PatchProductionWorldsV11R10.py','PatchCubetownFlagshipV12.py','PatchPortfolioWorldsV13.py','ValidateProductionWorlds.py')){
+    if($OneShotText -notmatch [regex]::Escape('PASS ImportOverhaulAssets.py') -and $OneShotText -notmatch [regex]::Escape('PASS committed Unreal generated-art library')){
+        throw 'V11 one-shot Unreal content pipeline has neither a source import nor a verified committed generated-art library.'
+    }
+    if($OneShotText -notmatch [regex]::Escape('PASS ImportExternalCC0Assets.py')){
+        $CuratedReport=Join-Path $Saved 'PhantomCuratedAssetImport.txt'
+        if(-not(Test-Path $CuratedReport) -or (Get-Content $CuratedReport -Raw) -notmatch 'CURATED ASSET GATE: PASS'){
+            throw 'V11 curated external asset import has no passing proof.'
+        }
+    }
+    foreach($step in @('ImportProductionCharacters.py','ImportPolyHavenProduction.py')){
+        $retainedLabel=if($step -eq 'ImportProductionCharacters.py'){'PASS retained production characters report'}else{'PASS retained Poly Haven materials report'}
+        if($OneShotText -notmatch [regex]::Escape("PASS $step") -and $OneShotText -notmatch [regex]::Escape($retainedLabel)){
+            throw "V11 one-shot Unreal content pipeline did not import or retain passing proof for $step"
+        }
+    }
+    foreach($step in @('ImportUnityBaselineAssets.py','HarvestOwnedFabAssets.py','BuildProductionWorlds.py','PatchProductionWorldsV11R7.py','PatchProductionWorldsV11R10.py','PatchCubetownFlagshipV12.py','PatchPortfolioWorldsV13.py','RepairCubeTownV17Materials.py','PatchCubeTownV17Diorama.py','ValidateProductionWorlds.py')){
         if($OneShotText -notmatch [regex]::Escape("PASS $step")){throw "V11 one-shot Unreal content pipeline did not PASS $step"}
     }
-    Write-Host "Four-game content gate PASS: CubeTown, Ages, Legends, and Strike all received the V13 density/safety layer + rigged characters + PBR surfaces + persistent worlds." -ForegroundColor Green
+    Write-Host "Four-game content gate PASS: all games received the V13 density/safety layer, and CubeTown retained its V17 diorama layer, rigged characters, PBR surfaces, and persistent worlds." -ForegroundColor Green
 }
 
 function Assert-UnityBaselineHarvest {
@@ -197,6 +223,7 @@ $EngineRoot=(Resolve-Path $EngineRoot).Path
 Enable-InstalledBuildNetFxCompatibility
 Configure-LocalBuildThrottle
 Stop-ExistingUnrealOnce
+Invoke-PortfolioStaticValidators
 
 $BuildTool=Join-Path $EngineRoot 'Engine\Build\BatchFiles\Build.bat'
 $RunUat=Join-Path $EngineRoot 'Engine\Build\BatchFiles\RunUAT.bat'
@@ -206,7 +233,7 @@ foreach($f in @($BuildTool,$RunUat,$EditorCmd)){if(-not(Test-Path $f)){throw "Re
 if($SmokeWindows){ & (Join-Path $ProjectRoot 'Smoke-Flagships.ps1'); exit $LASTEXITCODE }
 
 Write-Host '=====================================================================' -ForegroundColor Cyan
-Write-Host ' PHANTOM GAMES V11 // PRODUCTION REBOOT // REAL CHARACTERS + REAL WORLDS + HUMAN APPROVAL' -ForegroundColor Cyan
+Write-Host " PHANTOM GAMES $CandidateLabel // RECOVERED PORTFOLIO // REAL CHARACTERS + REAL WORLDS + HUMAN APPROVAL" -ForegroundColor Cyan
 Write-Host ' NO GENERATED-ART DOMINANCE // SKELETAL GAMEPLAY // PBR SURFACES // CANDIDATE-ONLY UNTIL APPROVED' -ForegroundColor Cyan
 Write-Host '=====================================================================' -ForegroundColor Cyan
 Write-Host "Engine: $EngineRoot"
@@ -238,7 +265,7 @@ if($SkipContentRefresh){
     # 3) Acquire current Poly Haven CC0 PBR surfaces, then compile editor exactly once.
     Invoke-NativeChecked $BuildTool @('PhantomGamesEditor','Win64','Development',$Project,'-WaitMutex','-NoHotReload') 'UNREAL EDITOR MODULE COMPILE'
 
-    # 4) ONE UnrealEditor-Cmd session: baseline library -> creator packs -> skeletal characters -> PBR -> Unity -> owned Fab -> base worlds -> V11R7/V11R10 -> CubeTown V12 -> four-game V13 density/safety -> validation.
+    # 4) ONE UnrealEditor-Cmd session: baseline library -> creator packs -> skeletal characters -> PBR -> Unity -> owned Fab -> base worlds -> V11R7/V11R10 -> CubeTown V12 -> four-game V13 -> CubeTown V17 -> validation.
     $Pipeline=Join-Path $ProjectRoot 'Tools\PhantomOneShotEditorPipeline.py'
     Remove-Item (Join-Path $Saved 'PhantomOneShotEditorPipelineV11.txt') -Force -ErrorAction SilentlyContinue
     Invoke-NativeChecked $EditorCmd @($Project,"-ExecutePythonScript=$Pipeline",'-unattended','-nop4','-nosplash','-NoSound','-utf8output') 'ONE-SHOT CONTENT IMPORT'
@@ -254,7 +281,7 @@ $Games=@(
 
 if($CompileOnly -and -not $PackageWindows){
     foreach($Game in $Games){Invoke-NativeChecked $BuildTool @($Game.Target,'Win64','Development',$Project,'-WaitMutex','-NoHotReload') ("COMPILE "+$Game.Target)}
-    Write-Host 'V11 compile-only PASS.' -ForegroundColor Green
+    Write-Host "$CandidateLabel compile-only PASS." -ForegroundColor Green
     exit 0
 }
 
@@ -304,7 +331,7 @@ if(-not $SkipGameplayProof){
 
 $CandidateProofs=@(Get-ChildItem $CandidateProofRoot -File -Filter '*-GAMEPLAY.png' -ErrorAction SilentlyContinue)
 if($CandidateProofs.Count -lt 4){
-    throw "V11 CANDIDATE GATE FAILED: expected 4 actual packaged gameplay screenshots, found $($CandidateProofs.Count). Live PhantomPlay builds were NOT replaced. Candidates remain at $CandidateRoot"
+    throw "$CandidateLabel CANDIDATE GATE FAILED: expected 4 actual packaged gameplay screenshots, found $($CandidateProofs.Count). Live PhantomPlay builds were NOT replaced. Candidates remain at $CandidateRoot"
 }
 
 # 7) Objective frame sanity gate. This cannot judge fun, but it stops obviously blank/flat/black/
@@ -318,7 +345,7 @@ Invoke-NativeChecked 'powershell.exe' @(
 # 8) HUMAN APPROVAL IS REQUIRED. Metrics cannot decide whether a game is actually appealing.
 # Open the four real candidate gameplay screenshots and refuse to replace live PhantomPlay unless the user explicitly approves them.
 Write-Host ''
-Write-Host 'V11 AUTOMATED GATES PASSED. LIVE PHANTOMPLAY BUILDS ARE STILL UNTOUCHED.' -ForegroundColor Yellow
+Write-Host "$CandidateLabel AUTOMATED GATES PASSED. LIVE PHANTOMPLAY BUILDS ARE STILL UNTOUCHED." -ForegroundColor Yellow
 Write-Host "Review the four actual gameplay screenshots here: $CandidateProofRoot" -ForegroundColor Yellow
 if($CandidateOnly){
     Set-Content (Join-Path $CandidateRoot ($CandidateLabel+'_READY_FOR_REVIEW.txt')) -Encoding UTF8 -Value @(
@@ -332,12 +359,12 @@ if($CandidateOnly){
 try { Start-Process explorer.exe $CandidateProofRoot } catch {}
 $Approval=Read-Host 'Type PROMOTE only if YOU personally approve all four screenshots. Anything else keeps the candidates separate'
 if($Approval -cne 'PROMOTE'){
-    Set-Content (Join-Path $CandidateRoot 'V11_NOT_PROMOTED.txt') -Encoding UTF8 -Value @(
-        'V11 candidates built and passed automated structural/frame checks.',
+    Set-Content (Join-Path $CandidateRoot ($CandidateLabel+'_NOT_PROMOTED.txt')) -Encoding UTF8 -Value @(
+        "$CandidateLabel candidates built and passed automated structural/frame checks.",
         'Live PhantomPlay builds were intentionally NOT replaced because human visual approval was not given.',
         "screenshots=$CandidateProofRoot"
     )
-    Write-Host 'V11 candidates preserved. Live builds unchanged.' -ForegroundColor Green
+    Write-Host "$CandidateLabel candidates preserved. Live builds unchanged." -ForegroundColor Green
     Write-Host "Candidates: $CandidateRoot" -ForegroundColor Green
     Write-Host "Screenshots: $CandidateProofRoot" -ForegroundColor Green
     exit 0
@@ -345,7 +372,7 @@ if($Approval -cne 'PROMOTE'){
 
 # 9) Promote only after explicit human approval. Existing live games are backed up atomically before replacement.
 $LiveRoot=Join-Path $ProjectRoot 'Builds\Windows'
-$RollbackRoot=Join-Path $ProjectRoot ("Builds\Rollback\V11-"+[DateTime]::Now.ToString('yyyyMMdd-HHmmss'))
+$RollbackRoot=Join-Path $ProjectRoot ("Builds\Rollback\"+$CandidateLabel+'-'+[DateTime]::Now.ToString('yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Force -Path $RollbackRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $LiveRoot | Out-Null
 
@@ -362,8 +389,8 @@ try{
         New-Item -ItemType Directory -Force -Path $Live | Out-Null
         Copy-Item (Join-Path $Candidate '*') $Live -Recurse -Force
         if(-not(Test-Path (Join-Path $Live $Game.Executable))){throw "Promotion copy missing $($Game.Executable) for $($Game.Id)"}
-        Set-Content (Join-Path $Live 'PHANTOM_PRODUCTION_REBOOT_V11_BUILD.txt') -Encoding UTF8 -Value @(
-            'PHANTOM PRODUCTION REBOOT V11',"game=$($Game.Id)","promoted=$([DateTime]::Now.ToString('s'))",
+        Set-Content (Join-Path $Live ("PHANTOM_PRODUCTION_REBOOT_"+$CandidateLabel+"_BUILD.txt")) -Encoding UTF8 -Value @(
+            "PHANTOM PRODUCTION REBOOT $CandidateLabel","game=$($Game.Id)","promoted=$([DateTime]::Now.ToString('s'))",
             "rollback=$RollbackRoot",'visual_gate=passed','gameplay_capture=passed'
         )
     }
@@ -381,15 +408,15 @@ try{
 $FinalProofRoot=Join-Path $Saved 'PhantomGameplayProof'
 if(Test-Path $FinalProofRoot){Remove-Item $FinalProofRoot -Recurse -Force}
 Copy-Item $CandidateProofRoot $FinalProofRoot -Recurse -Force
-Write-Host "V11 PROMOTION PASS: candidate builds replaced live builds only after 4/4 gameplay frames passed." -ForegroundColor Green
+Write-Host "$CandidateLabel PROMOTION PASS: candidate builds replaced live builds only after 4/4 gameplay frames passed." -ForegroundColor Green
 Write-Host "Rollback: $RollbackRoot" -ForegroundColor DarkGreen
 
 $Audit=Join-Path $ProjectRoot 'Tools\Audit-PhantomBuildPaths.ps1'
 if(Test-Path $Audit){try{& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Audit -ProjectRoot $ProjectRoot | Out-Host}catch{Write-Warning $_.Exception.Message}}
 
 $ProofCount=@(Get-ChildItem (Join-Path $Saved 'PhantomGameplayProof') -File -Filter '*-GAMEPLAY.png' -ErrorAction SilentlyContinue).Count
-Set-Content (Join-Path $Saved 'PHANTOM_PRODUCTION_REBOOT_V11_REPORT.txt') -Encoding UTF8 -Value @(
-    'PHANTOM PRODUCTION REBOOT V11 COMPLETE',
+Set-Content (Join-Path $Saved ("PHANTOM_PRODUCTION_REBOOT_"+$CandidateLabel+"_REPORT.txt")) -Encoding UTF8 -Value @(
+    "PHANTOM PRODUCTION REBOOT $CandidateLabel COMPLETE",
     "built=$([DateTime]::Now.ToString('s'))",
     "engine=$EngineRoot",
     "actual_gameplay_captures=$ProofCount/4",
@@ -399,12 +426,12 @@ Set-Content (Join-Path $Saved 'PHANTOM_PRODUCTION_REBOOT_V11_REPORT.txt') -Encod
     'semantic_asset_scale_normalization=enabled',
     'arbitrary_static_character_aliases=demoted',
     'engine_primitive_missing_art_fallback=disabled',
-    'v11_persistent_umap_worlds=verified',
-    'v11_human_approval_before_promotion=enabled',
+    'persistent_umap_worlds=verified',
+    'human_approval_before_promotion=enabled',
     'production_reboot=real_rigged_characters_pbr_persistent_worlds_no_basicshape_worlds',
     'human_visual_approval=explicit_PROMOTE_required'
 )
 Write-Host '=====================================================================' -ForegroundColor Green
-Write-Host " V11 PROMOTED // $ProofCount/4 CANDIDATE GAMEPLAY FRAMES PASSED" -ForegroundColor Green
+Write-Host " $CandidateLabel PROMOTED // $ProofCount/4 CANDIDATE GAMEPLAY FRAMES PASSED" -ForegroundColor Green
 Write-Host " Proof: $(Join-Path $Saved 'PhantomGameplayProof')" -ForegroundColor Green
 Write-Host '=====================================================================' -ForegroundColor Green

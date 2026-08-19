@@ -1,8 +1,9 @@
 param(
-  [string]$ProjectRoot = "C:\Users\jorda\Documents\Codex\2026-07-30\hi\work\phantomforce-phantomplay-platform-20260811\packages\phantom-games-unreal",
+  [string]$ProjectRoot = "",
   [switch]$AuditOnly
 )
 $ErrorActionPreference='Stop'
+if(-not $ProjectRoot){$ProjectRoot=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path}
 $Report=Join-Path $ProjectRoot 'PHANTOM_ASSET_REPORT.md'
 $Manifest=Join-Path $ProjectRoot 'Config\PhantomAssetManifest.json'
 $UProject=Join-Path $ProjectRoot 'PhantomGames.uproject'
