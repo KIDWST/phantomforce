@@ -11,9 +11,16 @@ const environment = {
 };
 
 const shellSourceRoot = path.join(repoRoot, "packages", "phantomplay-dioxus-shell", "src");
+const shellRoot = path.dirname(manifest);
 const mainSource = fs.readFileSync(path.join(shellSourceRoot, "main.rs"), "utf8");
 const studioSource = fs.readFileSync(path.join(shellSourceRoot, "studio.rs"), "utf8");
 const historySource = fs.readFileSync(path.join(shellSourceRoot, "project_history.rs"), "utf8");
+const buildSource = fs.readFileSync(path.join(shellRoot, "build.rs"), "utf8");
+const bundleConfig = fs.readFileSync(path.join(shellRoot, "Dioxus.toml"), "utf8");
+const windowsInstaller = fs.readFileSync(
+  path.join(shellRoot, "installer", "PhantomPlay.nsi"),
+  "utf8",
+);
 const aiEditSource = fs.readFileSync(path.join(repoRoot, "server", "src", "phantomplay-ai-edit.ts"), "utf8");
 
 for (const [label, source, contract] of [
@@ -29,6 +36,13 @@ for (const [label, source, contract] of [
   ["OpenRouter edit route", aiEditSource, "callOpenRouterGlm52"],
   ["local Ollama edit route", aiEditSource, "callLocalOllamaChat"],
   ["desktop model selector", studioSource, 'option { value: "local", "Local Ollama" }'],
+  ["Windows executable icon", buildSource, 'resource.set_icon("assets/phantomplay.ico")'],
+  ["Windows taskbar icon", mainSource, "window.with_taskbar_icon(icon.clone())"],
+  ["Windows NSIS bundle config", bundleConfig, "[bundle.windows.nsis]"],
+  ["Windows installer icon", windowsInstaller, "!define MUI_ICON"],
+  ["Windows uninstall icon", windowsInstaller, "!define MUI_UNICON"],
+  ["Windows Apps display icon", windowsInstaller, '"DisplayIcon" "$INSTDIR\\{{main_binary_name}},0"'],
+  ["Windows shortcut icon", windowsInstaller, '"" "$INSTDIR\\{{main_binary_name}}" 0'],
 ]) {
   if (!source.includes(contract)) {
     throw new Error(`PhantomPlay desktop shell is missing ${label}: ${contract}`);

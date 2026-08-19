@@ -70,6 +70,12 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **PhantomPlay Windows identity repair (2026-08-19)** — native shell `0.3.2`.
+  Embedded the Phantom icon and PhantomForce version identity into the executable,
+  added a dedicated Windows taskbar icon path, and branded the NSIS installer,
+  uninstaller, desktop/Start shortcuts, and Windows Apps registration. The packaged
+  and installed identity gates passed, 34 native shell tests passed, and a live
+  installed-app capture verified the current 35-project library and Vespergate 3.1.
 - **Vespergate 3.1 canonical recovery (2026-08-19)** — browser build
   `phantom-live-20260819-169`. Reunified the richer Aug 9 Vespergate branch with
   the later 3.0 systems so the illustrated pointed-hood bearer, asymmetric

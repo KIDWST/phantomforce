@@ -1936,6 +1936,12 @@ fn main() {
         .with_inner_size(dioxus::desktop::LogicalSize::new(1440.0, 900.0))
         .with_min_inner_size(dioxus::desktop::LogicalSize::new(1100.0, 700.0))
         .with_maximized(true);
+    #[cfg(target_os = "windows")]
+    let window = {
+        use dioxus::desktop::tao::platform::windows::WindowBuilderExtWindows;
+
+        window.with_taskbar_icon(icon.clone())
+    };
     let data_dir = std::env::var_os("PHANTOMPLAY_WEBVIEW_DATA_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {

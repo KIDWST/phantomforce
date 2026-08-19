@@ -1,11 +1,12 @@
 {
   "name": "@phantomforce/phantomplay-studio",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "Native PhantomPlay game studio with embedded play, source editing, hot reload, AI tools, mods, and dev rooms.",
   "scripts": {
     "build": "cargo build",
     "dev": "cargo run",
-    "test": "cargo test"
+    "test": "cargo test",
+    "verify:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-windows-identity.ps1"
   }
 }

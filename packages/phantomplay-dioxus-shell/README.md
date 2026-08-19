@@ -83,6 +83,7 @@ npm run dev
 npm run test
 cargo clippy --all-targets -- -D warnings
 dx bundle --release
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-windows-identity.ps1
 ```
 
 ## Release
@@ -90,7 +91,7 @@ dx bundle --release
 The release installer is produced at:
 
 ```text
-target\dx\PhantomPlay\bundle\windows\nsis\PhantomPlay_0.3.1_x64-setup.exe
+target\dx\PhantomPlay\bundle\windows\nsis\PhantomPlay_0.3.2_x64-setup.exe
 ```
 
 The verified per-user installation is:
@@ -105,6 +106,10 @@ installed shell and its shortcuts were backed up before removal at:
 ```text
 %USERPROFILE%\Documents\Codex\backups\phantomplay-shell-20260730-113126\installed-old
 ```
+
+The Windows identity check fails closed unless the packaged executable contains the current
+version metadata and the Phantom icon, and unless the generated installer assigns that icon to
+the installer, shortcuts, and Windows Apps registration.
 
 ## Verification
 
