@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { $petActivity } from '@/store/pet'
 import { $busy } from '@/store/session'
 
-import { phantomAssetPath, PhantomPresence, phantomPresencePhase } from './phantom-presence'
+import { phantomAssetPath, phantomGesturePose, PhantomPresence, phantomPresencePhase } from './phantom-presence'
 
 describe('PhantomPresence', () => {
   afterEach(() => {
@@ -27,6 +27,14 @@ describe('PhantomPresence', () => {
     expect(phantomAssetPath('chin.webp', './assets')).toBe('./assets/chin.webp')
   })
 
+  it('uses a deterministic gesture sequence for every live state', () => {
+    expect(phantomGesturePose('idle', 0)).toBe('welcome.webp')
+    expect(phantomGesturePose('idle', 1)).toBe('present.webp')
+    expect(phantomGesturePose('idle', 4)).toBe('welcome.webp')
+    expect(phantomGesturePose('review', 1)).toBe('conjure.webp')
+    expect(phantomGesturePose('run', 2)).toBe('point.webp')
+  })
+
   it('reacts to the live reasoning signal', () => {
     $petActivity.set({ busy: true, reasoning: true })
     render(<PhantomPresence />)
@@ -41,7 +49,7 @@ describe('PhantomPresence', () => {
     expect(presence.querySelectorAll('.phantom-presence__front-wisp')).toHaveLength(2)
   })
 
-  it('keeps the idle pose fixed instead of cycling it', () => {
+  it('cycles the idle Phantom through visible gestures', () => {
     vi.useFakeTimers()
 
     try {
@@ -51,9 +59,10 @@ describe('PhantomPresence', () => {
 
       expect(presence.getAttribute('data-pose')).toBe('welcome.webp')
 
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => vi.advanceTimersByTime(4_200))
 
-      expect(presence.getAttribute('data-pose')).toBe('welcome.webp')
+      expect(presence.getAttribute('data-pose')).toBe('present.webp')
+      expect(presence.getAttribute('data-gesture-step')).toBe('1')
       expect(presence.querySelector('.phantom-presence__status')).toBeNull()
     } finally {
       vi.useRealTimers()
