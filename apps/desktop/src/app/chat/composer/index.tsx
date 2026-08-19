@@ -3,6 +3,7 @@ import { useStore } from '@nanostores/react'
 import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { useHudComposerDrag } from '@/app/hud/composer-drag'
+import { PhantomPresence } from '@/components/assistant-ui/thread/phantom-presence'
 import { composerFill, composerFloatingStrip, composerSurfaceGlass } from '@/components/chat/composer-dock'
 import { Button } from '@/components/ui/button'
 import { Slot as ContribSlot } from '@/contrib/react/slot'
@@ -1208,6 +1209,7 @@ export function ChatBar({
             }}
             ref={composerRef}
           >
+            {showPhantomPresence && <PhantomPresence />}
             {isHelpHint && <HelpHint />}
             {trigger && !argStageEmpty && (
               <ComposerTriggerPopover
