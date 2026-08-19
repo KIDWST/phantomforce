@@ -150,7 +150,7 @@ for (const body of capturedBodies) {
   assert.equal(body.runtime_surface, "phantombot");
   assert.equal(body.requested_model, "local-auto", "the unsaved browser default should auto-select an installed local model");
   assert.equal(body.admin_model, "local_ollama");
-  assert.deepEqual(body.allowed_providers, ["local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"]);
+  assert.deepEqual(body.allowed_providers, ["deepseek_api", "local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"]);
   assert.equal(body.allow_provider_fallback, true, "the default Hybrid mode may use another enabled provider and must disclose it in the receipt");
   assert.ok(body.max_provider_ms <= 4500, "instant provider time must stay tightly bounded");
   assert.ok(Array.isArray(body.conversation_history));
@@ -224,7 +224,7 @@ assert.match(customerChat.say, /Direct answer/);
 assert.equal(capturedBodies.length, customerRequestCount + 1, "authenticated customers must reach the instant brain from the browser");
 assert.equal(capturedBodies.at(-1).route_tier, "instant");
 assert.equal(capturedBodies.at(-1).runtime_config, true, "customer chat must also resolve the organization runtime on the server");
-assert.deepEqual(capturedBodies.at(-1).allowed_providers, ["local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"]);
+assert.deepEqual(capturedBodies.at(-1).allowed_providers, ["deepseek_api", "local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"]);
 
 const customerReasoningPrompts = [
   "Compare electric cars and hybrids for a city commuter.",

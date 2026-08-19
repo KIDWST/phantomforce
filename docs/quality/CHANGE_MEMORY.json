@@ -4,6 +4,35 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "native-dropdowns-remain-readable",
+      "status": "active",
+      "title": "Native and custom dropdowns remain readable in every workspace",
+      "ownerDecision": "Every dropdown must be easy to read when closed and open. Native select popups must not fall back to a white browser surface beneath light option text; dark and light themes must explicitly cover normal, selected, hovered, focused, disabled, optgroup, and forced-colors states across the entire product shell.",
+      "requiredPatterns": [
+        {
+          "file": "app/admin-next.css",
+          "pattern": "Dropdown readability contract[\\s\\S]*html:not\\(\\[data-org-color-mode=\\\"light\\\"\\]\\) :where\\(select\\)[\\s\\S]*color-scheme:\\s*dark\\s*!important[\\s\\S]*html\\[data-org-color-mode=\\\"light\\\"\\] :where\\(select\\)[\\s\\S]*color-scheme:\\s*light\\s*!important",
+          "description": "Every native select receives an explicit browser color scheme in both supported themes."
+        },
+        {
+          "file": "app/admin-next.css",
+          "pattern": ":where\\(select\\) :where\\(option, optgroup\\)[\\s\\S]{0,700}background-color:[^;]+!important[\\s\\S]{0,350}color:[^;]+!important",
+          "description": "Every native popup row owns a high-contrast foreground and background instead of inheriting a white browser menu."
+        },
+        {
+          "file": "app/admin-next.css",
+          "pattern": ":where\\(select\\) option:checked,[\\s\\S]{0,250}:where\\(select\\) option:hover,[\\s\\S]{0,250}:where\\(select\\) option:focus[\\s\\S]{0,900}:where\\(select\\) option:disabled,[\\s\\S]{0,250}:where\\(select:disabled\\)[\\s\\S]{0,600}:where\\(select:disabled\\) option:checked",
+          "description": "Selected, pointer, keyboard, disabled, and disabled-selected dropdown states stay readable."
+        },
+        {
+          "file": "scripts/test-dropdown-readability.mjs",
+          "pattern": "selectInventory.length >= 20[\\s\\S]*selectCount >= 70[\\s\\S]*ratio >= 4\\.5",
+          "description": "The regression test inventories the broad product surface and enforces WCAG-readable dropdown color pairs."
+        }
+      ],
+      "forbiddenPatterns": []
+    },
+    {
       "id": "phantompet-full-presence-and-vespergate-current-build",
       "status": "active",
       "title": "PhantomPet stays full-body and Vespergate stays on its current build",

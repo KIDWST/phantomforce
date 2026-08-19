@@ -1192,3 +1192,97 @@ html[data-command-os="2040"] .page-worker-output {
   html[data-command-os="2040"] .page-worker::before { animation: none !important; }
   html[data-command-os="2040"] .command-os-enabled :where(button, a) { transition: none !important; }
 }
+
+/* Dropdown readability contract
+   Native Windows/Chromium menus do not reliably inherit the page surface.
+   Put the scheme directly on every select and paint every popup row so light
+   browser defaults can never produce light text on a white option list. */
+html {
+  --pf-native-option-bg: #06110c;
+  --pf-native-option-fg: #f4fff9;
+  --pf-native-option-selected-bg: #14603f;
+  --pf-native-option-selected-fg: #ffffff;
+  --pf-native-option-disabled-fg: #a9b7b0;
+}
+
+html[data-org-color-mode="light"] {
+  --pf-native-option-bg: #ffffff;
+  --pf-native-option-fg: #17251e;
+  --pf-native-option-selected-bg: #14603f;
+  --pf-native-option-selected-fg: #ffffff;
+  --pf-native-option-disabled-fg: #53655c;
+}
+
+html:not([data-org-color-mode="light"]) :where(select) {
+  color-scheme: dark !important;
+}
+
+html[data-org-color-mode="light"] :where(select) {
+  color-scheme: light !important;
+}
+
+:where(select) {
+  text-shadow: none;
+}
+
+:where(select) :where(option, optgroup) {
+  background-color: var(--pf-native-option-bg) !important;
+  background-image: linear-gradient(var(--pf-native-option-bg), var(--pf-native-option-bg)) !important;
+  color: var(--pf-native-option-fg) !important;
+  -webkit-text-fill-color: var(--pf-native-option-fg) !important;
+  text-shadow: none !important;
+}
+
+:where(select) option:checked,
+:where(select) option:hover,
+:where(select) option:focus {
+  background-color: var(--pf-native-option-selected-bg) !important;
+  background-image: linear-gradient(var(--pf-native-option-selected-bg), var(--pf-native-option-selected-bg)) !important;
+  color: var(--pf-native-option-selected-fg) !important;
+  -webkit-text-fill-color: var(--pf-native-option-selected-fg) !important;
+}
+
+:where(select) option:disabled,
+:where(select) optgroup:disabled,
+:where(select:disabled) {
+  color: var(--pf-native-option-disabled-fg) !important;
+  -webkit-text-fill-color: var(--pf-native-option-disabled-fg) !important;
+  opacity: 1;
+}
+
+:where(select:disabled) option:checked,
+:where(select) option:disabled:checked {
+  background-color: var(--pf-native-option-bg) !important;
+  background-image: linear-gradient(var(--pf-native-option-bg), var(--pf-native-option-bg)) !important;
+}
+
+/* Custom listbox/menu surfaces already own their visual treatment. An explicit
+   scheme keeps their form controls and scrollbars consistent with the menu. */
+html:not([data-org-color-mode="light"]) :where(
+  [role="listbox"],
+  .os-menu-popover,
+  .user-menu,
+  .notif-menu,
+  .buddy-menu,
+  .phantombot-model-menu
+) {
+  color-scheme: dark;
+}
+
+html[data-org-color-mode="light"] :where(
+  [role="listbox"],
+  .os-menu-popover,
+  .user-menu,
+  .notif-menu,
+  .buddy-menu,
+  .phantombot-model-menu
+) {
+  color-scheme: light;
+}
+
+@media (forced-colors: active) {
+  :where(select, select option, select optgroup) {
+    color-scheme: normal !important;
+    forced-color-adjust: auto;
+  }
+}

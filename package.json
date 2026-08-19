@@ -71,6 +71,7 @@
     "test:phantombot-next": "node scripts/test-phantombot-next-level.mjs",
     "test:phantombot-media-bridges": "node scripts/test-phantombot-media-bridges.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
+    "test:dropdown-readability": "node scripts/test-dropdown-readability.mjs",
     "test:automation-workspace": "node scripts/test-automation-workspace.mjs",
     "test:phantom-presence": "node scripts/test-phantom-presence-recovery.mjs",
     "test:phantombot-desktop": "npm test --workspace @phantomforce/phantombot-desktop",
