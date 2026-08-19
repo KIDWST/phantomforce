@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const AI_CREDENTIAL_PROVIDER_IDS = ["deepseek_api"] as const;
+export const AI_CREDENTIAL_PROVIDER_IDS = ["deepseek_api", "openrouter_glm"] as const;
 export type AiCredentialProviderId = (typeof AI_CREDENTIAL_PROVIDER_IDS)[number];
 
 type EncryptedCredential = {
@@ -65,6 +65,7 @@ function encryptionKey(options: CredentialStoreOptions = {}) {
 
 function providerEnvironmentKey(providerId: AiCredentialProviderId, env: CredentialStoreOptions["env"] = process.env) {
   if (providerId === "deepseek_api") return env?.DEEPSEEK_API_KEY?.trim() || "";
+  if (providerId === "openrouter_glm") return env?.OPENROUTER_API_KEY?.trim() || "";
   return "";
 }
 

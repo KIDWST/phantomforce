@@ -154,13 +154,15 @@ function extractUsage(json: unknown): OpenRouterGlm52ChatResult["usage"] {
 export async function callOpenRouterGlm52(
   input: OpenRouterGlm52ChatInput,
   options: {
+    credential?: string | null;
+    modelId?: string | null;
     env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
     fetchImpl?: OpenRouterFetch;
   } = {},
 ): Promise<OpenRouterGlm52ChatResult> {
   const env = options.env ?? process.env;
-  const apiKey = env.OPENROUTER_API_KEY?.trim();
-  const modelId = env.OPENROUTER_MODEL?.trim() || OPENROUTER_GLM_52_MODEL_ID;
+  const apiKey = options.credential?.trim() || env.OPENROUTER_API_KEY?.trim();
+  const modelId = options.modelId?.trim() || env.OPENROUTER_MODEL?.trim() || OPENROUTER_GLM_52_MODEL_ID;
 
   if (!envEnabled(env.PHANTOM_LIVE_PROVIDERS_ENABLED)) {
     return blockedResult(input, "Set PHANTOM_LIVE_PROVIDERS_ENABLED=true to allow live provider calls.", modelId);
