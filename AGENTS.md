@@ -70,6 +70,21 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Atomic workspace transitions + recoverable PhantomHunter/AI routing (2026-08-18)** —
+  product commit `79e4b371`, browser build `phantom-live-20260817-163`.
+  Workspace routes now warm and await their complete style bundles, preserve the
+  prior rendered page, and use a branded accessible transition so raw markup is
+  never exposed during navigation. PhantomHunter follow-ups stay pinned to the
+  server-returned organization, stale scan IDs self-heal, interrupted work
+  becomes a durable actionable failure, local paths stay redacted, and Windows
+  Git history uses the working TruffleHog URI. Smart PhantomBot reasoning now
+  enforces provider budgets through ChatGPT Bridge, records real call truth, and
+  treats user corrections as authoritative over assistant embellishment.
+  Release-critical passed 31/31, responsive Chrome passed 60/60 plus a post-
+  rebase PhantomPlay/PhantomStore 12-case sweep, database auth passed 57/57 and
+  the 139-turn two-organization browser journey, CRM persistence passed 18/18,
+  strict history scanning found 0 verified/unknown secrets, and the canonical
+  source doctor confirmed commit/build/service alignment.
 - **Future command shell material pass (2026-08-18)** — product commit
   `24e6f1ed`, browser build `phantom-live-20260817-162`. The desktop command
   rail is now one continuous glass surface instead of painting a rectangular
