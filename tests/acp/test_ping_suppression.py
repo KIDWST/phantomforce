@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from io import StringIO
 
 import pytest
@@ -119,6 +120,10 @@ class _FakeAgent:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows Proactor does not support the Unix os.pipe stdio harness",
+)
 async def test_bare_ping_request_produces_proper_response_and_no_stderr_noise(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

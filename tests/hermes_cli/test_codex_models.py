@@ -1,7 +1,11 @@
 import json
 from unittest.mock import patch
 
-from hermes_cli.codex_models import DEFAULT_CODEX_MODELS, get_codex_model_ids
+from hermes_cli.codex_models import (
+    DEFAULT_CODEX_MODELS,
+    get_codex_model_ids,
+    get_codex_refresh_state,
+)
 
 
 def test_get_codex_model_ids_prioritizes_default_and_cache(tmp_path, monkeypatch):
@@ -63,7 +67,9 @@ def test_get_codex_model_ids_adds_forward_compat_models_from_templates(monkeypat
         lambda access_token: ["gpt-5.3-codex"],
     )
 
-    models = get_codex_model_ids(access_token="codex-access-token")
+    models = get_codex_model_ids(
+        access_token="codex-access-token", force_refresh=True
+    )
 
     # When live discovery only returns gpt-5.3-codex, forward-compat synthesis
     # should surface gpt-5.5, gpt-5.4, gpt-5.4-mini, and gpt-5.3-codex-spark
@@ -75,6 +81,36 @@ def test_get_codex_model_ids_adds_forward_compat_models_from_templates(monkeypat
         "gpt-5.4",
         "gpt-5.3-codex-spark",
     ]
+
+
+def test_normal_codex_discovery_never_calls_live_api(tmp_path, monkeypatch):
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+    monkeypatch.setattr(
+        "hermes_cli.codex_models._fetch_models_from_api",
+        lambda _token: (_ for _ in ()).throw(AssertionError("live API called inline")),
+    )
+    starts = []
+    monkeypatch.setattr(
+        "hermes_cli.codex_models._maybe_start_background_refresh",
+        lambda token, home: starts.append((token, home)) or True,
+    )
+
+    models = get_codex_model_ids(access_token="codex-access-token")
+
+    assert models[: len(DEFAULT_CODEX_MODELS)] == DEFAULT_CODEX_MODELS
+    assert starts == [("codex-access-token", codex_home)]
+
+
+def test_codex_diagnostics_performs_no_filesystem_read(monkeypatch):
+    monkeypatch.setattr(
+        "hermes_cli.codex_models._read_cache_models",
+        lambda _home: (_ for _ in ()).throw(AssertionError("diagnostics did I/O")),
+    )
+    state = get_codex_refresh_state()
+    assert "cache_present" in state
+    assert "refresh_in_progress" in state
 
 
 def test_fetch_from_api_keeps_supported_in_api_false_models(monkeypatch):

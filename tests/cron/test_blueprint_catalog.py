@@ -29,8 +29,19 @@ from cron.blueprint_catalog import (
 class TestCatalog:
     def test_catalog_nonempty_and_keyed(self):
         assert len(CATALOG) >= 1
+        assert len({r.key for r in CATALOG}) == len(CATALOG)
         for r in CATALOG:
             assert get_blueprint(r.key) is r
+
+    def test_defensive_security_blueprints_are_native_catalog_entries(self):
+        expected = {
+            "defender-quick-scan",
+            "downloads-malware-watch",
+            "windows-protection-baseline",
+            "breach-exposure-monitor",
+        }
+        assert expected <= {r.key for r in CATALOG}
+        assert all(get_blueprint(key).category == "security" for key in expected)
 
     def test_every_slot_has_known_type(self):
         for r in CATALOG:
@@ -71,6 +82,37 @@ class TestScheduleResolution:
     def test_defaults_fill_when_omitted(self):
         spec = fill_blueprint(get_blueprint("morning-brief"), {})
         assert spec["schedule"] == "0 8 * * *"
+
+    def test_defender_scan_builds_real_windows_security_job(self):
+        spec = fill_blueprint(
+            get_blueprint("defender-quick-scan"),
+            {"time": "03:15", "deliver": "local"},
+        )
+        assert spec["schedule"] == "15 3 * * *"
+        assert "Start-MpScan -ScanType QuickScan" in spec["prompt"]
+        assert "Never disable protection" in spec["prompt"]
+
+    def test_download_watch_cadence_and_path_render(self):
+        spec = fill_blueprint(
+            get_blueprint("downloads-malware-watch"),
+            {
+                "interval_hours": "6",
+                "folder": r"C:\Users\Jordan\Downloads",
+                "deliver": "origin",
+            },
+        )
+        assert spec["schedule"] == "0 */6 * * *"
+        assert r"C:\Users\Jordan\Downloads" in spec["prompt"]
+        assert "CustomScan" in spec["prompt"]
+
+    def test_breach_monitor_is_public_source_only(self):
+        spec = fill_blueprint(
+            get_blueprint("breach-exposure-monitor"),
+            {"identity": "example.com", "time": "10:00", "day": "monday"},
+        )
+        assert spec["schedule"] == "0 10 * * 1"
+        assert "reputable public breach-notification services" in spec["prompt"]
+        assert "Never access illicit marketplaces" in spec["prompt"]
 
 
 class TestValidation:

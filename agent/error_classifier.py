@@ -63,6 +63,7 @@ class FailoverReason(enum.Enum):
     multimodal_tool_content_unsupported = "multimodal_tool_content_unsupported"  # Provider rejected list-type content in tool messages (e.g. Xiaomi MiMo) — downgrade to text and retry
 
     # Provider-specific
+    thinking_unsupported = "thinking_unsupported"  # Model rejects reasoning/thinking controls — omit and retry once
     thinking_signature = "thinking_signature"  # Anthropic thinking block sig invalid
     long_context_tier = "long_context_tier"    # Anthropic "extra usage" tier gate
     oauth_long_context_beta_forbidden = "oauth_long_context_beta_forbidden"  # Anthropic OAuth subscription rejects 1M context beta — disable beta and retry
@@ -661,6 +662,25 @@ def classify_api_error(
             FailoverReason.content_policy_blocked,
             retryable=False,
             should_fallback=True,
+        )
+
+    # Ollama and compatible local runtimes reject a reasoning request when the
+    # selected model has no native thinking capability. This is recoverable by
+    # rebuilding the same request without reasoning controls; retrying the
+    # unchanged payload would deterministically fail again.
+    if (
+        status_code == 400
+        and "thinking" in error_msg
+        and (
+            "does not support thinking" in error_msg
+            or "doesn't support thinking" in error_msg
+            or "thinking is not supported" in error_msg
+        )
+    ):
+        return _result(
+            FailoverReason.thinking_unsupported,
+            retryable=True,
+            should_compress=False,
         )
 
     # Anthropic thinking block recovery (400).  Two distinct failure modes,

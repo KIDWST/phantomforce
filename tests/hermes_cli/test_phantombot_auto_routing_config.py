@@ -10,9 +10,10 @@ def test_phantombot_auto_routing_defaults_are_non_secret_and_lane_specific():
     assert auto_routing == {
         "version": 1,
         "routes": {
-            "reasoning": {"option_id": "openrouter.glm-5.2"},
-            "image": {"option_id": "openai.gpt-image-1"},
+            "reasoning": {"option_id": "chatgpt.subscription"},
+            "image": {"option_id": "chatgpt.subscription"},
             "video": {"option_id": "higgsfield.subscription"},
+            "coding": {"option_id": "phantom-local"},
         },
     }
     assert re.search(r"api[_-]?key|token|secret|password", json.dumps(auto_routing), re.IGNORECASE) is None

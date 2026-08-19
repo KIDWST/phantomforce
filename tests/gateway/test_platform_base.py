@@ -1500,6 +1500,8 @@ class TestMediaDeliveryDefaultMode:
         """A symlink in the workdir pointing at a credential is rejected on its
         resolved target, even under the $HOME exception.
         """
+        if os.name == "nt":
+            pytest.skip("requires Windows Developer Mode or symlink privilege")
         self._patch_roots(monkeypatch)
 
         fake_home = tmp_path / "root"
@@ -2001,7 +2003,7 @@ class TestMediaDeliveryDiagnosability:
 
     def test_canonical_cache_roots_present(self):
         from gateway.platforms.base import MEDIA_DELIVERY_SAFE_ROOTS
-        roots = {str(r) for r in MEDIA_DELIVERY_SAFE_ROOTS}
+        roots = {r.as_posix() for r in MEDIA_DELIVERY_SAFE_ROOTS}
         assert any(r.endswith("cache/images") for r in roots)
         assert any(r.endswith("cache/documents") for r in roots)
         # Legacy layout still present.

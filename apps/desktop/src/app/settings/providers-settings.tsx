@@ -3,7 +3,14 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { runInTerminal } from '@/app/right-sidebar/store'
-import { FEATURED_ID, FeaturedProviderRow, ProviderRow, providerTitle, sortProviders } from '@/components/onboarding'
+import {
+  FEATURED_ID,
+  FeaturedProviderRow,
+  ProviderRow,
+  providerTitle,
+  sortProviders,
+  visibleOAuthProviders
+} from '@/components/onboarding'
 import { Button } from '@/components/ui/button'
 import { RowButton } from '@/components/ui/row-button'
 import { SearchField } from '@/components/ui/search-field'
@@ -138,7 +145,10 @@ function OAuthPicker({
   // The backend's historical "accounts" catalog includes one Anthropic
   // API-key helper. Keep it in API Keys so this view is subscriptions/accounts
   // only; every OAuth/external provider continues to flow through dynamically.
-  const ordered = useMemo(() => sortProviders(providers.filter(provider => provider.id !== 'anthropic')), [providers])
+  const ordered = useMemo(
+    () => sortProviders(visibleOAuthProviders(providers).filter(provider => provider.id !== 'anthropic')),
+    [providers]
+  )
 
   const select = (p: OAuthProvider) => startManualProviderOAuth(p.id)
 

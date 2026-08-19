@@ -1411,31 +1411,34 @@ agent:
 
 | Value | Behavior |
 |-------|----------|
-| `"auto"` (default) | Enabled for models matching: `gpt`, `codex`, `gemini`, `gemma`, `grok`. Disabled for all others (Claude, DeepSeek, Qwen, etc.). |
+| `"auto"` (default) | Enabled for every selected model whenever agent tools are loaded. |
 | `true` | Always enabled, regardless of model. Useful if you notice your current model describing actions instead of performing them. |
 | `false` | Always disabled, regardless of model. |
 | `["gpt", "codex", "qwen", "llama"]` | Enabled only when the model name contains one of the listed substrings (case-insensitive). |
 
 ### What it injects
 
-When enabled, three layers of guidance may be added to the system prompt:
+When enabled, the runtime adds a shared execution contract to the system prompt:
 
-1. **General tool-use enforcement** (all matched models) — instructs the model to make tool calls immediately instead of describing intentions, keep working until the task is complete, and never end a turn with a promise of future action.
+1. **General tool-use enforcement** — instructs the model to make tool calls immediately instead of describing intentions, keep working until the task is complete, and never end a turn with a promise of future action.
 
-2. **OpenAI execution discipline** (GPT and Codex models only) — additional guidance addressing GPT-specific failure modes: abandoning work on partial results, skipping prerequisite lookups, hallucinating instead of using tools, and declaring "done" without verification.
+2. **Model-neutral execution discipline** — covers abandoning work on partial results, skipping prerequisite lookups, hallucinating instead of using tools, and declaring "done" without verification.
 
-3. **Google operational guidance** (Gemini and Gemma models only) — conciseness, absolute paths, parallel tool calls, and verify-before-edit patterns.
+3. **Provider/model quirk guidance** — small additive hints may still be supplied for families with known wire/behavior quirks, but these no longer determine whether the agent can act.
 
-These are transparent to the user and only affect the system prompt. Models that already use tools reliably (like Claude) don't need this guidance, which is why `"auto"` excludes them.
+These are transparent to the user. The execution contract is owned by the agent runtime rather than by a vendor/model allowlist.
 
-### When to turn it on
+### Runtime continuation and tool compatibility
 
-If you're using a model not in the default auto list and notice it frequently describes what it *would* do instead of doing it, set `tool_use_enforcement: true` or add the model substring to the list:
+Two companion settings make the same execution contract resilient across different model/provider capabilities:
 
 ```yaml
 agent:
-  tool_use_enforcement: ["gpt", "codex", "gemini", "grok", "my-custom-model"]
+  intent_ack_continuation: "auto"  # retry a premature "I'll do it" turn for every model
+  text_tool_fallback: true          # bridge text-output models/endpoints without native tools
 ```
+
+Native structured function calling is always preferred. If an endpoint explicitly rejects native tool schemas, or a selected text model repeatedly fails to produce usable native calls, the compatibility path exposes the same advertised tool schemas through a strict text protocol and feeds recovered calls back into the normal validated executor. Tool permissions, approvals, schema validation, and guardrails are unchanged.
 
 ## Tool-Loop Guardrails
 

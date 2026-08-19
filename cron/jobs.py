@@ -1078,6 +1078,11 @@ def _normalize_workdir(workdir: Optional[str]) -> Optional[str]:
     raw = str(workdir).strip()
     if not raw:
         return None
+    if raw == "~" or raw.startswith(("~/", "~\\")):
+        explicit_home = os.environ.get("HOME", "").strip()
+        if explicit_home:
+            tail = raw[2:] if len(raw) > 1 else ""
+            raw = str(Path(explicit_home) / tail) if tail else explicit_home
     expanded = Path(raw).expanduser()
     if not expanded.is_absolute():
         raise ValueError(

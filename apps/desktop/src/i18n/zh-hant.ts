@@ -231,6 +231,7 @@ export const zhHant = defineLocale({
       archivedChats: '已封存聊天',
       about: '關於',
       billing: '帳單',
+      chatgptPlus: 'ChatGPT Plus',
       notifications: '通知'
     },
     notifications: {

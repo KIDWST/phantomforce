@@ -171,6 +171,9 @@ class TestConfigPrompt:
 
         image_gen_registry.register_provider(_FakeProvider("unavail-img", available=False))
 
+        # Keep this unit test isolated from locally installed plugins and
+        # credentials; only the explicitly registered fake provider is in scope.
+        monkeypatch.setattr("hermes_cli.plugins._ensure_plugins_discovered", lambda: None)
         assert tools_config._toolset_needs_configuration_prompt("image_gen", {}) is True
 
 

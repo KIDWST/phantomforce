@@ -9,6 +9,7 @@ covered in ``test_shell_hooks_consent.py``.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,15 @@ def _write_script(tmp_path: Path, name: str, body: str) -> Path:
 def _allowlist_pair(monkeypatch, tmp_path, event: str, command: str) -> None:
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes_home"))
     shell_hooks._record_approval(event, command)
+
+
+def _bash_path(path: Path) -> str:
+    """Render a native test path for use inside a Git Bash script."""
+    if os.name == "nt":
+        from tools.environments.local import _bash_safe_path
+
+        return _bash_safe_path(str(path))
+    return str(path)
 
 
 @pytest.fixture(autouse=True)
@@ -359,7 +369,7 @@ class TestCallbackSubprocess:
         script = _write_script(
             tmp_path, "log.sh",
             f"#!/usr/bin/env bash\n"
-            f"echo \"$(cat -)\" >> {calls}\n"
+            f"echo \"$(cat -)\" >> {_bash_path(calls)}\n"
             f"printf '{{}}\\n'\n",
         )
         spec = shell_hooks.ShellHookSpec(
@@ -379,7 +389,7 @@ class TestCallbackSubprocess:
         capture = tmp_path / "payload.json"
         script = _write_script(
             tmp_path, "capture.sh",
-            f"#!/usr/bin/env bash\ncat - > {capture}\nprintf '{{}}\\n'\n",
+            f"#!/usr/bin/env bash\ncat - > {_bash_path(capture)}\nprintf '{{}}\\n'\n",
         )
         spec = shell_hooks.ShellHookSpec(
             event="pre_tool_call", command=str(script),
@@ -690,8 +700,10 @@ class TestAllowlistConcurrency:
         assert shell_hooks.script_is_executable(f"python3 {script}")
         assert shell_hooks.script_is_executable(f"/usr/bin/env python3 {script}")
 
-        # Bare invocation on the same non-X_OK file: not runnable.
-        assert not shell_hooks.script_is_executable(str(script))
+        # Bare invocation on the same non-X_OK file: POSIX requires X_OK.
+        # Windows routes .py files through the active interpreter, where the
+        # POSIX execute bit has no meaning.
+        assert shell_hooks.script_is_executable(str(script)) is (os.name == "nt")
 
         # Flip +x; bare invocation is now runnable too.
         script.chmod(0o755)

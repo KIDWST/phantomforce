@@ -5927,6 +5927,26 @@ def test_config_set_model_switches_agent_without_touching_env(monkeypatch):
             "role": "user",
             "content": session["history"][-1]["content"],
         }
+        marker_count = len(session["history"])
+        persisted_marker_count = len(db.messages)
+
+        # An idempotent repeat (double-click/replayed config.set) may refresh
+        # runtime metadata, but it must not create another visible event.
+        repeat = server.handle_request(
+            {
+                "id": "1-repeat",
+                "method": "config.set",
+                "params": {
+                    "session_id": "sid",
+                    "key": "model",
+                    "value": "anthropic/claude-sonnet-4.6 --provider anthropic",
+                },
+            }
+        )
+
+        assert repeat["result"]["value"] == "anthropic/claude-sonnet-4.6"
+        assert len(session["history"]) == marker_count
+        assert len(db.messages) == persisted_marker_count
         # ...and the shared process env was NOT touched.
         assert os.environ["HERMES_TUI_PROVIDER"] == "openai-codex"
         assert "HERMES_MODEL" not in os.environ
@@ -8506,17 +8526,14 @@ def test_respond_unpacks_sid_tuple_correctly():
 
 
 # ---------------------------------------------------------------------------
-# /model switch and other agent-mutating commands must reject while the
-# session is running.  agent.switch_model() mutates self.model, self.provider,
-# self.base_url, self.client etc. in place — the worker thread running
-# agent.run_conversation is reading those on every iteration.  Same class of
-# bug as the session.undo / session.compress mid-run silent-drop; same fix
-# pattern: reject with 4009 while running.
+# /model switch and other agent-mutating commands must never mutate the agent
+# while a turn is running.  Model requests are queued as explicit pending
+# state and activated at the turn boundary; other mutations still reject.
 # ---------------------------------------------------------------------------
 
 
-def test_config_set_model_rejects_while_running(monkeypatch):
-    """/model via config.set must reject during an in-flight turn."""
+def test_config_set_model_queues_while_running(monkeypatch):
+    """/model via config.set records pending state during an in-flight turn."""
     seen = {"called": False}
 
     def _fake_apply(sid, session, raw, **_kwargs):
@@ -8538,9 +8555,11 @@ def test_config_set_model_rejects_while_running(monkeypatch):
                 },
             }
         )
-        assert resp.get("error")
-        assert resp["error"]["code"] == 4009
-        assert "session busy" in resp["error"]["message"]
+        assert resp.get("result")
+        assert resp["result"]["pending"] is True
+        assert server._sessions["sid"]["pending_model_switch"]["model"] == (
+            "anthropic/claude-sonnet-4.6"
+        )
         assert not seen["called"], (
             "_apply_model_switch was called mid-turn — would race with "
             "the worker thread reading agent.model / agent.client"
@@ -10494,7 +10513,9 @@ def test_session_activate_returns_inflight_stream_before_completion(monkeypatch)
                 ],
             }
 
-    server._sessions["sid-live"] = _session(agent=_Agent())
+    # This test exercises in-flight projection, not config-driven model sync.
+    # Pin the stub model so the worker reaches run_conversation immediately.
+    server._sessions["sid-live"] = _session(agent=_Agent(), model_override=True)
     monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
     monkeypatch.setattr(server, "render_message", lambda raw, cols: None)
     monkeypatch.setattr(server, "_get_db", lambda: None)

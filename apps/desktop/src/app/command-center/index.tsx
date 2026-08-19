@@ -19,6 +19,7 @@ import {
   BarChart3,
   Bookmark,
   BookmarkFilled,
+  Clipboard,
   Download,
   MessageCircle,
   Trash2,
@@ -37,11 +38,12 @@ import { useRouteEnumParam } from '../hooks/use-route-enum-param'
 import { OverlayMain, OverlayNav, OverlaySplitLayout } from '../overlays/overlay-split-layout'
 import { OverlayView } from '../overlays/overlay-view'
 
+import { EngineeringRunsPanel } from './engineering-runs'
 import { MaintenancePanel } from './maintenance'
 
-export type CommandCenterSection = 'maintenance' | 'sessions' | 'system' | 'usage'
+export type CommandCenterSection = 'maintenance' | 'runs' | 'sessions' | 'system' | 'usage'
 
-const SECTIONS = ['sessions', 'system', 'usage', 'maintenance'] as const satisfies readonly CommandCenterSection[]
+const SECTIONS = ['sessions', 'runs', 'system', 'usage', 'maintenance'] as const satisfies readonly CommandCenterSection[]
 
 const LOG_FILES = ['agent', 'errors', 'gateway', 'desktop'] as const
 const LOG_LEVELS = ['ALL', 'INFO', 'WARNING', 'ERROR'] as const
@@ -307,6 +309,8 @@ export function CommandCenterView({ initialSection, onClose, onDeleteSession, on
             icon:
               value === 'sessions'
                 ? MessageCircle
+                : value === 'runs'
+                  ? Clipboard
                 : value === 'system'
                   ? Activity
                   : value === 'maintenance'
@@ -399,6 +403,8 @@ export function CommandCenterView({ initialSection, onClose, onDeleteSession, on
                 </ul>
               )}
             </div>
+          ) : section === 'runs' ? (
+            <EngineeringRunsPanel />
           ) : section === 'usage' ? (
             <UsagePanel
               error={usageError}

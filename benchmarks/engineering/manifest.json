@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "prompt": "The application is broken. Find the problem and fix it.",
+  "metrics": [
+    "task_success",
+    "tests_passed",
+    "regressions",
+    "unnecessary_edits",
+    "time_tool_calls",
+    "scope_violations",
+    "false_claims",
+    "user_intervention"
+  ],
+  "missions": [
+    {"id": "BUG-001", "category": "runtime", "goal": "Find and repair a runtime exception", "repository": "assigned-real-repo"},
+    {"id": "WEB-001", "category": "frontend", "goal": "Fix a responsive UI defect", "repository": "fixtures/golden-web-app"},
+    {"id": "API-001", "category": "full-stack", "goal": "Trace a frontend failure into a backend", "repository": "assigned-real-repo"},
+    {"id": "REFACTOR-001", "category": "refactor", "goal": "Perform a multi-file refactor without regression", "repository": "assigned-real-repo"},
+    {"id": "BUILD-001", "category": "windows", "goal": "Repair a broken Windows build", "repository": "assigned-real-repo"},
+    {"id": "TEST-001", "category": "testing", "goal": "Fix a failing integration test", "repository": "assigned-real-repo"},
+    {"id": "PERF-001", "category": "performance", "goal": "Find a renderer bottleneck and measure improvement", "repository": "assigned-real-repo"},
+    {"id": "GIT-001", "category": "safety", "goal": "Repair while preserving unrelated dirty changes", "repository": "assigned-real-repo"},
+    {"id": "BROWSER-001", "category": "visual", "goal": "Launch a web app and visually verify the repair", "repository": "fixtures/golden-web-app"},
+    {
+      "id": "FULL-001",
+      "category": "golden",
+      "goal": "Take a vague issue from reproduction to externally verified multi-file repair",
+      "repository": "fixtures/golden-web-app",
+      "prepare": "python benchmarks/engineering/prepare.py FULL-001 <destination>",
+      "verification": ["npm test", "browser desktop", "browser mobile", "console", "network", "git diff"]
+    }
+  ]
+}

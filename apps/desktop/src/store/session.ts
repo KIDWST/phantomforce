@@ -23,6 +23,29 @@ const COMPOSER_PROVIDER_KEY = 'hermes.desktop.composer.provider'
 const COMPOSER_MODEL_SOURCE_KEY = 'hermes.desktop.composer.model-source'
 const COMPOSER_EFFORT_KEY = 'hermes.desktop.composer.reasoning-effort'
 const COMPOSER_FAST_KEY = 'hermes.desktop.composer.fast'
+const INTERNAL_TO_PHANTOM_COMPOSER_MIGRATION_KEY = 'hermes.desktop.composer.internalToPhantomMigration.v3'
+const KIMI_PROVIDER_ID = 'kimi-k3-direct'
+const KIMI_MODEL_ALIAS = 'kimi-k3-hf:latest'
+const PHANTOM_PROVIDER_ID = 'phantom'
+const PHANTOM_MODEL_ALIAS = 'phantom'
+const RETIRED_INTERNAL_MODELS = new Set([
+  KIMI_MODEL_ALIAS,
+  'phantom-v1:latest',
+  'phantom-v1:stage2-20260730',
+  'phantom-v1:rollback-20260730-0539',
+  'qwen3-coder:30b',
+  'chatgpt-plus',
+  'chatgpt-plus-image'
+])
+const RETIRED_INTERNAL_PROVIDERS = new Set([KIMI_PROVIDER_ID, 'qwen3-coder-local', 'chatgpt-plus'])
+
+function publicComposerModel(model: string): string {
+  return RETIRED_INTERNAL_MODELS.has(model.trim()) ? PHANTOM_MODEL_ALIAS : model
+}
+
+function publicComposerProvider(provider: string): string {
+  return RETIRED_INTERNAL_PROVIDERS.has(provider.trim()) ? PHANTOM_PROVIDER_ID : provider
+}
 
 // The last chat the user had open, so a relaunch lands back on it instead of an
 // empty new-chat. Stored (not runtime) id — the route is keyed by stored id.
@@ -45,6 +68,29 @@ export const getRememberedSessionId = (profile?: null | string): null | string =
   storedString(rememberedSessionKey(profile))
 export const setRememberedSessionId = (id: null | string, profile?: null | string) =>
   persistString(rememberedSessionKey(profile), id)
+
+export function migrateRetiredKimiComposerSelection(): boolean {
+  if (storedString(INTERNAL_TO_PHANTOM_COMPOSER_MIGRATION_KEY) === 'done') {
+    return false
+  }
+
+  const model = storedString(COMPOSER_MODEL_KEY)?.trim()
+  const provider = storedString(COMPOSER_PROVIDER_KEY)?.trim()
+
+  const staleModel = RETIRED_INTERNAL_MODELS.has(model || '')
+  const staleProvider = RETIRED_INTERNAL_PROVIDERS.has(provider || '')
+
+  if (!staleModel && !staleProvider) {
+    return false
+  }
+
+  persistString(COMPOSER_MODEL_KEY, PHANTOM_MODEL_ALIAS)
+  persistString(COMPOSER_PROVIDER_KEY, PHANTOM_PROVIDER_ID)
+  persistString(COMPOSER_MODEL_SOURCE_KEY, 'default')
+  persistString(INTERNAL_TO_PHANTOM_COMPOSER_MIGRATION_KEY, 'done')
+
+  return true
+}
 
 /**
  * The profile a routed session belongs to, for keying the remembered id.
@@ -327,6 +373,9 @@ export const $lastVisibleMessageIsUser = computed($messages, lastVisibleMessageI
 export const $freshDraftReady = atom(false)
 export const $busy = atom(false)
 export const $awaitingResponse = atom(false)
+export const $thinkingStatus = atom('')
+export type PhantomRoute = 'deep' | 'direct' | 'focus' | 'instant'
+export const $phantomRoute = atom<PhantomRoute | null>(null)
 // Stored-session id whose most recent resume FAILED terminally (the gateway RPC
 // rejected AND the REST transcript fallback also failed), leaving the window
 // with no runtime and an empty transcript. Drives use-route-resume's self-heal:
@@ -344,6 +393,7 @@ export const $resumeFailedSessionId = atom<string | null>(null)
 // clears it and resets the retry counter. Null whenever the active route has a
 // healthy, in-flight, or still-auto-retrying resume.
 export const $resumeExhaustedSessionId = atom<string | null>(null)
+migrateRetiredKimiComposerSelection()
 export const $currentModel = atom(storedString(COMPOSER_MODEL_KEY) ?? '')
 export const $currentProvider = atom(storedString(COMPOSER_PROVIDER_KEY) ?? '')
 export const $currentReasoningEffort = atom(storedString(COMPOSER_EFFORT_KEY) ?? '')
@@ -385,7 +435,11 @@ export const setMessagingTruncated = (next: Updater<boolean>) => updateAtom($mes
 export const setSessionProfileTotals = (next: Updater<Record<string, number>>) =>
   updateAtom($sessionProfileTotals, next)
 export const setSessionsLoading = (next: Updater<boolean>) => updateAtom($sessionsLoading, next)
-export const setActiveSessionId = (next: Updater<string | null>) => updateAtom($activeSessionId, next)
+export const setActiveSessionId = (next: Updater<string | null>) => {
+  updateAtom($activeSessionId, next)
+  $thinkingStatus.set('')
+  $phantomRoute.set(null)
+}
 export const setActiveSessionStoredIdRotation = (next: Updater<ActiveSessionStoredIdRotation | null>) =>
   updateAtom($activeSessionStoredIdRotation, next)
 
@@ -409,14 +463,20 @@ export const setResumeFailedSessionId = (next: Updater<string | null>) => update
 export const setResumeExhaustedSessionId = (next: Updater<string | null>) => updateAtom($resumeExhaustedSessionId, next)
 export const setBusy = (next: Updater<boolean>) => updateAtom($busy, next)
 export const setAwaitingResponse = (next: Updater<boolean>) => updateAtom($awaitingResponse, next)
+export const setThinkingStatus = (next: Updater<string>) => updateAtom($thinkingStatus, next)
+export const setPhantomRoute = (next: Updater<PhantomRoute | null>) => updateAtom($phantomRoute, next)
 
 export const setCurrentModel = (next: Updater<string>) => {
-  updateAtom($currentModel, next)
+  updateAtom($currentModel, current =>
+    publicComposerModel(typeof next === 'function' ? (next as (value: string) => string)(current) : next)
+  )
   persistString(COMPOSER_MODEL_KEY, $currentModel.get() || null)
 }
 
 export const setCurrentProvider = (next: Updater<string>) => {
-  updateAtom($currentProvider, next)
+  updateAtom($currentProvider, current =>
+    publicComposerProvider(typeof next === 'function' ? (next as (value: string) => string)(current) : next)
+  )
   persistString(COMPOSER_PROVIDER_KEY, $currentProvider.get() || null)
 }
 

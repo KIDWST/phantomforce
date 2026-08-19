@@ -237,6 +237,7 @@ export const ja = defineLocale({
       archivedChats: 'アーカイブ済みチャット',
       about: '情報',
       billing: '請求',
+      chatgptPlus: 'ChatGPT Plus',
       notifications: '通知'
     },
     notifications: {

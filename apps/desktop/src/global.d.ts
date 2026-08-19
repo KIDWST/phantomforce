@@ -75,6 +75,10 @@ declare global {
         discover: (org?: string) => Promise<DesktopCloudDiscoverResult>
         agentSignIn: (dashboardUrl: string) => Promise<DesktopCloudAgentSignInResult>
       }
+      chatgptPlus?: {
+        health: () => Promise<ChatGptPlusBridgeStatus>
+        start: () => Promise<ChatGptPlusBridgeStatus>
+      }
       profile: {
         get: () => Promise<DesktopActiveProfile>
         // Persists the desktop's profile choice and relaunches the local
@@ -592,6 +596,18 @@ export interface DesktopCloudAgentSignInResult {
   baseUrl: string
   // Whether the agent's gateway session cookie landed (silent cascade done).
   connected: boolean
+}
+
+export interface ChatGptPlusBridgeStatus {
+  available: boolean
+  baseUrl: string
+  browserUp: boolean
+  error: string | null
+  loggedIn: boolean
+  pid: number | null
+  running: boolean
+  service: string
+  version: string | null
 }
 
 export interface DesktopBootProgress {

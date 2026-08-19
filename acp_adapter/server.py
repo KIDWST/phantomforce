@@ -290,10 +290,14 @@ def _path_from_file_uri(uri: str) -> Path | None:
 
     # file:///C:/Users/... or C:\Users\...
     if len(path_text) >= 3 and path_text[0] == "/" and path_text[2] == ":" and path_text[1].isalpha():
+        if os.name == "nt":
+            return Path(path_text.lstrip("/").replace("/", "\\"))
         drive = path_text[1].lower()
         rest = path_text[3:].lstrip("/\\").replace("\\", "/")
         return Path("/mnt") / drive / rest
     if len(path_text) >= 2 and path_text[1] == ":" and path_text[0].isalpha():
+        if os.name == "nt":
+            return Path(path_text.replace("/", "\\"))
         drive = path_text[0].lower()
         rest = path_text[2:].lstrip("/\\").replace("\\", "/")
         return Path("/mnt") / drive / rest
@@ -307,10 +311,10 @@ def _decode_text_bytes(data: bytes, mime_type: str | None) -> str | None:
         return None
     for encoding in ("utf-8-sig", "utf-8", "latin-1"):
         try:
-            return data.decode(encoding)
+            return data.decode(encoding).replace("\r\n", "\n").replace("\r", "\n")
         except UnicodeDecodeError:
             continue
-    return data.decode("utf-8", errors="replace")
+    return data.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _format_resource_text(
@@ -1801,6 +1805,9 @@ class HermesACPAgent(acp.Agent):
             # never leaks one session's id into the next session's tools.
             previous_session_id = os.environ.get("HERMES_SESSION_ID")
             os.environ["HERMES_SESSION_ID"] = session_id
+            _had_external_cancel = hasattr(agent, "_external_cancel_event")
+            _previous_external_cancel = getattr(agent, "_external_cancel_event", None)
+            agent._external_cancel_event = state.cancel_event
             try:
                 result = agent.run_conversation(
                     user_message=user_content,
@@ -1821,6 +1828,13 @@ class HermesACPAgent(acp.Agent):
                     os.environ.pop("HERMES_SESSION_ID", None)
                 else:
                     os.environ["HERMES_SESSION_ID"] = previous_session_id
+                if _had_external_cancel:
+                    agent._external_cancel_event = _previous_external_cancel
+                else:
+                    try:
+                        delattr(agent, "_external_cancel_event")
+                    except AttributeError:
+                        pass
                 if approval_cb:
                     try:
                         from tools import terminal_tool as _terminal_tool
@@ -1898,6 +1912,9 @@ class HermesACPAgent(acp.Agent):
         suppress_interrupt_response = interrupted and final_response.startswith(
             INTERRUPT_WAITING_FOR_MODEL_PREFIX
         )
+        if cancelled:
+            final_response = ""
+
         if final_response and not suppress_interrupt_response:
             try:
                 from agent.title_generator import maybe_auto_title
@@ -1954,8 +1971,10 @@ class HermesACPAgent(acp.Agent):
         with state.runtime_lock:
             state.is_running = False
             state.current_prompt_text = ""
+            if cancelled:
+                state.queued_prompts.clear()
 
-        while True:
+        while not cancelled:
             with state.runtime_lock:
                 if not state.queued_prompts:
                     break

@@ -333,7 +333,7 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
 
   return (
     <div
-      className="relative min-h-0 max-w-full overflow-hidden contain-[layout_paint]"
+      className="relative z-1 min-h-0 max-w-full overflow-hidden contain-[layout_paint]"
       style={
         {
           height: clampToComposer ? 'var(--thread-viewport-height)' : '100%',

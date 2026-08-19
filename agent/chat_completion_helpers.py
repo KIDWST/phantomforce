@@ -34,6 +34,7 @@ from agent.turn_context import substitute_api_content
 from agent.gemini_native_adapter import is_native_gemini_base_url
 from agent.model_metadata import is_local_endpoint
 from agent.message_content import flatten_message_text
+from agent.ollama_runtime import choose_ollama_request_num_ctx
 from agent.message_sanitization import (
     _sanitize_surrogates,
     _repair_tool_call_arguments,
@@ -55,6 +56,61 @@ _OPENROUTER_PROVIDER_SORT_VALUES = {"throughput", "latency", "price"}
 # billing reasons keep their own 60s cooldown (set above); this is the
 # narrower non-rate-limit case.  See issue #24996.
 _FALLBACK_EXHAUSTED_COOLDOWN_S = 5.0
+
+
+def _reasoning_route_key(agent) -> tuple[str, str, str]:
+    """Stable identity for a model route's request-option capabilities."""
+    return (
+        str(getattr(agent, "provider", "") or "").strip().lower(),
+        str(getattr(agent, "base_url", "") or "").strip().rstrip("/").lower(),
+        str(getattr(agent, "model", "") or "").strip().lower(),
+    )
+
+
+def reasoning_is_suppressed_for_current_route(agent) -> bool:
+    suppressed = getattr(agent, "_reasoning_suppressed_routes", None)
+    return isinstance(suppressed, set) and _reasoning_route_key(agent) in suppressed
+
+
+def suppress_reasoning_for_current_route(agent) -> None:
+    """Remember a provider's definitive unsupported-thinking response."""
+    suppressed = getattr(agent, "_reasoning_suppressed_routes", None)
+    if not isinstance(suppressed, set):
+        suppressed = set()
+        agent._reasoning_suppressed_routes = suppressed
+    suppressed.add(_reasoning_route_key(agent))
+
+    # Keep the native Ollama capability cache consistent with the provider's
+    # definitive response. This prevents a stale positive /api/show result
+    # from re-enabling the rejected option later in the same agent session.
+    cache = getattr(agent, "_ollama_thinking_cache", None)
+    if isinstance(cache, dict):
+        cache[(getattr(agent, "model", ""), getattr(agent, "base_url", ""))] = (
+            False,
+            time.monotonic(),
+        )
+
+
+def _ensure_explicit_phantom_runtime(agent) -> None:
+    """Cold-start Local only when this outbound request explicitly uses Phantom."""
+    try:
+        from agent.ollama_runtime import ensure_explicit_phantom_runtime
+
+        status = ensure_explicit_phantom_runtime(agent, log=logger)
+        if status.get("status") in {
+            "start_failed",
+            "start_lock_timeout",
+            "start_timeout",
+            "missing_ollama_executable",
+        }:
+            state = status.get("status")
+            logger.warning("Explicit Phantom runtime unavailable: %s", state)
+            raise RuntimeError(f"Phantom local runtime unavailable ({state})")
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        logger.debug("Explicit Phantom runtime startup failed", exc_info=True)
+        raise RuntimeError("Phantom local runtime startup failed") from exc
 
 
 def _ra():
@@ -385,6 +441,8 @@ def _dispatch_nonstreaming_api_request(agent, api_kwargs: dict, *, make_client):
     interrupt, abort, cancellation, and close semantics stay in the callers —
     this helper only issues the request.
     """
+    if agent.api_mode == "chat_completions":
+        _ensure_explicit_phantom_runtime(agent)
     if agent.api_mode == "codex_responses":
         request_client = make_client("codex_stream_request")
         return agent._run_codex_stream(
@@ -982,8 +1040,23 @@ def interruptible_api_call(agent, api_kwargs: dict):
 
 
 def build_api_kwargs(agent, api_messages: list) -> dict:
-    """Build the keyword arguments dict for the active API mode."""
+    """Build the keyword arguments dict for the active API mode.
+
+    Native provider tool schemas are the fast/default path.  When the selected
+    model or endpoint cannot accept them, the model-neutral compatibility
+    bridge converts only the wire copy of the transcript to a strict text tool
+    protocol.  The durable Hermes transcript and tool registry remain unchanged.
+    """
     tools_for_api = agent.tools
+    if tools_for_api:
+        from agent.execution_policy import (
+            prepare_text_tool_bridge_messages,
+            text_tool_bridge_enabled,
+        )
+
+        if text_tool_bridge_enabled(agent):
+            api_messages = prepare_text_tool_bridge_messages(api_messages, tools_for_api)
+            tools_for_api = None
 
     if agent.api_mode == "anthropic_messages":
         _transport = agent._get_transport()
@@ -1108,6 +1181,10 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
     )
     _is_tokenhub = base_url_host_matches(agent._base_url_lower, "tokenhub.tencentmaas.com")
     _is_lmstudio = (agent.provider or "").strip().lower() == "lmstudio"
+    _reasoning_suppressed = reasoning_is_suppressed_for_current_route(agent)
+    _supports_reasoning = (
+        False if _reasoning_suppressed else agent._supports_reasoning_extra_body()
+    )
 
     # Temperature: _fixed_temperature_for_model may return OMIT_TEMPERATURE
     # sentinel (temperature omitted entirely), a numeric override, or None.
@@ -1122,6 +1199,19 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
 
     # Provider preferences (aggregator profile decides whether to emit them).
     _prefs = _provider_preferences_for_agent(agent)
+
+    # Resolve request-local Ollama context before the provider-profile split.
+    # Registered providers (including the first-class Phantom profile) return
+    # from the profile branch below, so initializing this only in the legacy
+    # branch leaves the normal path reading an unbound local. The chooser is
+    # pure and returns None for non-Ollama/cloud routes, which keeps this value
+    # request-scoped without shared mutable state or exception swallowing.
+    _ollama_request_ctx = choose_ollama_request_num_ctx(
+        agent.model,
+        getattr(agent, "_ollama_num_ctx", None),
+        api_messages,
+        tool_count=len(tools_for_api or []),
+    )
 
     # Anthropic-compatible max-output fallback (last resort only — applied in
     # build_kwargs *after* ephemeral/user/profile max_tokens, never overriding
@@ -1184,13 +1274,16 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
             request_overrides=agent.request_overrides,
             session_id=getattr(agent, "session_id", None),
             provider_profile=_profile,
-            ollama_num_ctx=agent._ollama_num_ctx,
+            ollama_num_ctx=_ollama_request_ctx,
             # Context forwarded to profile hooks:
             provider_preferences=_prefs or None,
             openrouter_min_coding_score=agent.openrouter_min_coding_score,
             anthropic_max_output=_ant_max,
-            supports_reasoning=agent._supports_reasoning_extra_body(),
+            supports_reasoning=_supports_reasoning,
+            reasoning_suppressed=_reasoning_suppressed,
             qwen_session_metadata=_qwen_meta,
+            ollama_options=getattr(agent, "_ollama_options", None),
+            ollama_keep_alive=getattr(agent, "_ollama_keep_alive", None),
         )
 
     # ── Legacy flag path ────────────────────────────────────────────
@@ -1225,7 +1318,9 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
         is_tokenhub=_is_tokenhub,
         is_lmstudio=_is_lmstudio,
         is_custom_provider=agent.provider == "custom",
-        ollama_num_ctx=agent._ollama_num_ctx,
+        ollama_num_ctx=_ollama_request_ctx,
+        ollama_options=getattr(agent, "_ollama_options", None),
+        ollama_keep_alive=getattr(agent, "_ollama_keep_alive", None),
         provider_preferences=_prefs or None,
         openrouter_min_coding_score=agent.openrouter_min_coding_score,
         qwen_prepare_fn=agent._qwen_prepare_chat_messages if _is_qwen else None,
@@ -1233,7 +1328,8 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
         qwen_session_metadata=_qwen_meta,
         fixed_temperature=_fixed_temp,
         omit_temperature=_omit_temp,
-        supports_reasoning=agent._supports_reasoning_extra_body(),
+        supports_reasoning=_supports_reasoning,
+        reasoning_suppressed=_reasoning_suppressed,
         github_reasoning_extra=agent._github_models_reasoning_extra_body() if _is_gh else None,
         lmstudio_reasoning_options=agent._lmstudio_reasoning_options_cached() if _is_lmstudio else None,
         anthropic_max_output=_ant_max,
@@ -1586,6 +1682,34 @@ def try_activate_fallback(agent, reason: "FailoverReason | None" = None) -> bool
     auth resolution and client construction — no duplicated provider→key
     mappings.
     """
+    primary = getattr(agent, "_primary_runtime", None) or {}
+    primary_provider = str(
+        primary.get("provider") or getattr(agent, "provider", "") or ""
+    ).strip().lower()
+    primary_model = str(
+        primary.get("model") or getattr(agent, "model", "") or ""
+    ).strip().lower()
+    primary_base_url = str(
+        primary.get("base_url") or getattr(agent, "base_url", "") or ""
+    ).strip()
+
+    from agent.ollama_runtime import is_local_ollama_endpoint
+
+    provider_is_local_phantom = primary_provider in {"phantom", "custom:phantom"} or (
+        primary_provider == "custom"
+        and is_local_ollama_endpoint(primary_base_url, primary_provider)
+    )
+    if provider_is_local_phantom and (
+        primary_model == "phantom"
+        or primary_model.startswith("phantom:")
+        or primary_model.startswith("phantom-unleashed")
+        or primary_model.startswith("phantom-v1")
+    ):
+        logger.warning(
+            "Phantom is local-only; provider fallback is disabled for this session"
+        )
+        return False
+
     if reason in {FailoverReason.rate_limit, FailoverReason.billing, FailoverReason.upstream_rate_limit}:
         # Only start cooldown when leaving the primary provider.  If we're
         # already on a fallback and chain-switching, the primary wasn't the
@@ -1759,6 +1883,9 @@ def try_activate_fallback(agent, reason: "FailoverReason | None" = None) -> bool
         agent.requested_provider = fb_provider
         agent.base_url = fb_base_url
         agent.api_mode = fb_api_mode
+        # A tool-compatibility downgrade belongs to the endpoint that required
+        # it.  Do not carry it across a fallback model/provider switch.
+        agent._force_text_tool_bridge = False
         if hasattr(agent, "_transport_cache"):
             agent._transport_cache.clear()
         agent._fallback_activated = True
@@ -2787,6 +2914,7 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
         # ``request_client_holder["diag"]`` for closure access.
         _diag = agent._stream_diag_init()
         request_client_holder["diag"] = _diag
+        _ensure_explicit_phantom_runtime(agent)
         stream = request_client.chat.completions.create(**stream_kwargs)
         if agent.provider == "moa":
             # The MoA facade is a shared singleton — abort/close of the

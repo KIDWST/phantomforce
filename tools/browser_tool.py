@@ -4332,6 +4332,151 @@ def browser_vision(question: str, annotate: bool = False, task_id: Optional[str]
         return json.dumps(error_info, ensure_ascii=False)
 
 
+def browser_visual_verify(
+    width: int,
+    height: int,
+    label: str = "",
+    task_id: Optional[str] = None,
+    session_id: str = "",
+    user_task: str = "",
+) -> str:
+    """Capture a viewport-specific visual QA evidence pack.
+
+    This is deliberately an evidence tool, not a false visual oracle. It sets
+    an exact viewport, captures a full-page screenshot, checks common overflow
+    and clipping signals, and includes console/network diagnostics. The agent
+    must still inspect the screenshot (normally with ``browser_vision``) before
+    claiming the page looks correct.
+    """
+    import uuid as uuid_mod
+    from hermes_constants import get_hermes_dir
+
+    viewport_width = max(240, min(int(width), 7680))
+    viewport_height = max(320, min(int(height), 4320))
+    viewport_label = (label or f"{viewport_width}x{viewport_height}").strip()[:120]
+    effective_task_id = _last_session_key(task_id or "default")
+    screenshot_dir = get_hermes_dir("cache/screenshots", "browser_screenshots")
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+    _cleanup_old_screenshots(screenshot_dir, max_age_hours=24)
+    screenshot_path = screenshot_dir / (
+        f"visual-{viewport_width}x{viewport_height}-{uuid_mod.uuid4().hex}.png"
+    )
+
+    viewport = _run_browser_command(
+        effective_task_id,
+        "set",
+        ["viewport", str(viewport_width), str(viewport_height)],
+    )
+    if not viewport.get("success"):
+        return json.dumps(
+            _redact_browser_output(
+                {
+                    "success": False,
+                    "error": viewport.get("error") or "Failed to set browser viewport",
+                    "viewport": {"height": viewport_height, "label": viewport_label, "width": viewport_width},
+                }
+            ),
+            ensure_ascii=False,
+        )
+
+    layout_expression = """(() => {
+      const root = document.documentElement;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const clipped = [...document.querySelectorAll('body *')].filter((node) => {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        if (style.position === 'fixed' || style.position === 'sticky') return false;
+        return rect.width > 0 && (rect.right > vw + 1 || rect.left < -1);
+      }).slice(0, 20).map((node) => ({
+        tag: node.tagName.toLowerCase(),
+        id: node.id || null,
+        className: typeof node.className === 'string' ? node.className.slice(0, 120) : null,
+        left: Math.round(node.getBoundingClientRect().left),
+        right: Math.round(node.getBoundingClientRect().right)
+      }));
+      return {
+        viewport: { width: vw, height: vh },
+        document: { width: root.scrollWidth, height: root.scrollHeight },
+        horizontalOverflow: root.scrollWidth > vw + 1,
+        clipped
+      };
+    })()"""
+    layout_raw = browser_console(expression=layout_expression, task_id=effective_task_id)
+    console_raw = browser_console(task_id=effective_task_id)
+    network = _run_browser_command(effective_task_id, "network", ["requests"])
+    screenshot = _run_browser_command(
+        effective_task_id,
+        "screenshot",
+        ["--full", str(screenshot_path)],
+    )
+
+    actual_path = str(screenshot.get("data", {}).get("path") or screenshot_path)
+    captured = bool(screenshot.get("success") and Path(actual_path).exists())
+
+    def parsed(value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return value[:8_000]
+
+    response = _redact_browser_output(
+        {
+            "success": captured,
+            "viewport": {"height": viewport_height, "label": viewport_label, "width": viewport_width},
+            "screenshot_path": actual_path if captured else None,
+            "layout": parsed(layout_raw),
+            "console": parsed(console_raw),
+            "network": network,
+            "inspection_required": True,
+            "next_step": "Inspect screenshot_path with browser_vision before claiming visual success.",
+            **({} if captured else {"error": screenshot.get("error") or "Screenshot file was not created"}),
+        }
+    )
+
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        store = default_store()
+        run = store.ensure_run(
+            session_id=session_id,
+            task_id=task_id or "",
+            title=user_task or "Browser visual verification",
+            cwd=_cwd_for_browser_task(task_id or ""),
+        )
+        if run is not None:
+            store.add_evidence(
+                str(run["id"]),
+                kind="visual",
+                label=f"Browser viewport {viewport_label}",
+                status="captured" if captured else "failed",
+                path=actual_path if captured else "",
+                details={
+                    "height": viewport_height,
+                    "inspection_required": True,
+                    "width": viewport_width,
+                },
+            )
+    except Exception:
+        logger.debug("Could not persist browser visual evidence", exc_info=True)
+
+    return json.dumps(response, ensure_ascii=False, default=str)
+
+
+def _cwd_for_browser_task(task_id: str) -> str:
+    try:
+        from tools.terminal_tool import resolve_task_overrides
+
+        cwd = str(resolve_task_overrides(task_id).get("cwd") or "").strip()
+        if cwd:
+            return cwd
+    except Exception:
+        pass
+    return os.getcwd()
+
+
 def _cleanup_old_screenshots(screenshots_dir, max_age_hours=24):
     """Remove browser screenshots older than max_age_hours to prevent disk bloat.
 
@@ -4942,4 +5087,37 @@ registry.register(
     handler=lambda args, **kw: browser_console(clear=args.get("clear", False), expression=args.get("expression"), task_id=kw.get("task_id")),
     check_fn=check_browser_requirements,
     emoji="🖥️",
+)
+registry.register(
+    name="browser_visual_verify",
+    toolset="browser",
+    schema={
+        "name": "browser_visual_verify",
+        "description": (
+            "Capture a full-page visual QA evidence pack at an exact viewport, including a screenshot path, "
+            "DOM overflow/clipping signals, console errors, and network requests. Call once per relevant "
+            "mobile/tablet/desktop/ultrawide viewport, then inspect each screenshot with browser_vision before "
+            "claiming visual success."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "width": {"type": "integer", "minimum": 240, "maximum": 7680},
+                "height": {"type": "integer", "minimum": 320, "maximum": 4320},
+                "label": {"type": "string", "description": "Human label such as mobile or desktop."},
+            },
+            "required": ["width", "height"],
+        },
+    },
+    handler=lambda args, **kw: browser_visual_verify(
+        width=args.get("width", 1280),
+        height=args.get("height", 720),
+        label=args.get("label", ""),
+        task_id=kw.get("task_id"),
+        session_id=str(kw.get("session_id") or ""),
+        user_task=str(kw.get("user_task") or ""),
+    ),
+    check_fn=check_browser_requirements,
+    emoji="🔬",
+    max_result_size_chars=120_000,
 )

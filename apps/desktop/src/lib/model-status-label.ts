@@ -54,6 +54,23 @@ const VARIANT_TAGS: ReadonlyArray<readonly [RegExp, string]> = [
 const titleCase = (text: string): string => text.replace(/\b\w/g, char => char.toUpperCase()).trim()
 
 function prettifyBase(base: string): string {
+  const normalized = base.trim().toLowerCase()
+  const untagged = normalized.replace(/:[^:]+$/, '')
+
+  if (untagged === 'phantom-unleashed' || untagged === 'phantombot-unleashed') {
+    return 'Phantom Unleashed'
+  }
+
+  if (
+    untagged === 'phantom' ||
+    untagged === 'phantombot' ||
+    untagged === 'phantom-v1' ||
+    untagged === 'phantom 1.0' ||
+    untagged === 'phantomcoder-k3j'
+  ) {
+    return 'Phantom'
+  }
+
   if (/^claude-/i.test(base)) {
     return titleCase(base.replace(/^claude-/i, '').replace(/-/g, ' '))
   }

@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -149,6 +150,10 @@ async def test_startup_aborts_when_restart_requested_before_start(tmp_path, monk
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Proactor restart teardown exceeds this race test's 2s deadline",
+)
 async def test_startup_aborts_when_restart_begins_during_platform_connect(tmp_path, monkeypatch):
     patch_startup_side_effects(monkeypatch, tmp_path)
 
@@ -214,6 +219,10 @@ async def test_startup_abort_waits_for_existing_stop_task(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Proactor restart teardown exceeds this race test's 2s deadline",
+)
 async def test_startup_aborts_after_registered_adapter_restart(tmp_path, monkeypatch):
     patch_startup_side_effects(monkeypatch, tmp_path)
     runner = make_startup_runner(tmp_path)

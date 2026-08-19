@@ -53,18 +53,10 @@ export default defineConfig(({ command }) => ({
     postcss: { plugins: [] }
   },
   build: {
-    // Keep desktop packaging stable: Shiki ships many dynamic chunks by
-    // default, and electron-builder can OOM scanning thousands of files.
-    // Collapsing to a single chunk is intentional, so the renderer bundle is
-    // large by design (~22 MB). Raise the warning ceiling above that so the
-    // cosmetic "chunk larger than 500 kB" nag stays quiet, while still acting
-    // as a regression alarm if the bundle balloons well past today's size.
-    chunkSizeWarningLimit: 25000,
-    rolldownOptions: {
-      output: {
-        codeSplitting: false
-      }
-    }
+    // Keep Vite/Rolldown's dependency-aware default chunk graph. Artificial
+    // max-size vendor groups can bisect a circular package graph and crash
+    // before Electron reaches ready-to-show.
+    chunkSizeWarningLimit: 5000
   },
   resolve: {
     alias: {

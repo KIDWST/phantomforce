@@ -1,5 +1,6 @@
 import { atom } from 'nanostores'
 
+import { visibleOAuthProviders } from '@/components/onboarding/providers'
 import {
   cancelOAuthSession,
   getGlobalModelOptions,
@@ -375,7 +376,8 @@ async function refreshProviders() {
   providersRefreshPromise = (async () => {
     try {
       const { providers } = await listOAuthProviders()
-      patch({ mode: providers.length > 0 ? 'oauth' : 'apikey', providers })
+      const visibleProviders = visibleOAuthProviders(providers)
+      patch({ mode: visibleProviders.length > 0 ? 'oauth' : 'apikey', providers: visibleProviders })
     } catch {
       patch({ mode: 'apikey', providers: [] })
     } finally {

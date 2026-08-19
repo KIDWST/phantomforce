@@ -81,7 +81,7 @@ def test_format_footer_skips_missing_context_length():
     # context_pct dropped silently; no "?%" artifact
     assert "%" not in out
     assert "gpt-5.4" in out
-    assert "/tmp/wd" in out
+    assert os.path.abspath("/tmp/wd") in out
 
 
 def test_format_footer_context_pct_clamped_to_100():

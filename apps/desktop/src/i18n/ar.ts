@@ -297,6 +297,7 @@ export const ar = defineLocale({
       mcp: 'MCP',
       archivedChats: 'المحادثات المؤرشفة',
       about: 'حول',
+      chatgptPlus: 'ChatGPT Plus',
       notifications: 'الإشعارات',
       keybinds: 'اختصارات لوحة المفاتيح',
       plugins: 'الإضافات'

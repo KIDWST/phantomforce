@@ -8,15 +8,20 @@ import {
   $activeSessionId,
   $connection,
   $currentCwd,
+  $currentModel,
+  $currentProvider,
   $selectedStoredSessionId,
   $unreadFinishedSessionIds,
   applyConfiguredDefaultProjectDir,
   getRememberedSessionId,
   mergeSessionPage,
+  migrateRetiredKimiComposerSelection,
   rememberedSessionProfile,
   resolveComposerSessionKey,
   sessionPinId,
   setCurrentCwd,
+  setCurrentModel,
+  setCurrentProvider,
   setRememberedSessionId,
   setSelectedStoredSessionId,
   workspaceCwdForNewSession
@@ -45,6 +50,62 @@ const session = (over: Partial<SessionInfo>): SessionInfo => ({
   title: null,
   tool_call_count: 0,
   ...over
+})
+
+describe('migrateRetiredKimiComposerSelection', () => {
+  afterEach(() => {
+    localStorage.clear()
+  })
+
+  it('moves stale Kimi composer state to Phantom', () => {
+    localStorage.setItem('hermes.desktop.composer.model', 'kimi-k3-hf:latest')
+    localStorage.setItem('hermes.desktop.composer.provider', 'kimi-k3-direct')
+    localStorage.setItem('hermes.desktop.composer.model-source', 'manual')
+
+    expect(migrateRetiredKimiComposerSelection()).toBe(true)
+    expect(localStorage.getItem('hermes.desktop.composer.model')).toBe('phantom')
+    expect(localStorage.getItem('hermes.desktop.composer.provider')).toBe('phantom')
+    expect(localStorage.getItem('hermes.desktop.composer.model-source')).toBe('default')
+    expect(localStorage.getItem('hermes.desktop.composer.internalToPhantomMigration.v3')).toBe('done')
+  })
+
+  it('moves stale Phantom v1 composer state to Phantom', () => {
+    localStorage.setItem('hermes.desktop.composer.model', 'phantom-v1:latest')
+    localStorage.setItem('hermes.desktop.composer.provider', 'qwen3-coder-local')
+
+    expect(migrateRetiredKimiComposerSelection()).toBe(true)
+    expect(localStorage.getItem('hermes.desktop.composer.model')).toBe('phantom')
+    expect(localStorage.getItem('hermes.desktop.composer.provider')).toBe('phantom')
+  })
+
+  it('moves the private ChatGPT bridge out of the public composer', () => {
+    localStorage.setItem('hermes.desktop.composer.model', 'chatgpt-plus')
+    localStorage.setItem('hermes.desktop.composer.provider', 'chatgpt-plus')
+
+    expect(migrateRetiredKimiComposerSelection()).toBe(true)
+    expect(localStorage.getItem('hermes.desktop.composer.model')).toBe('phantom')
+    expect(localStorage.getItem('hermes.desktop.composer.provider')).toBe('phantom')
+  })
+
+  it('does not change local Ollama composer state', () => {
+    localStorage.setItem('hermes.desktop.composer.model', 'huihui-qwen3.6-35b-uncensored:q3')
+    localStorage.setItem('hermes.desktop.composer.provider', 'ollama-launch')
+
+    expect(migrateRetiredKimiComposerSelection()).toBe(false)
+    expect(localStorage.getItem('hermes.desktop.composer.model')).toBe('huihui-qwen3.6-35b-uncensored:q3')
+    expect(localStorage.getItem('hermes.desktop.composer.provider')).toBe('ollama-launch')
+    expect(localStorage.getItem('hermes.desktop.composer.internalToPhantomMigration.v3')).toBeNull()
+  })
+})
+
+describe('public Phantom composer identity', () => {
+  it('normalizes internal models restored by historical sessions', () => {
+    setCurrentModel('chatgpt-plus')
+    setCurrentProvider('chatgpt-plus')
+
+    expect($currentModel.get()).toBe('phantom')
+    expect($currentProvider.get()).toBe('phantom')
+  })
 })
 
 describe('computed $attentionSessionIds', () => {

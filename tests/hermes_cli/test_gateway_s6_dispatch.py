@@ -7,6 +7,7 @@ host systemd/launchd/windows code path.
 """
 from __future__ import annotations
 
+import signal
 
 import pytest
 
@@ -465,6 +466,7 @@ def test_redirect_falls_back_when_sleep_missing(
     assert "`sleep` is unavailable" in err
 
 
+@pytest.mark.skipif(not hasattr(signal, "pause"), reason="signal.pause is POSIX-only")
 def test_block_until_terminated_installs_sigterm_handler_and_blocks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -474,6 +474,7 @@ class CodexAppServerSession:
         turn_timeout: float = 600.0,
         notification_poll_timeout: float = 0.25,
         post_tool_quiet_timeout: float = 90.0,
+        cancel_event: Any = None,
     ) -> TurnResult:
         """Send a user message and block until turn/completed, while
         forwarding server-initiated approval requests and projecting items
@@ -508,7 +509,15 @@ class CodexAppServerSession:
         # Do not clear here: a hard stop can arrive while ensure_started() is
         # spawning/initializing the subprocess. Honor it before launching a
         # Codex turn instead of erasing the signal.
-        if self._interrupt_event.is_set():
+        def _cancel_requested() -> bool:
+            try:
+                return self._interrupt_event.is_set() or bool(
+                    cancel_event is not None and cancel_event.is_set()
+                )
+            except Exception:
+                return self._interrupt_event.is_set()
+
+        if _cancel_requested():
             result.interrupted = True
             self._interrupt_event.clear()
             return result
@@ -568,7 +577,7 @@ class CodexAppServerSession:
         last_tool_completion_at: Optional[float] = None
 
         while time.monotonic() < deadline and not turn_complete:
-            if self._interrupt_event.is_set():
+            if _cancel_requested():
                 self._issue_interrupt(result.turn_id)
                 result.interrupted = True
                 break
@@ -793,6 +802,7 @@ class CodexAppServerSession:
         *,
         turn_timeout: float = 600.0,
         notification_poll_timeout: float = 0.25,
+        cancel_event: Any = None,
     ) -> TurnResult:
         """Trigger Codex-native history compaction for the current thread.
 
@@ -845,8 +855,16 @@ class CodexAppServerSession:
         deadline = time.monotonic() + turn_timeout
         turn_complete = False
 
+        def _cancel_requested() -> bool:
+            try:
+                return self._interrupt_event.is_set() or bool(
+                    cancel_event is not None and cancel_event.is_set()
+                )
+            except Exception:
+                return self._interrupt_event.is_set()
+
         while time.monotonic() < deadline and not turn_complete:
-            if self._interrupt_event.is_set():
+            if _cancel_requested():
                 self._issue_interrupt(result.turn_id)
                 result.interrupted = True
                 break

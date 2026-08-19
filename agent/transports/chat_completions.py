@@ -311,6 +311,7 @@ class ChatCompletionsTransport(ProviderTransport):
             is_lmstudio: bool
             is_custom_provider: bool
             ollama_num_ctx: int | None
+            ollama_options: dict | None
             # Provider routing
             provider_preferences: dict | None
             # Qwen-specific
@@ -322,6 +323,7 @@ class ChatCompletionsTransport(ProviderTransport):
             omit_temperature: bool
             # Reasoning
             supports_reasoning: bool
+            reasoning_suppressed: bool
             github_reasoning_extra: dict | None
             lmstudio_reasoning_options: list[str] | None  # raw allowed_options from /api/v1/models
             # Claude on OpenRouter/Nous max output
@@ -496,6 +498,19 @@ class ChatCompletionsTransport(ProviderTransport):
             elif raw_thinking_config:
                 extra_body["thinking_config"] = raw_thinking_config
 
+        if params.get("is_custom_provider") and params.get("ollama_options"):
+            options = extra_body.get("options", {})
+            options.update(params["ollama_options"])
+            if params.get("ollama_num_ctx"):
+                options["num_ctx"] = params["ollama_num_ctx"]
+            extra_body["options"] = options
+        elif params.get("is_custom_provider") and params.get("ollama_num_ctx"):
+            options = extra_body.get("options", {})
+            options["num_ctx"] = params["ollama_num_ctx"]
+            extra_body["options"] = options
+        if params.get("ollama_keep_alive") is not None:
+            extra_body["keep_alive"] = params["ollama_keep_alive"]
+
         # Merge any pre-built extra_body additions
         additions = params.get("extra_body_additions")
         if additions:
@@ -589,6 +604,13 @@ class ChatCompletionsTransport(ProviderTransport):
                 model=model,
                 base_url=params.get("base_url"),
                 ollama_num_ctx=params.get("ollama_num_ctx"),
+                ollama_options=params.get("ollama_options"),
+                is_ollama=bool(
+                    params.get("ollama_options") is not None
+                    or params.get("ollama_num_ctx") is not None
+                    or params.get("ollama_keep_alive") is not None
+                ),
+                reasoning_suppressed=params.get("reasoning_suppressed", False),
                 session_id=params.get("session_id"),
             )
         )
@@ -612,6 +634,9 @@ class ChatCompletionsTransport(ProviderTransport):
         # Profile's reasoning/thinking extra_body entries
         if extra_body_from_profile:
             extra_body.update(extra_body_from_profile)
+
+        if params.get("ollama_keep_alive") is not None:
+            extra_body["keep_alive"] = params["ollama_keep_alive"]
 
         # Merge any pre-built extra_body additions from the caller
         additions = params.get("extra_body_additions")

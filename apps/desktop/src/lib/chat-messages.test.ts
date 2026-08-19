@@ -260,6 +260,19 @@ describe('toChatMessages', () => {
     ])
   })
 
+  it('collapses adjacent duplicate model-switch events but keeps later switches', () => {
+    const messages = toChatMessages([
+      { role: 'user', content: 'first marker', display_kind: 'model_switch', timestamp: 1 },
+      { role: 'user', content: 'duplicate marker', display_kind: 'model_switch', timestamp: 2 },
+      { role: 'user', content: 'duplicate marker again', display_kind: 'model_switch', timestamp: 3 },
+      { role: 'user', content: 'real user turn', timestamp: 4 },
+      { role: 'user', content: 'later switch', display_kind: 'model_switch', timestamp: 5 }
+    ])
+
+    expect(messages.map(message => message.role)).toEqual(['system', 'user', 'system'])
+    expect(messages.map(chatMessageText)).toEqual(['model changed', 'real user turn', 'model changed'])
+  })
+
   // A backend older than this app serves display_metadata as unparsed JSON
   // text. Indexing into that string used to throw and fail the whole resume.
   it.each([

@@ -18,6 +18,7 @@ Scope (what we expose):
     _get_images / _console / _vision
   - vision_analyze                       — image inspection by vision model
   - image_generate                       — image generation
+  - video_generate / Higgsfield edit     — video generation/editing
   - skill_view, skills_list              — Hermes' skill library
   - text_to_speech                       — TTS
   - kanban_* (complete/block/comment/    — kanban worker + orchestrator
@@ -124,6 +125,8 @@ EXPOSED_TOOLS: tuple[str, ...] = (
     "browser_vision",
     "vision_analyze",
     "image_generate",
+    "video_generate",
+    "higgsfield_video_edit",
     "skill_view",
     "skills_list",
     "text_to_speech",

@@ -9,6 +9,13 @@ describe('model-status-label', () => {
     expect(displayModelName('openai/gpt-5.5-fast')).toBe('GPT-5.5')
     expect(displayModelName('deepseek/deepseek-v4-pro-thinking')).toBe('Deepseek V4 Pro')
     expect(displayModelName('openai/gpt-5.5')).toBe('GPT-5.5')
+    expect(displayModelName('phantom')).toBe('Phantom')
+    expect(displayModelName('phantom:latest')).toBe('Phantom')
+    expect(displayModelName('phantom-v1:latest')).toBe('Phantom')
+    expect(displayModelName('phantombot')).toBe('Phantom')
+    expect(displayModelName('phantom-unleashed')).toBe('Phantom Unleashed')
+    expect(displayModelName('phantom-unleashed:latest')).toBe('Phantom Unleashed')
+    expect(displayModelName('phantombot-unleashed')).toBe('Phantom Unleashed')
   })
 
   it('strips trailing date-pin snapshots from the display name', () => {

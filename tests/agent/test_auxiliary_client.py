@@ -6625,3 +6625,125 @@ class TestCustomEndpointApiKeyInheritance:
             )
 
         assert captured.get("api_key") == "no-key-required"
+
+
+class TestLocalPhantomBillingBoundary:
+    @staticmethod
+    def _runtime():
+        return {
+            "provider": "phantom",
+            "requested_provider": "phantom",
+            "model": "phantom",
+            "base_url": "http://127.0.0.1:11434/v1",
+            "api_key": "no-key-required",
+            "api_mode": "chat_completions",
+        }
+
+    def test_auto_resolution_never_discovers_paid_fallback_for_phantom(self):
+        import agent.auxiliary_client as ac
+
+        with (
+            patch.object(ac, "resolve_provider_client", return_value=(None, None)),
+            patch.object(ac, "_try_configured_fallback_chain") as configured,
+            patch.object(ac, "_try_main_fallback_chain") as main_fallback,
+            patch.object(ac, "_get_provider_chain") as discovery,
+        ):
+            assert ac._resolve_auto(self._runtime(), task="compression") == (None, None)
+
+        configured.assert_not_called()
+        main_fallback.assert_not_called()
+        discovery.assert_not_called()
+
+    def test_custom_loopback_unleashed_keeps_the_local_billing_boundary(self):
+        import agent.auxiliary_client as ac
+
+        runtime = {
+            **self._runtime(),
+            "provider": "custom",
+            "requested_provider": "custom",
+            "model": "phantom-unleashed",
+        }
+
+        assert ac._is_explicit_local_phantom_runtime(runtime) is True
+
+        runtime["base_url"] = "https://models.example.test/v1"
+        assert ac._is_explicit_local_phantom_runtime(runtime) is False
+
+    def test_task_config_cannot_override_phantom_with_openrouter(self):
+        import agent.auxiliary_client as ac
+
+        response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="local summary"))]
+        )
+        client = MagicMock()
+        client.base_url = "http://127.0.0.1:11434/v1"
+        client.chat.completions.create.return_value = response
+
+        with (
+            patch.object(
+                ac,
+                "_resolve_task_provider_model",
+                return_value=(
+                    "openrouter",
+                    "moonshotai/kimi-k3",
+                    "https://openrouter.ai/api/v1",
+                    "paid-key",
+                    "chat_completions",
+                ),
+            ),
+            patch.object(ac, "_get_task_extra_body", return_value={}),
+            patch.object(ac, "_ensure_local_phantom_aux_runtime") as ensure_local,
+            patch.object(ac, "_get_cached_client", return_value=(client, "phantom")) as get_client,
+        ):
+            result = ac.call_llm(
+                task="compression",
+                main_runtime=self._runtime(),
+                messages=[{"role": "user", "content": "summarize"}],
+                extra_body={"response_format": {"type": "json_object"}},
+            )
+
+        assert result is response
+        ensure_local.assert_called_once()
+        assert get_client.call_args.args[:2] == ("phantom", "phantom")
+        assert get_client.call_args.kwargs["base_url"] == "http://127.0.0.1:11434/v1"
+        sent = client.chat.completions.create.call_args.kwargs
+        assert sent["extra_body"]["keep_alive"] == "15m"
+        assert sent["extra_body"]["think"] is False
+        assert sent["extra_body"]["options"]["num_ctx"] == 262144
+        assert "response_format" not in sent["extra_body"]
+
+    def test_unavailable_local_client_does_not_consult_fallbacks(self):
+        import agent.auxiliary_client as ac
+
+        with (
+            patch.object(ac, "_get_task_extra_body", return_value={}),
+            patch.object(ac, "_ensure_local_phantom_aux_runtime"),
+            patch.object(ac, "_get_cached_client", return_value=(None, None)),
+            patch.object(ac, "_try_configured_fallback_for_unavailable_client") as configured,
+            patch.object(ac, "_get_provider_chain") as discovery,
+            pytest.raises(RuntimeError, match="paid fallback is blocked"),
+        ):
+            ac.call_llm(
+                task="compression",
+                main_runtime=self._runtime(),
+                messages=[{"role": "user", "content": "summarize"}],
+            )
+
+        configured.assert_not_called()
+        discovery.assert_not_called()
+
+    def test_vision_fails_locally_instead_of_spending(self):
+        import agent.auxiliary_client as ac
+
+        with (
+            patch.object(ac, "_get_task_extra_body", return_value={}),
+            patch.object(ac, "resolve_vision_provider_client") as resolve_vision,
+            pytest.raises(RuntimeError, match="not sent to a paid provider"),
+        ):
+            ac.call_llm(
+                task="vision",
+                main_runtime=self._runtime(),
+                messages=[{"role": "user", "content": "describe image"}],
+            )
+
+        resolve_vision.assert_not_called()

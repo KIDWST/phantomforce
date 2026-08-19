@@ -114,6 +114,8 @@ export function GatewayMenuPanel({
   const gatewayOpen = gatewayState === 'open'
   const gatewayConnecting = gatewayState === 'connecting'
   const inferenceReady = gatewayOpen && inferenceStatus?.ready === true
+  const globalDefault = inferenceStatus?.globalDefault
+  const globalDefaultReady = gatewayOpen && globalDefault?.ready === true
 
   const connectionLabel = gatewayOpen
     ? copy.connected
@@ -125,6 +127,14 @@ export function GatewayMenuPanel({
     ? inferenceStatus?.ready
       ? copy.inferenceReady
       : inferenceStatus
+        ? copy.inferenceNotReady
+        : copy.checkingInference
+    : copy.disconnected
+
+  const globalDefaultLabel = gatewayOpen
+    ? globalDefault?.ready
+      ? copy.inferenceReady
+      : globalDefault
         ? copy.inferenceNotReady
         : copy.checkingInference
     : copy.disconnected
@@ -153,8 +163,15 @@ export function GatewayMenuPanel({
           </span>
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <StatusDot tone={inferenceReady ? 'good' : gatewayOpen ? 'warn' : 'bad'} />
+            {inferenceStatus?.activeProvider ? `Active session (${inferenceStatus.activeProvider}): ` : ''}
             {inferenceLabel}
           </span>
+          {inferenceStatus?.activeProvider ? (
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <StatusDot tone={globalDefaultReady ? 'good' : gatewayOpen ? 'warn' : 'bad'} />
+              Global default: {globalDefaultLabel}
+            </span>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <Tip label={t.commandCenter.restartGateway}>
@@ -185,6 +202,19 @@ export function GatewayMenuPanel({
       {inferenceStatus?.reason && (
         <Section className="text-xs text-muted-foreground">
           <div className="line-clamp-3">{inferenceStatus.reason}</div>
+        </Section>
+      )}
+
+      {inferenceStatus?.configurationDrift && (
+        <Section className="text-xs text-amber-200">
+          <div>
+            This chat and the global default use different provider health. Your active chat is unchanged; review the
+            default before starting unpinned work.
+          </div>
+          {globalDefault?.reason ? <div className="mt-1 line-clamp-2 text-muted-foreground">{globalDefault.reason}</div> : null}
+          <Button className="mt-1 h-auto p-0" onClick={openSystem} size="xs" type="button" variant="textStrong">
+            Review configuration
+          </Button>
         </Section>
       )}
 

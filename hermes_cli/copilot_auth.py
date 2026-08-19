@@ -124,6 +124,10 @@ def _gh_cli_candidates() -> list[str]:
     return candidates
 
 
+_GH_TOKEN_CACHE: dict = {}
+_GH_TOKEN_CACHE_TTL = 30.0  # seconds
+
+
 def _try_gh_cli_token() -> Optional[str]:
     """Return a token from ``gh auth token`` when the GitHub CLI is available.
 
@@ -132,6 +136,24 @@ def _try_gh_cli_token() -> Optional[str]:
     subprocess environment so ``gh`` reads from its own credential store
     (hosts.yml) instead of just echoing the env var back.
     """
+    # Short-TTL memo: opening the model picker / provider discovery loads the
+    # copilot credential pool repeatedly, and each load used to spawn a fresh
+    # ``gh auth token`` subprocess (~80ms).  Cache the resolved token briefly
+    # so repeated picker/read paths are fast; a 30s TTL keeps it fresh enough
+    # for practical use while avoiding a subprocess storm on every open.
+    now = time.time()
+    cached = _GH_TOKEN_CACHE.get("token")
+    cached_at = _GH_TOKEN_CACHE.get("at", 0.0)
+    if cached and (now - cached_at) < _GH_TOKEN_CACHE_TTL:
+        return cached
+    token = _gh_auth_token_subprocess()
+    _GH_TOKEN_CACHE["token"] = token
+    _GH_TOKEN_CACHE["at"] = now if token else cached_at
+    return token
+
+
+def _gh_auth_token_subprocess() -> Optional[str]:
+    """Run the actual ``gh auth token`` subprocess (uncached)."""
     hostname = os.getenv("COPILOT_GH_HOST", "").strip()
 
     # Build a clean env so gh doesn't short-circuit on GITHUB_TOKEN / GH_TOKEN
@@ -304,7 +326,7 @@ def _token_fingerprint(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode()).hexdigest()[:16]
 
 
-def exchange_copilot_token(raw_token: str, *, timeout: float = 10.0) -> tuple[str, float, Optional[str]]:
+def exchange_copilot_token(raw_token: str, *, timeout: float = 10.0, prefer_cached: bool = False) -> tuple[str, float, Optional[str]]:
     """Exchange a raw GitHub token for a short-lived Copilot API token.
 
     Calls ``GET https://api.github.com/copilot_internal/v2/token`` with
@@ -319,6 +341,12 @@ def exchange_copilot_token(raw_token: str, *, timeout: float = 10.0) -> tuple[st
 
     Results are cached in-process and reused until close to expiry.
     Raises ``ValueError`` on failure.
+
+    ``prefer_cached=True`` makes this a read-only discovery probe: it returns
+    the cached entry when one is still valid, otherwise raises ``ValueError``
+    WITHOUT performing any outbound exchange.  The model-picker / provider
+    discovery path passes this so opening the picker can never block on (or
+    initiate) a live network round-trip.
     """
     import urllib.request
 
@@ -330,6 +358,10 @@ def exchange_copilot_token(raw_token: str, *, timeout: float = 10.0) -> tuple[st
         api_token, expires_at, base_url = cached
         if time.time() < expires_at - _JWT_REFRESH_MARGIN_SECONDS:
             return api_token, expires_at, base_url
+
+    if prefer_cached:
+        # Read-only discovery: never hit the network.
+        raise ValueError("Copilot token not in local cache (discovery probe; no network)")
 
     req = urllib.request.Request(
         _TOKEN_EXCHANGE_URL,
@@ -412,7 +444,7 @@ def _derive_base_url_from_proxy_ep(token: str) -> Optional[str]:
     return f"https://{api_host}"
 
 
-def get_copilot_api_token(raw_token: str) -> tuple[str, Optional[str]]:
+def get_copilot_api_token(raw_token: str, *, prefer_cached: bool = False) -> tuple[str, Optional[str]]:
     """Exchange a raw GitHub token for a Copilot API token, with fallback.
 
     Convenience wrapper: returns ``(api_token, base_url)`` on success, or
@@ -423,11 +455,15 @@ def get_copilot_api_token(raw_token: str) -> tuple[str, Optional[str]]:
     ``base_url`` is the account-specific API endpoint advertised by the
     exchange (``endpoints.api``, with a ``proxy-ep`` fallback), or None for
     individual accounts.
+
+    ``prefer_cached=True`` opts into read-only discovery: the exchange is only
+    served from the in-process JWT cache and never initiates a live network
+    round-trip (used by provider discovery / model-picker paths).
     """
     if not raw_token:
         return raw_token, None
     try:
-        api_token, _, base_url = exchange_copilot_token(raw_token)
+        api_token, _, base_url = exchange_copilot_token(raw_token, prefer_cached=prefer_cached)
         return api_token, base_url
     except Exception as exc:
         logger.debug("Copilot token exchange failed, using raw token: %s", exc)

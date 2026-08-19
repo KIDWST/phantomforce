@@ -298,6 +298,14 @@ class TestTerminalSchema:
         assert props["notify_on_complete"]["type"] == "boolean"
         assert props["notify_on_complete"]["default"] is False
 
+    def test_schema_has_visible_terminal_flag(self):
+        from tools.terminal_tool import TERMINAL_SCHEMA
+        props = TERMINAL_SCHEMA["parameters"]["properties"]
+        assert "visible" in props
+        assert props["visible"]["type"] == "boolean"
+        assert props["visible"]["default"] is False
+        assert "visible" in props["visible"]["description"].lower()
+
     def test_handler_passes_notify(self):
         """_handle_terminal passes notify_on_complete to terminal_tool."""
         from tools.terminal_tool import _handle_terminal
@@ -308,6 +316,17 @@ class TestTerminalSchema:
             )
             _, kwargs = mock_tt.call_args
             assert kwargs["notify_on_complete"] is True
+
+    def test_handler_passes_visible_terminal_flag(self):
+        """_handle_terminal passes visible through to terminal_tool."""
+        from tools.terminal_tool import _handle_terminal
+        with patch("tools.terminal_tool.terminal_tool", return_value='{"ok":true}') as mock_tt:
+            _handle_terminal(
+                {"command": "echo hi", "visible": True},
+                task_id="t1",
+            )
+            _, kwargs = mock_tt.call_args
+            assert kwargs["visible"] is True
 
 
 # =========================================================================

@@ -110,11 +110,20 @@ class TestGenerateBash:
     def test_valid_bash_syntax(self):
         """Script must pass `bash -n` syntax check."""
         out = generate_bash(_make_parser())
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".bash", delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".bash", delete=False, newline="\n"
+        ) as f:
             f.write(out)
             path = f.name
         try:
-            result = subprocess.run(["bash", "-n", path], capture_output=True)
+            # Windows may resolve ``bash`` to WSL, where a native ``C:\\...``
+            # argument is not a valid path. Running from the temp directory and
+            # passing only the basename works in POSIX, WSL, and Git Bash.
+            result = subprocess.run(
+                ["bash", "-n", os.path.basename(path)],
+                cwd=os.path.dirname(path),
+                capture_output=True,
+            )
             assert result.returncode == 0, result.stderr.decode()
         finally:
             os.unlink(path)

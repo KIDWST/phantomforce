@@ -101,9 +101,10 @@ import { $focusedStoredSessionId, $workingSessionIds, type SplitDir } from '@/st
 import {
   type AppView,
   ARTIFACTS_ROUTE,
+  CRON_ROUTE,
   MESSAGING_ROUTE,
-  SIDEBAR_NAV_AREA,
   SETTINGS_ROUTE,
+  SIDEBAR_NAV_AREA,
   type SidebarNavContribution,
   SKILLS_ROUTE
 } from '../../routes'
@@ -162,6 +163,13 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     icon: props => <Codicon name="comment" {...props} />,
     route: MESSAGING_ROUTE,
     keybindActionId: 'nav.messaging'
+  },
+  {
+    id: 'automations',
+    label: 'Automations',
+    icon: props => <Codicon name="calendar" {...props} />,
+    route: CRON_ROUTE,
+    keybindActionId: 'nav.cron'
   },
   {
     id: 'artifacts',

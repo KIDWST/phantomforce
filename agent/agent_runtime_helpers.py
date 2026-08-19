@@ -1248,6 +1248,7 @@ def try_recover_primary_transport(
         agent.requested_provider = rt.get("requested_provider", agent.provider)
         agent.base_url = rt["base_url"]
         agent.api_mode = rt["api_mode"]
+        agent._force_text_tool_bridge = False
         if hasattr(agent, "_transport_cache"):
             agent._transport_cache.clear()
         agent.api_key = rt["api_key"]
@@ -2105,6 +2106,7 @@ def switch_model(agent, new_model, new_provider, api_key='', base_url='', api_mo
             "_anthropic_base_url",
             "_is_anthropic_oauth",
             "_config_context_length",
+            "_force_text_tool_bridge",
         )
     }
     # _client_kwargs is a dict — snapshot a shallow copy so mutating the
@@ -2153,6 +2155,10 @@ def switch_model(agent, new_model, new_provider, api_key='', base_url='', api_mo
                 "refusing to keep the previous provider's endpoint"
             )
         agent.api_mode = api_mode
+        # Compatibility mode is scoped to the model/endpoint that needed it.
+        # A newly selected model always gets a chance to use its native tool
+        # protocol first.
+        agent._force_text_tool_bridge = False
         # Invalidate transport cache — new api_mode may need a different transport
         if hasattr(agent, "_transport_cache"):
             agent._transport_cache.clear()
@@ -2308,6 +2314,41 @@ def switch_model(agent, new_model, new_provider, api_key='', base_url='', api_mo
 
     # ── LM Studio: preload before probing context length ──
     agent._ensure_lmstudio_runtime_loaded()
+
+    # ── Ollama: launch local runtime and refresh resource caps on model switch ──
+    try:
+        from agent.ollama_runtime import configure_agent_ollama_runtime
+        from hermes_cli.config import load_config
+
+        _sm_cfg_for_ollama = load_config()
+        _sm_model_cfg = (
+            (_sm_cfg_for_ollama.get("model") or {})
+            if isinstance(_sm_cfg_for_ollama, dict)
+            else {}
+        )
+        _sm_context_length = None
+        if isinstance(_sm_model_cfg, dict):
+            _raw_context_length = _sm_model_cfg.get("context_length")
+            if _raw_context_length is not None:
+                try:
+                    _sm_context_length = int(_raw_context_length)
+                except (TypeError, ValueError):
+                    _sm_context_length = None
+        _sm_ollama_runtime = configure_agent_ollama_runtime(
+            agent,
+            model_cfg=_sm_model_cfg if isinstance(_sm_model_cfg, dict) else None,
+            config_context_length=_sm_context_length,
+            log=logger,
+        )
+        if getattr(agent, "_ollama_num_ctx", None):
+            logger.info(
+                "Ollama runtime refreshed after model switch: status=%s num_ctx=%s options=%s",
+                _sm_ollama_runtime.get("status"),
+                getattr(agent, "_ollama_num_ctx", None),
+                getattr(agent, "_ollama_options", None) or {},
+            )
+    except Exception:
+        logger.debug("Ollama runtime refresh skipped on switch_model", exc_info=True)
 
     # ── Update context compressor ──
     if hasattr(agent, "context_compressor") and agent.context_compressor:
@@ -2965,141 +3006,63 @@ def looks_like_codex_intermediate_ack(
     messages: List[Dict[str, Any]],
     require_workspace: bool = True,
 ) -> bool:
-    """Detect a planning/ack message that should continue instead of ending the turn.
+    """Backward-compatible wrapper around the model-neutral ack detector.
 
-    ``require_workspace`` (default True) keeps the original codex-coding scope:
-    the ack must reference a filesystem/repo workspace. The conversation loop
-    passes ``require_workspace=False`` when the user has explicitly opted into
-    intent-ack continuation for all api_modes (``agent.intent_ack_continuation``
-    is ``true`` or a model-list), so general autonomous workflows ("I'll run a
-    health check on the server", "I'll start the deployment") — which carry a
-    future-ack and an action verb but no filesystem reference — are caught too.
-    The future-ack + short-content + no-prior-tools + action-verb requirements
-    always apply, which is what keeps conversational "I'll help you brainstorm"
-    replies from tripping it.
+    The historical public/helper name is retained because plugins and tests may
+    import it, but the policy is no longer Codex-specific.  Current-turn tool
+    activity, actionable-intent detection, and workspace scoping all live in
+    :mod:`agent.execution_policy`.
     """
-    if any(isinstance(msg, dict) and msg.get("role") == "tool" for msg in messages):
-        return False
+    from agent.execution_policy import looks_like_intermediate_action_response
 
-    assistant_text = agent._strip_think_blocks(assistant_content or "").strip().lower()
-    if not assistant_text:
-        return False
-    if len(assistant_text) > 1200:
-        return False
-
-    has_future_ack = bool(
-        re.search(r"\b(i['’]ll|i will|let me|i can do that|i can help with that)\b", assistant_text)
+    return looks_like_intermediate_action_response(
+        agent,
+        user_message,
+        assistant_content,
+        require_workspace=require_workspace,
+        messages=messages,
     )
-    if not has_future_ack:
-        return False
-
-    action_markers = (
-        "look into",
-        "look at",
-        "inspect",
-        "scan",
-        "check",
-        "analyz",
-        "review",
-        "explore",
-        "read",
-        "open",
-        "run",
-        "test",
-        "fix",
-        "debug",
-        "search",
-        "find",
-        "walkthrough",
-        "report back",
-        "summarize",
-    )
-    workspace_markers = (
-        "directory",
-        "current directory",
-        "current dir",
-        "cwd",
-        "repo",
-        "repository",
-        "codebase",
-        "project",
-        "folder",
-        "filesystem",
-        "file tree",
-        "files",
-        "path",
-    )
-
-    assistant_mentions_action = any(marker in assistant_text for marker in action_markers)
-    if not assistant_mentions_action:
-        return False
-
-    # Opted-in (all-api_mode) path: a future-ack + action verb + no prior tool
-    # call is enough — the user asked us to keep going when the model only
-    # announces intent, regardless of whether a filesystem is involved.
-    if not require_workspace:
-        return True
-
-    # ``user_message`` is typed ``str`` but can arrive as an OpenAI-style
-    # multi-part content list (``[{type:"text",...}, {type:"image_url",...}]``)
-    # for vision requests routed through the OpenAI-compat API server. A
-    # truthy list survives ``(user_message or "")`` and then ``.strip()``
-    # raises ``AttributeError`` — flatten to text first.
-    from agent.codex_responses_adapter import _summarize_user_message_for_log
-
-    user_text = _summarize_user_message_for_log(user_message).strip().lower()
-    user_targets_workspace = (
-        any(marker in user_text for marker in workspace_markers)
-        or "~/" in user_text
-        or "/" in user_text
-    )
-    assistant_targets_workspace = any(
-        marker in assistant_text for marker in workspace_markers
-    )
-    return user_targets_workspace or assistant_targets_workspace
 
 
 def intent_ack_continuation_mode(agent) -> str:
-    """Classify the resolved intent-ack continuation mode for this turn.
+    """Resolve the no-action continuation policy for the active model.
 
-    Returns one of:
-      * ``"off"``        — never continue.
-      * ``"codex_only"`` — historical scope: continue only on the
-        ``codex_responses`` api_mode, and only for codebase/workspace acks
-        (``require_workspace=True``).
-      * ``"all"``        — user opted in for every api_mode; continue on any
-        future-ack + action verb (``require_workspace=False``).
-
-    Mirrors the four-mode shape of ``agent.tool_use_enforcement``: ``"auto"``
-    (default) → codex_only; ``True``/"true"/"always"/"yes"/"on" → all;
-    ``False``/"false"/"never"/"no"/"off" → off; ``list`` → all when a substring
-    matches the active model name, else off.
+    Returns ``"off"``, ``"codex_only"`` (legacy explicit compatibility), or
+    ``"all"``.  ``"auto"`` is intentionally model/provider-neutral: when the
+    runtime advertises tools, every selected model is held to the same
+    execution contract.  A model-list remains available as an explicit user
+    narrowing mechanism, and the literal ``"codex_only"`` value preserves the
+    old workspace-scoped behavior for installations that deliberately want it.
     """
     mode = getattr(agent, "_intent_ack_continuation", "auto")
 
-    if mode is True or (isinstance(mode, str) and mode.lower() in {"true", "always", "yes", "on"}):
+    if mode is True or (
+        isinstance(mode, str)
+        and mode.strip().lower() in {"true", "always", "yes", "on", "auto"}
+    ):
         return "all"
-    if mode is False or (isinstance(mode, str) and mode.lower() in {"false", "never", "no", "off"}):
+    if isinstance(mode, str) and mode.strip().lower() == "codex_only":
+        return "codex_only" if getattr(agent, "api_mode", "") == "codex_responses" else "off"
+    if mode is False or (
+        isinstance(mode, str)
+        and mode.strip().lower() in {"false", "never", "no", "off"}
+    ):
         return "off"
     if isinstance(mode, list):
-        model_lower = (agent.model or "").lower()
-        return "all" if any(p.lower() in model_lower for p in mode if isinstance(p, str)) else "off"
-    # "auto" or any unrecognised value — historical codex-only behavior.
-    return "codex_only" if agent.api_mode == "codex_responses" else "off"
+        model_lower = (getattr(agent, "model", "") or "").lower()
+        return (
+            "all"
+            if any(p.lower() in model_lower for p in mode if isinstance(p, str))
+            else "off"
+        )
+    # Unknown values fail toward the product default rather than silently
+    # disabling autonomy for whichever model happens to be selected.
+    return "all"
 
 
 def intent_ack_continuation_enabled(agent) -> bool:
-    """Whether intent-ack continuation should fire at all for this turn.
-
-    The ``codex_ack_continuations < 2`` per-turn cap and the
-    ``looks_like_codex_intermediate_ack`` detector are applied by the caller;
-    this only decides the on/off gate. Callers that also need to know whether
-    the workspace requirement applies should use ``intent_ack_continuation_mode``
-    directly (``"codex_only"`` ⇒ require_workspace=True, ``"all"`` ⇒ False).
-    """
+    """Whether the runtime should recover from a no-action acknowledgment."""
     return intent_ack_continuation_mode(agent) != "off"
-
-
 
 
 def copy_reasoning_content_for_api(agent, source_msg: dict, api_msg: dict) -> None:

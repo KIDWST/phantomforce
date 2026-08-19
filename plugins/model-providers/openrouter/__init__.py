@@ -48,6 +48,18 @@ def _anthropic_reasoning_is_mandatory(model: str | None) -> bool:
 class OpenRouterProfile(ProviderProfile):
     """OpenRouter aggregator — provider preferences, reasoning config passthrough."""
 
+    def get_max_tokens(self, model: str | None) -> int | None:
+        """Return a practical default completion reservation.
+
+        OpenRouter performs budget checks against the requested completion
+        ceiling, not the response the model eventually emits. Some routed
+        models accept very large output caps, but reserving 65k tokens by
+        default causes avoidable HTTP 402 failures on keys with weekly limits.
+        Keep the default practical for every OpenRouter model; an explicit
+        ``model.max_tokens`` still overrides it.
+        """
+        return 8192
+
     def fetch_models(
         self,
         *,

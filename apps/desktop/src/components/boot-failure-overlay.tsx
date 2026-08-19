@@ -13,6 +13,7 @@ import { notify, notifyError } from '@/store/notifications'
 import { $desktopOnboarding } from '@/store/onboarding'
 
 import type { RemoteReauth } from './boot-failure-reauth'
+import { runBootRecovery } from './boot-recovery-action'
 import {
   deriveProviderShape,
   isRemoteConfig,
@@ -145,14 +146,30 @@ export function BootFailureOverlay() {
 
   const retry = async () => {
     setBusy('retry')
-    await window.hermesDesktop?.resetBootstrap().catch(() => undefined)
-    window.location.reload()
+
+    try {
+      await runBootRecovery(
+        () => window.hermesDesktop?.resetBootstrap() ?? Promise.resolve(undefined),
+        () => window.location.reload()
+      )
+    } catch (err) {
+      notifyError(err, 'PhantomBot could not reset its background gateway')
+      setBusy(null)
+    }
   }
 
   const repair = async () => {
     setBusy('repair')
-    await window.hermesDesktop?.repairBootstrap().catch(() => undefined)
-    window.location.reload()
+
+    try {
+      await runBootRecovery(
+        () => window.hermesDesktop?.repairBootstrap() ?? Promise.resolve(undefined),
+        () => window.location.reload()
+      )
+    } catch (err) {
+      notifyError(err, 'PhantomBot could not repair its background gateway')
+      setBusy(null)
+    }
   }
 
   const switchToLocalGateway = async () => {

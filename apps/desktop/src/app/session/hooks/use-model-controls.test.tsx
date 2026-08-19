@@ -162,6 +162,26 @@ describe('useModelControls', () => {
     expect(requestGateway).not.toHaveBeenCalledWith('slash.exec', expect.anything())
   })
 
+  it('does not emit another gateway switch when the active model is reselected', async () => {
+    $activeSessionId.set('session-1')
+    setCurrentModel('claude-sonnet-4.6')
+    setCurrentProvider('anthropic')
+    const requestGateway = vi.fn()
+    let controls!: Controls
+
+    render(<Harness onReady={value => (controls = value)} requestGateway={requestGateway} />)
+
+    await expect(
+      controls.selectModel({
+        model: 'claude-sonnet-4.6',
+        provider: 'anthropic'
+      })
+    ).resolves.toBe(true)
+
+    expect(requestGateway).not.toHaveBeenCalled()
+    expect(getCurrentModelSource()).toBe('manual')
+  })
+
   it('session-scopes MoA preset selections so they cannot persist as the global gateway default', async () => {
     $activeSessionId.set('session-1')
     const requestGateway = vi.fn(async () => ({ key: 'model', value: 'BeastMode' }) as never)

@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import threading
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -223,33 +225,190 @@ def _read_cache_models(codex_home: Path) -> List[str]:
     return deduped
 
 
-def get_codex_model_ids(access_token: Optional[str] = None) -> List[str]:
-    """Return available Codex model IDs, trying API first, then local sources.
-    
-    Resolution order: API (live, if token provided) > config.toml default >
-    local cache > hardcoded defaults.
-    """
-    codex_home_str = os.getenv("CODEX_HOME", "").strip() or str(Path.home() / ".codex")
-    codex_home = Path(codex_home_str).expanduser()
-    ordered: List[str] = []
+_refresh_lock = threading.Lock()
+_refresh_in_progress: bool = False
+_refresh_start_count: int = 0
+_last_refresh_attempt: float = 0.0
+_last_successful_refresh: float = 0.0
+_last_refresh_error: Optional[str] = None
+_cache_present: bool = False
+_cache_age: Optional[float] = None
 
-    # Try live API if we have a token
-    if access_token:
+
+def _background_refresh_worker(access_token: Optional[str], codex_home: Path) -> None:
+    """Background worker that fetches live Codex models and caches them.
+
+    Runs on a daemon thread so the synchronous picker path never blocks.
+    De-duplication via ``_refresh_in_progress`` ensures at most one worker.
+    """
+    global _refresh_in_progress, _last_refresh_attempt, _last_successful_refresh, _last_refresh_error
+    try:
+        if access_token:
+            with _refresh_lock:
+                _last_refresh_attempt = time.time()
+            api_models = _fetch_models_from_api(access_token)
+            if api_models:
+                _write_cache_models(codex_home, api_models)
+                with _refresh_lock:
+                    _last_successful_refresh = time.time()
+                    _last_refresh_error = None
+                return
+            with _refresh_lock:
+                _last_refresh_error = "Codex live discovery returned no models"
+    except Exception as e:  # noqa: BLE001
+        with _refresh_lock:
+            _last_refresh_error = str(e)
+        logger.debug("Background Codex refresh failed: %s", e)
+    finally:
+        with _refresh_lock:
+            _refresh_in_progress = False
+
+
+def _maybe_start_background_refresh(access_token: Optional[str], codex_home: Path) -> bool:
+    """Start a single de-duplicated background Codex refresh, if none running."""
+    global _refresh_in_progress, _refresh_start_count
+    with _refresh_lock:
+        if _refresh_in_progress:
+            return False
+        _refresh_in_progress = True
+        _refresh_start_count += 1
+    try:
+        thread = threading.Thread(
+            target=_background_refresh_worker,
+            args=(access_token, codex_home),
+            name="codex-models-background-refresh",
+            daemon=True,
+        )
+        thread.start()
+        return True
+    except Exception:
+        with _refresh_lock:
+            _refresh_in_progress = False
+        return False
+
+
+def get_codex_refresh_state() -> dict:
+    """Return read-only diagnostics for the Codex model cache (no I/O)."""
+    with _refresh_lock:
+        return {
+            "cache_present": _cache_present,
+            "cache_age": _cache_age,
+            "ttl": _CODEX_CACHE_TTL_SECONDS,
+            "refresh_in_progress": _refresh_in_progress,
+            "background_refresh_count": _refresh_start_count,
+            "last_refresh_attempt": _last_refresh_attempt or None,
+            "last_successful_refresh": _last_successful_refresh or None,
+            "last_refresh_error": _last_refresh_error,
+        }
+
+
+def _codex_home_path() -> Path:
+    codex_home_str = os.getenv("CODEX_HOME", "").strip() or str(Path.home() / ".codex")
+    return Path(codex_home_str).expanduser()
+
+
+def _write_cache_models(codex_home: Path, model_ids: List[str]) -> None:
+    """Persist discovered model IDs to the Codex models cache file (atomically)."""
+    try:
+        from utils import atomic_json_write
+
+        cache_path = codex_home / "models_cache.json"
+        payload = [{"slug": slug} for slug in model_ids]
+        atomic_json_write(cache_path, {"models": payload})
+        global _cache_present, _cache_age
+        with _refresh_lock:
+            _cache_present = bool(model_ids)
+            _cache_age = 0.0
+    except Exception as exc:
+        logger.debug("Failed to write Codex models cache: %s", exc)
+
+
+def get_codex_model_ids(
+    access_token: Optional[str] = None,
+    *,
+    force_refresh: bool = False,
+) -> List[str]:
+    """Return available Codex model IDs, cache-first; never blocks on network.
+
+    Resolution order on the synchronous path (``force_refresh=False``) — all
+    local, zero outbound HTTPS:
+
+      1. Local ``models_cache.json`` (what live discovery wrote last time)
+      2. ``config.toml`` default model
+      3. Hardcoded curated ``DEFAULT_CODEX_MODELS`` list
+
+    When a live API fetch is possible (an ``access_token`` is provided) and
+    the result is not already cached in this process, a single de-duplicated
+    background worker refreshes the live catalog asynchronously.  Network or
+    SSL failure never blocks or slows the caller.
+
+    ``force_refresh=True`` performs a blocking live fetch (explicit intent).
+    """
+    global _last_refresh_attempt, _last_successful_refresh, _last_refresh_error
+    codex_home = _codex_home_path()
+    if force_refresh:
+        if not access_token:
+            return _add_forward_compat_models(
+                _merge_codex_local_sources(codex_home)
+            )
+        with _refresh_lock:
+            _last_refresh_attempt = time.time()
         api_models = _fetch_models_from_api(access_token)
         if api_models:
+            _write_cache_models(codex_home, api_models)
+            with _refresh_lock:
+                _last_successful_refresh = time.time()
+                _last_refresh_error = None
             return _add_forward_compat_models(api_models)
+        with _refresh_lock:
+            _last_refresh_error = "Codex live discovery returned no models"
+        return _add_forward_compat_models(_merge_codex_local_sources(codex_home))
 
-    # Fall back to local sources
+    ordered = _merge_codex_local_sources(codex_home)
+
+    # If a live refresh is possible and the local cache is missing/stale, kick
+    # off a single background refresh so the picker warms without blocking.
+    if access_token and _codex_cache_stale(codex_home):
+        _maybe_start_background_refresh(access_token, codex_home)
+
+    return _add_forward_compat_models(ordered)
+
+
+_CODEX_CACHE_TTL_SECONDS = 3600  # 1 hour
+
+
+def _codex_cache_stale(codex_home: Path) -> bool:
+    """Return True when the Codex models cache is missing or older than TTL."""
+    cache_path = codex_home / "models_cache.json"
+    try:
+        age = time.time() - cache_path.stat().st_mtime
+        return age >= _CODEX_CACHE_TTL_SECONDS
+    except Exception:
+        return True
+
+
+def _merge_codex_local_sources(codex_home: Path) -> List[str]:
+    """Merge local Codex model sources (config default + cache + curated)."""
+    global _cache_present, _cache_age
+    ordered: List[str] = []
     default_model = _read_default_model(codex_home)
     if default_model:
         ordered.append(default_model)
 
-    for model_id in _read_cache_models(codex_home):
+    cached = _read_cache_models(codex_home)
+    cache_path = codex_home / "models_cache.json"
+    try:
+        cache_age = max(0.0, time.time() - cache_path.stat().st_mtime)
+    except Exception:
+        cache_age = None
+    with _refresh_lock:
+        _cache_present = bool(cached)
+        _cache_age = cache_age
+    for model_id in cached:
         if model_id not in ordered:
             ordered.append(model_id)
 
     for model_id in DEFAULT_CODEX_MODELS:
         if model_id not in ordered:
             ordered.append(model_id)
-
-    return _add_forward_compat_models(ordered)
+    return ordered

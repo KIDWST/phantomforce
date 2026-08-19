@@ -94,7 +94,8 @@ export function Backdrop() {
       {on && statue.enabled && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 z-2"
+          className="phantom-chat-backdrop pointer-events-none absolute inset-0 z-2"
+          data-slot="chat-backdrop"
           style={{
             mixBlendMode: statue.blendMode as CSSProperties['mixBlendMode'],
             opacity: statue.opacity

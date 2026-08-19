@@ -2331,11 +2331,18 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
         # Copilot tokens are resolved dynamically via `gh auth token` or
         # env vars (COPILOT_GITHUB_TOKEN / GH_TOKEN).  They don't live in
         # the auth store or credential pool, so we resolve them here.
+        #
+        # ``prefer_cached=True`` keeps this a read-only discovery probe:
+        # an already-exchanged (cached) token is adopted for pool seeding,
+        # but no live token exchange is initiated.  Loading the pool happens
+        # on the synchronous model-picker / provider-discovery path, which
+        # must never block on (or start) a network round-trip.  The actual
+        # token exchange, when needed, happens lazily at request time.
         try:
             from hermes_cli.copilot_auth import resolve_copilot_token, get_copilot_api_token
             token, source = resolve_copilot_token()
             if token:
-                api_token, enterprise_base_url = get_copilot_api_token(token)
+                api_token, enterprise_base_url = get_copilot_api_token(token, prefer_cached=True)
                 source_name = "gh_cli" if "gh" in source.lower() else f"env:{source}"
                 if not _is_suppressed(provider, source_name):
                     active_sources.add(source_name)

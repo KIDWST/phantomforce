@@ -879,19 +879,142 @@ code {
    The theme system still supports imported/user palettes, but a clean
    PhantomBot profile opens in this obsidian + emerald visual language. */
 .phantombot-brand-mark {
-  border: 1px solid color-mix(in srgb, var(--theme-midground) 44%, transparent);
-  background: #020503;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, #fff 5%, transparent),
-    0 0 1.25rem color-mix(in srgb, var(--theme-midground) 18%, transparent);
+  position: relative;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  isolation: isolate;
+}
+
+.phantombot-brand-mark__image {
+  position: relative;
+  z-index: 1;
+  filter: saturate(1.2) contrast(1.08)
+    drop-shadow(0 0 0.42rem color-mix(in srgb, var(--theme-midground) 56%, transparent))
+    drop-shadow(0 0 1.05rem color-mix(in srgb, var(--theme-midground) 28%, transparent));
+}
+
+.phantombot-brand-mark__eyes,
+.phantombot-brand-mark__gleam {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(
+    50% 12%,
+    70% 21%,
+    83% 38%,
+    88% 62%,
+    78% 82%,
+    63% 94%,
+    50% 84%,
+    37% 94%,
+    22% 82%,
+    12% 62%,
+    17% 38%,
+    30% 21%
+  );
+}
+
+.phantombot-brand-mark__eyes {
+  z-index: 2;
+  background:
+    radial-gradient(
+      ellipse 14% 7% at 41% 49%,
+      color-mix(in srgb, var(--theme-midground) 88%, #d7ff7a),
+      transparent 72%
+    ),
+    radial-gradient(ellipse 14% 7% at 59% 49%, color-mix(in srgb, var(--theme-midground) 88%, #d7ff7a), transparent 72%);
+  filter: blur(0.04rem);
+  mix-blend-mode: screen;
+  opacity: 0.48;
+  animation: phantombot-eye-glow 2.8s ease-in-out infinite;
+}
+
+.phantombot-brand-mark__gleam {
+  z-index: 3;
+  background:
+    linear-gradient(
+      112deg,
+      transparent 24%,
+      color-mix(in srgb, #fff 0%, transparent) 38%,
+      color-mix(in srgb, #fff 38%, transparent) 48%,
+      color-mix(in srgb, var(--theme-midground) 36%, transparent) 53%,
+      transparent 66%
+    ),
+    radial-gradient(
+      ellipse at 50% 35%,
+      transparent 29%,
+      color-mix(in srgb, var(--theme-midground) 28%, transparent) 45%,
+      transparent 62%
+    );
+  mix-blend-mode: screen;
+  opacity: 0.68;
+  transform: translateX(-62%);
+  animation: phantombot-hood-gleam 4.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
 }
 
 .phantombot-hero-mark {
-  border-radius: 1.35rem;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, #fff 7%, transparent),
-    0 0 2.5rem color-mix(in srgb, var(--theme-midground) 28%, transparent),
-    0 1.25rem 3.5rem color-mix(in srgb, #000 40%, transparent);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.phantombot-hero-mark .phantombot-brand-mark__image {
+  filter: saturate(1.24) contrast(1.1)
+    drop-shadow(0 0 0.65rem color-mix(in srgb, var(--theme-midground) 66%, transparent))
+    drop-shadow(0 0 2.25rem color-mix(in srgb, var(--theme-midground) 38%, transparent));
+}
+
+@keyframes phantombot-eye-glow {
+  0%,
+  100% {
+    opacity: 0.36;
+    filter: blur(0.04rem) brightness(0.95);
+  }
+
+  45% {
+    opacity: 0.82;
+    filter: blur(0.08rem) brightness(1.45);
+  }
+
+  56% {
+    opacity: 0.58;
+  }
+}
+
+@keyframes phantombot-hood-gleam {
+  0% {
+    opacity: 0;
+    transform: translateX(-68%) rotate(0.001deg);
+  }
+
+  18% {
+    opacity: 0;
+  }
+
+  46% {
+    opacity: 0.82;
+  }
+
+  72% {
+    opacity: 0;
+    transform: translateX(68%) rotate(0.001deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(68%) rotate(0.001deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phantombot-brand-mark__eyes,
+  .phantombot-brand-mark__gleam {
+    animation: none;
+  }
+
+  .phantombot-brand-mark__gleam {
+    transform: none;
+  }
 }
 
 .phantombot-wordmark {
@@ -1928,4 +2051,737 @@ html[data-hermes-theme='phantomforce'] [data-slot='aui_intro'] {
     width: 100%;
     opacity: 0.4;
   }
+}
+
+/* Phantom Presence --------------------------------------------------------- */
+/* Chat-only brand intelligence: the original transparent gesture Phantom
+   reacts to the live agent lifecycle without competing with conversation text. */
+.phantom-presence {
+  --phantom-presence-color: color-mix(in srgb, var(--ui-accent) 78%, #62ffbc);
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  color: var(--phantom-presence-color);
+  pointer-events: none;
+  user-select: none;
+}
+
+.phantom-presence__stage {
+  position: absolute;
+  top: 54%;
+  right: clamp(-1.5rem, 1vw, 1rem);
+  width: clamp(18rem, 28vw, 30rem);
+  height: min(72vh, 44rem);
+  transform: translateY(-50%);
+  opacity: 0.2;
+  filter: saturate(1.08) drop-shadow(0 0 1.8rem color-mix(in srgb, var(--phantom-presence-color) 28%, transparent));
+  transition:
+    filter 500ms ease,
+    opacity 500ms ease;
+}
+
+.phantom-presence__figure {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  object-fit: contain;
+  object-position: right center;
+  transform-origin: 58% 52%;
+  filter: contrast(1.04);
+  animation:
+    phantom-presence-pose-enter 380ms cubic-bezier(0.16, 1, 0.3, 1) both,
+    phantom-presence-float 7.2s 380ms ease-in-out infinite;
+}
+
+.phantom-presence__telemetry {
+  fill: none;
+  opacity: 0.2;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+  transition: opacity 400ms ease;
+}
+
+.phantom-presence__rail {
+  stroke-dasharray: 3 8;
+}
+
+.phantom-presence__spark,
+.phantom-presence__trail {
+  opacity: 0.4;
+}
+
+.phantom-presence__signal {
+  position: absolute;
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 1rem currentColor;
+  opacity: 0.35;
+}
+
+.phantom-presence__signal--one {
+  left: 18%;
+  top: 23%;
+  animation: phantom-presence-signal 3.8s ease-in-out infinite;
+}
+
+.phantom-presence__signal--two {
+  right: 19%;
+  top: 67%;
+  animation: phantom-presence-signal 3.8s 1.6s ease-in-out infinite;
+}
+
+.phantom-presence__body,
+.phantom-presence__arm,
+.phantom-presence__face,
+.phantom-presence__hand {
+  transform-box: fill-box;
+}
+
+.phantom-presence__face {
+  transform-origin: center;
+  filter: drop-shadow(0 0 0.8rem currentColor);
+}
+
+.phantom-presence__arm,
+.phantom-presence__hand {
+  transition: transform 450ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.phantom-presence__arm--left {
+  transform-origin: 88% 24%;
+}
+
+.phantom-presence__arm--right {
+  transform-origin: 12% 24%;
+}
+
+.phantom-presence__hand--left {
+  transform-origin: 76% 58%;
+}
+
+.phantom-presence__hand--right {
+  transform-origin: 24% 58%;
+}
+
+.phantom-presence__trail {
+  transform-origin: center;
+}
+
+.phantom-presence[data-phase='idle'] .phantom-presence__arm--right {
+  animation: phantom-presence-wave 7.4s 1.2s ease-in-out infinite;
+}
+
+.phantom-presence[data-phase='reasoning'] .phantom-presence__stage,
+.phantom-presence[data-phase='working'] .phantom-presence__stage,
+.phantom-presence[data-phase='listening'] .phantom-presence__stage {
+  opacity: 0.2;
+  filter: saturate(1.35) drop-shadow(0 0 2.4rem color-mix(in srgb, var(--phantom-presence-color) 38%, transparent));
+}
+
+.phantom-presence[data-phase='reasoning'] .phantom-presence__telemetry {
+  opacity: 0.7;
+  animation: phantom-presence-telemetry 2.4s ease-in-out infinite;
+}
+
+.phantom-presence[data-phase='reasoning'] .phantom-presence__face {
+  animation: phantom-presence-focus 2.2s ease-in-out infinite;
+}
+
+.phantom-presence[data-phase='reasoning'] .phantom-presence__arm--left {
+  transform: translate(42px, -18px) rotate(48deg);
+}
+
+.phantom-presence[data-phase='reasoning'] .phantom-presence__arm--right {
+  transform: translate(-8px, 8px) rotate(12deg);
+}
+
+.phantom-presence[data-phase='working'] .phantom-presence__figure {
+  animation: phantom-presence-work 1.55s ease-in-out infinite;
+}
+
+.phantom-presence[data-phase='working'] .phantom-presence__arm--left {
+  transform: translate(20px, 12px) rotate(18deg);
+}
+
+.phantom-presence[data-phase='working'] .phantom-presence__arm--right {
+  transform: translate(-20px, 12px) rotate(-18deg);
+}
+
+.phantom-presence[data-phase='working'] .phantom-presence__hand {
+  animation: phantom-presence-hand-work 720ms ease-in-out infinite alternate;
+}
+
+.phantom-presence[data-phase='working'] .phantom-presence__trail {
+  animation: phantom-presence-trail 1.25s ease-out infinite;
+}
+
+.phantom-presence[data-phase='listening'] .phantom-presence__arm--left {
+  transform: translate(20px, -18px) rotate(54deg);
+}
+
+.phantom-presence[data-phase='listening'] .phantom-presence__arm--right {
+  transform: translate(-20px, -18px) rotate(-54deg);
+}
+
+.phantom-presence[data-phase='listening'] .phantom-presence__hand--left {
+  transform: rotate(-14deg);
+}
+
+.phantom-presence[data-phase='listening'] .phantom-presence__hand--right {
+  transform: rotate(14deg);
+}
+
+.phantom-presence[data-phase='celebrate'] .phantom-presence__stage {
+  opacity: 0.28;
+  animation: phantom-presence-celebrate 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.phantom-presence[data-phase='celebrate'] .phantom-presence__arm--left {
+  transform: translate(16px, -24px) rotate(68deg);
+}
+
+.phantom-presence[data-phase='celebrate'] .phantom-presence__arm--right {
+  transform: translate(-16px, -24px) rotate(-68deg);
+}
+
+.phantom-presence[data-phase='celebrate'] .phantom-presence__spark {
+  opacity: 0.88;
+  animation: phantom-presence-spark 860ms ease-out infinite;
+}
+
+.phantom-presence[data-phase='error'] {
+  --phantom-presence-color: #ff647c;
+}
+
+.phantom-presence[data-phase='error'] .phantom-presence__stage {
+  opacity: 0.22;
+  animation: phantom-presence-glitch 420ms steps(2, end) 3;
+}
+
+.phantom-presence[data-phase='error'] .phantom-presence__arm--left {
+  transform: translateY(12px) rotate(-18deg);
+}
+
+.phantom-presence[data-phase='error'] .phantom-presence__arm--right {
+  transform: translateY(12px) rotate(18deg);
+}
+
+.phantom-route-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-accent) 7%, transparent);
+  padding: 0.08rem 0.48rem;
+  color: color-mix(in srgb, var(--ui-accent) 72%, var(--ui-text-primary));
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.phantom-route-badge__pulse {
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0.55rem currentColor;
+  animation: phantom-route-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes phantom-presence-pose-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(1rem, 0.35rem, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes phantom-presence-float {
+  0%,
+  100% {
+    transform: translate3d(0, -4px, 0) rotate(-0.5deg);
+  }
+  50% {
+    transform: translate3d(-3px, 7px, 0) rotate(0.5deg);
+  }
+}
+
+@keyframes phantom-presence-wave {
+  0%,
+  68%,
+  100% {
+    transform: none;
+  }
+  74% {
+    transform: translate(-8px, -10px) rotate(-34deg);
+  }
+  80% {
+    transform: translate(-8px, -10px) rotate(-48deg);
+  }
+  86% {
+    transform: translate(-8px, -10px) rotate(-34deg);
+  }
+  92% {
+    transform: translate(-8px, -10px) rotate(-48deg);
+  }
+}
+
+@keyframes phantom-presence-telemetry {
+  0%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.36;
+  }
+  50% {
+    stroke-dashoffset: -18;
+    opacity: 0.78;
+  }
+}
+
+@keyframes phantom-presence-focus {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scaleX(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.05);
+  }
+}
+
+@keyframes phantom-presence-work {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(-1.3deg);
+  }
+  50% {
+    transform: translate3d(-12px, 3px, 0) rotate(1.3deg);
+  }
+}
+
+@keyframes phantom-presence-hand-work {
+  from {
+    transform: translateY(-2px) rotate(-3deg);
+  }
+  to {
+    transform: translateY(3px) rotate(3deg);
+  }
+}
+
+@keyframes phantom-presence-trail {
+  from {
+    opacity: 0.7;
+    transform: translate3d(8px, -6px, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(36px, 24px, 0);
+  }
+}
+
+@keyframes phantom-presence-celebrate {
+  0% {
+    transform: translateY(-46%) scale(0.96);
+  }
+  45% {
+    transform: translateY(-54%) scale(1.045);
+  }
+  100% {
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+@keyframes phantom-presence-glitch {
+  0%,
+  100% {
+    transform: translateY(-50%);
+  }
+  35% {
+    transform: translate3d(-8px, -50%, 0) skewX(2deg);
+  }
+  70% {
+    transform: translate3d(7px, -50%, 0) skewX(-2deg);
+  }
+}
+
+@keyframes phantom-presence-spark {
+  0% {
+    opacity: 0;
+    transform: scale(0.65) rotate(0deg);
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35) rotate(45deg);
+  }
+}
+
+@keyframes phantom-presence-signal {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.62;
+    transform: scale(1.4);
+  }
+}
+
+@keyframes phantom-route-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@media (max-width: 760px) {
+  .phantom-presence__stage {
+    right: -8rem;
+    width: 25rem;
+    opacity: 0.08;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phantom-presence *,
+  .phantom-route-badge__pulse {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Phantom chat presence */
+.phantom-presence {
+  --phantom-presence-color: color-mix(in srgb, var(--ui-accent) 84%, #78ffbd);
+  z-index: 0;
+}
+
+.phantom-presence,
+.phantom-presence__stage,
+.phantom-presence__figure {
+  animation: none !important;
+  transition: none !important;
+}
+
+.phantom-presence__stage {
+  top: 52%;
+  right: clamp(0.75rem, 4vw, 4rem);
+  bottom: auto;
+  display: block;
+  width: clamp(16rem, 23vw, 24rem);
+  height: min(64vh, 39rem);
+  transform: translateY(-48%);
+  opacity: 0.11;
+  filter: saturate(1.05) contrast(1.03)
+    drop-shadow(0 0 1.25rem color-mix(in srgb, var(--phantom-presence-color) 18%, transparent));
+}
+
+.phantom-presence__figure {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: right center;
+  transform: none !important;
+  filter: brightness(1.02) contrast(1.03);
+  will-change: auto;
+}
+
+.phantom-presence[data-phase='listening'] .phantom-presence__stage,
+.phantom-presence[data-phase='reasoning'] .phantom-presence__stage,
+.phantom-presence[data-phase='working'] .phantom-presence__stage {
+  opacity: 0.15;
+  filter: saturate(1.08) contrast(1.04)
+    drop-shadow(0 0 1.5rem color-mix(in srgb, var(--phantom-presence-color) 22%, transparent));
+}
+
+.phantom-presence[data-phase='celebrate'] .phantom-presence__stage {
+  opacity: 0.17;
+}
+
+.phantom-presence[data-phase='error'] {
+  --phantom-presence-color: #ff647c;
+}
+
+.phantom-presence[data-phase='error'] .phantom-presence__stage {
+  opacity: 0.14;
+}
+
+@media (max-width: 1024px) {
+  .phantom-presence__stage {
+    top: 52%;
+    right: 0.5rem;
+    bottom: auto;
+    width: clamp(13rem, 24vw, 17rem);
+    height: min(58vh, 31rem);
+    transform: translateY(-48%);
+    opacity: 0.1;
+  }
+
+  .phantom-presence[data-phase='listening'] .phantom-presence__stage,
+  .phantom-presence[data-phase='reasoning'] .phantom-presence__stage,
+  .phantom-presence[data-phase='working'] .phantom-presence__stage,
+  .phantom-presence[data-phase='celebrate'] .phantom-presence__stage,
+  .phantom-presence[data-phase='error'] .phantom-presence__stage {
+    opacity: 0.12;
+  }
+}
+
+@media (max-width: 760px) {
+  .phantom-presence__stage {
+    right: -1rem;
+    width: 11rem;
+    height: min(44vh, 22rem);
+    opacity: 0.08;
+  }
+
+  .phantom-presence[data-phase='listening'] .phantom-presence__stage,
+  .phantom-presence[data-phase='reasoning'] .phantom-presence__stage,
+  .phantom-presence[data-phase='working'] .phantom-presence__stage,
+  .phantom-presence[data-phase='celebrate'] .phantom-presence__stage,
+  .phantom-presence[data-phase='error'] .phantom-presence__stage {
+    opacity: 0.1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phantom-presence,
+  .phantom-presence__stage,
+  .phantom-presence__figure {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Composer apparition ------------------------------------------------------ */
+/* This final cascade owns the shipped treatment. The presence lives inside
+   composer-root: its glow and body paint below composer-surface (z-4), while
+   two thin wisps paint above it. That real occlusion makes the Phantom emerge
+   from the product's input surface instead of floating as page wallpaper. */
+[data-slot='composer-root'] > .phantom-presence {
+  --phantom-presence-color: color-mix(in srgb, var(--ui-accent) 72%, #64ffb7);
+  position: absolute;
+  inset: auto clamp(-4rem, -2vw, -1.25rem) -0.6rem auto;
+  z-index: auto;
+  width: clamp(27rem, 44vw, 48rem);
+  height: clamp(34rem, 58vw, 54rem);
+  overflow: visible;
+  contain: layout style;
+  opacity: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+[data-slot='composer-root'] > .phantom-presence .phantom-presence__glow {
+  position: absolute;
+  z-index: 0;
+  right: 6%;
+  bottom: 4%;
+  width: 76%;
+  height: 72%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at 50% 68%,
+    color-mix(in srgb, var(--phantom-presence-color) 15%, transparent),
+    transparent 68%
+  );
+  filter: blur(2.25rem);
+  opacity: 0.24;
+}
+
+[data-slot='composer-root'] > .phantom-presence .phantom-presence__stage {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  opacity: 0.2;
+  filter: saturate(1.08) contrast(1.03)
+    drop-shadow(0 0 1.8rem color-mix(in srgb, var(--phantom-presence-color) 18%, transparent));
+}
+
+[data-slot='composer-root'] > .phantom-presence .phantom-presence__figure {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: right bottom;
+  transform: translate3d(0, 27%, 0) scale(1.12) !important;
+  transform-origin: 50% 62%;
+  filter: brightness(1.02) contrast(1.03);
+  animation: phantom-composer-breathe 5.8s ease-in-out infinite !important;
+}
+
+[data-slot='composer-root'] > .phantom-presence .phantom-presence__front-wisp {
+  position: absolute;
+  z-index: 6;
+  right: 9%;
+  bottom: 0.42rem;
+  height: 0.12rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--phantom-presence-color), transparent);
+  box-shadow: 0 0 0.65rem color-mix(in srgb, var(--phantom-presence-color) 48%, transparent);
+  opacity: 0.46;
+  transform-origin: right center;
+  animation: phantom-composer-wisp 3.4s ease-in-out infinite;
+}
+
+[data-slot='composer-root'] > .phantom-presence .phantom-presence__front-wisp--one {
+  width: 48%;
+  transform: rotate(-4deg);
+}
+
+[data-slot='composer-root'] > .phantom-presence .phantom-presence__front-wisp--two {
+  right: 3%;
+  bottom: 1.05rem;
+  width: 31%;
+  opacity: 0.28;
+  animation-delay: -1.7s;
+}
+
+[data-slot='composer-root'] > .phantom-presence[data-phase='listening'] .phantom-presence__stage,
+[data-slot='composer-root'] > .phantom-presence[data-phase='reasoning'] .phantom-presence__stage,
+[data-slot='composer-root'] > .phantom-presence[data-phase='working'] .phantom-presence__stage {
+  opacity: 0.27;
+  filter: saturate(1.18) contrast(1.05)
+    drop-shadow(0 0 2.1rem color-mix(in srgb, var(--phantom-presence-color) 23%, transparent));
+}
+
+[data-slot='composer-root'] > .phantom-presence[data-phase='working'] .phantom-presence__figure {
+  animation: phantom-composer-work 1.5s ease-in-out infinite !important;
+}
+
+[data-slot='composer-root'] > .phantom-presence[data-phase='celebrate'] .phantom-presence__figure {
+  animation: phantom-composer-celebrate 900ms cubic-bezier(0.16, 1, 0.3, 1) both !important;
+}
+
+[data-slot='composer-root'] > .phantom-presence[data-phase='error'] .phantom-presence__figure {
+  animation: phantom-composer-glitch 380ms steps(2, end) 3 !important;
+}
+
+@keyframes phantom-composer-breathe {
+  0%,
+  100% {
+    transform: translate3d(0, 27%, 0) scale(1.12);
+  }
+  50% {
+    transform: translate3d(0, 25.8%, 0) scale(1.135);
+  }
+}
+
+@keyframes phantom-composer-work {
+  0%,
+  100% {
+    transform: translate3d(0, 27%, 0) scale(1.12) rotate(-0.6deg);
+  }
+  50% {
+    transform: translate3d(-0.25rem, 26%, 0) scale(1.13) rotate(0.7deg);
+  }
+}
+
+@keyframes phantom-composer-celebrate {
+  from {
+    transform: translate3d(0, 33%, 0) scale(1.04);
+    opacity: 0;
+  }
+  55% {
+    transform: translate3d(0, 22%, 0) scale(1.16);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(0, 27%, 0) scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes phantom-composer-glitch {
+  0%,
+  100% {
+    transform: translate3d(0, 27%, 0) scale(1.12);
+  }
+  40% {
+    transform: translate3d(-0.35rem, 27%, 0) scale(1.12) skewX(1.5deg);
+  }
+  75% {
+    transform: translate3d(0.3rem, 26.5%, 0) scale(1.12) skewX(-1.5deg);
+  }
+}
+
+@keyframes phantom-composer-wisp {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: translateX(0) scaleX(0.76);
+  }
+  50% {
+    opacity: 0.54;
+    transform: translateX(-0.4rem) scaleX(1);
+  }
+}
+
+@media (max-width: 900px) {
+  [data-slot='composer-root'] > .phantom-presence {
+    right: -2rem;
+    width: clamp(22rem, 48vw, 31rem);
+    height: clamp(28rem, 64vw, 39rem);
+  }
+}
+
+@media (max-width: 680px) {
+  [data-slot='composer-root'] > .phantom-presence {
+    right: -4rem;
+    width: 21rem;
+    height: 27rem;
+  }
+
+  [data-slot='composer-root'] > .phantom-presence .phantom-presence__stage {
+    opacity: 0.14;
+  }
+
+  [data-slot='composer-root'] > .phantom-presence .phantom-presence__front-wisp {
+    opacity: 0.14;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='composer-root'] > .phantom-presence .phantom-presence__figure,
+  [data-slot='composer-root'] > .phantom-presence .phantom-presence__front-wisp {
+    animation: none !important;
+  }
+}
+
+/* Sticky rows span the scroller for positioning only. Painting that wrapper
+   creates a full-width black band behind every compact user bubble. */
+.phantom-user-message-row {
+  background: transparent;
+}
+
+.phantom-user-message-bubble {
+  border-color: color-mix(in srgb, var(--ui-accent) 20%, var(--ui-stroke-tertiary));
+  background: color-mix(in srgb, var(--dt-user-bubble) 88%, transparent);
+  box-shadow:
+    0 0.6rem 1.6rem color-mix(in srgb, #000 16%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--ui-text-primary) 7%, transparent);
+  backdrop-filter: blur(0.75rem) saturate(1.08);
+  -webkit-backdrop-filter: blur(0.75rem) saturate(1.08);
 }

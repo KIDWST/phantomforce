@@ -262,18 +262,14 @@ def _safe_copy_db(src: Path, dst: Path) -> bool:
     """
     conn = None
     backup_conn = None
+    copied = False
     try:
         conn = sqlite3.connect(f"file:{src}?mode=ro", uri=True)
         backup_conn = sqlite3.connect(str(dst))
         conn.backup(backup_conn)
-        return True
+        copied = True
     except Exception as exc:
         logger.warning("SQLite safe copy failed for %s: %s", src, exc)
-        try:
-            dst.unlink(missing_ok=True)
-        except OSError:
-            pass
-        return False
     finally:
         for connection in (backup_conn, conn):
             if connection is not None:
@@ -281,6 +277,15 @@ def _safe_copy_db(src: Path, dst: Path) -> bool:
                     connection.close()
                 except Exception:
                     pass
+    if not copied:
+        # On Windows the destination cannot be unlinked until backup_conn is
+        # closed.  Cleanup therefore belongs after the finally block, not in
+        # the exception handler while SQLite still owns the file handle.
+        try:
+            dst.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return copied
 
 
 def is_zeroed_sqlite_file(

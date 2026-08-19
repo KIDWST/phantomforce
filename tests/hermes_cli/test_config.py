@@ -1,6 +1,10 @@
 """Tests for hermes_cli configuration management."""
 
 import os
+import shlex
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,6 +19,7 @@ from hermes_cli.config import (
     get_compatible_custom_providers,
     _explicit_config_paths,
     _normalize_max_turns_config,
+    _normalize_phantom_model_profiles,
     is_provider_enabled,
     load_config,
     load_env,
@@ -31,12 +36,85 @@ from hermes_cli.config import (
 )
 
 
+def _assert_posix_shell_roundtrip(env_path: Path, key: str, expected: str) -> None:
+    """Exercise shell sourcing when a POSIX shell is available.
+
+    The value is already verified through python-dotenv and ``load_env`` on
+    every platform.  This extra boundary protects the POSIX ``source`` use
+    case without assuming GNU ``env`` or ``sh`` exists on native Windows.
+    """
+    if os.name == "nt":
+        return
+
+    shell = shutil.which("sh")
+    if shell is None:
+        return
+
+    command = (
+        f"set -a; . {shlex.quote(str(env_path))}; set +a; "
+        f'printf "%s" "${key}"'
+    )
+    result = subprocess.run(
+        [shell, "-c", command],
+        capture_output=True,
+        env={},
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert result.stdout == expected
+
+
+def test_legacy_dadgpt_profile_migrates_to_local_phantom_profiles():
+    legacy = {
+        "model": {
+            "provider": "custom:phantom",
+            "default": "Dadgpt-default",
+            "base_url": "https://www.dadgpt.live/v1",
+            "api_key": "preserve-me",
+        },
+        "providers": {
+            "phantom": {
+                "name": "Phantom",
+                "base_url": "http://127.0.0.1:11434/v1",
+                "models": {
+                    "phantom": {"context_length": 65536},
+                },
+            }
+        },
+    }
+
+    normalized = _normalize_phantom_model_profiles(legacy)
+
+    assert normalized["model"] == {
+        "provider": "phantom",
+        "default": "phantom",
+        "base_url": "http://127.0.0.1:11434/v1",
+        "api_key": "preserve-me",
+    }
+    assert set(normalized["providers"]["phantom"]["models"]) == {
+        "phantom",
+        "phantom-unleashed",
+    }
+    assert normalized["providers"]["phantom"]["models"]["phantom-unleashed"] == {
+        "context_length": 65536,
+        "ollama_num_ctx": 65536,
+        "reasoning_effort": "none",
+    }
+    assert legacy["model"]["default"] == "Dadgpt-default"
+    assert _normalize_phantom_model_profiles(normalized) == normalized
+
+
 class TestGetHermesHome:
     def test_default_path(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("HERMES_HOME", None)
             home = get_hermes_home()
-            assert home == Path.home() / ".hermes"
+            if sys.platform == "win32":
+                base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+                assert home == base / "hermes"
+            else:
+                assert home == Path.home() / ".hermes"
 
     def test_env_override(self):
         with patch.dict(os.environ, {"HERMES_HOME": "/custom/path"}):
@@ -631,26 +709,10 @@ class TestSaveEnvValueSecure:
             assert parsed["TERMINAL_SSH_KEY"] == path
             assert load_env()["TERMINAL_SSH_KEY"] == path
 
-            # Shell source must round-trip (this is what the bug broke).
-            r = subprocess.run(
-                [
-                    "env",
-                    "-i",
-                    "sh",
-                    "-c",
-                    f"set -a; . '{env_path}'; set +a; "
-                    f'printf "%s" "$TERMINAL_SSH_KEY"',
-                ],
-                capture_output=True,
-                text=True,
-            )
-            assert r.returncode == 0, r.stderr
-            assert r.stderr == ""
-            assert r.stdout == path
+            _assert_posix_shell_roundtrip(env_path, "TERMINAL_SSH_KEY", path)
 
     def test_save_env_value_quotes_values_with_tabs(self, tmp_path):
         """Tabs trigger quoting; round-trip via dotenv and shell source."""
-        import subprocess
         from dotenv import dotenv_values
 
         value = "left\tright"
@@ -666,21 +728,7 @@ class TestSaveEnvValueSecure:
             assert parsed["TABBY_KEY"] == value
             assert load_env()["TABBY_KEY"] == value
 
-            r = subprocess.run(
-                [
-                    "env",
-                    "-i",
-                    "sh",
-                    "-c",
-                    f"set -a; . '{env_path}'; set +a; "
-                    f'printf "%s" "$TABBY_KEY"',
-                ],
-                capture_output=True,
-                text=True,
-            )
-            assert r.returncode == 0, r.stderr
-            assert r.stderr == ""
-            assert r.stdout == value
+            _assert_posix_shell_roundtrip(env_path, "TABBY_KEY", value)
 
     def test_save_env_value_spaced_path_is_idempotent(self, tmp_path):
         """Saving the same spaced value twice must not grow quotes."""
@@ -2252,8 +2300,8 @@ class TestCodexAppServerAutoConfig:
     def _write(self, tmp_path, body):
         (tmp_path / "config.yaml").write_text(body, encoding="utf-8")
 
-    def test_default_config_has_native_mode(self):
-        assert DEFAULT_CONFIG["compression"]["codex_app_server_auto"] == "native"
+    def test_default_config_has_hermes_mode(self):
+        assert DEFAULT_CONFIG["compression"]["codex_app_server_auto"] == "hermes"
         assert DEFAULT_CONFIG["compression"]["codex_gpt55_autoraise"] is True
 
     def test_preserves_existing_codex_app_server_auto_value(self, tmp_path):

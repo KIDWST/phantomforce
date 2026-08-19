@@ -682,7 +682,7 @@ class TestGetProcessStartTime:
     def test_live_process_is_stable_int(self):
         import subprocess
         import time
-        p = subprocess.Popen(["sleep", "20"])
+        p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
         try:
             a = status._get_process_start_time(p.pid)
             time.sleep(0.2)
@@ -707,7 +707,7 @@ class TestGetProcessStartTime:
             return orig_read_text(self, *args, **kwargs)
 
         monkeypatch.setattr(Path, "read_text", no_proc)
-        p = subprocess.Popen(["sleep", "20"])
+        p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
         try:
             a = status._get_process_start_time(p.pid)
             b = status._get_process_start_time(p.pid)

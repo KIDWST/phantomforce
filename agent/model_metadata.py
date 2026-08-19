@@ -254,6 +254,7 @@ DEFAULT_CONTEXT_LENGTHS = {
     "gpt-5": 400000,                  # GPT-5.x base, mini, codex variants (400k)
     "gpt-4.1": 1047576,
     "gpt-4": 128000,
+    "chatgpt-plus": 128000,           # Local browser bridge; minimum safe agent window.
     # Google
     "gemini": 1048576,
     # Gemma (open models served via AI Studio)
@@ -1338,6 +1339,15 @@ def parse_available_output_tokens_from_error(error_msg: str) -> Optional[int]:
         # The input itself fits — this is purely an output-cap error, so reduce
         # max_tokens and retry; do NOT compress.
         "range of max_tokens should be" in error_lower
+    ) or (
+        # OpenRouter affordability preflight:
+        #   "This request requires more credits, or fewer max_tokens. You
+        #    requested up to 65536 tokens, but can only afford 55936."
+        # This is not account depletion if a smaller output reservation would
+        # pass. Treat it like an output-cap error so the caller retries with a
+        # smaller max_tokens instead of reporting a billing wall.
+        "fewer max_tokens" in error_lower
+        and "can only afford" in error_lower
     )
     if not is_output_cap_error:
         return None
@@ -1350,6 +1360,14 @@ def parse_available_output_tokens_from_error(error_msg: str) -> Optional[int]:
     )
     if _m_range:
         _cap = int(_m_range.group(1))
+        if _cap >= 1:
+            return _cap
+
+    # OpenRouter affordability form. The affordable amount is the largest
+    # completion reservation the key can currently pass for this request.
+    _m_afford = re.search(r'can only afford\s+(\d+)', error_lower)
+    if _m_afford:
+        _cap = int(_m_afford.group(1))
         if _cap >= 1:
             return _cap
 

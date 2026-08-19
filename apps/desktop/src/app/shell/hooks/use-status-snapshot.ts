@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
 
 import { getStatus } from '@/hermes'
-import { evaluateRuntimeReadiness, type RuntimeReadinessResult } from '@/lib/runtime-readiness'
+import { evaluateSessionRuntimeReadiness, type RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import type { StatusResponse } from '@/types/hermes'
 
 const REFRESH_MS = 15_000
 
 type GatewayRequester = <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>
 
-export function useStatusSnapshot(gatewayState: string | undefined, requestGateway: GatewayRequester) {
+export function useStatusSnapshot(
+  gatewayState: string | undefined,
+  requestGateway: GatewayRequester,
+  activeProvider?: string
+) {
   const [statusSnapshot, setStatusSnapshot] = useState<StatusResponse | null>(null)
   const [inferenceStatus, setInferenceStatus] = useState<RuntimeReadinessResult | null>(null)
 
@@ -37,7 +41,9 @@ export function useStatusSnapshot(gatewayState: string | undefined, requestGatew
         // race newer healthy results.
         const [statusResult, inferenceResult] = await Promise.allSettled([
           getStatus(),
-          gatewayState === 'open' ? evaluateRuntimeReadiness(requestGateway) : Promise.resolve(null)
+          gatewayState === 'open'
+            ? evaluateSessionRuntimeReadiness(requestGateway, activeProvider)
+            : Promise.resolve(null)
         ])
 
         if (cancelled) {
@@ -76,7 +82,7 @@ export function useStatusSnapshot(gatewayState: string | undefined, requestGatew
         window.clearTimeout(timer)
       }
     }
-  }, [gatewayState, requestGateway])
+  }, [activeProvider, gatewayState, requestGateway])
 
   return { inferenceStatus, statusSnapshot }
 }

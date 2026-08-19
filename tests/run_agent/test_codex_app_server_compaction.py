@@ -14,7 +14,7 @@ class FakeCodexSession:
         self.calls = 0
         self.closed = False
 
-    def compact_thread(self):
+    def compact_thread(self, **kwargs):
         self.calls += 1
         return self.result
 
@@ -27,7 +27,7 @@ class SlowCodexSession(FakeCodexSession):
         super().__init__(result)
         self.touch_calls = touch_calls
 
-    def compact_thread(self):
+    def compact_thread(self, **kwargs):
         self.calls += 1
         _wait_for_touch(self.touch_calls, "context compression in progress")
         return self.result

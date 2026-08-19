@@ -20,11 +20,20 @@ export interface RuntimeReadinessOptions {
   unknownReady?: boolean
 }
 
-export interface RuntimeReadinessResult {
+export interface RuntimeReadinessCheck {
   checksDisagree: boolean
   ready: boolean
   reason: null | string
   source: 'fallback' | 'runtime_check' | 'setup_status'
+}
+
+export interface RuntimeReadinessResult extends RuntimeReadinessCheck {
+  /** Provider pinned to the open composer/session, when one exists. */
+  activeProvider?: string
+  /** Independently evaluated process-level default used by unpinned new work. */
+  globalDefault?: RuntimeReadinessCheck
+  /** True when the open session and global default do not have the same health. */
+  configurationDrift?: boolean
 }
 
 export type RuntimeReadinessRequester = <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -149,4 +158,52 @@ export async function evaluateRuntimeReadiness(
   const signals = await fetchRuntimeReadinessSignals(requestGateway, options.requestedProvider)
 
   return interpretRuntimeReadiness(signals, options)
+}
+
+/**
+ * Evaluate the route the open session will actually use and the global
+ * default as two separate facts. A pinned session can be healthy while a
+ * stale/disabled global provider is broken; collapsing those checks made the
+ * desktop claim inference was unavailable even while that session worked.
+ *
+ * This is intentionally diagnostic only. It never rewrites config: the UI can
+ * surface the mismatch and let the user review the default explicitly.
+ */
+export async function evaluateSessionRuntimeReadiness(
+  requestGateway: RuntimeReadinessRequester,
+  activeProvider?: string
+): Promise<RuntimeReadinessResult> {
+  const provider = activeProvider?.trim()
+
+  if (!provider) {
+    return evaluateRuntimeReadiness(requestGateway)
+  }
+
+  const [setup, activeRuntime, globalRuntime] = await Promise.all([
+    requestWithFallback<SetupStatusSnapshot>(requestGateway, 'setup.status'),
+    requestWithFallback<RuntimeCheckSnapshot>(requestGateway, 'setup.runtime_check', { provider }),
+    requestWithFallback<RuntimeCheckSnapshot>(requestGateway, 'setup.runtime_check')
+  ])
+
+  const sharedSetup = {
+    setup: setup.value,
+    setupError: setup.error
+  }
+  const active = interpretRuntimeReadiness({
+    ...sharedSetup,
+    runtime: activeRuntime.value,
+    runtimeError: activeRuntime.error
+  })
+  const globalDefault = interpretRuntimeReadiness({
+    ...sharedSetup,
+    runtime: globalRuntime.value,
+    runtimeError: globalRuntime.error
+  })
+
+  return {
+    ...active,
+    activeProvider: provider,
+    configurationDrift: active.ready !== globalDefault.ready,
+    globalDefault
+  }
 }

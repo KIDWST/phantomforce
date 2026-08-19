@@ -106,18 +106,41 @@ cd "$REPO_ROOT"
 # Each test file runs in its own subprocess via run_tests_parallel.py.
 # Pre-building the bytecode cache once here (instead of each subprocess
 # compiling on first import) avoids redundant work across ~2000 processes.
-# Uses git to list tracked .py files (skips venv, node_modules, etc).
+# Prefer ripgrep's repository-aware file listing.  Git cannot resolve a
+# Windows absolute ``gitdir:`` pointer when this script is launched from WSL
+# against a Windows worktree, which previously printed a fatal error and
+# silently skipped pre-compilation.
 echo "▶ pre-compiling bytecode cache"
-"$PYTHON" -m compileall -q -j 0 -- $(git ls-files '*.py') >/dev/null 2>&1 || true
+if command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; then
+  mapfile -d '' PYTHON_SOURCES < <(rg --files -0 -g '*.py')
+else
+  mapfile -d '' PYTHON_SOURCES < <(
+    find . -type f -name '*.py' \
+      -not -path './.venv/*' \
+      -not -path './venv/*' \
+      -not -path './node_modules/*' \
+      -not -path './apps/desktop/node_modules/*' \
+      -print0
+  )
+fi
+if [ "${#PYTHON_SOURCES[@]}" -gt 0 ]; then
+  "$PYTHON" -m compileall -q -j 0 -- "${PYTHON_SOURCES[@]}" >/dev/null 2>&1 || true
+fi
 
 echo "▶ launching test runner"
 exec env -i \
   PATH="$PATH" \
   HOME="$HOME" \
+  ${USERPROFILE:+USERPROFILE="$USERPROFILE"} \
+  ${HOMEDRIVE:+HOMEDRIVE="$HOMEDRIVE"} \
+  ${HOMEPATH:+HOMEPATH="$HOMEPATH"} \
   TZ=UTC \
   LANG=C.UTF-8 \
   LC_ALL=C.UTF-8 \
+  PYTHONUTF8=1 \
+  PYTHONIOENCODING=utf-8 \
   PYTHONHASHSEED=0 \
+  ${HERMES_TEST_WORKERS:+HERMES_TEST_WORKERS="$HERMES_TEST_WORKERS"} \
   ${HERMES_RUN_SLOW_PET_TESTS:+HERMES_RUN_SLOW_PET_TESTS="$HERMES_RUN_SLOW_PET_TESTS"} \
   ${EXTRA_PYTHONPATH:+PYTHONPATH="$EXTRA_PYTHONPATH"} \
   ${EXTRA_PYTEST_PLUGINS:+PYTEST_PLUGINS="$EXTRA_PYTEST_PLUGINS"} \

@@ -890,7 +890,10 @@ class TestInlineShellExpansion:
             msg = build_skill_invocation_message("/dyn-cwd")
 
         assert msg is not None
-        assert f"Here: {skill_dir}" in msg
+        cwd_line = next(line for line in msg.splitlines() if line.startswith("Here: "))
+        # The shell may be Git Bash or WSL on Windows, so the drive prefix can
+        # differ; the resolved working directory must still be the skill dir.
+        assert cwd_line.replace("\\", "/").endswith("/dyn-cwd")
 
     def test_inline_shell_timeout_does_not_break_message(self, tmp_path):
         with (

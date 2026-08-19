@@ -49,6 +49,29 @@ def test_noauth_lmstudio_still_resolves(monkeypatch):
     assert resolved["api_key"]
 
 
+def test_phantombot_kimi_alias_canonicalizes_to_direct_gateway(monkeypatch):
+    """A stale UI provider must not send PhantomBot's Kimi alias to local Ollama."""
+    monkeypatch.setattr(
+        rp,
+        "_get_model_config",
+        lambda: {
+            "provider": "ollama-launch",
+            "default": "kimi-k3-hf:latest",
+            "base_url": "http://127.0.0.1:11434",
+        },
+    )
+
+    resolved = rp.resolve_runtime_provider(
+        requested="ollama-launch",
+        target_model="kimi-k3-hf:latest",
+    )
+
+    assert resolved["requested_provider"] == "kimi-k3-direct"
+    assert resolved["base_url"] == "http://127.0.0.1:11435"
+    assert resolved["model"] == "kimi-k3-hf:latest"
+    assert resolved["source"] == "phantombot-kimi-direct"
+
+
 def _fake_invoke_jwt(ttl_seconds=3600):
     header = base64.urlsafe_b64encode(b'{"alg":"none","typ":"JWT"}').decode().rstrip("=")
     payload = base64.urlsafe_b64encode(

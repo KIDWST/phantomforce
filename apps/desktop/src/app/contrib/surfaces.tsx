@@ -14,7 +14,7 @@ import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { ContribBoundary } from '@/contrib/react/boundary'
 import { useContributions } from '@/contrib/react/use-contributions'
 import { $activeGatewayProfile } from '@/store/profile'
-import { $freshDraftReady, $gatewayState } from '@/store/session'
+import { $currentProvider, $freshDraftReady, $gatewayState } from '@/store/session'
 
 import { ChatView } from '../chat'
 import { ChatSidebar } from '../chat/sidebar'
@@ -77,8 +77,13 @@ export const StatusbarSurface = memo(function StatusbarSurface({
   commandCenterOpen: boolean
 }) {
   const gatewayState = useStore($gatewayState)
+  const currentProvider = useStore($currentProvider)
   const freshDraftReady = useStore($freshDraftReady)
-  const { inferenceStatus, statusSnapshot } = useStatusSnapshot(gatewayState, actions.requestGateway)
+  const { inferenceStatus, statusSnapshot } = useStatusSnapshot(
+    gatewayState,
+    actions.requestGateway,
+    currentProvider
+  )
   const extraLeftItems = useStatusbarContributions('left')
   const extraRightItems = useStatusbarContributions('right')
 

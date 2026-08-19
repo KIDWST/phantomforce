@@ -90,6 +90,40 @@ class TestFallbackChainAdvancement:
         agent = _make_agent(fallback_model=None)
         assert agent._try_activate_fallback() is False
 
+    def test_explicit_phantom_never_falls_back_to_paid_provider(self):
+        agent = _make_agent(
+            fallback_model={"provider": "openrouter", "model": "openai/gpt-5"}
+        )
+        agent.provider = "phantom"
+        agent.model = "phantom"
+        agent.base_url = "http://127.0.0.1:11434/v1"
+        agent._primary_runtime = {"provider": "phantom", "model": "phantom"}
+
+        with patch("agent.auxiliary_client.resolve_provider_client") as resolve:
+            assert agent._try_activate_fallback() is False
+
+        resolve.assert_not_called()
+        assert agent._fallback_index == 0
+
+    def test_custom_loopback_unleashed_never_falls_back_to_paid_provider(self):
+        agent = _make_agent(
+            fallback_model={"provider": "openrouter", "model": "openai/gpt-5"}
+        )
+        agent.provider = "custom"
+        agent.model = "phantom-unleashed"
+        agent.base_url = "http://127.0.0.1:11434/v1"
+        agent._primary_runtime = {
+            "provider": "custom",
+            "model": "phantom-unleashed",
+            "base_url": "http://127.0.0.1:11434/v1",
+        }
+
+        with patch("agent.auxiliary_client.resolve_provider_client") as resolve:
+            assert agent._try_activate_fallback() is False
+
+        resolve.assert_not_called()
+        assert agent._fallback_index == 0
+
     def test_advances_index(self):
         fbs = [
             {"provider": "openai", "model": "gpt-4o"},

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import signal
+import sys
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,7 @@ class TestOwnCgroupPath:
         assert cgroup_cleanup._own_cgroup_path() is None
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="systemd cgroups are Linux-only")
 class TestReapCgroup:
     def test_skips_own_pid_and_kills_the_rest(self, tmp_path, monkeypatch):
         own = os.getpid()

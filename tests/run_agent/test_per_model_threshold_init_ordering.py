@@ -126,7 +126,25 @@ def test_model_thresholds_key_in_default_config():
     from hermes_cli.config import DEFAULT_CONFIG
 
     assert "model_thresholds" in DEFAULT_CONFIG["compression"]
-    assert DEFAULT_CONFIG["compression"]["model_thresholds"] == {}
+    defaults = DEFAULT_CONFIG["compression"]["model_thresholds"]
+    assert defaults["glm-5.2"] == 0.08
+    assert defaults["z-ai/glm-5.2"] == 0.08
+
+
+def test_cost_hygiene_defaults_compact_large_glm_contexts_early():
+    """Default GLM-5.2 routing must not wait until half of a 1M window.
+
+    The model supports a huge context, but paid providers bill what we resend.
+    The default should preserve capability while compacting long sessions well
+    before a routine PhantomBot day can burn hundreds of thousands of prompt
+    tokens per turn.
+    """
+    from hermes_cli.config import DEFAULT_CONFIG
+
+    compression = DEFAULT_CONFIG["compression"]
+    assert compression["model_thresholds"]["glm-5.2"] == 0.08
+    assert compression["proactive_prune_tokens"] == 48000
+    assert compression["idle_compact_after_seconds"] == 900
 
 
 class TestFloorInteractionOnModelSwitch:

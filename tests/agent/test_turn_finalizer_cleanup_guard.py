@@ -11,6 +11,7 @@ traceback and lost the whole turn.
 import pytest
 
 from agent.turn_finalizer import finalize_turn
+from hermes_cli.engineering_os import EngineeringStore
 
 
 class _StubBudget:
@@ -182,3 +183,34 @@ def test_text_response_on_last_allowed_call_is_completed():
     )
     assert result["final_response"] == "final report"
     assert result["completed"] is True
+
+
+def test_completed_turn_finalizes_all_matching_engineering_runs(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes-home"))
+    store = EngineeringStore()
+    project = tmp_path / "project"
+    project.mkdir()
+    session_run = store.create_run(
+        title="Session run",
+        cwd=str(project),
+        session_id="sess-1",
+        status="running",
+    )
+    task_run = store.create_run(
+        title="Task run",
+        cwd=str(project),
+        task_id="task-1",
+        status="verifying",
+    )
+
+    result = _run(
+        _StubAgent(raise_in=()),
+        final_response="fixed and verified",
+        api_call_count=1,
+        turn_exit_reason="text_response(finish_reason=stop)",
+    )
+
+    assert result["completed"] is True
+    assert store.get_run(session_run["id"])["status"] == "succeeded"
+    assert store.get_run(task_run["id"])["status"] == "succeeded"
+    assert store.get_run(session_run["id"])["summary"] == "fixed and verified"

@@ -203,6 +203,10 @@
       {
         "from": "assets/icon.ico",
         "to": "icon.ico"
+      },
+      {
+        "from": "../../services/chatgpt_plus_backend.py",
+        "to": "services/chatgpt_plus_backend.py"
       }
     ],
     "asar": true,
@@ -258,7 +262,7 @@
         "nsis",
         "msi"
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true
     },
     "linux": {
       "category": "Development",

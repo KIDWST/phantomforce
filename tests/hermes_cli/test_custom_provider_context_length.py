@@ -157,6 +157,23 @@ class TestGetCustomProviderContextLength:
             == 400_000
         )
 
+    def test_phantombot_kimi_gateway_forces_direct_context(self):
+        """PhantomBot Kimi direct must not inherit generic Ollama 8K fallback metadata."""
+        custom = [
+            {
+                "name": "Kimi K3 Direct",
+                "provider_key": "kimi-k3-direct",
+                "base_url": "http://127.0.0.1:11435",
+                "models": {"kimi-k3-hf:latest": {"context_length": 8192}},
+            }
+        ]
+        assert (
+            get_custom_provider_context_length(
+                "kimi-k3-hf:latest", "http://127.0.0.1:11435", custom
+            )
+            == 65536
+        )
+
 
 class TestGetModelContextLengthHonorsOverride:
     """agent.model_metadata.get_model_context_length must honor the

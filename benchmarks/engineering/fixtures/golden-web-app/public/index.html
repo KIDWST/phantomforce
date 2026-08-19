@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signal Board</title>
+    <link rel="stylesheet" href="/public/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">PHANTOM FORCE · OPERATIONS</p>
+          <h1>Signal Board</h1>
+          <p class="lede">A calm view of work moving through the system.</p>
+        </div>
+        <button class="primary" data-action="create-task" type="button">Add sample task</button>
+      </header>
+      <section class="summary" aria-label="Run summary">
+        <div><strong id="progress">—</strong><span>Complete</span></div>
+        <div><strong id="task-count">—</strong><span>Tasks</span></div>
+        <div><strong id="health">Loading</strong><span>System</span></div>
+      </section>
+      <section>
+        <div class="section-heading"><h2>Current work</h2><span id="updated">Connecting…</span></div>
+        <ul id="task-list" class="task-list" aria-live="polite"></ul>
+      </section>
+    </main>
+    <script type="module" src="/public/app.js"></script>
+  </body>
+</html>

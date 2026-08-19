@@ -2,6 +2,7 @@ from hermes_state import AsyncSessionDB
 """Tests for gateway /status behavior and token persistence."""
 
 from datetime import datetime
+from pathlib import Path
 import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -11,6 +12,13 @@ import pytest
 from gateway.config import GatewayConfig, Platform, PlatformConfig
 from gateway.platforms.base import MessageEvent
 from gateway.session import SessionEntry, SessionSource, build_session_key
+
+
+def _display_home(path: Path) -> str:
+    try:
+        return "~/" + str(path.relative_to(Path.home()))
+    except ValueError:
+        return str(path)
 
 
 def _make_source(platform: Platform = Platform.TELEGRAM) -> SessionSource:
@@ -669,7 +677,7 @@ async def test_profile_command_reports_custom_root_profile(monkeypatch, tmp_path
     result = await runner._handle_profile_command(_make_event("/profile"))
 
     assert "**Profile:** `coder`" in result
-    assert f"**Home:** `{profile_home}`" in result
+    assert f"**Home:** `{_display_home(profile_home)}`" in result
 
 
 @pytest.mark.asyncio
@@ -700,7 +708,7 @@ async def test_profile_command_reports_source_stamped_profile(monkeypatch, tmp_p
     result = await runner._handle_profile_command(event)
 
     assert "**Profile:** `milo`" in result
-    assert f"**Home:** `{profile_home}`" in result
+    assert f"**Home:** `{_display_home(profile_home)}`" in result
 
 
 @pytest.mark.asyncio
@@ -731,7 +739,7 @@ async def test_profile_command_ignores_stamp_when_multiplexing_off(monkeypatch, 
     result = await runner._handle_profile_command(event)
 
     assert "**Profile:** `default`" in result
-    assert f"**Home:** `{hermes_home}`" in result
+    assert f"**Home:** `{_display_home(hermes_home)}`" in result
 
 
 @pytest.mark.asyncio
@@ -755,7 +763,7 @@ async def test_profile_command_unstamped_source_unchanged(monkeypatch, tmp_path)
     result = await runner._handle_profile_command(_make_event("/profile"))
 
     assert "**Profile:** `default`" in result
-    assert f"**Home:** `{hermes_home}`" in result
+    assert f"**Home:** `{_display_home(hermes_home)}`" in result
 
 
 @pytest.mark.asyncio

@@ -210,6 +210,9 @@ _LONG_HANDLERS = frozenset(
         # responsive; completion is read-only and write_json is lock-guarded.
         "complete.path",
         "complete.slash",
+        # Repository indexing reads and parses an entire worktree.  Keep the
+        # gateway's approval/interrupt fast path responsive while it runs.
+        "engineering.repo_index",
         "llm.oneshot",
         # model.options builds the full picker payload — per-provider credential
         # pool checks, pricing fetch, Nous tier check, optional custom-provider
@@ -3729,6 +3732,7 @@ def _apply_model_switch(
     pin_session_override: bool = True,
     parsed_flags: Any | None = None,
     persist_override: bool | None = None,
+    emit_session_info: bool = True,
 ) -> dict:
     from hermes_cli.model_switch import (
         parse_model_flags_detailed,
@@ -3819,6 +3823,12 @@ def _apply_model_switch(
     if not result.success:
         raise ValueError(result.error_message or "model switch failed")
 
+    model_route_changed = (
+        str(result.new_model or "").strip() != str(current_model or "").strip()
+        or str(result.target_provider or "").strip().lower()
+        != str(current_provider or "").strip().lower()
+    )
+
     restore_snapshot = _snapshot_agent_model_runtime(agent) if (one_turn and agent) else None
 
     if agent:
@@ -3889,10 +3899,12 @@ def _apply_model_switch(
         _restart_slash_worker(sid, session)
         _persist_live_session_runtime(session)
         _persist_live_session_system_prompt(session)
-        _append_model_switch_marker(
-            session, model=result.new_model, provider=result.target_provider
-        )
-        _emit("session.info", sid, _session_info(agent, session))
+        if model_route_changed:
+            _append_model_switch_marker(
+                session, model=result.new_model, provider=result.target_provider
+            )
+        if emit_session_info:
+            _emit("session.info", sid, _session_info(agent, session))
         if one_turn:
             session["one_turn_model_restore"] = restore_snapshot
         else:
@@ -3927,6 +3939,38 @@ def _apply_model_switch(
         "confirm_required": False,
         "scope": "once" if one_turn else ("global" if persist_global else "session"),
     }
+
+
+def _apply_pending_model_switch(sid: str, session: dict) -> bool:
+    """Apply one model switch queued while a turn was running."""
+    pending = session.get("pending_model_switch")
+    if not isinstance(pending, dict):
+        return False
+    raw_input = str(pending.get("raw_input") or "").strip()
+    if not raw_input:
+        session.pop("pending_model_switch", None)
+        return False
+    try:
+        result = _apply_model_switch(
+            sid,
+            session,
+            raw_input,
+            confirm_expensive_model=bool(pending.get("confirm_expensive_model")),
+            emit_session_info=False,
+        )
+        if result.get("confirm_required"):
+            raise ValueError(
+                result.get("confirm_message") or "model switch requires confirmation"
+            )
+        return True
+    except Exception as exc:
+        logger.warning("queued model switch failed for %s: %s", sid, exc)
+        _emit("error", sid, {"message": f"queued model switch failed: {exc}"})
+        return False
+    finally:
+        # Clearing happens after the in-place switch attempt and before the
+        # caller emits its settled session.info snapshot.
+        session.pop("pending_model_switch", None)
 
 
 def _sync_agent_model_with_config(sid: str, session: dict) -> None:
@@ -4411,9 +4455,20 @@ def _session_info(agent, session: dict | None = None) -> dict:
         yolo = bool(_YOLO_MODE_FROZEN) or session_yolo or approval_mode == "off"
     except Exception:
         yolo = False
+    active_model = mirror.get("model", getattr(agent, "model", ""))
+    active_provider = mirror.get("provider", getattr(agent, "provider", ""))
+    pending = (session or {}).get("pending_model_switch")
+    if not isinstance(pending, dict):
+        pending = {}
     info: dict = {
-        "model": mirror.get("model", getattr(agent, "model", "")),
-        "provider": mirror.get("provider", getattr(agent, "provider", "")),
+        # Legacy fields remain the active route. New clients get an explicit
+        # transition instead of mistaking an optimistic selection for reality.
+        "model": active_model,
+        "provider": active_provider,
+        "active_model": active_model,
+        "active_provider": active_provider,
+        "pending_model": pending.get("model"),
+        "pending_provider": pending.get("provider"),
         "reasoning_effort": reasoning_effort,
         "service_tier": service_tier,
         "fast": service_tier == "priority",
@@ -5449,6 +5504,7 @@ def _reset_session_agent(sid: str, session: dict) -> dict:
         session.pop("create_reasoning_override", None)
         session.pop("create_service_tier_override", None)
         session.pop("one_turn_model_restore", None)
+        session.pop("pending_model_switch", None)
         new_agent = _make_agent(
             sid,
             session["session_key"],
@@ -7046,6 +7102,119 @@ def _(rid, params: dict) -> dict:
     except Exception:
         logger.exception("project.facts failed")
         return _ok(rid, {"facts": None})
+
+
+@method("engineering.runs")
+def _(rid, params: dict) -> dict:
+    """List durable engineering runs for the active profile."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        runs = default_store().list_runs(
+            project_key=str(params.get("project_key") or ""),
+            limit=int(params.get("limit") or 50),
+        )
+        return _ok(rid, {"runs": runs})
+    except (OSError, TypeError, ValueError) as exc:
+        logger.exception("engineering.runs failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.run")
+def _(rid, params: dict) -> dict:
+    """Return one run with its nested tasks, tool results, changes, and evidence."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        run_id = str(params.get("run_id") or "").strip()
+        if not run_id:
+            return _err(rid, -32602, "run_id is required")
+        return _ok(rid, {"run": default_store().get_run(run_id)})
+    except (OSError, ValueError) as exc:
+        logger.exception("engineering.run failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.repo_status")
+def _(rid, params: dict) -> dict:
+    """Read the cached repository index status without touching the worktree."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        cwd = str(params.get("cwd") or "").strip()
+        if not cwd:
+            return _err(rid, -32602, "cwd is required")
+        return _ok(rid, {"index": default_store().repo_status(cwd)})
+    except (OSError, ValueError) as exc:
+        logger.exception("engineering.repo_status failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.repo_index")
+def _(rid, params: dict) -> dict:
+    """Build the profile-local file and symbol index for one repository."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        cwd = str(params.get("cwd") or "").strip()
+        if not cwd:
+            return _err(rid, -32602, "cwd is required")
+        return _ok(rid, {"index": default_store().index_repository(cwd)})
+    except (OSError, ValueError) as exc:
+        logger.exception("engineering.repo_index failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.repo_symbols")
+def _(rid, params: dict) -> dict:
+    """Search symbols from a previously built repository index."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        cwd = str(params.get("cwd") or "").strip()
+        if not cwd:
+            return _err(rid, -32602, "cwd is required")
+        matches = default_store().search_symbols(
+            cwd,
+            str(params.get("query") or ""),
+            int(params.get("limit") or 50),
+        )
+        return _ok(rid, {"matches": matches})
+    except (OSError, TypeError, ValueError) as exc:
+        logger.exception("engineering.repo_symbols failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.memory")
+def _(rid, params: dict) -> dict:
+    """Read sanitized project memory from the active profile."""
+    try:
+        from hermes_cli.engineering_os import default_store
+
+        project_key = str(params.get("project_key") or "").strip()
+        if not project_key:
+            return _err(rid, -32602, "project_key is required")
+        memories = default_store().search_memory(
+            project_key,
+            str(params.get("query") or ""),
+            int(params.get("limit") or 50),
+        )
+        return _ok(rid, {"memories": memories})
+    except (OSError, TypeError, ValueError) as exc:
+        logger.exception("engineering.memory failed")
+        return _err(rid, -32000, str(exc))
+
+
+@method("engineering.tool_results")
+def _(rid, params: dict) -> dict:
+    """Expose the normalized in-process tool result stream (metadata only)."""
+    try:
+        from tools.tool_bus import tool_result_bus
+
+        return _ok(rid, {"results": tool_result_bus.recent(int(params.get("limit") or 100))})
+    except (TypeError, ValueError) as exc:
+        logger.exception("engineering.tool_results failed")
+        return _err(rid, -32000, str(exc))
 
 
 @method("verification.status")
@@ -11934,6 +12103,7 @@ def _run_prompt_submit(
             # frame paths retire the marker as they emit).
             _retire_turn_marker(session, marker_key)
             session.pop("_auto_continue_scheduled", None)
+            _apply_pending_model_switch(sid, session)
             _emit_settled_session_info(sid, session, agent)
 
         # A user prompt that arrived mid-turn (interrupt + queue) wins over
@@ -12872,6 +13042,103 @@ def _(rid, params: dict) -> dict:
 # ── Methods: config ──────────────────────────────────────────────────
 
 
+def _diagnostics_snapshot(session: dict | None) -> dict:
+    """Return a fast, read-only runtime snapshot without live probes."""
+    session = session or {}
+    agent = session.get("agent")
+    mirror = _metadata_mirror(session)
+    active_model = mirror.get("model", getattr(agent, "model", ""))
+    active_provider = mirror.get("provider", getattr(agent, "provider", ""))
+    pending = session.get("pending_model_switch")
+    if not isinstance(pending, dict):
+        pending = {}
+
+    cfg = _load_cfg()
+    context_cfg = cfg.get("context_limits") if isinstance(cfg, dict) else {}
+    if not isinstance(context_cfg, dict):
+        context_cfg = {}
+    usage = _session_usage_snapshot(session)
+    estimated_context = int(
+        usage.get("context_used")
+        or usage.get("prompt_tokens")
+        or usage.get("prompt")
+        or usage.get("input")
+        or getattr(getattr(agent, "context_compressor", None), "last_prompt_tokens", 0)
+        or 0
+    )
+
+    ollama_thinking = getattr(agent, "_ollama_thinking_cache", None)
+    ollama_entries = len(ollama_thinking) if isinstance(ollama_thinking, dict) else 0
+    ollama_route_cached = False
+    ollama_thinking_supported = None
+    if isinstance(ollama_thinking, dict):
+        route_key = (
+            str(active_model or ""),
+            str(getattr(agent, "base_url", "") or ""),
+        )
+        cached_value = ollama_thinking.get(route_key)
+        if cached_value is None:
+            # Compatibility for early Phantom builds that keyed only by model.
+            cached_value = ollama_thinking.get(str(active_model or ""))
+        if cached_value is not None:
+            ollama_route_cached = True
+            if isinstance(cached_value, (tuple, list)) and cached_value:
+                cached_value = cached_value[0]
+            if cached_value is None or isinstance(cached_value, bool):
+                ollama_thinking_supported = cached_value
+
+    try:
+        from agent.models_dev import get_models_dev_refresh_state
+
+        models_dev_state = get_models_dev_refresh_state()
+    except Exception as exc:
+        models_dev_state = {"error": str(exc)}
+    try:
+        from hermes_cli.codex_models import get_codex_refresh_state
+
+        codex_state = get_codex_refresh_state()
+    except Exception as exc:
+        codex_state = {"error": str(exc)}
+
+    max_turns = int(
+        getattr(agent, "max_iterations", 0)
+        or _cfg_max_turns(cfg if isinstance(cfg, dict) else {}, 300)
+    )
+    target_context = int(context_cfg.get("target_input_tokens") or 40_000)
+    hard_context = int(context_cfg.get("hard_input_tokens") or 110_000)
+    return {
+        "active_model": active_model,
+        "active_provider": active_provider,
+        "pending_model": pending.get("model"),
+        "pending_provider": pending.get("provider"),
+        "turn_tool_call_count": int(
+            getattr(agent, "_turn_tool_call_count", 0) or 0
+        ),
+        "max_turns": max_turns,
+        "context": {
+            "target": target_context,
+            "hard": hard_context,
+            "estimated": max(0, estimated_context),
+        },
+        "ollama": {
+            "thinking_cache_present": bool(ollama_thinking),
+            "thinking_cache_entries": ollama_entries,
+            "current_route_cached": ollama_route_cached,
+            "thinking_supported": ollama_thinking_supported,
+        },
+        "models_dev": models_dev_state,
+        "codex": codex_state,
+    }
+
+
+@method("diagnostics.get")
+def _(rid, params: dict) -> dict:
+    return _ok(
+        rid,
+        _diagnostics_snapshot(_sessions.get(params.get("session_id", ""))),
+    )
+
+
 @method("config.set")
 def _(rid, params: dict) -> dict:
     key, value = params.get("key", ""), params.get("value", "")
@@ -12882,23 +13149,46 @@ def _(rid, params: dict) -> dict:
             if not value:
                 return _err(rid, 4002, "model value required")
             if session:
-                # Reject during an in-flight turn.  agent.switch_model()
-                # mutates self.model / self.provider / self.base_url /
-                # self.client in place; the worker thread running
-                # agent.run_conversation is reading those on every
-                # iteration.  A mid-turn swap can send an HTTP request
-                # with the new base_url but old model (or vice versa),
-                # producing 400/404s the user never asked for.  Parity
-                # with the gateway's running-agent /model guard.
-                if session.get("running"):
-                    return _err(
-                        rid,
-                        4009,
-                        "session busy — /interrupt the current turn before switching models",
-                    )
                 from hermes_cli.model_switch import parse_model_flags_detailed
 
                 parsed_flags = parse_model_flags_detailed(value)
+                if session.get("running"):
+                    pending_model = str(parsed_flags.model_input or "").strip()
+                    if not pending_model:
+                        return _err(rid, 4002, "model value required")
+                    pending_provider = str(
+                        parsed_flags.explicit_provider
+                        or getattr(session.get("agent"), "provider", "")
+                        or ""
+                    ).strip()
+                    # Do not mutate an agent while its request loop is reading
+                    # the route. Queue the latest selection and immediately
+                    # publish active + pending identities to every client.
+                    session["pending_model_switch"] = {
+                        "raw_input": str(value),
+                        "model": pending_model,
+                        "provider": pending_provider or None,
+                        "confirm_expensive_model": bool(
+                            params.get("confirm_expensive_model", False)
+                        ),
+                    }
+                    _emit(
+                        "session.info",
+                        params.get("session_id", ""),
+                        _session_info(session.get("agent"), session),
+                    )
+                    return _ok(
+                        rid,
+                        {
+                            "key": key,
+                            "value": pending_model,
+                            "warning": "",
+                            "confirm_required": False,
+                            "confirm_message": "",
+                            "scope": "session",
+                            "pending": True,
+                        },
+                    )
                 explicit_provider = parsed_flags.explicit_provider
                 if session.get("agent") is None and not explicit_provider.strip():
                     session_id = params.get("session_id", "")

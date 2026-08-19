@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientSessionState } from '@/app/types'
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { $compactingSessions, setSessionCompacting } from '@/store/compaction'
+import { $phantomRoute, $thinkingStatus } from '@/store/session'
 import type { RpcEvent } from '@/types/hermes'
 
 import { useMessageStream } from './index'
@@ -55,11 +56,15 @@ describe('useMessageStream compaction lifecycle', () => {
   beforeEach(() => {
     handleEvent = null
     $compactingSessions.set({})
+    $thinkingStatus.set('')
+    $phantomRoute.set(null)
   })
 
   afterEach(() => {
     cleanup()
     $compactingSessions.set({})
+    $thinkingStatus.set('')
+    $phantomRoute.set(null)
     vi.restoreAllMocks()
   })
 
@@ -88,5 +93,32 @@ describe('useMessageStream compaction lifecycle', () => {
     emit('status.update', { kind: 'compacted' })
 
     expect($compactingSessions.get()).toEqual({ [OTHER_SID]: true })
+  })
+
+  it('surfaces spinner personality without adding reasoning text', async () => {
+    await mountStream()
+
+    emit('message.start')
+    emit('thinking.delta', { text: '(¬‿¬) *byting chips*...' })
+    expect($thinkingStatus.get()).toBe('(¬‿¬) *byting chips*...')
+
+    emit('message.complete', { text: 'Done.' })
+    expect($thinkingStatus.get()).toBe('')
+  })
+
+  it('separates the adaptive lane from personality status', async () => {
+    await mountStream()
+
+    emit('message.start')
+    emit('thinking.delta', { text: 'Phantom lane · Deep' })
+    expect($phantomRoute.get()).toBe('deep')
+    expect($thinkingStatus.get()).toBe('')
+
+    emit('thinking.delta', { text: '*consulting the tiny council*' })
+    expect($phantomRoute.get()).toBe('deep')
+    expect($thinkingStatus.get()).toBe('*consulting the tiny council*')
+
+    emit('message.complete', { text: 'Done.' })
+    expect($phantomRoute.get()).toBeNull()
   })
 })

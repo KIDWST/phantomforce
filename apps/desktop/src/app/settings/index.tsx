@@ -10,6 +10,7 @@ import {
   Archive,
   BarChart3,
   Bell,
+  Brain,
   Download,
   Globe,
   Info,
@@ -34,6 +35,7 @@ import { SKILLS_ROUTE } from '../routes'
 import { AboutSettings } from './about-settings'
 import { AppearanceSettings } from './appearance-settings'
 import { BillingSettings } from './billing'
+import { ChatGptPlusSettings } from './chatgpt-plus-settings'
 import { ConfigSettings } from './config-settings'
 import { SECTIONS } from './constants'
 import { GatewaySettings } from './gateway-settings'
@@ -53,6 +55,7 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   'keys',
   'notifications',
   'billing',
+  'chatgpt-plus',
   'plugins',
   'sessions',
   'about'
@@ -160,6 +163,13 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
       id: 'billing',
       label: t.settings.nav.billing,
       onSelect: () => setActiveView('billing')
+    },
+    {
+      active: activeView === 'chatgpt-plus',
+      icon: Brain,
+      id: 'chatgpt-plus',
+      label: t.settings.nav.chatgptPlus,
+      onSelect: () => setActiveView('chatgpt-plus')
     },
     {
       active: activeView === 'providers',
@@ -326,6 +336,8 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
             <NotificationsSettings />
           ) : activeView === 'billing' ? (
             <BillingSettings />
+          ) : activeView === 'chatgpt-plus' ? (
+            <ChatGptPlusSettings />
           ) : activeView === 'plugins' ? (
             <PluginsSettings />
           ) : (

@@ -14,9 +14,9 @@ import {
   installedAgentInstallScript,
   installRefForStamp,
   isPinnedCommit,
+  repositoryCacheKey,
   resolveInstallScript,
   resolveMarkerPinnedCommit,
-  repositoryCacheKey,
   runBootstrap
 } from './bootstrap-runner'
 

@@ -1,0 +1,5 @@
+name: chatgpt-plus
+version: 1.0.0
+description: "ChatGPT Plus browser-session image generation backend for PhantomBot."
+author: PhantomForce
+kind: backend

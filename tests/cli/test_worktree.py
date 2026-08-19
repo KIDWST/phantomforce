@@ -537,7 +537,10 @@ class TestWorktreeDirectorySymlink:
         # Manually symlink (mirrors cli.py logic)
         if not dst.exists():
             dst.parent.mkdir(parents=True, exist_ok=True)
-            os.symlink(str(src.resolve()), str(dst))
+            try:
+                os.symlink(str(src.resolve()), str(dst))
+            except OSError:
+                pytest.skip("directory symlinks are not available for this Windows user")
 
         assert dst.is_symlink()
         assert (dst / "lib" / "marker.txt").read_text() == "venv marker"
@@ -1520,4 +1523,3 @@ class TestPruneParallelEquivalence:
 
         cli._prune_stale_worktrees(str(git_repo))
         assert not wt.exists(), "serial fallback must still reap the merged tree"
-

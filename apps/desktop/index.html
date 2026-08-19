@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#0a0a0a" />
-    <link rel="icon" type="image/png" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="shortcut icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" type="image/png" href="/phantombot-mark.png" />
+    <link rel="apple-touch-icon" href="/phantombot-mark.png" />
+    <link rel="shortcut icon" href="/phantombot-mark.png" />
     <title>PhantomBot</title>
     <script>
       // Pre-paint the themed background before the app bundle loads. Without
@@ -31,9 +31,340 @@
         // localStorage unavailable — keep UA defaults.
       }
     </script>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background: #000;
+      }
+
+      .phantombot-boot {
+        align-items: center;
+        background: #000;
+        color: #eafff4;
+        display: flex;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        height: 100%;
+        justify-content: center;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .phantombot-boot::before {
+        background: radial-gradient(circle, rgba(62, 255, 124, 0.11), rgba(0, 0, 0, 0) 68%);
+        content: '';
+        height: min(34rem, 82vw);
+        left: 50%;
+        pointer-events: none;
+        position: absolute;
+        top: 47%;
+        transform: translate(-50%, -50%);
+        width: min(34rem, 82vw);
+      }
+
+      .phantombot-boot__stack {
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: 1.15rem;
+        position: relative;
+      }
+
+      .phantombot-boot__emblem {
+        aspect-ratio: 1;
+        position: relative;
+        width: min(13.5rem, 48vw);
+      }
+
+      .phantombot-boot__mark {
+        inset: 0;
+        isolation: isolate;
+        position: absolute;
+      }
+
+      .phantombot-boot__mark img {
+        display: block;
+        height: 100%;
+        object-fit: contain;
+        position: relative;
+        width: 100%;
+        z-index: 1;
+        filter: saturate(1.22) contrast(1.08) drop-shadow(0 0 0.55rem rgba(82, 255, 108, 0.68))
+          drop-shadow(0 0 1.8rem rgba(35, 255, 108, 0.32));
+        animation:
+          phantombot-boot-arrive 680ms cubic-bezier(0.16, 1, 0.3, 1) both,
+          phantombot-boot-float 4.8s 680ms ease-in-out infinite;
+      }
+
+      .phantombot-boot__mark::before,
+      .phantombot-boot__mark::after {
+        clip-path: polygon(
+          50% 12%,
+          70% 21%,
+          83% 38%,
+          88% 62%,
+          78% 82%,
+          63% 94%,
+          50% 84%,
+          37% 94%,
+          22% 82%,
+          12% 62%,
+          17% 38%,
+          30% 21%
+        );
+        content: '';
+        inset: 0;
+        pointer-events: none;
+        position: absolute;
+      }
+
+      .phantombot-boot__mark::before {
+        background:
+          radial-gradient(ellipse 13% 6% at 41% 50%, rgba(218, 255, 115, 0.94), transparent 72%),
+          radial-gradient(ellipse 13% 6% at 59% 50%, rgba(218, 255, 115, 0.94), transparent 72%);
+        filter: blur(0.08rem);
+        mix-blend-mode: screen;
+        z-index: 2;
+        animation: phantombot-boot-eyes 2.6s 520ms ease-in-out infinite;
+      }
+
+      .phantombot-boot__mark::after {
+        background: linear-gradient(
+          112deg,
+          transparent 24%,
+          rgba(255, 255, 255, 0) 38%,
+          rgba(255, 255, 255, 0.42) 48%,
+          rgba(24, 245, 138, 0.38) 53%,
+          transparent 66%
+        );
+        mix-blend-mode: screen;
+        z-index: 3;
+        animation: phantombot-boot-gleam 3.8s 820ms cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+      }
+
+      .phantombot-boot__scan {
+        background: linear-gradient(90deg, transparent, rgba(208, 255, 114, 0.8), transparent);
+        box-shadow: 0 0 0.8rem rgba(68, 255, 112, 0.55);
+        clip-path: polygon(
+          50% 12%,
+          70% 21%,
+          83% 38%,
+          88% 62%,
+          78% 82%,
+          63% 94%,
+          50% 84%,
+          37% 94%,
+          22% 82%,
+          12% 62%,
+          17% 38%,
+          30% 21%
+        );
+        height: 1px;
+        inset-inline: 8%;
+        opacity: 0;
+        position: absolute;
+        top: 25%;
+        z-index: 4;
+        animation: phantombot-boot-scan 2.6s 420ms ease-in-out infinite;
+      }
+
+      .phantombot-boot__identity {
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        min-width: 12rem;
+      }
+
+      .phantombot-boot__wordmark {
+        font-size: 1.02rem;
+        font-weight: 720;
+        letter-spacing: 0;
+        line-height: 1;
+        text-shadow: 0 0 1.2rem rgba(65, 255, 126, 0.36);
+      }
+
+      .phantombot-boot__status {
+        align-items: center;
+        color: rgba(218, 238, 227, 0.58);
+        display: flex;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.65rem;
+        gap: 0.45rem;
+        letter-spacing: 0;
+        line-height: 1;
+      }
+
+      .phantombot-boot__status-dot {
+        background: #56ff84;
+        border-radius: 999px;
+        box-shadow: 0 0 0.6rem rgba(86, 255, 132, 0.82);
+        height: 0.34rem;
+        width: 0.34rem;
+        animation: phantombot-boot-status 1.2s ease-in-out infinite;
+      }
+
+      .phantombot-boot__progress {
+        background: rgba(100, 255, 147, 0.12);
+        height: 1px;
+        overflow: hidden;
+        width: 11rem;
+      }
+
+      .phantombot-boot__progress span {
+        background: linear-gradient(90deg, transparent, #63ff92, transparent);
+        box-shadow: 0 0 0.7rem rgba(78, 255, 131, 0.72);
+        display: block;
+        height: 100%;
+        transform: translateX(-100%);
+        width: 58%;
+        animation: phantombot-boot-progress 1.45s ease-in-out infinite;
+      }
+
+      @keyframes phantombot-boot-arrive {
+        from {
+          opacity: 0;
+          transform: scale(0.86);
+        }
+
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @keyframes phantombot-boot-float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+
+        50% {
+          transform: translateY(-0.28rem);
+        }
+      }
+
+      @keyframes phantombot-boot-eyes {
+        0%,
+        100% {
+          opacity: 0.42;
+        }
+
+        48% {
+          opacity: 0.9;
+        }
+      }
+
+      @keyframes phantombot-boot-gleam {
+        0%,
+        18%,
+        100% {
+          opacity: 0;
+          transform: translateX(-68%);
+        }
+
+        48% {
+          opacity: 0.82;
+        }
+
+        76% {
+          opacity: 0;
+          transform: translateX(68%);
+        }
+      }
+
+      @keyframes phantombot-boot-scan {
+        0%,
+        14% {
+          opacity: 0;
+          top: 24%;
+        }
+
+        32% {
+          opacity: 0.72;
+        }
+
+        76% {
+          opacity: 0.28;
+          top: 79%;
+        }
+
+        100% {
+          opacity: 0;
+          top: 79%;
+        }
+      }
+
+      @keyframes phantombot-boot-status {
+        0%,
+        100% {
+          opacity: 0.42;
+        }
+
+        50% {
+          opacity: 1;
+        }
+      }
+
+      @keyframes phantombot-boot-progress {
+        from {
+          transform: translateX(-110%);
+        }
+
+        to {
+          transform: translateX(190%);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .phantombot-boot__mark img,
+        .phantombot-boot__mark::before,
+        .phantombot-boot__mark::after,
+        .phantombot-boot__scan,
+        .phantombot-boot__status-dot,
+        .phantombot-boot__progress span {
+          animation: none;
+        }
+
+        .phantombot-boot__scan {
+          display: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root" class="scrollbar-dt"></div>
+    <div id="root" class="scrollbar-dt">
+      <div class="phantombot-boot" role="status" aria-label="Starting PhantomBot">
+        <div class="phantombot-boot__stack">
+          <div class="phantombot-boot__emblem" aria-hidden="true">
+            <div class="phantombot-boot__mark">
+              <img src="/phantombot-mark.png" alt="" />
+              <span class="phantombot-boot__scan"></span>
+            </div>
+          </div>
+          <div class="phantombot-boot__identity">
+            <div class="phantombot-boot__wordmark">PHANTOMBOT</div>
+            <div class="phantombot-boot__status">
+              <span class="phantombot-boot__status-dot"></span>
+              <span>STARTING PHANTOM RUNTIME</span>
+            </div>
+            <div class="phantombot-boot__progress" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

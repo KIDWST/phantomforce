@@ -18,6 +18,7 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  Clipboard,
   Clock,
   Cpu,
   Download,
@@ -224,6 +225,7 @@ const toSessionEntry = (session: SessionRow): SessionEntry => ({
 type NonConfigSettingsLabel =
   | 'about'
   | 'archivedChats'
+  | 'chatgptPlus'
   | 'gateway'
   | 'keysSettings'
   | 'keysTools'
@@ -263,6 +265,12 @@ const NON_CONFIG_SETTINGS: ReadonlyArray<{
     tab: 'keys&kview=settings'
   },
   { icon: Archive, keywords: ['history', 'archived'], labelKey: 'archivedChats', tab: 'sessions' },
+  {
+    icon: Zap,
+    keywords: ['chatgpt', 'chatgpt plus', 'plus', 'image generation', 'reasoning', 'qwen', 'coder'],
+    labelKey: 'chatgptPlus',
+    tab: 'chatgpt-plus'
+  },
   { icon: Info, keywords: ['version', 'about'], labelKey: 'about', tab: 'about' }
 ]
 
@@ -468,8 +476,8 @@ export function CommandPalette() {
             action: 'nav.cron',
             icon: Clock,
             id: 'nav-cron',
-            keywords: ['schedule', 'jobs'],
-            label: t.shell.statusbar.cron,
+            keywords: ['automations', 'automation', 'schedule', 'jobs', 'power automate'],
+            label: 'Automations',
             run: go(CRON_ROUTE)
           },
           { action: 'nav.profiles', icon: Users, id: 'nav-profiles', label: t.profiles.title, run: go(PROFILES_ROUTE) },
@@ -493,6 +501,13 @@ export function CommandPalette() {
             keywords: ['command center', 'sessions', 'pin'],
             label: cc.sections.sessions,
             run: go(`${COMMAND_CENTER_ROUTE}?section=sessions`)
+          },
+          {
+            icon: Clipboard,
+            id: 'cc-runs',
+            keywords: ['command center', 'engineering', 'runs', 'tasks', 'tools', 'evidence', 'verification'],
+            label: cc.sections.runs,
+            run: go(`${COMMAND_CENTER_ROUTE}?section=runs`)
           },
           {
             icon: Activity,
@@ -627,7 +642,7 @@ export function CommandPalette() {
       })
     }
 
-    // Deep-link straight to a Capabilities sub-tab. The root "Go to" entry only
+    // Deep-link straight to a Skills sub-tab. The root "Go to" entry only
     // lands on the top-level Skills view; typing "mcp"/"tools"/"skills" should
     // jump to the exact tab (matches the "not just the top lvl" ask).
     const capLabel = t.commandCenter.nav.skills.title

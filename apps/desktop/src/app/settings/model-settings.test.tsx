@@ -115,6 +115,32 @@ describe('ModelSettings', () => {
     expect(screen.queryByText(/DeepSeek/)).toBeNull()
   })
 
+  it('shows the two public Phantom profiles without exposing runtime ids', async () => {
+    getGlobalModelInfo.mockResolvedValueOnce({ provider: 'phantom', model: 'phantom' })
+    getGlobalModelOptions.mockResolvedValueOnce({
+      providers: [
+        {
+          name: 'Phantom',
+          slug: 'phantom',
+          models: ['phantom', 'phantom-unleashed'],
+          authenticated: true
+        }
+      ]
+    })
+    getAuxiliaryModels.mockResolvedValueOnce({
+      main: { provider: 'phantom', model: 'phantom' },
+      tasks: [{ task: 'vision', provider: 'auto', model: '', base_url: '' }]
+    })
+
+    await renderModelSettings()
+
+    const triggers = await screen.findAllByRole('combobox')
+    expect(triggers[1].textContent).toContain('Phantom')
+    fireEvent.click(triggers[1])
+    expect(await screen.findByText('Phantom Unleashed')).toBeTruthy()
+    expect(screen.queryByText('phantom-unleashed')).toBeNull()
+  })
+
   it.each(['custom', 'local', 'custom:lab'])(
     'opens local endpoint setup when %s has no inventory row',
     async provider => {

@@ -99,10 +99,14 @@ def test_build_welcome_banner_title_is_hyperlinked_to_release():
 
     raw = buf.getvalue()
     # The existing version label must still be present in the title
-    assert "Hermes Agent v" in raw, "Version label missing from title"
-    # OSC-8 hyperlink escape sequence present with the release URL
-    assert "\x1b]8;" in raw, "OSC-8 hyperlink not emitted"
-    assert "releases/tag/v2026.4.23" in raw, "Release URL missing from banner output"
+    assert "PhantomBot v" in raw, "Version label missing from title"
+    # Rich intentionally disables OSC-8 links in legacy Windows consoles.
+    # Modern terminals retain the clickable release title.
+    if console.legacy_windows:
+        assert "\x1b]8;" not in raw
+    else:
+        assert "\x1b]8;" in raw, "OSC-8 hyperlink not emitted"
+        assert "releases/tag/v2026.4.23" in raw, "Release URL missing from banner output"
 
 
 def test_build_welcome_banner_title_falls_back_when_no_tag():
@@ -131,7 +135,7 @@ def test_build_welcome_banner_title_falls_back_when_no_tag():
         )
 
     raw = buf.getvalue()
-    assert "Hermes Agent v" in raw, "Version label missing from title"
+    assert "PhantomBot v" in raw, "Version label missing from title"
     assert "\x1b]8;" not in raw, "OSC-8 hyperlink should not be emitted without a tag"
 
 

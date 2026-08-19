@@ -14,6 +14,13 @@ import { FallbackModelsField } from './fallback-models-field'
 import { fieldCopyForSchemaKey } from './field-copy'
 import { ListRow } from './primitives'
 
+const CONTEXT_WINDOW_OPTIONS = [
+  { label: 'Auto — Recommended', value: 0 },
+  { label: '65K — Fast', value: 65_536 },
+  { label: '128K — Large', value: 131_072 },
+  { label: '262K — Very large / slow', value: 262_144 }
+] as const
+
 /**
  * One generic config row: label + description resolved from the i18n field
  * copy (falling back to the schema description), and a control picked from the
@@ -81,6 +88,36 @@ export function ConfigField({
   // dedicated structured editor instead.
   if (schemaKey === 'fallback_providers') {
     return row(<FallbackModelsField onChange={onChange} value={value} />, true)
+  }
+
+  if (schemaKey === 'model_context_length') {
+    const numericValue = typeof value === 'number' && Number.isFinite(value) ? value : Number(value) || 0
+    const known = CONTEXT_WINDOW_OPTIONS.some(option => option.value === numericValue)
+    const options = known
+      ? CONTEXT_WINDOW_OPTIONS
+      : [...CONTEXT_WINDOW_OPTIONS, { label: `Custom — ${numericValue.toLocaleString()}`, value: numericValue }]
+
+    return row(
+      <div className="grid justify-items-end gap-1.5">
+        <Select onValueChange={next => onChange(Number(next))} value={String(numericValue)}>
+          <SelectTrigger aria-label={label} className={CONTROL_TEXT}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map(option => (
+              <SelectItem key={option.value} value={String(option.value)}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {numericValue >= 262_144 ? (
+          <span className="max-w-64 text-right text-[0.68rem] leading-snug text-amber-300">
+            Very large context can use substantially more memory and respond much more slowly.
+          </span>
+        ) : null}
+      </div>
+    )
   }
 
   if (schema.type === 'boolean') {

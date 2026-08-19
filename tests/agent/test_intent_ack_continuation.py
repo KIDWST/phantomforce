@@ -1,15 +1,4 @@
-"""Intent-ack continuation gate + detector behavior.
-
-Covers the config-driven generalization of the codex intent-ack continuation
-(issue #27881): the historical ``codex_responses``-only path is byte-stable
-under the default ``"auto"`` mode, while an explicit ``true``/model-list opt-in
-extends the "you announced an action but called no tool — keep going" nudge to
-every api_mode and relaxes the codebase/workspace requirement so general
-autonomous workflows ("I'll run a health check on the server") are caught.
-
-These are invariant assertions about how the mode string and the detector
-gates relate, not snapshots of the marker lists.
-"""
+"""Model-neutral no-action continuation policy behavior contracts."""
 
 from types import SimpleNamespace
 from typing import Union
@@ -26,7 +15,6 @@ def _agent(
     api_mode="chat_completions",
     model="anthropic/claude-sonnet-4",
 ):
-    # _strip_think_blocks is a no-op for these plain-text fixtures.
     return SimpleNamespace(
         _intent_ack_continuation=mode,
         api_mode=api_mode,
@@ -35,149 +23,154 @@ def _agent(
     )
 
 
-# The reporter's exact repro (#27881): server-ops task, no filesystem reference.
 REPRO_USER = (
     "check the current status of the server, grab the latest error logs, "
     "and let me know if there's anything critical"
 )
 REPRO_ACK = "I will start by running a health check command on the server to see its current status."
-
-# The codex-coding case the detector was originally built for.
 CODE_USER = "review the codebase in /app"
 CODE_ACK = "Let me inspect the repository files first."
 
 
-# ── mode resolution ────────────────────────────────────────────────────────
-
-
-def test_auto_is_codex_only():
-    assert intent_ack_continuation_mode(_agent("auto", "codex_responses")) == "codex_only"
-    assert intent_ack_continuation_mode(_agent("auto", "chat_completions")) == "off"
-    assert intent_ack_continuation_mode(_agent("auto", "anthropic")) == "off"
+def test_auto_is_model_and_transport_neutral():
+    for api_mode in ("chat_completions", "anthropic_messages", "codex_responses", "bedrock_converse"):
+        assert intent_ack_continuation_mode(_agent("auto", api_mode)) == "all"
 
 
 def test_true_is_all_api_modes():
-    for am in ("chat_completions", "anthropic", "codex_responses"):
-        assert intent_ack_continuation_mode(_agent(True, am)) == "all"
-    for s in ("true", "always", "yes", "on", "ON"):
-        assert intent_ack_continuation_mode(_agent(s, "chat_completions")) == "all"
+    for api_mode in ("chat_completions", "anthropic_messages", "codex_responses"):
+        assert intent_ack_continuation_mode(_agent(True, api_mode)) == "all"
+    for value in ("true", "always", "yes", "on", "ON"):
+        assert intent_ack_continuation_mode(_agent(value)) == "all"
 
 
-def test_false_is_off_even_for_codex():
-    assert intent_ack_continuation_mode(_agent(False, "codex_responses")) == "off"
-    for s in ("false", "never", "no", "off"):
-        assert intent_ack_continuation_mode(_agent(s, "codex_responses")) == "off"
+def test_false_is_off_for_every_model_and_transport():
+    for value in (False, "false", "never", "no", "off"):
+        assert intent_ack_continuation_mode(_agent(value, "codex_responses")) == "off"
+        assert intent_ack_continuation_mode(_agent(value, "chat_completions")) == "off"
 
 
-def test_list_matches_model_substring():
+def test_legacy_codex_only_can_still_be_requested_explicitly():
+    assert intent_ack_continuation_mode(_agent("codex_only", "codex_responses")) == "codex_only"
+    assert intent_ack_continuation_mode(_agent("codex_only", "chat_completions")) == "off"
+
+
+def test_list_is_an_explicit_model_narrowing_mechanism():
     assert intent_ack_continuation_mode(
-        _agent(["gemini", "qwen"], "chat_completions", "google/gemini-3-pro")
+        _agent(["gemini", "qwen"], model="google/gemini-3.7-flash")
     ) == "all"
     assert intent_ack_continuation_mode(
-        _agent(["gemini", "qwen"], "chat_completions", "anthropic/claude-sonnet-4")
+        _agent(["gemini", "qwen"], model="anthropic/claude-sonnet-4")
     ) == "off"
 
 
-def test_unrecognised_value_falls_back_to_auto():
-    assert intent_ack_continuation_mode(_agent("garbage", "codex_responses")) == "codex_only"
-    assert intent_ack_continuation_mode(_agent("garbage", "chat_completions")) == "off"
-
-
-def test_missing_attr_defaults_to_auto():
+def test_unrecognised_and_missing_values_fail_toward_product_default():
+    assert intent_ack_continuation_mode(_agent("garbage")) == "all"
     bare = SimpleNamespace(api_mode="chat_completions", model="x", _strip_think_blocks=lambda c: c)
-    assert intent_ack_continuation_mode(bare) == "off"
-    bare_codex = SimpleNamespace(api_mode="codex_responses", model="x", _strip_think_blocks=lambda c: c)
-    assert intent_ack_continuation_mode(bare_codex) == "codex_only"
+    assert intent_ack_continuation_mode(bare) == "all"
 
 
 def test_enabled_is_mode_not_off():
-    assert intent_ack_continuation_enabled(_agent(True, "chat_completions")) is True
-    assert intent_ack_continuation_enabled(_agent("auto", "codex_responses")) is True
-    assert intent_ack_continuation_enabled(_agent("auto", "chat_completions")) is False
-    assert intent_ack_continuation_enabled(_agent(False, "codex_responses")) is False
+    assert intent_ack_continuation_enabled(_agent("auto")) is True
+    assert intent_ack_continuation_enabled(_agent(True)) is True
+    assert intent_ack_continuation_enabled(_agent(False)) is False
 
 
-# ── detector: workspace requirement ─────────────────────────────────────────
-
-
-def test_codex_only_path_requires_workspace():
-    a = _agent("auto", "codex_responses")
-    msgs = [{"role": "user", "content": CODE_USER}]
-    # codebase ack matches workspace markers → fires
-    assert looks_like_codex_intermediate_ack(a, CODE_USER, CODE_ACK, msgs, require_workspace=True)
-    # server-ops ack has no filesystem reference → does NOT fire (historical scope)
-    repro_msgs = [{"role": "user", "content": REPRO_USER}]
+def test_legacy_workspace_scope_still_works():
+    agent = _agent("codex_only", "codex_responses")
+    assert looks_like_codex_intermediate_ack(
+        agent, CODE_USER, CODE_ACK, [{"role": "user", "content": CODE_USER}], require_workspace=True
+    )
     assert not looks_like_codex_intermediate_ack(
-        a, REPRO_USER, REPRO_ACK, repro_msgs, require_workspace=True
+        agent, REPRO_USER, REPRO_ACK, [{"role": "user", "content": REPRO_USER}], require_workspace=True
     )
 
 
 def test_multipart_user_message_does_not_crash_on_workspace_path():
-    """#9562: vision requests forward ``user_message`` as a multi-part list.
-
-    The OpenAI-compat API server passes the raw ``content`` field straight
-    through for vision turns, so ``user_message`` reaches the detector as
-    ``[{type:"text",...}, {type:"image_url",...}]``. The ``require_workspace``
-    path flattened it with ``(user_message or "").strip()`` — a truthy list
-    survived and ``.strip()`` raised ``AttributeError``, killing the turn.
-    The text part still has to drive workspace detection.
-    """
-    a = _agent("auto", "codex_responses")
+    agent = _agent("codex_only", "codex_responses")
     multipart = [
         {"type": "text", "text": CODE_USER},
         {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
     ]
-    msgs = [{"role": "user", "content": multipart}]
-    # No crash, and the text part ("review the codebase in /app") still
-    # satisfies the workspace requirement so the ack fires.
     assert looks_like_codex_intermediate_ack(
-        a, multipart, CODE_ACK, msgs, require_workspace=True
+        agent, multipart, CODE_ACK, [{"role": "user", "content": multipart}], require_workspace=True
     )
 
 
-def test_all_path_drops_workspace_requirement():
-    """The #27881 fix: opted-in turns catch non-codebase intent acks."""
-    a = _agent(True, "chat_completions")
-    msgs = [{"role": "user", "content": REPRO_USER}]
+def test_auto_catches_non_workspace_execution_ack():
+    agent = _agent("auto")
     assert looks_like_codex_intermediate_ack(
-        a, REPRO_USER, REPRO_ACK, msgs, require_workspace=False
+        agent,
+        REPRO_USER,
+        REPRO_ACK,
+        [{"role": "user", "content": REPRO_USER}],
+        require_workspace=False,
     )
 
 
-# ── detector: guardrails that hold regardless of workspace ───────────────────
+def test_historical_tool_activity_does_not_disable_a_new_turn():
+    agent = _agent("auto")
+    messages = [
+        {"role": "user", "content": "check the old server"},
+        {"role": "assistant", "content": None, "tool_calls": [{"id": "old"}]},
+        {"role": "tool", "tool_call_id": "old", "content": "ok"},
+        {"role": "assistant", "content": "Done."},
+        {"role": "user", "content": REPRO_USER},
+    ]
+    assert looks_like_codex_intermediate_ack(
+        agent, REPRO_USER, REPRO_ACK, messages, require_workspace=False
+    )
+
+
+def test_promise_after_a_tool_round_is_still_incomplete():
+    agent = _agent("auto")
+    agent._turn_tool_call_count = 1
+    messages = [
+        {"role": "user", "content": "fix the project"},
+        {"role": "tool", "content": "found config"},
+    ]
+    ack = "I found the config. I'll edit the broken setting now."
+    assert looks_like_codex_intermediate_ack(
+        agent, "fix the project", ack, messages, require_workspace=False
+    )
 
 
 def test_real_final_answer_does_not_fire():
-    a = _agent(True, "chat_completions")
+    agent = _agent("auto")
     final = "Done. The server is healthy and there are no critical errors in the logs."
-    msgs = [{"role": "user", "content": REPRO_USER}]
-    assert not looks_like_codex_intermediate_ack(a, REPRO_USER, final, msgs, require_workspace=False)
-
-
-def test_conversational_reply_without_action_verb_does_not_fire():
-    a = _agent(True, "chat_completions")
-    brainstorm = "I'll help you think through the tradeoffs here."
-    msgs = [{"role": "user", "content": "help me decide"}]
     assert not looks_like_codex_intermediate_ack(
-        a, "help me decide", brainstorm, msgs, require_workspace=False
+        agent, REPRO_USER, final, [{"role": "user", "content": REPRO_USER}], require_workspace=False
     )
 
 
-def test_does_not_fire_after_a_tool_already_ran():
-    a = _agent(True, "chat_completions")
-    msgs = [
-        {"role": "user", "content": REPRO_USER},
-        {"role": "tool", "content": "health check result"},
+def test_conversational_reply_without_execution_intent_does_not_fire():
+    agent = _agent("auto")
+    assert not looks_like_codex_intermediate_ack(
+        agent,
+        "help me decide which design I like",
+        "I'll help you think through the tradeoffs here.",
+        [{"role": "user", "content": "help me decide which design I like"}],
+        require_workspace=False,
+    )
+
+
+def test_broader_action_promises_are_caught():
+    agent = _agent("auto")
+    cases = [
+        ("build the project", "I'll build it now."),
+        ("implement the login fix", "I'll implement that fix now."),
+        ("install the dependency", "I'll install the dependency first."),
+        ("edit the config file", "I'll edit the config now."),
     ]
-    assert not looks_like_codex_intermediate_ack(
-        a, REPRO_USER, REPRO_ACK, msgs, require_workspace=False
-    )
+    for user, ack in cases:
+        assert looks_like_codex_intermediate_ack(
+            agent, user, ack, [{"role": "user", "content": user}], require_workspace=False
+        )
 
 
 def test_long_response_is_not_treated_as_an_ack():
-    a = _agent(True, "chat_completions")
-    long_ack = "I will run the check. " + ("x" * 1300)
-    msgs = [{"role": "user", "content": REPRO_USER}]
+    agent = _agent("auto")
+    long_ack = "I will run the check. " + ("x" * 1800)
     assert not looks_like_codex_intermediate_ack(
-        a, REPRO_USER, long_ack, msgs, require_workspace=False
+        agent, REPRO_USER, long_ack, [{"role": "user", "content": REPRO_USER}], require_workspace=False
     )

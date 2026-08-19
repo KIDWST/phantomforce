@@ -190,11 +190,14 @@ def build_models_payload(
         probe_current_custom_provider=probe_current_custom_provider,
         for_picker=for_picker,
         excluded_providers=ctx.excluded_providers or [],
+        no_network=not bool(refresh),
     )
 
     moa_row = _moa_provider_row(ctx.current_provider)
     if moa_row is not None:
         rows = [moa_row] + [r for r in rows if str(r.get("slug", "")).lower() != "moa"]
+
+    rows = _ensure_phantom_provider_row(rows, ctx)
 
     if explicit_only:
         rows = _filter_explicit_provider_rows(rows, ctx)
@@ -259,9 +262,13 @@ def build_models_payload(
     if canonical_order:
         rows = _reorder_canonical(rows)
     if pricing:
-        _apply_pricing(rows, force_fresh_nous_tier=force_fresh_nous_tier)
+        _apply_pricing(
+            rows,
+            force_fresh_nous_tier=force_fresh_nous_tier,
+            allow_network=bool(refresh),
+        )
     if capabilities:
-        _apply_capabilities(rows)
+        _apply_capabilities(rows, allow_network=bool(refresh))
 
     return {
         "providers": rows,
@@ -299,6 +306,7 @@ def build_model_options_payload(
         refresh=refresh,
         probe_custom_providers=refresh,
         probe_current_custom_provider=not refresh,
+        for_picker=True,
     )
 
 
@@ -390,14 +398,14 @@ def format_aux_picker_entries(
     return entries
 
 
-def _apply_capabilities(rows: list[dict]) -> None:
+def _apply_capabilities(rows: list[dict], *, allow_network: bool = True) -> None:
     """Attach a ``{model: {fast, reasoning}}`` map to each provider row.
 
     `fast` mirrors ``model_supports_fast_mode`` (the same gate the runtime
     enforces). `reasoning` comes from the models.dev catalog when known and
-    defaults to True otherwise — the effort dial is broadly accepted and a
-    no-op on models that ignore it, whereas hiding it from a capable-but-
-    uncatalogued model is the worse failure.
+    defaults to True otherwise. Ollama is the exception: its OpenAI-compatible
+    endpoint rejects unsupported reasoning controls with HTTP 400, so the
+    native ``/api/show`` capability is authoritative for local Ollama rows.
     """
     from hermes_cli.models import model_supports_fast_mode
 
@@ -406,19 +414,64 @@ def _apply_capabilities(rows: list[dict]) -> None:
     except Exception:
         get_model_capabilities = None  # type: ignore[assignment]
 
+    try:
+        from agent.ollama_runtime import is_local_ollama_endpoint
+        from hermes_cli.models import ollama_model_supports_thinking
+    except Exception:
+        is_local_ollama_endpoint = None  # type: ignore[assignment]
+        ollama_model_supports_thinking = None  # type: ignore[assignment]
+
     for row in rows:
         slug = row.get("slug") or ""
+        api_url = str(row.get("api_url") or "").strip()
+        explicit_ollama_slug = str(slug).strip().lower() in {
+            "ollama",
+            "ollama-launch",
+            "local-ollama",
+            "custom:local-ollama",
+            "phantom",
+            "custom:phantom",
+            "qwen3-coder-local",
+        }
+        ollama_url = api_url or (
+            "http://127.0.0.1:11434/v1" if explicit_ollama_slug else ""
+        )
+        is_ollama_row = bool(
+            ollama_url
+            and is_local_ollama_endpoint is not None
+            and is_local_ollama_endpoint(ollama_url, slug)
+        )
         caps: dict[str, dict[str, bool]] = {}
 
         for model in row.get("models") or []:
             reasoning = True
             if get_model_capabilities is not None and slug:
                 try:
-                    meta = get_model_capabilities(slug, model)
+                    meta = get_model_capabilities(
+                        slug,
+                        model,
+                        allow_background_refresh=allow_network,
+                    )
                     if meta is not None:
                         reasoning = bool(meta.supports_reasoning)
                 except Exception:
                     reasoning = True
+
+            if is_ollama_row and allow_network:
+                # Unknown is treated as unsupported for Ollama. Unlike most
+                # compatible APIs, sending reasoning_effort to a non-thinking
+                # Ollama model is a hard failure rather than a harmless no-op.
+                try:
+                    detected = (
+                        ollama_model_supports_thinking(
+                            model, ollama_url, timeout=1.0
+                        )
+                        if ollama_model_supports_thinking is not None
+                        else None
+                    )
+                    reasoning = detected is True
+                except Exception:
+                    reasoning = False
 
             caps[model] = {
                 "fast": bool(model_supports_fast_mode(model)),
@@ -499,6 +552,57 @@ def _append_unconfigured_rows(
             }
         )
     return extras
+
+
+def _ensure_phantom_provider_row(rows: list[dict], ctx: ConfigContext) -> list[dict]:
+    """Expose one canonical Phantom row with both public profiles."""
+
+    current_slug = str(ctx.current_provider or "").strip().lower()
+    if current_slug not in {"phantom", "custom:phantom"}:
+        return rows
+
+    raw_provider = ctx.user_providers.get("phantom")
+    provider_cfg = raw_provider if isinstance(raw_provider, dict) else {}
+    models = _declared_phantom_models(provider_cfg, ctx.current_model)
+    matching_rows = [
+        row
+        for row in rows
+        if str(row.get("slug", "")).strip().lower() in {"phantom", "custom:phantom"}
+    ]
+    existing = dict(matching_rows[0]) if matching_rows else {}
+    base_url = (
+        provider_cfg.get("base_url")
+        or provider_cfg.get("api_url")
+        or provider_cfg.get("url")
+        or existing.get("api_url")
+        or existing.get("base_url")
+        or ctx.current_base_url
+        or "http://127.0.0.1:11434/v1"
+    )
+    row = existing | {
+        "slug": "phantom",
+        "name": provider_cfg.get("name") or existing.get("name") or "Phantom",
+        "is_current": True,
+        "is_user_defined": True,
+        "models": models,
+        "total_models": len(models),
+        "source": "user-config",
+        "api_url": base_url,
+    }
+    remaining = [
+        candidate
+        for candidate in rows
+        if str(candidate.get("slug", "")).strip().lower()
+        not in {"phantom", "custom:phantom"}
+    ]
+    return [row] + remaining
+
+
+def _declared_phantom_models(provider_cfg: dict, current_model: str) -> list[str]:
+    """Return the two public Phantom runtime profiles."""
+
+    del provider_cfg, current_model
+    return ["phantom", "phantom-unleashed"]
 
 
 def _filter_explicit_provider_rows(rows: list[dict], ctx: ConfigContext) -> list[dict]:
@@ -643,6 +747,7 @@ def _apply_pricing(
     rows: list[dict],
     *,
     force_fresh_nous_tier: bool = False,
+    allow_network: bool = True,
 ) -> None:
     """Enrich each provider row with per-model pricing + Nous tier gating.
 
@@ -661,6 +766,9 @@ def _apply_pricing(
     renders strings — identical formatting to the CLI picker. All failures
     are swallowed (best-effort): a row simply gets no ``pricing`` key.
     """
+    if not allow_network:
+        return
+
     from hermes_cli.models import (
         _format_price_per_mtok,
         check_nous_free_tier,
@@ -759,7 +867,10 @@ def _moa_provider_row(current_provider: str = "") -> dict | None:
         from hermes_cli.config import load_config
         from hermes_cli.moa_config import normalize_moa_config
 
-        cfg = normalize_moa_config(load_config().get("moa") or {})
+        raw = load_config().get("moa") or {}
+        if isinstance(raw, dict) and raw.get("enabled") is False:
+            return None
+        cfg = normalize_moa_config(raw)
         models = list(cfg.get("presets", {}).keys())
         if not models:
             return None

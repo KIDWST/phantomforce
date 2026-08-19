@@ -6153,11 +6153,21 @@ class AIAgent:
             opts = self._lmstudio_reasoning_options_cached()
             # "off-only" (or absent) means no real reasoning capability.
             return any(opt and opt != "off" for opt in opts)
-        # Ollama Cloud (and any Ollama-compatible server): the native
+        # Ollama Cloud and local Ollama: the native
         # /api/show capabilities list is authoritative — emit reasoning_effort
         # only for models that declare the "thinking" capability. deepseek-v4
         # has it; gemma3 / qwen3-coder don't. Cached per (model, base_url).
-        if base_url_host_matches(self._base_url_lower, "ollama.com"):
+        try:
+            from agent.ollama_runtime import is_local_ollama_endpoint
+
+            _is_local_ollama = is_local_ollama_endpoint(
+                self.base_url, self.provider
+            )
+        except Exception:
+            _is_local_ollama = False
+        if _is_local_ollama or base_url_host_matches(
+            self._base_url_lower, "ollama.com"
+        ):
             return self._ollama_supports_thinking_cached()
         if "openrouter" not in self._base_url_lower:
             return False
@@ -6170,7 +6180,7 @@ class AIAgent:
             "anthropic/",
             "openai/",
             "x-ai/",
-            "google/gemini-2",
+            "google/gemini-",
             "google/gemma-4",
             "qwen/qwen3",
             "tencent/hy3",

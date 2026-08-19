@@ -3033,6 +3033,104 @@ def _normalize_main_runtime(main_runtime: Optional[Dict[str, Any]]) -> Dict[str,
     return normalized
 
 
+def _is_explicit_local_phantom_runtime(
+    main_runtime: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Return whether the active session explicitly selected local Phantom.
+
+    This is a billing and privacy boundary, not merely a routing preference:
+    auxiliary work in a Phantom session must never spill into a subscription or
+    metered API because the local endpoint is unavailable.
+    """
+    runtime = _normalize_main_runtime(main_runtime)
+    provider = str(runtime.get("provider") or "").strip().lower()
+    requested = str(runtime.get("requested_provider") or "").strip().lower()
+    model = str(runtime.get("model") or "").strip().lower()
+    model_is_phantom = (
+        model == "phantom"
+        or model.startswith("phantom:")
+        or model.startswith("phantom-unleashed")
+        or model.startswith("phantom-v1")
+    )
+
+    from agent.ollama_runtime import is_local_ollama_endpoint
+
+    provider_is_phantom = provider in {"phantom", "custom:phantom"} or requested in {
+        "phantom",
+        "custom:phantom",
+    }
+    custom_local_phantom = (
+        provider == "custom" or requested == "custom"
+    ) and is_local_ollama_endpoint(
+        runtime.get("base_url"),
+        provider,
+    )
+    return (provider_is_phantom or custom_local_phantom) and model_is_phantom
+
+
+def _local_phantom_aux_route(
+    main_runtime: Optional[Dict[str, Any]],
+) -> Tuple[str, str, str, str, str]:
+    runtime = _normalize_main_runtime(main_runtime)
+    runtime_provider = str(runtime.get("provider") or "").strip().lower()
+    provider = (
+        runtime_provider
+        if runtime_provider in {"phantom", "custom:phantom"}
+        else "custom"
+    )
+    return (
+        provider,
+        str(runtime.get("model") or "phantom"),
+        str(runtime.get("base_url") or "http://127.0.0.1:11434/v1"),
+        str(runtime.get("api_key") or "no-key-required"),
+        "chat_completions",
+    )
+
+
+def _ensure_local_phantom_aux_runtime(main_runtime: Optional[Dict[str, Any]]) -> None:
+    """Cold-start Phantom for an auxiliary call without authorizing fallback."""
+    from agent.ollama_runtime import ensure_explicit_phantom_runtime
+
+    _provider, model, base_url, api_key, _ = _local_phantom_aux_route(main_runtime)
+    status = ensure_explicit_phantom_runtime(
+        SimpleNamespace(
+            provider="phantom",
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+        ),
+        log=logger,
+    )
+    if status.get("status") in {
+        "start_failed",
+        "start_lock_timeout",
+        "start_timeout",
+        "missing_ollama_executable",
+    }:
+        raise RuntimeError(
+            f"Phantom local runtime unavailable ({status.get('status')})"
+        )
+
+
+def _local_phantom_extra_body(value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Apply non-negotiable resource and no-thinking controls to local aux calls."""
+    body = dict(value or {})
+    options = dict(body.get("options") or {})
+    options.update({"num_ctx": 262144, "num_thread": 4, "num_batch": 64})
+    for key in (
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "thinking",
+        "thinking_config",
+        "thinking_budget",
+        "enable_thinking",
+    ):
+        body.pop(key, None)
+    body.update({"keep_alive": "15m", "think": False, "options": options})
+    return body
+
+
 def _get_provider_chain() -> List[tuple]:
     """Return the ordered provider detection chain.
 
@@ -4571,6 +4669,7 @@ def _resolve_auto(
     runtime_base_url = str(runtime.get("base_url") or "")
     runtime_api_key = runtime.get("api_key", "")
     runtime_api_mode = str(runtime.get("api_mode") or "")
+    local_phantom_only = _is_explicit_local_phantom_runtime(runtime)
 
 
     # ── Warn once if OPENAI_BASE_URL is set but config.yaml uses a named
@@ -4688,6 +4787,13 @@ def _resolve_auto(
                 logger.info("Auxiliary auto-detect: using main provider %s (%s)",
                             main_provider, resolved or main_model)
                 return client, resolved or main_model
+
+    if local_phantom_only:
+        logger.warning(
+            "Auxiliary %s: local Phantom is unavailable; paid fallback is blocked",
+            task or "call",
+        )
+        return None, None
 
     # ── Step 2: user-configured fallback policy ─────────────────────────
     # In auto mode, respect the task-specific fallback chain first, then the
@@ -5196,7 +5302,9 @@ def resolve_provider_client(
             if not custom_key and custom_key_env:
                 custom_key = os.getenv(custom_key_env, "").strip()
             custom_key = custom_key or "no-key-required"
-            if custom_key == "no-key-required":
+            custom_base_host = (urlparse(custom_base).hostname or "").strip().lower()
+            is_local_no_key_endpoint = custom_base_host in {"127.0.0.1", "localhost", "::1"}
+            if custom_key == "no-key-required" and not is_local_no_key_endpoint:
                 logger.warning(
                     "resolve_provider_client: named custom provider %r has no resolvable "
                     "api_key — request will be sent with placeholder no-key-required "
@@ -7579,12 +7687,28 @@ def call_llm(
     # concurrent /model switch produce a key for one runtime and a client for
     # another.
     main_runtime = _normalize_main_runtime(main_runtime)
+    local_phantom_only = _is_explicit_local_phantom_runtime(main_runtime)
     resolved_provider, resolved_model, resolved_base_url, resolved_api_key, resolved_api_mode = _resolve_task_provider_model(
         task, provider, model, base_url, api_key)
     if api_mode:
         resolved_api_mode = api_mode
     effective_extra_body = _get_task_extra_body(task)
     effective_extra_body.update(extra_body or {})
+    if local_phantom_only:
+        if task == "vision":
+            raise RuntimeError(
+                "Local Phantom is text-only; vision was not sent to a paid provider"
+            )
+        (
+            resolved_provider,
+            resolved_model,
+            resolved_base_url,
+            resolved_api_key,
+            resolved_api_mode,
+        ) = _local_phantom_aux_route(main_runtime)
+        effective_extra_body = _local_phantom_extra_body(effective_extra_body)
+        reasoning_config = None
+        _ensure_local_phantom_aux_runtime(main_runtime)
 
     if task == "vision":
         effective_provider, client, final_model = resolve_vision_provider_client(
@@ -7622,6 +7746,10 @@ def call_llm(
             main_runtime=main_runtime,
         )
         if client is None:
+            if local_phantom_only:
+                raise RuntimeError(
+                    "Local Phantom auxiliary client is unavailable; paid fallback is blocked"
+                )
             # When the user explicitly chose a non-OpenRouter provider but no
             # credentials were found, honor the task fallback_chain before
             # raising.  Missing raw env keys are recoverable for auxiliary
@@ -8055,7 +8183,7 @@ def call_llm(
             or _is_model_incompatible_error(first_err)
             or _is_invalid_aux_response_error(first_err)
         )
-        if should_fallback and (is_auto or is_capacity_error):
+        if should_fallback and (is_auto or is_capacity_error) and not local_phantom_only:
             if _is_auth_error(first_err):
                 reason = "auth error"
             elif _is_payment_error(first_err):
@@ -8226,10 +8354,26 @@ async def async_call_llm(
     # Keep every async phase on the same runtime identity, even if another
     # session switches models while this task is awaiting network I/O.
     main_runtime = _normalize_main_runtime(main_runtime)
+    local_phantom_only = _is_explicit_local_phantom_runtime(main_runtime)
     resolved_provider, resolved_model, resolved_base_url, resolved_api_key, resolved_api_mode = _resolve_task_provider_model(
         task, provider, model, base_url, api_key)
     effective_extra_body = _get_task_extra_body(task)
     effective_extra_body.update(extra_body or {})
+    if local_phantom_only:
+        if task == "vision":
+            raise RuntimeError(
+                "Local Phantom is text-only; vision was not sent to a paid provider"
+            )
+        (
+            resolved_provider,
+            resolved_model,
+            resolved_base_url,
+            resolved_api_key,
+            resolved_api_mode,
+        ) = _local_phantom_aux_route(main_runtime)
+        effective_extra_body = _local_phantom_extra_body(effective_extra_body)
+        reasoning_config = None
+        _ensure_local_phantom_aux_runtime(main_runtime)
 
     if task == "vision":
         effective_provider, client, final_model = resolve_vision_provider_client(
@@ -8268,6 +8412,10 @@ async def async_call_llm(
             main_runtime=main_runtime,
         )
         if client is None:
+            if local_phantom_only:
+                raise RuntimeError(
+                    "Local Phantom auxiliary client is unavailable; paid fallback is blocked"
+                )
             _explicit = (resolved_provider or "").strip().lower()
             if _explicit and _explicit not in {"auto", "openrouter", "custom"}:
                 fb_client, fb_model, fb_label = _try_configured_fallback_for_unavailable_client(
@@ -8593,7 +8741,7 @@ async def async_call_llm(
             or _is_model_incompatible_error(first_err)
             or _is_invalid_aux_response_error(first_err)
         )
-        if should_fallback and (is_auto or is_capacity_error):
+        if should_fallback and (is_auto or is_capacity_error) and not local_phantom_only:
             if _is_auth_error(first_err):
                 reason = "auth error"
             elif _is_payment_error(first_err):

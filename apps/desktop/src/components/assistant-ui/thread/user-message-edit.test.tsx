@@ -133,6 +133,22 @@ function StockHarness({ onEdit }: { onEdit: () => Promise<void> }) {
 }
 
 describe('click-to-edit user message', () => {
+  it('keeps the prompt compact and aligned to the right', async () => {
+    const { container } = render(<IncrementalHarness onEdit={async () => {}} />)
+
+    const bubble = await screen.findByRole('button', { name: 'Edit message' })
+    const actions = container.querySelector('[data-slot="aui_user-bubble-actions"]')
+    const row = container.querySelector('[data-slot="aui_user-message-root"]')
+    const frame = bubble.parentElement
+
+    expect(row?.classList.contains('phantom-user-message-row')).toBe(true)
+    expect(row?.classList.contains('bg-(--ui-chat-surface-background)')).toBe(false)
+    expect(actions?.classList.contains('justify-end')).toBe(true)
+    expect(frame?.classList.contains('w-fit')).toBe(true)
+    expect(frame?.classList.contains('max-w-[min(88%,46rem)]')).toBe(true)
+    expect(bubble.classList.contains('rounded-md')).toBe(true)
+  })
+
   it('opens the edit composer with the incremental runtime', async () => {
     const { container } = render(<IncrementalHarness onEdit={async () => {}} />)
 
@@ -141,7 +157,12 @@ describe('click-to-edit user message', () => {
     fireEvent.click(bubble)
 
     await waitFor(() => {
-      expect(container.querySelector('[data-slot="aui_edit-composer-root"]')).toBeTruthy()
+      const composer = container.querySelector('[data-slot="aui_edit-composer-root"]')
+      const frame = composer?.querySelector('.composer-human-message-container')
+
+      expect(composer).toBeTruthy()
+      expect(frame?.classList.contains('max-w-[min(88%,46rem)]')).toBe(true)
+      expect(frame?.classList.contains('bg-(--ui-chat-surface-background)')).toBe(false)
     })
   })
 

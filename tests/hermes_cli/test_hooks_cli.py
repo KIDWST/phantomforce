@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
@@ -37,6 +38,14 @@ def _run(sub_args: SimpleNamespace) -> str:
     with redirect_stdout(buf):
         hooks_cli.hooks_command(sub_args)
     return buf.getvalue()
+
+
+def _bash_path(path: Path) -> str:
+    if os.name == "nt":
+        from tools.environments.local import _bash_safe_path
+
+        return _bash_safe_path(str(path))
+    return str(path)
 
 
 # ── list ──────────────────────────────────────────────────────────────────
@@ -89,7 +98,7 @@ class TestHooksTest:
         capture = tmp_path / "captured.json"
         script = _hook_script(
             tmp_path,
-            f"#!/usr/bin/env bash\ncat - > {capture}\nprintf '{{}}\\n'\n",
+            f"#!/usr/bin/env bash\ncat - > {_bash_path(capture)}\nprintf '{{}}\\n'\n",
         )
         cfg = {"hooks": {"subagent_stop": [{"command": str(script)}]}}
         with patch("hermes_cli.config.load_config", return_value=cfg):
@@ -186,6 +195,8 @@ class TestHooksRevoke:
 
 class TestHooksDoctor:
     def test_flags_missing_exec_bit(self, tmp_path):
+        if os.name == "nt":
+            pytest.skip("Windows runs .sh hooks through Git Bash; POSIX X_OK is not applicable")
         script = tmp_path / "hook.sh"
         script.write_text("#!/usr/bin/env bash\nprintf '{}\\n'\n")
         # No chmod — intentionally not executable

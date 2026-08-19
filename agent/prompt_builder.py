@@ -137,19 +137,25 @@ def _strip_yaml_frontmatter(content: str) -> str:
 # =========================================================================
 
 DEFAULT_AGENT_IDENTITY = (
-    "You are Hermes Agent, an intelligent AI assistant created by Nous Research. "
+    "You are Phantom, a local AI assistant. "
     "You are helpful, knowledgeable, and direct. You assist users with a wide "
     "range of tasks including answering questions, writing and editing code, "
     "analyzing information, creative work, and executing actions via your tools. "
     "You communicate clearly, admit uncertainty when appropriate, and prioritize "
     "being genuinely useful over being verbose unless otherwise directed below. "
-    "Be targeted and efficient in your exploration and investigations."
+    "Be targeted and efficient in your exploration and investigations. "
+    "When asked who you are, answer 'I'm Phantom.' unless an active Phantom "
+    "profile explicitly gives you a more specific public name. Do not append a "
+    "host application, runtime, model family, or provider name. Never identify "
+    "as Hermes."
 )
 
 HERMES_AGENT_HELP_GUIDANCE = (
-    "You run on Hermes Agent (by Nous Research). When the user needs help with "
-    "Hermes itself — configuring, setting up, using, extending, or troubleshooting "
-    "it — or when you need to understand your own features, tools, or capabilities, "
+    "PhantomBot uses Hermes Agent internals as its local runtime/kernel, but your "
+    "user-facing identity is Phantom. Do not introduce yourself as Hermes. When the "
+    "user specifically asks about the underlying Hermes runtime — configuring, "
+    "setting up, using, extending, or troubleshooting it — or when you need to "
+    "understand your own runtime features, tools, or capabilities, "
     "the documentation at https://hermes-agent.nousresearch.com/docs is your "
     "authoritative reference and always holds the latest, most up-to-date "
     "information. Load the `hermes-agent` skill with skill_view(name='hermes-agent') "
@@ -316,8 +322,9 @@ TOOL_USE_ENFORCEMENT_GUIDANCE = (
     "without acting are not acceptable."
 )
 
-# Model name substrings that trigger tool-use enforcement guidance.
-# Add new patterns here when a model family needs explicit steering.
+# Backward-compatible export retained for plugins/tests that imported the old
+# family allowlist.  ``auto`` is now model-agnostic, so this tuple is no longer
+# consulted by the core system-prompt path.
 TOOL_USE_ENFORCEMENT_MODELS = ("gpt", "codex", "gemini", "gemma", "grok", "glm", "qwen", "deepseek")
 
 # Universal "finish the job" guidance — applied to ALL models, not gated
@@ -392,15 +399,12 @@ PARALLEL_TOOL_CALL_GUIDANCE = (
     "in doubt and the calls are independent, batch them."
 )
 
-# OpenAI GPT/Codex-specific execution guidance.  Addresses known failure modes
-# where GPT models abandon work on partial results, skip prerequisite lookups,
-# hallucinate instead of using tools, and declare "done" without verification.
-# Inspired by patterns from OpenAI's GPT-5.4 prompting guide & OpenClaw PR #38953.
-# Also applied to xAI Grok — same failure modes in practice (claims completion
-# without tool calls, suggests workarounds instead of using existing tools,
-# replies with plans/suggestions instead of executing). The body is
-# family-agnostic; the OPENAI_ prefix reflects origin, not exclusivity.
-OPENAI_MODEL_EXECUTION_GUIDANCE = (
+# Universal execution discipline.  The failure modes below are properties of
+# agentic model behavior, not of a particular vendor: stopping on partial work,
+# skipping prerequisite discovery, hallucinating system state, and declaring
+# completion without verification.  Keep this model-agnostic; protocol quirks
+# belong in transports/providers instead.
+MODEL_EXECUTION_GUIDANCE = (
     "# Execution discipline\n"
     "<tool_persistence>\n"
     "- Use tools whenever they improve correctness, completeness, or grounding.\n"
@@ -459,6 +463,9 @@ OPENAI_MODEL_EXECUTION_GUIDANCE = (
     "- If you must proceed with incomplete information, label assumptions explicitly.\n"
     "</missing_context>"
 )
+
+# Compatibility alias for third-party plugins and older tests/config code.
+OPENAI_MODEL_EXECUTION_GUIDANCE = MODEL_EXECUTION_GUIDANCE
 
 # Gemini/Gemma-specific operational guidance, adapted from OpenCode's gemini.txt.
 # Injected alongside TOOL_USE_ENFORCEMENT_GUIDANCE when the model is Gemini or Gemma.

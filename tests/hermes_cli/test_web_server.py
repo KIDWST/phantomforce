@@ -4341,6 +4341,18 @@ class TestWebServerEndpoints:
         out = _apply_main_model_assignment("not-a-dict", "custom", "m", "http://x/v1")
         assert out == {"provider": "custom", "default": "m", "base_url": "http://x/v1"}
 
+        # PhantomBot Kimi direct keeps its explicit 65,536 context and canonical
+        # route even if stale composer state reports it under the local Ollama provider.
+        out = _apply_main_model_assignment(
+            {"provider": "ollama-launch", "base_url": "http://127.0.0.1:11434"},
+            "ollama-launch",
+            "kimi-k3-hf:latest",
+        )
+        assert out["provider"] == "kimi-k3-direct"
+        assert out["default"] == "kimi-k3-hf:latest"
+        assert out["base_url"] == "http://127.0.0.1:11435"
+        assert out["context_length"] == 65536
+
         # api_key follows the same lifecycle as base_url:
         # supplied → persisted.
         out = _apply_main_model_assignment(

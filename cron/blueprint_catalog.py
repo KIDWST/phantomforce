@@ -476,6 +476,134 @@ CATALOG: List[AutomationBlueprint] = [
         ],
         tags=("daily", "curiosity"),
     ),
+    AutomationBlueprint(
+        key="defender-quick-scan",
+        title="Microsoft Defender quick scan",
+        description="Run a real Windows Security quick scan, then report only actionable results.",
+        category="security",
+        schedule_template="{minute} {hour} * * *",
+        prompt_template=(
+            "Perform a defensive antivirus check on this computer. On Windows, "
+            "use the installed Microsoft Defender PowerShell cmdlets: inspect "
+            "Get-MpComputerStatus, update signatures with Update-MpSignature "
+            "when they are stale, then run Start-MpScan -ScanType QuickScan. "
+            "Use bounded polling and report scan completion, signature age, "
+            "and any Get-MpThreatDetection findings. Never disable protection, "
+            "change exclusions, upload files, or install another scanner. If "
+            "Microsoft Defender is not the active antivirus or elevation is "
+            "required, report that clearly without forcing a change. On a "
+            "non-Windows host, report unsupported and stop. If healthy and no "
+            "threats are found, send one short all-clear."
+        ),
+        slots=[_TIME("02:00"), _DELIVER],
+        tags=("security", "antivirus", "windows"),
+    ),
+    AutomationBlueprint(
+        key="downloads-malware-watch",
+        title="Downloads malware watch",
+        description="Scan your Downloads folder with Microsoft Defender on a recurring cadence.",
+        category="security",
+        schedule_template="0 */{interval_hours} * * *",
+        prompt_template=(
+            "Run a defensive malware scan of this folder on Windows: {folder}. "
+            "Resolve environment variables safely, verify the resolved path is "
+            "a real local directory, then use Microsoft Defender "
+            "Start-MpScan -ScanType CustomScan -ScanPath with that exact path. "
+            "After the scan, inspect Get-MpThreatDetection and report only new "
+            "or active detections plus the action Defender took. Do not open or "
+            "execute downloaded files, upload samples, alter exclusions, or "
+            "install third-party tools. If the folder is missing, Defender is "
+            "inactive, or elevation is required, report the exact blocker. Send "
+            "[SILENT] when the scan completes cleanly unless this is the first run."
+        ),
+        slots=[
+            BlueprintSlot(
+                name="interval_hours", type="enum", label="How often?",
+                default="4", options=("2", "4", "6", "12"),
+                help="hours between scans",
+            ),
+            BlueprintSlot(
+                name="folder", type="text", label="Folder to protect",
+                default="%USERPROFILE%\\Downloads",
+                help="a local folder; environment variables are supported",
+            ),
+            _DELIVER,
+        ],
+        tags=("security", "antivirus", "downloads", "windows"),
+    ),
+    AutomationBlueprint(
+        key="windows-protection-baseline",
+        title="Windows protection baseline",
+        description="Audit core Windows protections and optionally repair a narrow, reversible baseline.",
+        category="security",
+        schedule_template="{minute} {hour} * * {dow}",
+        prompt_template=(
+            "Run a Windows privacy and protection baseline in {mode} mode. "
+            "Inspect Microsoft Defender real-time and cloud protection, security "
+            "intelligence age, PUA protection, all Windows Firewall profiles, "
+            "BitLocker status, Windows Update state, Remote Desktop exposure, "
+            "listening TCP ports, and startup entries. In audit-only mode, make "
+            "no changes. In repair-safe-baseline mode, only: enable Windows "
+            "Firewall profiles; enable Defender real-time monitoring when "
+            "Microsoft Defender is the active antivirus; enable PUA protection; "
+            "and update stale Defender signatures. Never remove antivirus "
+            "exclusions, change BitLocker, accounts, passwords, remote access, "
+            "network addressing, browser data, or third-party security products. "
+            "Do not terminate processes automatically. Report what was checked, "
+            "what changed, remaining risks, and exact approval-required next steps. "
+            "On non-Windows hosts, report unsupported and stop."
+        ),
+        slots=[
+            BlueprintSlot(
+                name="mode", type="enum", label="Protection mode",
+                default="audit-only",
+                options=("audit-only", "repair-safe-baseline"),
+                help="repair mode only changes the narrow reversible baseline described above",
+            ),
+            _TIME("09:00"),
+            BlueprintSlot(
+                name="day", type="enum", label="Which day?",
+                default="sunday",
+                options=("sunday", "monday", "friday", "saturday"),
+            ),
+            _DELIVER,
+        ],
+        tags=("security", "privacy", "hardening", "windows"),
+    ),
+    AutomationBlueprint(
+        key="breach-exposure-monitor",
+        title="Breach exposure monitor",
+        description="Check an email or domain against reputable breach-notification sources.",
+        category="security",
+        schedule_template="{minute} {hour} * * {dow}",
+        prompt_template=(
+            "Check this user-owned identity for newly reported breach exposure: "
+            "{identity}. Use only reputable public breach-notification services, "
+            "a configured Have I Been Pwned-compatible API, official incident "
+            "notices, and normal web search. Dedupe against prior reports and "
+            "include source links, breach date, exposed data categories, and "
+            "specific defensive actions. Never access illicit marketplaces, "
+            "download leaked databases, search for plaintext passwords, test "
+            "credentials, or reveal secret values. If a source requires a key "
+            "that is not configured, explain the legitimate setup needed and "
+            "stop. Send [SILENT] when there is no new verified exposure."
+        ),
+        slots=[
+            BlueprintSlot(
+                name="identity", type="text", label="Email or domain to monitor",
+                default="my primary email address",
+                help="only monitor identities you own or are authorized to protect",
+            ),
+            _TIME("10:00"),
+            BlueprintSlot(
+                name="day", type="enum", label="Which day?",
+                default="monday",
+                options=("sunday", "monday", "friday", "saturday"),
+            ),
+            _DELIVER,
+        ],
+        tags=("security", "privacy", "breach-monitoring"),
+    ),
 ]
 
 _CATALOG_BY_KEY = {r.key: r for r in CATALOG}

@@ -20,6 +20,7 @@ rather than parsing the raw JSON themselves.
 
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,11 +33,24 @@ import requests
 logger = logging.getLogger(__name__)
 
 MODELS_DEV_URL = "https://models.dev/api.json"
-_MODELS_DEV_CACHE_TTL = 3600  # 1 hour in-memory
+_MODELS_DEV_CACHE_TTL = 3600  # 1 hour
 
 # In-memory cache
 _models_dev_cache: Dict[str, Any] = {}
 _models_dev_cache_time: float = 0
+
+# ── Background-refresh state (thread-safe) ─────────────────────────────
+# The synchronous picker/UI path must NEVER block on the network.  When the
+# in-memory or disk cache is stale (or missing), a single de-duplicated
+# background worker re-fetches the registry; readers keep serving whatever
+# cached data exists until then.  These module-level diagnostics let the
+# ``diagnostics.get`` endpoint report refresh state without doing I/O.
+_refresh_lock = threading.RLock()
+_refresh_in_progress: bool = False
+_refresh_start_count: int = 0
+_last_refresh_attempt: float = 0.0
+_last_successful_refresh: float = 0.0
+_last_refresh_error: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -237,85 +251,188 @@ def _save_disk_cache(data: Dict[str, Any]) -> None:
         logger.debug("Failed to save models.dev disk cache: %s", e)
 
 
-def fetch_models_dev(force_refresh: bool = False) -> Dict[str, Any]:
-    """Fetch models.dev registry. Cache hierarchy: in-mem → disk → network.
+def _synchronous_fetch() -> Dict[str, Any]:
+    """Perform a blocking network fetch of the models.dev registry.
 
-    Returns the full registry dict keyed by provider ID, or empty dict on failure.
-
-    Cache hierarchy (when ``force_refresh=False``):
-      1. In-memory cache, populated and < TTL old → return immediately.
-      2. **Disk cache file < TTL old by mtime → load, populate in-mem, return.**
-         No network call. Saves ~500 ms per cold-start agent construction;
-         ``models.dev`` only changes when providers add new models, so a
-         1 hour staleness window is acceptable (same TTL as in-mem cache).
-      3. Network fetch → on success, save to disk + in-mem and return.
-      4. Network fails → fall back to ANY available disk cache (even stale)
-         with a short 5 min in-mem grace period before retrying network.
-
-    When ``force_refresh=True`` (used by ``hermes config refresh``, the
-    \"refresh model catalog\" code path), stages 1 and 2 are skipped. The
-    function always hits the network and only falls back to disk if the
-    network call fails.
+    Returns the registry dict on success, or ``{}`` on any failure (network,
+    SSL, non-200, bad JSON).  Callers must never let this run on the
+    synchronous picker/UI path — it exists for ``force_refresh=True`` and the
+    background worker only.
     """
-    global _models_dev_cache, _models_dev_cache_time
-
-    # Stage 1: fresh in-memory cache wins. This is the hot path on
-    # long-lived processes — no I/O, no system calls.
-    if (
-        not force_refresh
-        and _models_dev_cache
-        and (time.time() - _models_dev_cache_time) < _MODELS_DEV_CACHE_TTL
-    ):
-        return _models_dev_cache
-
-    # Stage 2: fresh-by-mtime disk cache short-circuits the network call.
-    # Only kicks in on cold-start processes (in-mem cache is empty or
-    # expired) and only when the user hasn't asked for a forced refresh.
-    # Skipped if the disk cache file is missing, unreadable, or older
-    # than _MODELS_DEV_CACHE_TTL.
-    if not force_refresh:
-        disk_age = _disk_cache_age_seconds()
-        if disk_age is not None and disk_age < _MODELS_DEV_CACHE_TTL:
-            disk_data = _load_disk_cache()
-            if disk_data:
-                _models_dev_cache = disk_data
-                # Anchor in-mem TTL to the disk file's age so we don't
-                # extend an already-aging cache by another full hour.
-                _models_dev_cache_time = time.time() - disk_age
-                logger.debug(
-                    "Loaded models.dev from fresh disk cache "
-                    "(%d providers, age=%.0fs)", len(disk_data), disk_age,
-                )
-                return _models_dev_cache
-
-    # Stage 3: network fetch.
+    global _last_refresh_attempt, _last_successful_refresh, _last_refresh_error
+    with _refresh_lock:
+        _last_refresh_attempt = time.time()
     try:
         response = requests.get(MODELS_DEV_URL, timeout=15)
         response.raise_for_status()
         data = response.json()
         if isinstance(data, dict) and data:
-            _models_dev_cache = data
-            _models_dev_cache_time = time.time()
+            with _refresh_lock:
+                _last_successful_refresh = time.time()
+                _last_refresh_error = None
+            return data
+        with _refresh_lock:
+            _last_refresh_error = "models.dev returned empty/invalid payload"
+    except Exception as e:
+        with _refresh_lock:
+            _last_refresh_error = str(e)
+        logger.debug("Failed to fetch models.dev: %s", e)
+    return {}
+
+
+def _background_refresh_worker() -> None:
+    """Background worker that refreshes the models.dev registry once.
+
+    Runs on a daemon thread so a slow/offline network never blocks a reader.
+    De-duplication is enforced by ``_maybe_start_background_refresh`` via
+    ``_refresh_in_progress``, so at most one worker exists per catalog.
+    """
+    global _refresh_in_progress
+    try:
+        data = _synchronous_fetch()
+        if data:
+            global _models_dev_cache, _models_dev_cache_time
+            with _refresh_lock:
+                _models_dev_cache = data
+                _models_dev_cache_time = time.time()
             _save_disk_cache(data)
             logger.debug(
-                "Fetched models.dev registry: %d providers, %d total models",
+                "Background models.dev refresh completed (%d providers)",
                 len(data),
-                sum(len(p.get("models", {})) for p in data.values() if isinstance(p, dict)),
             )
+    except Exception as e:  # noqa: BLE001 — never let a worker kill the process
+        logger.debug("Background models.dev refresh failed: %s", e)
+    finally:
+        with _refresh_lock:
+            _refresh_in_progress = False
+
+
+def _maybe_start_background_refresh() -> bool:
+    """Start a single de-duplicated background refresh, if none is running.
+
+    Returns True when a new worker was spawned, False when one is already in
+    flight (or the lock is contended).  Safe to call on every eager cache
+    read; repeated calls cannot produce a thread storm.
+    """
+    global _refresh_in_progress, _refresh_start_count
+    with _refresh_lock:
+        if _refresh_in_progress:
+            return False
+        _refresh_in_progress = True
+        _refresh_start_count += 1
+    try:
+        thread = threading.Thread(
+            target=_background_refresh_worker,
+            name="models-dev-background-refresh",
+            daemon=True,
+        )
+        thread.start()
+        return True
+    except Exception:
+        with _refresh_lock:
+            _refresh_in_progress = False
+        return False
+
+
+def get_models_dev_refresh_state() -> dict:
+    """Return read-only diagnostics for the models.dev cache (no I/O)."""
+    now = time.time()
+    with _refresh_lock:
+        return {
+            "cache_present": bool(_models_dev_cache),
+            "cache_age": (now - _models_dev_cache_time) if _models_dev_cache_time else None,
+            "ttl": _MODELS_DEV_CACHE_TTL,
+            "refresh_in_progress": _refresh_in_progress,
+            "background_refresh_count": _refresh_start_count,
+            "last_refresh_attempt": _last_refresh_attempt or None,
+            "last_successful_refresh": _last_successful_refresh or None,
+            "last_refresh_error": _last_refresh_error,
+        }
+
+
+def fetch_models_dev(
+    force_refresh: bool = False,
+    *,
+    allow_background_refresh: bool = True,
+) -> Dict[str, Any]:
+    """Fetch models.dev registry. Cache-first; never blocks on the network.
+
+    Returns the full registry dict keyed by provider ID, or ``{}`` on failure.
+
+    Resolution order (when ``force_refresh=False``) — ALL cache-only, zero
+    synchronous network I/O:
+
+      1. In-memory cache (fresh OR stale) → return it immediately.  A stale
+         cache additionally schedules a single background refresh.
+      2. Disk cache (fresh OR stale) → load into memory, return immediately.
+         A stale disk cache additionally schedules a background refresh.
+      3. Nothing available → return ``{}`` immediately and schedule a
+         background refresh; the registry populates asynchronously.
+
+    ``allow_background_refresh=False`` is the stricter picker-inventory path:
+    it still serves memory/disk data but causes zero outbound work, including
+    daemon-thread refreshes.
+
+    ``force_refresh=True`` (used by ``hermes config refresh`` and the
+    explicit "refresh model catalog" path) performs a blocking network fetch
+    and, on success, refreshes both caches.
+    """
+    global _models_dev_cache, _models_dev_cache_time
+
+    # Forced refresh: blocking (explicit user intent), cache as a side effect.
+    if force_refresh:
+        data = _synchronous_fetch()
+        if data:
+            with _refresh_lock:
+                _models_dev_cache = data
+                _models_dev_cache_time = time.time()
+            _save_disk_cache(data)
             return data
-    except Exception as e:
-        logger.debug("Failed to fetch models.dev: %s", e)
+        # Network failed — serve whatever cache exists so callers are not
+        # left with nothing. A later normal read may schedule a retry.
+        with _refresh_lock:
+            fallback = _models_dev_cache
+        fallback = fallback or _load_disk_cache()
+        if fallback:
+            disk_age = _disk_cache_age_seconds()
+            with _refresh_lock:
+                _models_dev_cache = fallback
+                _models_dev_cache_time = time.time() - max(0.0, disk_age or 0.0)
+        return fallback
 
-    # Stage 4: network failed — fall back to whatever disk cache exists,
-    # even if it's stale. Give it a short 5 min in-mem TTL so we retry
-    # the network soon instead of serving stale data for a full hour.
-    if not _models_dev_cache:
-        _models_dev_cache = _load_disk_cache()
-        if _models_dev_cache:
-            _models_dev_cache_time = time.time() - _MODELS_DEV_CACHE_TTL + 300
-            logger.debug("Loaded models.dev from disk cache (%d providers)", len(_models_dev_cache))
+    # Stage 1: in-memory cache — always returned synchronously, no I/O.
+    with _refresh_lock:
+        memory_data = _models_dev_cache
+        memory_time = _models_dev_cache_time
+    if memory_data:
+        if (
+            allow_background_refresh
+            and (time.time() - memory_time) >= _MODELS_DEV_CACHE_TTL
+        ):
+            _maybe_start_background_refresh()
+        return memory_data
 
-    return _models_dev_cache
+    # Stage 2: disk cache — loaded synchronously (local file, not network).
+    disk_data = _load_disk_cache()
+    if disk_data:
+        disk_age = _disk_cache_age_seconds()
+        with _refresh_lock:
+            _models_dev_cache = disk_data
+            # Preserve the disk entry's actual age. Treat an unreadable/future
+            # mtime as stale so diagnostics remain honest and refresh starts.
+            _models_dev_cache_time = (
+                time.time() - disk_age if disk_age is not None else 0.0
+            )
+        if allow_background_refresh and (
+            disk_age is None or disk_age >= _MODELS_DEV_CACHE_TTL
+        ):
+            _maybe_start_background_refresh()
+        return disk_data
+
+    # Stage 3: nothing available — return empty immediately, refresh in bg.
+    if allow_background_refresh:
+        _maybe_start_background_refresh()
+    return {}
 
 
 def lookup_models_dev_context(provider: str, model: str) -> Optional[int]:
@@ -410,7 +527,11 @@ class ModelCapabilities:
     model_family: str = ""
 
 
-def _get_provider_models(provider: str) -> Optional[Dict[str, Any]]:
+def _get_provider_models(
+    provider: str,
+    *,
+    allow_background_refresh: bool = True,
+) -> Optional[Dict[str, Any]]:
     """Resolve a Hermes provider ID to its models dict from models.dev.
 
     Returns the models dict or None if the provider is unknown or has no data.
@@ -419,7 +540,11 @@ def _get_provider_models(provider: str) -> Optional[Dict[str, Any]]:
     if not mdev_provider_id:
         return None
 
-    data = fetch_models_dev()
+    data = (
+        fetch_models_dev(allow_background_refresh=False)
+        if not allow_background_refresh
+        else fetch_models_dev()
+    )
     provider_data = data.get(mdev_provider_id)
     if not isinstance(provider_data, dict):
         return None
@@ -447,7 +572,12 @@ def _find_model_entry(models: Dict[str, Any], model: str) -> Optional[Dict[str, 
     return None
 
 
-def get_model_capabilities(provider: str, model: str) -> Optional[ModelCapabilities]:
+def get_model_capabilities(
+    provider: str,
+    model: str,
+    *,
+    allow_background_refresh: bool = True,
+) -> Optional[ModelCapabilities]:
     """Look up full capability metadata from models.dev cache.
 
     Uses the existing fetch_models_dev() and PROVIDER_TO_MODELS_DEV mapping.
@@ -461,7 +591,10 @@ def get_model_capabilities(provider: str, model: str) -> Optional[ModelCapabilit
       - limit.output  (int) → max_output_tokens
       - family     (str)   → model_family
     """
-    models = _get_provider_models(provider)
+    models = _get_provider_models(
+        provider,
+        allow_background_refresh=allow_background_refresh,
+    )
     if models is None:
         return None
 
@@ -671,7 +804,11 @@ def _parse_provider_info(provider_id: str, raw: Dict[str, Any]) -> ProviderInfo:
 # Provider-level queries
 # ---------------------------------------------------------------------------
 
-def get_provider_info(provider_id: str) -> Optional[ProviderInfo]:
+def get_provider_info(
+    provider_id: str,
+    *,
+    allow_background_refresh: bool = True,
+) -> Optional[ProviderInfo]:
     """Get full provider metadata from models.dev.
 
     Accepts either a Hermes provider ID (e.g. "kilocode") or a models.dev
@@ -680,7 +817,11 @@ def get_provider_info(provider_id: str) -> Optional[ProviderInfo]:
     # Resolve Hermes ID → models.dev ID
     mdev_id = PROVIDER_TO_MODELS_DEV.get(provider_id, provider_id)
 
-    data = fetch_models_dev()
+    data = (
+        fetch_models_dev(allow_background_refresh=False)
+        if not allow_background_refresh
+        else fetch_models_dev()
+    )
     raw = data.get(mdev_id)
     if not isinstance(raw, dict):
         return None

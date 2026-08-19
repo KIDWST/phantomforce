@@ -328,6 +328,7 @@ export const zh: Translations = {
       archivedChats: '已归档对话',
       about: '关于',
       billing: '账单',
+      chatgptPlus: 'ChatGPT Plus',
       notifications: '通知',
       plugins: '插件'
     },
@@ -1409,9 +1410,10 @@ export const zh: Translations = {
     settingsFields: '设置字段',
     mcpServers: 'MCP 服务器',
     archivedChats: '已归档对话',
-    sections: { maintenance: '维护', sessions: '会话', system: '系统', usage: '用量' },
+    sections: { maintenance: '维护', runs: '工程运行', sessions: '会话', system: '系统', usage: '用量' },
     sectionDescriptions: {
       maintenance: '诊断、备份、维护器与记忆数据',
+      runs: '实时计划、工具证据、检查点与验证',
       sessions: '搜索与管理会话',
       system: '状态、日志与系统操作',
       usage: '一段时间内的词元、成本与技能活动'
@@ -1424,6 +1426,7 @@ export const zh: Translations = {
       artifacts: { title: '产物', detail: '浏览生成的输出' }
     },
     sectionEntries: {
+      runs: { title: '工程运行', detail: '检查计划、工具、变更与证据' },
       sessions: { title: '会话面板', detail: '搜索、置顶与管理会话' },
       system: { title: '系统面板', detail: '网关状态、日志、重启/更新' },
       usage: { title: '用量面板', detail: '词元、成本与技能活动' }

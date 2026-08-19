@@ -42,7 +42,9 @@ import {
   setCurrentReasoningEffort,
   setCurrentServiceTier,
   setCurrentUsage,
+  setPhantomRoute,
   setSessions,
+  setThinkingStatus,
   setTurnStartedAt,
   setYoloActive
 } from '@/store/session'
@@ -119,6 +121,8 @@ const COMPACTION_RESUME_EVENT_TYPES = new Set([
   'tool.generating',
   'tool.complete'
 ])
+
+const PHANTOM_ROUTE_STATUS = /^Phantom lane · (Direct|Instant|Focus|Deep)$/i
 
 interface GatewayEventDeps {
   activeGatewayProfile: string
@@ -447,6 +451,8 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         clearBillingBlock(sessionId)
 
         if (isActiveEvent) {
+          setThinkingStatus('')
+          setPhantomRoute(null)
           triggerHaptic('streamStart')
         }
 
@@ -494,10 +500,19 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           }
         }
       } else if (event.type === 'thinking.delta') {
-        // thinking.delta carries the kawaii spinner status (face + verb from
-        // KawaiiSpinner), not real reasoning. The bottom-of-thread loading
-        // indicator already covers that UX, so we ignore these events to
-        // avoid a duplicative "Thinking" disclosure showing spinner text.
+        // This is a short presentation status from KawaiiSpinner, not hidden
+        // reasoning. Keep it out of the transcript and show it only in the
+        // active session's loading row.
+        if (isActiveEvent) {
+          const status = coerceGatewayText(payload?.text).replace(/\s+/g, ' ').trim().slice(0, 140)
+          const route = status.match(PHANTOM_ROUTE_STATUS)?.[1]?.toLowerCase()
+
+          if (route === 'direct' || route === 'instant' || route === 'focus' || route === 'deep') {
+            setPhantomRoute(route)
+          } else {
+            setThinkingStatus(status)
+          }
+        }
       } else if (event.type === 'reaction') {
         // Core-detected affection (ily / <3 / good bot) on the user's message.
         // Play hearts only for the visible session so background turns stay quiet.
@@ -638,6 +653,8 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         }
 
         if (isActiveEvent) {
+          setThinkingStatus('')
+          setPhantomRoute(null)
           setTurnStartedAt(null)
 
           // Pet beat: a finished turn always celebrates — go straight to the
@@ -983,6 +1000,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
         }
 
         if (isActiveEvent) {
+          setPhantomRoute(null)
           setPetActivity({ reasoning: false, toolRunning: false })
           flashPetActivity({ error: true })
         }

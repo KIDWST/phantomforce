@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select'
 import { saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
-import { Brain, ImageIcon, MonitorPlay, SlidersHorizontal } from '@/lib/icons'
+import { Brain, ImageIcon, MonitorPlay, SlidersHorizontal, Terminal } from '@/lib/icons'
 import { notify, notifyError } from '@/store/notifications'
 
 import { setHermesConfigCache, useHermesConfigRecord } from '../hooks/use-config-record'
@@ -30,7 +30,13 @@ import { ListRow, Pill, SettingsContent, SettingsSection, SettingsSkeleton } fro
 const LANE_ICONS = {
   reasoning: Brain,
   image: ImageIcon,
-  video: MonitorPlay
+  video: MonitorPlay,
+  coding: Terminal
+} as const
+
+const CODING_LANE_COPY = {
+  title: 'Coding execution',
+  description: 'Phantom executes and verifies code work locally through one consolidated model.'
 } as const
 
 export function AutoRoutingSettings({ onConfigSaved }: { onConfigSaved?: () => void }) {
@@ -79,7 +85,7 @@ export function AutoRoutingSettings({ onConfigSaved }: { onConfigSaved?: () => v
       notify({
         kind: 'success',
         title: copy.savedTitle,
-        message: copy.savedMessage(copy.lanes[lane].title)
+        message: copy.savedMessage(lane === 'coding' ? CODING_LANE_COPY.title : copy.lanes[lane].title)
       })
     } catch (error) {
       if (profileEpoch.current === epoch) {
@@ -115,7 +121,7 @@ export function AutoRoutingSettings({ onConfigSaved }: { onConfigSaved?: () => v
         </p>
         <div className="grid gap-1">
           {AUTO_ROUTING_LANES.map(lane => {
-            const laneCopy = copy.lanes[lane]
+            const laneCopy = lane === 'coding' ? CODING_LANE_COPY : copy.lanes[lane]
             const LaneIcon = LANE_ICONS[lane]
             const options = AUTO_ROUTING_OPTIONS[lane]
 

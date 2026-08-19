@@ -1,0 +1,6 @@
+name: higgsfield
+version: 1.0.0
+description: "Higgsfield video generation backend via the authenticated higgsfield CLI. Supports text-to-video, image/reference-to-video, and video-reference editing/remixing."
+author: PhantomForce
+kind: backend
+requires_env: []

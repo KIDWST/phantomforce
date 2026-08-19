@@ -2397,7 +2397,7 @@ def _compress_context_via_codex_app_server(
     unchanged.
     """
     auto_mode = str(
-        getattr(agent, "codex_app_server_auto_compaction", "native") or "native"
+        getattr(agent, "codex_app_server_auto_compaction", "hermes") or "hermes"
     ).lower()
     if auto_mode not in {"native", "hermes", "off"}:
         auto_mode = "native"
@@ -2452,7 +2452,9 @@ def _compress_context_via_codex_app_server(
     _activity_heartbeat: Optional[_CompressionActivityHeartbeat] = None
     try:
         _activity_heartbeat = _CompressionActivityHeartbeat(agent).start()
-        result = codex_session.compact_thread()
+        result = codex_session.compact_thread(
+            cancel_event=getattr(agent, "_external_cancel_event", None)
+        )
     except BaseException:
         if _activity_heartbeat is not None:
             _activity_heartbeat.stop("context compression failed")

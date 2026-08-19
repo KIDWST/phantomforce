@@ -48,6 +48,7 @@ class TurnRetryState:
     vertex_auth_retry_attempted: bool = False
 
     # ── Format / payload recovery guards ─────────────────────────────────
+    unsupported_thinking_retry_attempted: bool = False
     thinking_sig_retry_attempted: bool = False
     invalid_encrypted_content_retry_attempted: bool = False
     image_shrink_retry_attempted: bool = False

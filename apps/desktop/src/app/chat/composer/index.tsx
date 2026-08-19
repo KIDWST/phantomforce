@@ -2,6 +2,7 @@ import { ComposerPrimitive } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
 import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef } from 'react'
 
+import { PhantomPresence } from '@/components/assistant-ui/thread/phantom-presence'
 import { composerFill, composerSurfaceGlass } from '@/components/chat/composer-dock'
 import { Button } from '@/components/ui/button'
 import { Slot as ContribSlot } from '@/contrib/react/slot'
@@ -71,6 +72,7 @@ export function ChatBar({
   maxRecordingSeconds = 120,
   queueSessionKey,
   sessionId,
+  showPhantomPresence = false,
   state,
   onCancel,
   onAddUrl,
@@ -899,6 +901,7 @@ export function ChatBar({
               : undefined
           }
         >
+          {showPhantomPresence && <PhantomPresence />}
           {isHelpHint && <HelpHint />}
           {trigger && !argStageEmpty && (
             <ComposerTriggerPopover

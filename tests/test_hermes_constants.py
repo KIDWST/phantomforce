@@ -35,6 +35,8 @@ class TestGetDefaultHermesRoot:
 
     def test_no_hermes_home_returns_native(self, tmp_path, monkeypatch):
         """When HERMES_HOME is not set, returns ~/.hermes."""
+        if os.name == "nt":
+            pytest.skip("covered by the dedicated native-Windows fallback tests below")
         monkeypatch.delenv("HERMES_HOME", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
@@ -133,6 +135,8 @@ class TestGetProcessHermesHome:
         assert get_process_hermes_home() == home
 
     def test_env_unset_returns_platform_default(self, tmp_path, monkeypatch):
+        if os.name == "nt":
+            pytest.skip("covered by the dedicated native-Windows fallback tests above")
         monkeypatch.delenv("HERMES_HOME", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         assert get_process_hermes_home() == tmp_path / ".hermes"
@@ -748,6 +752,14 @@ class TestResolveReasoningConfig:
         cfg = self._cfg(effort="high", overrides={"gemini-flash": "none"})
         assert resolve_reasoning_config(cfg, "gemini-flash") == {"enabled": False}
 
+    def test_phantom_v1_never_receives_native_reasoning_flags(self):
+        """Phantom/Qwen3-Coder can reason in text, but reject native thinking flags."""
+        from hermes_constants import resolve_reasoning_config
+
+        cfg = self._cfg(effort="medium", overrides={"phantom": "high"})
+        assert resolve_reasoning_config(cfg, "phantom") == {"enabled": False}
+        assert resolve_reasoning_config(cfg, "qwen3-coder:30b") == {"enabled": False}
+
     def test_unknown_global_returns_none(self):
         from hermes_constants import resolve_reasoning_config
         cfg = self._cfg(effort="bogus-level")
@@ -896,6 +908,8 @@ class TestSecureParentDir:
 
     def test_symlink_resolved(self, tmp_path, monkeypatch):
         """Symlinks should be resolved before checking depth."""
+        if os.name == "nt":
+            pytest.skip("requires Windows Developer Mode or symlink privilege")
         real_dir = tmp_path / "a" / "b"
         real_dir.mkdir(parents=True)
         target = real_dir / "file.json"
@@ -1141,6 +1155,8 @@ class TestGetHermesDir:
         returned False for a dangling one. Otherwise a stale broken symlink
         would orphan real data (a stricter variant of the #27602 bug).
         """
+        if os.name == "nt":
+            pytest.skip("requires Windows Developer Mode or symlink privilege")
         self._set_home(tmp_path, monkeypatch)
         legacy = tmp_path / "pairing"
         legacy.symlink_to(tmp_path / "does-not-exist")
@@ -1152,6 +1168,8 @@ class TestGetHermesDir:
 
     def test_symlink_to_populated_dir_returns_legacy(self, tmp_path, monkeypatch):
         """A legacy symlink pointing at a populated directory is honoured."""
+        if os.name == "nt":
+            pytest.skip("requires Windows Developer Mode or symlink privilege")
         self._set_home(tmp_path, monkeypatch)
         real = tmp_path / "real_store"
         real.mkdir()
@@ -1163,6 +1181,8 @@ class TestGetHermesDir:
 
     def test_symlink_to_empty_dir_returns_new(self, tmp_path, monkeypatch):
         """A legacy symlink pointing at an EMPTY directory falls through."""
+        if os.name == "nt":
+            pytest.skip("requires Windows Developer Mode or symlink privilege")
         self._set_home(tmp_path, monkeypatch)
         empty = tmp_path / "empty_real"
         empty.mkdir()

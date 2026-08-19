@@ -225,7 +225,8 @@ class TestUpdateCommandGatewayFlag:
         hermes_home.mkdir()
 
         mock_popen = MagicMock()
-        with patch("gateway.run._hermes_home", hermes_home), \
+        with patch("gateway.slash_commands.sys.platform", "linux"), \
+             patch("gateway.run._hermes_home", hermes_home), \
              patch("gateway.run.__file__", fake_file), \
              patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"), \
              patch("subprocess.Popen", mock_popen):

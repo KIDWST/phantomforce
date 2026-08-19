@@ -17,7 +17,8 @@ describe('PhantomBot Auto routing config', () => {
           routes: {
             reasoning: { option_id: 'openrouter.kimi-k3' },
             image: { option_id: 'unknown.image' },
-            video: 'broken'
+            video: 'broken',
+            coding: { option_id: 'phantom-local' }
           }
         }
       }
@@ -28,7 +29,8 @@ describe('PhantomBot Auto routing config', () => {
       routes: {
         reasoning: { option_id: 'openrouter.kimi-k3' },
         image: DEFAULT_AUTO_ROUTING.routes.image,
-        video: DEFAULT_AUTO_ROUTING.routes.video
+        video: DEFAULT_AUTO_ROUTING.routes.video,
+        coding: { option_id: 'phantom-local' }
       }
     })
   })

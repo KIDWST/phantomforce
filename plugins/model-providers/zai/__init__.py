@@ -1,21 +1,17 @@
 """ZAI / GLM provider profile.
 
 Z.AI's GLM-4.5-and-later chat models default to thinking-mode ON when the
-request omits ``thinking``.  Hermes' ``reasoning_config = {"enabled": False}``
-was previously a silent no-op on this route — the base profile emits nothing,
-so users who turned thinking off (desktop toggle, ``/reasoning none``,
-``reasoning_effort: none``/``false`` in config.yaml) kept burning thinking
-tokens on every turn.
+request omits ``thinking``.  Hermes sends an explicit disabled marker unless
+the user enables reasoning, so a missing preference does not silently burn
+hidden thinking tokens on paid GLM routes.
 
 :meth:`ZaiProfile.build_api_kwargs_extras` translates the Hermes reasoning
 config into the wire shape Z.AI's OpenAI-compat endpoint expects:
 
     {"extra_body": {"thinking": {"type": "enabled" | "disabled"}}}
 
-When no reasoning preference is set (``reasoning_config is None``) the field
-is omitted so the server default applies, matching prior behavior.  GLM
-models before 4.5 (e.g. ``glm-4-9b``) don't accept ``thinking`` and are left
-untouched.
+GLM models before 4.5 (e.g. ``glm-4-9b``) don't accept ``thinking`` and are
+left untouched.
 
 GLM-5.2 additionally exposes a native ``reasoning_effort`` knob with exactly
 two enabled levels — ``high`` and ``max`` — on the OpenAI-compatible endpoint
@@ -94,11 +90,14 @@ class ZaiProfile(ProviderProfile):
         if not _model_supports_thinking(model) and not _is_glm_5_2(model):
             return extra_body, top_level
 
-        # Only emit when the user expressed a preference; omitting the field
-        # keeps the server default (enabled) exactly as before.
-        if isinstance(reasoning_config, dict):
-            enabled = reasoning_config.get("enabled") is not False
-            extra_body["thinking"] = {"type": "enabled" if enabled else "disabled"}
+        # GLM defaults thinking ON when the field is omitted. Default Hermes'
+        # no-preference path to economical mode; explicit user settings still
+        # win, including enabled high/max reasoning for hard tasks.
+        enabled = (
+            isinstance(reasoning_config, dict)
+            and reasoning_config.get("enabled") is not False
+        )
+        extra_body["thinking"] = {"type": "enabled" if enabled else "disabled"}
 
         if _is_glm_5_2(model):
             effort = _glm_5_2_reasoning_effort(reasoning_config)

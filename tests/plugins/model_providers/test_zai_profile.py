@@ -1,10 +1,9 @@
 """Unit tests for the Z.AI / GLM provider profile's reasoning wiring.
 
 Z.AI's GLM-4.5-and-later chat models default to thinking-mode ON when the
-request omits ``thinking``.  Before the profile emitted the parameter,
-``reasoning_config = {"enabled": False}`` was a silent no-op on the direct
-Z.AI route — users who turned thinking off kept burning thinking tokens on
-every turn (the desktop "thinking reverts to medium" report).
+request omits ``thinking``.  Hermes therefore sends an explicit disabled
+marker when there is no reasoning preference, and explicit user settings can
+turn reasoning back on.
 
 GLM-5.2 additionally exposes a native ``reasoning_effort`` knob with two
 enabled levels (high / max) on the OpenAI-compatible ``/api/paas/v4``
@@ -35,13 +34,12 @@ def zai_profile():
 class TestZaiThinkingWireShape:
     """``build_api_kwargs_extras`` produces Z.AI's exact wire format."""
 
-    def test_no_preference_omits_thinking(self, zai_profile):
-        """No reasoning_config → omit ``thinking`` so the server default
-        applies (matches prior behavior for users with no preference)."""
+    def test_no_preference_disables_thinking(self, zai_profile):
+        """No reasoning_config → economical default, not server thinking-on."""
         extra_body, top_level = zai_profile.build_api_kwargs_extras(
             reasoning_config=None, model="glm-5"
         )
-        assert extra_body == {}
+        assert extra_body == {"thinking": {"type": "disabled"}}
         assert top_level == {}
 
     def test_enabled_sends_enabled_marker(self, zai_profile):
@@ -116,12 +114,12 @@ class TestZaiGLM52ReasoningEffort:
         assert extra_body == {"thinking": {"type": "disabled"}}
         assert top_level == {}
 
-    def test_no_config_leaves_server_default(self, zai_profile):
+    def test_no_config_disables_glm_5_2_thinking(self, zai_profile):
         extra_body, top_level = zai_profile.build_api_kwargs_extras(
             reasoning_config=None,
             model="glm-5.2",
         )
-        assert extra_body == {}
+        assert extra_body == {"thinking": {"type": "disabled"}}
         assert top_level == {}
 
     def test_no_effort_sends_no_effort_level(self, zai_profile):
@@ -220,7 +218,7 @@ class TestZaiFullKwargsIntegration:
         )
         assert kwargs["extra_body"]["thinking"] == {"type": "disabled"}
 
-    def test_no_preference_keeps_wire_clean(self, zai_profile):
+    def test_no_preference_sends_economical_marker(self, zai_profile):
         from agent.transports.chat_completions import ChatCompletionsTransport
 
         kwargs = ChatCompletionsTransport().build_kwargs(
@@ -232,7 +230,7 @@ class TestZaiFullKwargsIntegration:
             base_url="https://api.z.ai/api/paas/v4",
             provider_name="zai",
         )
-        assert "thinking" not in kwargs.get("extra_body", {})
+        assert kwargs["extra_body"]["thinking"] == {"type": "disabled"}
 
     def test_glm_5_2_effort_reaches_top_level(self, zai_profile):
         from agent.transports.chat_completions import ChatCompletionsTransport

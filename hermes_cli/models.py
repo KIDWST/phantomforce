@@ -270,6 +270,7 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
         "gpt-4o-mini",
     ],
     "openai-codex": _codex_curated_models(),
+    "chatgpt-plus": ["chatgpt-plus"],
     "xai-oauth": _xai_curated_models(),
     "copilot-acp": [
         "copilot-acp",
@@ -1085,7 +1086,8 @@ CANONICAL_PROVIDERS: list[ProviderEntry] = [
     ProviderEntry("novita",         "NovitaAI",                 "NovitaAI (Cloud: Model API, Agent Sandbox, GPU Cloud)"),
     ProviderEntry("lmstudio",       "LM Studio",                "LM Studio (Local desktop app with built-in model server)"),
     ProviderEntry("anthropic",      "Anthropic",                "Anthropic (Claude models via API key or Claude Code)"),
-    ProviderEntry("openai-codex",   "OpenAI Codex",             "OpenAI Codex (Codex CLI via ChatGPT subscription or API key)"),
+    ProviderEntry("openai-codex",   "OpenAI Codex",             "OpenAI Codex (optional compatibility provider; not the default ChatGPT Plus route)"),
+    ProviderEntry("chatgpt-plus",   "ChatGPT Plus",             "ChatGPT Plus (local browser bridge using your signed-in subscription)"),
     ProviderEntry("openai-api",     "OpenAI API",               "OpenAI API (api.openai.com, API key)"),
     ProviderEntry("alibaba",        "Qwen Cloud",               "Qwen Cloud / DashScope (Qwen + multi-provider)"),
     ProviderEntry("xai-oauth",      "xAI Grok OAuth (SuperGrok / Premium+)", "xAI Grok OAuth (SuperGrok / Premium+ subscription)"),
@@ -1458,6 +1460,35 @@ def _openrouter_model_supports_tools(item: Any) -> bool:
     return "tools" in params
 
 
+def _openrouter_model_is_agent_compatible(item: Any) -> bool:
+    """Return True for text-output models usable by the PhantomBot agent.
+
+    Native tool support is no longer a hard requirement because the runtime
+    has a model-neutral text-tool compatibility bridge.  What *is* required
+    for the main agent slot is text output.  OpenRouter exposes that capability
+    in ``architecture.output_modalities``; when the field is missing we stay
+    permissive because the Models API itself defaults to text-output models
+    and older mirrors may omit architecture metadata.
+    """
+    if not isinstance(item, dict):
+        return True
+
+    architecture = item.get("architecture")
+    modalities = None
+    if isinstance(architecture, dict):
+        modalities = architecture.get("output_modalities")
+    if modalities is None:
+        modalities = item.get("output_modalities")
+
+    if isinstance(modalities, list):
+        normalized = {str(value).strip().lower() for value in modalities}
+        return "text" in normalized
+
+    # Missing/malformed metadata: permit the model rather than hiding a valid
+    # text model from compatible OpenRouter mirrors/catalog snapshots.
+    return True
+
+
 def fetch_openrouter_models(
     timeout: float = 8.0,
     *,
@@ -1478,7 +1509,16 @@ def fetch_openrouter_models(
         remote = get_curated_openrouter_models()
     except Exception:
         remote = None
-    fallback = list(remote) if remote else list(OPENROUTER_MODELS)
+    fallback = list(remote) if remote else []
+    # A remotely published manifest can lag the packaged snapshot during a
+    # catalog rollout. Merge the static entries behind it (remote order and
+    # labels still win), then let the live OpenRouter response remove models
+    # that no longer exist. This avoids silently hiding a valid model merely
+    # because one catalog source is temporarily incomplete.
+    seen_fallback_ids = {mid for mid, _ in fallback}
+    fallback.extend(
+        entry for entry in OPENROUTER_MODELS if entry[0] not in seen_fallback_ids
+    )
     preferred_ids = [mid for mid, _ in fallback]
 
     try:
@@ -1510,10 +1550,11 @@ def fetch_openrouter_models(
         live_item = live_by_id.get(preferred_id)
         if live_item is None:
             continue
-        # Hide models that don't advertise tool-calling support — hermes-agent
-        # requires it and surfacing them leads to immediate runtime failures
-        # when the user selects them. Ported from Kilo-Org/kilocode#9068.
-        if not _openrouter_model_supports_tools(live_item):
+        # The agent runtime can bridge text-output models that lack native
+        # function calling, so native ``tools`` support is not a picker gate.
+        # Still exclude non-text generators/embedding models from the main
+        # conversational agent slot.
+        if not _openrouter_model_is_agent_compatible(live_item):
             continue
         if preferred_id == silent_default:
             # Keep the silent-default badge through the live refresh so the
@@ -2937,12 +2978,20 @@ def cached_provider_model_ids(
     provider: Optional[str],
     *,
     force_refresh: bool = False,
+    no_network: bool = False,
     ttl_seconds: int = _PROVIDER_MODELS_CACHE_TTL,
 ) -> list[str]:
     """Disk-cached wrapper around :func:`provider_model_ids`.
 
     Hits the cache when fresh; otherwise calls the live function and
     persists a non-empty result. Always returns a list (never None).
+
+    ``no_network=True`` is the synchronous picker/UI read path: it serves the
+    disk cache when present (even stale — stale beats frozen), and otherwise
+    returns ``[]`` WITHOUT triggering a live fetch.  The caller falls back
+    to the curated static list, and a background/foreground refresh
+    populates the cache later.  This keeps opening the model picker free of
+    any outbound network round-trip.
     """
     normalized = normalize_provider(provider) or (provider or "")
     if not normalized:
@@ -2959,9 +3008,17 @@ def cached_provider_model_ids(
         and entry.get("fp") == fp
         and isinstance(entry.get("models"), list)
         and entry["models"]
-        and (now - float(entry.get("at", 0))) < ttl_seconds
     ):
+        # Any cached data is better than blocking the picker: serve it whether
+        # fresh or stale. Only a forced refresh insist on a live fetch below.
         return list(entry["models"])
+
+    if no_network and not force_refresh:
+        # Read-only picker path: never initiate a live fetch synchronously.
+        # (The branch above already returned any cached entry; reaching here
+        # means no usable cached list exists.) Return [] and let the caller's
+        # curated static fallback win; a refresh populates the cache later.
+        return []
 
     # Cache miss / stale / forced refresh — call the live path.
     live = provider_model_ids(normalized, force_refresh=force_refresh)

@@ -222,15 +222,75 @@ def _ollama_context_limit_error(agent: Any, request_tokens: int) -> Optional[str
 
     return (
         f"Ollama loaded `{model}` with only {runtime_ctx:,} tokens of runtime "
-        f"context, but Hermes needs at least {MINIMUM_CONTEXT_LENGTH:,} tokens "
-        "for reliable tool use.\n\n"
-        "Increase the Ollama context for this model and restart/reload the "
-        "model before trying again. A known-good starting point is 65,536 "
-        "tokens. In Hermes config, set `model.ollama_num_ctx: 65536` "
-        "(and `model.context_length: 65536` if you also override the displayed "
-        "model context). If you manage the model through an Ollama Modelfile, "
-        "set `PARAMETER num_ctx 65536` there instead."
+        f"context, but PhantomBot needs at least {MINIMUM_CONTEXT_LENGTH:,} "
+        "tokens for reliable tool use.\n\n"
+        "Increase the Ollama context for this model and restart/reload it "
+        "before trying again. For Phantom local models, use the full local "
+        "window: set `model.ollama_num_ctx: 262144` and "
+        "`model.context_length: 262144`. If you manage the model through an "
+        "Ollama Modelfile, set `PARAMETER num_ctx 262144` there instead."
     )
+
+
+_MEDIA_IMAGE_INTENT_RE = re.compile(
+    r"\b(generate|create|make|draw|design|render|produce|paint|illustrate)\b"
+    r".{0,100}\b(image|picture|photo|illustration|artwork|logo|poster|graphic|thumbnail)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_MEDIA_DRAW_INTENT_RE = re.compile(
+    r"^\s*(draw|paint|illustrate)\b",
+    re.IGNORECASE,
+)
+_MEDIA_VIDEO_INTENT_RE = re.compile(
+    r"\b(generate|create|make|produce|render|animate)\b"
+    r".{0,100}\b(video|clip|movie|animation|short|reel|trailer|b-roll|broll)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _phantom_media_request_kind(user_message: Any) -> Optional[str]:
+    """Return deterministic media route for explicit creation requests."""
+    from agent.message_content import flatten_message_text
+
+    text = flatten_message_text(user_message).strip()
+    if not text:
+        return None
+    if _MEDIA_VIDEO_INTENT_RE.search(text):
+        return "video"
+    if _MEDIA_IMAGE_INTENT_RE.search(text) or _MEDIA_DRAW_INTENT_RE.search(text):
+        return "image"
+    return None
+
+
+def _format_auto_media_result(raw: str, *, kind: str, provider_label: str) -> str:
+    try:
+        payload = json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        return str(raw)
+    if not isinstance(payload, dict):
+        return str(raw)
+    if not payload.get("success"):
+        error = payload.get("error") or payload.get("message") or "media generation failed"
+        return f"{provider_label} generation failed: {error}"
+    media = payload.get("image") if kind == "image" else payload.get("video")
+    if isinstance(media, str) and media.strip():
+        noun = "image" if kind == "image" else "video"
+        return f"Generated {noun} with {provider_label}.\n\nMEDIA:{media.strip()}"
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def _run_phantom_auto_media_request(kind: str, prompt: str, task_id: Optional[str]) -> str:
+    if kind == "image":
+        from tools.image_generation_tool import _handle_image_generate
+
+        raw = _handle_image_generate({"prompt": prompt}, task_id=task_id)
+        return _format_auto_media_result(raw, kind="image", provider_label="ChatGPT Plus")
+    if kind == "video":
+        from tools.video_generation_tool import _handle_video_generate
+
+        raw = _handle_video_generate({"prompt": prompt}, task_id=task_id)
+        return _format_auto_media_result(raw, kind="video", provider_label="Higgsfield")
+    return "Unsupported media request."
 
 
 def _ra():
@@ -774,6 +834,161 @@ def _compression_deferred_result(
     }
 
 
+def _tool_schema_for_name(tools: Any, name: str) -> dict:
+    """Return the advertised parameters schema for ``name`` (or ``{}`)."""
+    for entry in tools or []:
+        if not isinstance(entry, dict):
+            continue
+        function = entry.get("function")
+        if not isinstance(function, dict) or function.get("name") != name:
+            continue
+        schema = function.get("parameters")
+        return schema if isinstance(schema, dict) else {}
+    return {}
+
+
+def _json_value_matches_type(value: Any, expected: Any) -> bool:
+    if isinstance(expected, list):
+        return any(_json_value_matches_type(value, item) for item in expected)
+    return {
+        "object": lambda: isinstance(value, dict),
+        "array": lambda: isinstance(value, list),
+        "string": lambda: isinstance(value, str),
+        "integer": lambda: isinstance(value, int) and not isinstance(value, bool),
+        "number": lambda: isinstance(value, (int, float)) and not isinstance(value, bool),
+        "boolean": lambda: isinstance(value, bool),
+        "null": lambda: value is None,
+    }.get(str(expected), lambda: True)()
+
+
+def _validate_tool_call_arguments(
+    tools: Any,
+    tool_name: str,
+    raw_arguments: Any,
+) -> tuple[Optional[dict], Optional[str], dict]:
+    """Parse and lightly validate model arguments before tool dispatch.
+
+    This intentionally implements the stable, high-value JSON-Schema subset
+    used by Hermes tools: object shape, required properties, property types,
+    and enum membership. Provider-specific advanced schema keywords stay at
+    the tool implementation boundary.
+    """
+    schema = _tool_schema_for_name(tools, tool_name)
+    if isinstance(raw_arguments, dict):
+        parsed = raw_arguments
+    else:
+        raw = "{}" if raw_arguments is None or not str(raw_arguments).strip() else str(raw_arguments)
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, TypeError) as exc:
+            return None, f"arguments are not valid JSON: {exc}", schema
+    if not isinstance(parsed, dict):
+        return None, "arguments must be a JSON object", schema
+
+    # Prefer the installed JSON Schema engine so nested objects, arrays,
+    # bounds, patterns, oneOf/anyOf, and additionalProperties are enforced at
+    # the same pre-dispatch boundary. Keep the compact checks below as a
+    # dependency-safe fallback for minimal installations or malformed
+    # third-party schemas.
+    if schema:
+        try:
+            from jsonschema import validators
+            validator_cls = validators.validator_for(schema)
+            validator_cls.check_schema(schema)
+            errors = sorted(
+                validator_cls(schema).iter_errors(parsed),
+                key=lambda item: list(item.absolute_path),
+            )
+            if errors:
+                first = errors[0]
+                path = ".".join(str(part) for part in first.absolute_path)
+                location = f" at '{path}'" if path else ""
+                return None, f"schema validation failed{location}: {first.message}", schema
+            return parsed, None, schema
+        except Exception:
+            pass
+
+    required = schema.get("required") if isinstance(schema, dict) else None
+    if isinstance(required, list):
+        missing = [str(key) for key in required if str(key) not in parsed]
+        if missing:
+            return None, f"missing required properties: {', '.join(missing)}", schema
+
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    if isinstance(properties, dict):
+        for key, value in parsed.items():
+            prop = properties.get(key)
+            if not isinstance(prop, dict):
+                continue
+            expected = prop.get("type")
+            if expected is not None and not _json_value_matches_type(value, expected):
+                return None, f"property '{key}' must have type {expected}", schema
+            enum = prop.get("enum")
+            if isinstance(enum, list) and value not in enum:
+                return None, f"property '{key}' must be one of {enum}", schema
+    return parsed, None, schema
+
+
+def _tool_argument_error_content(tool_name: str, error: str, schema: dict) -> str:
+    rendered = json.dumps(schema or {"type": "object"}, ensure_ascii=False, sort_keys=True)
+    return (
+        f"Error: Invalid arguments for tool '{tool_name}'; tool was not executed. "
+        f"{error}. Retry the same tool with arguments matching this JSON schema: {rendered}"
+    )
+
+
+def _phantom_forced_tool_repair_supported(agent: Any) -> bool:
+    """Keep forced repair narrow to the small local Phantom profile."""
+    model = str(getattr(agent, "model", "") or "").lower().split("/")[-1]
+    return (
+        (model == "phantom" or model.startswith("phantom:"))
+        and not model.startswith("phantom-unleashed")
+        and getattr(agent, "api_mode", "chat_completions") == "chat_completions"
+        and not getattr(agent, "_force_text_tool_bridge", False)
+    )
+
+
+def _force_same_tool_choice(api_kwargs: dict, agent: Any, tool_name: str) -> bool:
+    """Apply a provider-supported one-call tool choice to the wire payload."""
+    if (
+        not tool_name
+        or getattr(agent, "api_mode", "") != "chat_completions"
+        or not api_kwargs.get("tools")
+    ):
+        return False
+    api_kwargs["tool_choice"] = {
+        "type": "function",
+        "function": {"name": tool_name},
+    }
+    return True
+
+
+def _append_tool_argument_recovery(
+    agent: Any,
+    assistant_message: Any,
+    finish_reason: str,
+    messages: list[dict],
+    failures: dict[str, tuple[str, dict]],
+) -> None:
+    """Pair every rejected call with a tool result; execute none of the batch."""
+    messages.append(agent._build_assistant_message(assistant_message, finish_reason))
+    for call in assistant_message.tool_calls:
+        failure = failures.get(str(call.id))
+        if failure is None:
+            content = "Skipped: another tool call in this response had invalid arguments."
+        else:
+            error, schema = failure
+            content = _tool_argument_error_content(call.function.name, error, schema)
+        messages.append(
+            {
+                "role": "tool",
+                "name": call.function.name,
+                "tool_call_id": call.id,
+                "content": content,
+            }
+        )
+
+
 def _sync_failover_system_message(agent, api_messages, active_system_prompt):
     """Refresh the in-flight system message after a provider failover.
 
@@ -1031,9 +1246,12 @@ def run_conversation(
     final_response = None
     interrupted = False
     failed = False
-    codex_ack_continuations = 0
+    execution_ack_continuations = 0
     length_continue_retries = 0
     truncated_tool_call_retries = 0
+    execution_refusal_retries = 0
+    forced_tool_repair_pending: Optional[str] = None
+    forced_tool_repair_attempted = False
     truncated_response_parts: List[str] = []
     compression_attempts = 0
     # One resolved per-turn compression attempt cap, shared by every site that
@@ -1069,12 +1287,144 @@ def run_conversation(
     # over instead of spinning. Reset here so each turn starts fresh. See #26080.
     agent._auth_pool_refresh_counts = {}
 
-    # Reset the per-turn usage holder forwarded to the context engine's
-    # on_turn_complete() observation hook. Set after each successful provider
-    # response (see below); left as None on turns that never reach a response
-    # (early failure / interrupt) so the hook receives None rather than a
-    # stale prior turn's usage.
+    _auto_media_kind = _phantom_media_request_kind(original_user_message)
+    if _auto_media_kind and "phantom" in str(getattr(agent, "model", "") or "").lower():
+        try:
+            final_response = _run_phantom_auto_media_request(
+                _auto_media_kind,
+                _summarize_user_message_for_log(original_user_message),
+                effective_task_id,
+            )
+            _turn_exit_reason = f"phantom_auto_{_auto_media_kind}_generation"
+        except Exception as exc:
+            logger.warning("Phantom auto media routing failed: %s", exc, exc_info=True)
+            final_response = f"Media generation failed: {exc}"
+            _turn_exit_reason = f"phantom_auto_{_auto_media_kind}_generation_error"
+
+        from agent.turn_finalizer import finalize_turn
+        return finalize_turn(
+            agent,
+            final_response=final_response,
+            api_call_count=api_call_count,
+            interrupted=interrupted,
+            failed=failed,
+            messages=messages,
+            conversation_history=conversation_history,
+            effective_task_id=effective_task_id,
+            turn_id=turn_id,
+            user_message=user_message,
+            original_user_message=original_user_message,
+            _should_review_memory=_should_review_memory,
+            _turn_exit_reason=_turn_exit_reason,
+            _pending_verification_response=_pending_verification_response,
+            _pending_verification_response_previewed=_pending_verification_response_previewed,
+        )
+
+    # Phantom keeps execution local while ChatGPT Plus supplies either a
+    # direct general-knowledge answer or a compact private execution brief.
+    # Bridge failure is fail-open so local work remains available offline.
+    # Initialize state used by the shared finalizer before any early return.
+    # The supervisor path should have the same lifecycle semantics as a normal
+    # provider response, even though it does not make a local model call.
     agent._last_turn_usage = None
+    _phantom_execution_brief = None
+
+    try:
+        from agent.phantom_supervisor import (
+            ask_bridge,
+            ask_execution_plan,
+            classify_chatgpt_effort,
+            execution_chatgpt_effort,
+            fast_execution_plan,
+            format_execution_brief,
+            instant_phantom_reply,
+            phantom_lane_status,
+            should_plan_execution,
+            should_supervise,
+            subscription_bridge_enabled,
+        )
+        from agent.turn_finalizer import finalize_turn
+
+        _supervisor_text = _summarize_user_message_for_log(original_user_message)
+        _reasoning_bridge_enabled = subscription_bridge_enabled("reasoning")
+        _instant_response = instant_phantom_reply(
+            getattr(agent, "model", ""),
+            _supervisor_text,
+        )
+        if _instant_response:
+            return finalize_turn(
+                agent,
+                final_response=_instant_response,
+                api_call_count=0,
+                interrupted=False,
+                failed=False,
+                messages=messages,
+                conversation_history=conversation_history,
+                effective_task_id=effective_task_id,
+                turn_id=turn_id,
+                user_message=user_message,
+                original_user_message=original_user_message,
+                _should_review_memory=_should_review_memory,
+                _turn_exit_reason="phantom_instant_social_reply",
+                _pending_verification_response=None,
+                _pending_verification_response_previewed=False,
+            )
+        if should_supervise(
+            getattr(agent, "model", ""),
+            _supervisor_text,
+            enabled=_reasoning_bridge_enabled,
+        ):
+            _supervisor_effort = classify_chatgpt_effort(_supervisor_text)
+            agent._emit_wait_notice(phantom_lane_status(_supervisor_effort))
+            _supervisor_response = ask_bridge(
+                _supervisor_text,
+                conversation_history,
+                allow_paid_bridge=_reasoning_bridge_enabled,
+                effort=_supervisor_effort,
+            )
+            if _supervisor_response:
+                return finalize_turn(
+                    agent,
+                    final_response=_supervisor_response,
+                    api_call_count=0,
+                    interrupted=False,
+                    failed=False,
+                    messages=messages,
+                    conversation_history=conversation_history,
+                    effective_task_id=effective_task_id,
+                    turn_id=turn_id,
+                    user_message=user_message,
+                    original_user_message=original_user_message,
+                    _should_review_memory=_should_review_memory,
+                    _turn_exit_reason="phantom_chatgpt_supervisor",
+                    _pending_verification_response=None,
+                    _pending_verification_response_previewed=False,
+                )
+        if should_plan_execution(getattr(agent, "model", ""), _supervisor_text):
+            _supervisor_plan = fast_execution_plan(_supervisor_text)
+            if _supervisor_plan:
+                agent._emit_wait_notice(phantom_lane_status("instant", direct=True))
+            else:
+                _execution_effort = execution_chatgpt_effort(_supervisor_text)
+                agent._emit_wait_notice(phantom_lane_status(_execution_effort))
+                _supervisor_plan = ask_execution_plan(
+                    _supervisor_text,
+                    history=conversation_history,
+                    allow_paid_bridge=_reasoning_bridge_enabled,
+                    effort=_execution_effort,
+                )
+            if _supervisor_plan:
+                _phantom_execution_brief = format_execution_brief(
+                    _supervisor_text,
+                    _supervisor_plan,
+                )
+                logger.info(
+                    "Phantom bridge-first execution brief ready: chars=%d session=%s",
+                    len(_phantom_execution_brief),
+                    getattr(agent, "session_id", None) or "-",
+                )
+    except Exception as exc:
+        logger.debug("Phantom supervisor routing failed open: %s", exc, exc_info=True)
 
     # Optional opt-in runtime: if api_mode == codex_app_server, hand the
     # turn to the codex app-server subprocess (terminal/file ops/patching
@@ -1306,6 +1656,18 @@ def run_conversation(
                 # ``_flush_messages_to_session_db``).
                 api_msg["content"] = _api_content
 
+            # Execution-recovery guidance is deliberately API-only and attached
+            # to the CURRENT user turn.  Never persist a synthetic user message
+            # mid-loop: that breaks strict role alternation and poisons prompt
+            # caching on every later turn.
+            if idx == current_turn_user_idx and msg.get("role") == "user":
+                from agent.execution_policy import append_runtime_nudge
+
+                api_msg["content"] = append_runtime_nudge(
+                    api_msg.get("content"),
+                    getattr(agent, "_runtime_turn_nudge", None),
+                )
+
             # For ALL assistant messages, pass reasoning back to the API
             # This ensures multi-turn reasoning context is preserved
             agent._copy_reasoning_content_for_api(msg, api_msg)
@@ -1368,6 +1730,8 @@ def run_conversation(
         effective_system = active_system_prompt or ""
         if agent.ephemeral_system_prompt:
             effective_system = (effective_system + "\n\n" + agent.ephemeral_system_prompt).strip()
+        if _phantom_execution_brief:
+            effective_system = (effective_system + "\n\n" + _phantom_execution_brief).strip()
         if effective_system:
             api_messages = [{"role": "system", "content": effective_system}] + api_messages
 
@@ -1780,7 +2144,10 @@ def run_conversation(
         else:
             # Animated thinking spinner in quiet mode
             face = random.choice(KawaiiSpinner.get_thinking_faces())
-            verb = random.choice(KawaiiSpinner.get_thinking_verbs())
+            if "phantom" in str(getattr(agent, "model", "") or "").lower():
+                verb = random.choice(KawaiiSpinner.get_phantom_thinking_quips())
+            else:
+                verb = random.choice(KawaiiSpinner.get_thinking_verbs())
             if agent.thinking_callback:
                 # CLI TUI mode: use prompt_toolkit widget instead of raw spinner
                 # (works in both streaming and non-streaming modes)
@@ -1871,6 +2238,13 @@ def run_conversation(
                 # isn't sent with stale, primary-shaped reasoning fields.
                 agent._reapply_reasoning_echo_for_provider(api_messages)
                 api_kwargs = agent._build_api_kwargs(api_messages)
+                if forced_tool_repair_pending:
+                    _repair_name = forced_tool_repair_pending
+                    forced_tool_repair_pending = None
+                    if _force_same_tool_choice(api_kwargs, agent, _repair_name):
+                        agent._emit_status(
+                            f"↻ Repairing invalid {_repair_name} arguments with its schema"
+                        )
                 if agent._force_ascii_payload:
                     _sanitize_structure_non_ascii(api_kwargs)
                 if agent.api_mode == "codex_responses":
@@ -3428,6 +3802,66 @@ def run_conversation(
                     reason=classified.reason.value,
                 )
 
+                # Provider/model compatibility recovery: native structured
+                # tools are preferred, but they are not a prerequisite for the
+                # PhantomBot agent contract. If an endpoint explicitly rejects
+                # tool/function schemas, retry the SAME logical turn through
+                # the API-only text tool bridge. Canonical history/tools are not
+                # mutated, so model switches and prompt caching stay sane.
+                try:
+                    from agent.execution_policy import (
+                        looks_like_native_tooling_unsupported_error,
+                    )
+
+                    _native_tools_rejected = (
+                        bool(agent.valid_tool_names)
+                        and getattr(agent, "_text_tool_fallback", True)
+                        and not getattr(agent, "_force_text_tool_bridge", False)
+                        and looks_like_native_tooling_unsupported_error(api_error)
+                    )
+                except Exception:
+                    _native_tools_rejected = False
+
+                if _native_tools_rejected:
+                    agent._force_text_tool_bridge = True
+                    logger.warning(
+                        "Native tool schema rejected; enabling compatibility tool "
+                        "mode for model=%s provider=%s",
+                        agent.model,
+                        agent.provider,
+                    )
+                    agent._emit_status(
+                        "↻ This model endpoint rejected native tool schemas; "
+                        "switching to compatibility tool mode."
+                    )
+                    continue
+
+                # OpenRouter can reject before generation when max_tokens is
+                # larger than the key can afford for this request:
+                # "requires more credits, or fewer max_tokens ... can only
+                # afford N". That is an oversized output reservation, not
+                # necessarily exhausted funds. Retry once with the affordable
+                # output cap before billing recovery rotates/fails the turn.
+                _affordable_out = parse_available_output_tokens_from_error(
+                    str(api_error)
+                )
+                if (
+                    _affordable_out is not None
+                    and status_code == 402
+                    and "max_tokens" in str(api_error).lower()
+                    and compression_attempts <= max_compression_attempts
+                ):
+                    safe_out = max(1, _affordable_out - 64)
+                    agent._ephemeral_max_output_tokens = safe_out
+                    compression_attempts += 1
+                    agent._buffer_vprint(
+                        f"⚠️  Output reservation too large for current "
+                        f"OpenRouter key — retrying with max_tokens={safe_out:,} "
+                        f"(affordable={_affordable_out:,})"
+                    )
+                    _retry.restart_with_compressed_messages = True
+                    break
+
                 if (
                     classified.reason == FailoverReason.billing
                     and _is_nous_inference_route(
@@ -3636,6 +4070,31 @@ def run_conversation(
                     print(f"{agent.log_prefix}     • For Claude Code: run 'claude /login' to refresh, then retry")
                     print(f"{agent.log_prefix}     • Legacy cleanup: hermes config set ANTHROPIC_TOKEN \"\"")
                     print(f"{agent.log_prefix}     • Clear stale keys: hermes config set ANTHROPIC_API_KEY \"\"")
+
+                # Unsupported thinking control recovery. Ollama returns this
+                # deterministic 400 when stale/unknown capability metadata
+                # caused us to send reasoning_effort to a non-thinking model.
+                # Remember the exact route and rebuild once without any
+                # reasoning controls; canonical messages and the user's saved
+                # effort preference remain unchanged.
+                if (
+                    classified.reason == FailoverReason.thinking_unsupported
+                    and not _retry.unsupported_thinking_retry_attempted
+                ):
+                    _retry.unsupported_thinking_retry_attempted = True
+                    from agent.chat_completion_helpers import (
+                        suppress_reasoning_for_current_route,
+                    )
+
+                    suppress_reasoning_for_current_route(agent)
+                    logger.warning(
+                        "%sProvider rejected thinking controls for %s/%s; "
+                        "retrying once without them",
+                        agent.log_prefix,
+                        getattr(agent, "provider", ""),
+                        getattr(agent, "model", ""),
+                    )
+                    continue
 
                 # Thinking block signature recovery.
                 #
@@ -5190,6 +5649,30 @@ def run_conversation(
                 else:
                     assistant_message.content = str(raw)
 
+            # Some models/endpoints leak valid function calls into ordinary text
+            # instead of the provider's structured tool_calls field.  Recover
+            # those calls for every model, but only when the referenced tool name
+            # was actually advertised.  Schema validation, approvals, guardrails,
+            # and dispatch still happen in the normal executor below.
+            if not getattr(assistant_message, "tool_calls", None):
+                try:
+                    from agent.execution_policy import recover_embedded_tool_calls
+
+                    if recover_embedded_tool_calls(
+                        assistant_message,
+                        set(agent.valid_tool_names),
+                    ):
+                        finish_reason = "tool_calls"
+                        assistant_message.finish_reason = "tool_calls"
+                        logger.warning(
+                            "Recovered text-emitted tool call into structured execution "
+                            "(model=%s provider=%s)",
+                            agent.model,
+                            agent.provider,
+                        )
+                except Exception:
+                    logger.debug("Embedded tool-call recovery failed", exc_info=True)
+
             try:
                 from hermes_cli.plugins import (
                     has_hook,
@@ -5522,6 +6005,22 @@ def run_conversation(
                     continue
                 # Reset retry counter on successful tool call validation
                 agent._invalid_tool_retries = 0
+
+                # Validate the advertised schema before dispatch. JSON syntax
+                # errors keep the established recovery path below; valid JSON
+                # with the wrong object shape/required fields/types is rejected
+                # here for every model and can never reach a tool handler.
+                invalid_schema_args: list[tuple[Any, str, dict]] = []
+                for tc in assistant_message.tool_calls:
+                    if tc.function.name not in agent.valid_tool_names:
+                        continue
+                    _parsed_args, _arg_error, _arg_schema = _validate_tool_call_arguments(
+                        agent.tools,
+                        tc.function.name,
+                        tc.function.arguments,
+                    )
+                    if _arg_error and not _arg_error.startswith("arguments are not valid JSON"):
+                        invalid_schema_args.append((tc, _arg_error, _arg_schema))
                 
                 # Validate tool call arguments are valid JSON
                 # Handle empty strings as empty objects (common model quirk)
@@ -5552,6 +6051,28 @@ def run_conversation(
                         invalid_json_args.append((tc.function.name, str(e)))
                 
                 if invalid_json_args:
+                    if (
+                        _phantom_forced_tool_repair_supported(agent)
+                        and not forced_tool_repair_attempted
+                    ):
+                        _failed_names = {name for name, _ in invalid_json_args}
+                        _failures: dict[str, tuple[str, dict]] = {}
+                        _repair_name = ""
+                        for tc in assistant_message.tool_calls:
+                            if tc.function.name not in _failed_names:
+                                continue
+                            _schema = _tool_schema_for_name(agent.tools, tc.function.name)
+                            _err = next(err for name, err in invalid_json_args if name == tc.function.name)
+                            _failures[str(tc.id)] = (f"arguments are not valid JSON: {_err}", _schema)
+                            _repair_name = _repair_name or tc.function.name
+                        _append_tool_argument_recovery(
+                            agent, assistant_message, finish_reason, messages, _failures
+                        )
+                        forced_tool_repair_attempted = True
+                        forced_tool_repair_pending = _repair_name
+                        agent._invalid_json_retries = 0
+                        continue
+
                     # Check if the invalid JSON is due to truncation rather
                     # than a model formatting mistake.  Routers sometimes
                     # rewrite finish_reason from "length" to "tool_calls",
@@ -5627,6 +6148,22 @@ def run_conversation(
                 
                 # Reset retry counter on successful JSON validation
                 agent._invalid_json_retries = 0
+
+                if invalid_schema_args:
+                    _failures = {
+                        str(tc.id): (error, schema)
+                        for tc, error, schema in invalid_schema_args
+                    }
+                    _append_tool_argument_recovery(
+                        agent, assistant_message, finish_reason, messages, _failures
+                    )
+                    if (
+                        _phantom_forced_tool_repair_supported(agent)
+                        and not forced_tool_repair_attempted
+                    ):
+                        forced_tool_repair_attempted = True
+                        forced_tool_repair_pending = invalid_schema_args[0][0].function.name
+                    continue
 
                 # ── Post-call guardrails ──────────────────────────
                 assistant_message.tool_calls = agent._cap_delegate_task_calls(
@@ -5743,6 +6280,28 @@ def run_conversation(
                 messages.append(assistant_msg)
                 if not duplicate_previous_interim:
                     agent._emit_interim_assistant_message(assistant_msg)
+
+                # Record tool intent at the current user-turn boundary.  This is
+                # model/provider-neutral runtime state; it must not be inferred
+                # by scanning the whole persisted session (an old tool call used
+                # to disable no-action recovery on every later turn).
+                _turn_calls = list(getattr(assistant_message, "tool_calls", None) or [])
+                agent._turn_tool_call_count = int(
+                    getattr(agent, "_turn_tool_call_count", 0) or 0
+                ) + len(_turn_calls)
+                _turn_tool_names = getattr(agent, "_turn_tool_names", None)
+                if not isinstance(_turn_tool_names, set):
+                    _turn_tool_names = set()
+                    agent._turn_tool_names = _turn_tool_names
+                for _tc in _turn_calls:
+                    _name = getattr(getattr(_tc, "function", None), "name", None)
+                    if _name:
+                        _turn_tool_names.add(str(_name))
+                if _turn_calls:
+                    # The recovery hint did its job.  Do not keep paying for it
+                    # through every later tool round unless the model stalls again.
+                    agent._runtime_turn_nudge = None
+                    execution_ack_continuations = 0
 
                 # Mixed batch: error-result the invalid calls and strip them
                 # from the execution set. The assistant message above keeps
@@ -6277,15 +6836,18 @@ def run_conversation(
                 agent._emit_pending_fallback_notice()
                 agent._clear_status_buffer()
 
-                from agent.agent_runtime_helpers import (
-                    intent_ack_continuation_mode,
+                from agent.agent_runtime_helpers import intent_ack_continuation_mode
+                from agent.execution_policy import (
+                    build_execution_recovery_nudge,
+                    is_false_capability_refusal,
+                    turn_has_tool_activity,
                 )
 
                 _ack_mode = intent_ack_continuation_mode(agent)
                 if (
                     _ack_mode != "off"
                     and agent.valid_tool_names
-                    and codex_ack_continuations < 2
+                    and execution_ack_continuations < 2
                     and agent._looks_like_codex_intermediate_ack(
                         user_message=user_message,
                         assistant_content=final_response,
@@ -6293,27 +6855,36 @@ def run_conversation(
                         require_workspace=(_ack_mode == "codex_only"),
                     )
                 ):
-                    codex_ack_continuations += 1
-                    interim_msg = agent._build_assistant_message(assistant_message, "incomplete")
-                    messages.append(interim_msg)
+                    execution_ack_continuations += 1
+                    interim_msg = agent._build_assistant_message(
+                        assistant_message, "incomplete"
+                    )
+                    # Show the user what the model said, but never persist it as
+                    # an answered assistant turn followed by a fake user row.
+                    # The retry instruction rides only on the API copy of the
+                    # real current user message, preserving transcript roles and
+                    # the conversation cache after this turn ends.
                     agent._emit_interim_assistant_message(interim_msg)
-
-                    continue_msg = {
-                        "role": "user",
-                        "content": (
-                            "[System: Continue now. Execute the required tool calls and only "
-                            "send your final answer after completing the task.]"
-                        ),
-                    }
-                    messages.append(continue_msg)
-                    agent._session_messages = messages
+                    agent._runtime_turn_nudge = build_execution_recovery_nudge(
+                        _summarize_user_message_for_log(original_user_message)
+                    )
+                    if (
+                        execution_ack_continuations >= 2
+                        and getattr(agent, "_text_tool_fallback", True)
+                        and not getattr(agent, "_force_text_tool_bridge", False)
+                    ):
+                        agent._force_text_tool_bridge = True
+                        agent._emit_status(
+                            "↻ Model kept narrating instead of invoking tools; "
+                            "switching this model to compatibility tool mode."
+                        )
                     # An acknowledgment is explicitly non-final. Do not let its
-                    # text suppress iteration-limit summarization if this
-                    # continuation consumes the remaining budget.
+                    # text suppress iteration-limit summarization if this retry
+                    # consumes the remaining budget.
                     final_response = None
                     continue
 
-                codex_ack_continuations = 0
+                execution_ack_continuations = 0
 
                 if truncated_response_parts:
                     final_response = "".join(truncated_response_parts) + final_response
@@ -6324,56 +6895,123 @@ def run_conversation(
                 
                 final_msg = agent._build_assistant_message(assistant_message, finish_reason)
 
-                # ── Dropped tool-call recovery (copilot/Claude) ────────
-                # Some providers (observed: claude-opus-4.8 / claude-sonnet-4.5
-                # on GitHub Copilot, ~2026-07) return finish_reason="tool_calls"
-                # while the parsed tool_calls array is empty — the model
-                # signalled it wanted to act but the payload shipped no call.
-                # Reaching finalization with that mismatch means the turn is
-                # about to end with the task unstarted (the narration, which may
-                # be in content or only in the reasoning field, gets treated as
-                # the final answer). Re-prompt (bounded to 3 CONSECUTIVE stalls;
-                # the budget resets after any successful tool round) to make the
-                # model emit the call instead of exiting. finish_reason="stop"
-                # text finishes never enter this guard.
+                # Capability/scope excuses are a runtime concern, not a model
+                # family concern. If the user asked for an executable action,
+                # PhantomBot actually has tools, and the selected model did not
+                # even try one this turn, give every model the same bounded
+                # recovery path. Phantom's optional supervisor can still add a
+                # private plan, but it is only an enhancement to this generic
+                # policy — never the gate.
+                _scope_refusal = (
+                    bool(agent.valid_tool_names)
+                    and not turn_has_tool_activity(agent, messages)
+                    and is_false_capability_refusal(
+                        original_user_message, final_response
+                    )
+                )
+
+                if _scope_refusal and execution_refusal_retries < 2:
+                    execution_refusal_retries += 1
+                    logger.warning(
+                        "Model capability refusal intercepted; retrying execution "
+                        "(%d/2, model=%s provider=%s)",
+                        execution_refusal_retries,
+                        agent.model,
+                        agent.provider,
+                    )
+                    agent._emit_status(
+                        "↻ Model claimed it could not act despite available tools; "
+                        f"retrying execution ({execution_refusal_retries}/2)"
+                    )
+
+                    _supervisor_plan = None
+                    if execution_refusal_retries == 1:
+                        try:
+                            from agent.phantom_supervisor import (
+                                ask_execution_plan,
+                                is_phantom_model,
+                            )
+
+                            if is_phantom_model(getattr(agent, "model", "")):
+                                _supervisor_plan = ask_execution_plan(
+                                    _summarize_user_message_for_log(
+                                        original_user_message
+                                    ),
+                                    final_response,
+                                    conversation_history,
+                                    allow_paid_bridge=subscription_bridge_enabled(
+                                        "reasoning"
+                                    ),
+                                )
+                        except Exception:
+                            logger.debug(
+                                "Optional Phantom execution supervisor unavailable",
+                                exc_info=True,
+                            )
+
+                    # If a model repeats the false refusal under native tool
+                    # schemas, try the provider-neutral text bridge on the final
+                    # recovery attempt. This also covers OpenAI-compatible
+                    # endpoints that accept the request but silently fail to
+                    # expose the functions to the model.
+                    if (
+                        execution_refusal_retries >= 2
+                        and getattr(agent, "_text_tool_fallback", True)
+                        and not getattr(agent, "_force_text_tool_bridge", False)
+                    ):
+                        agent._force_text_tool_bridge = True
+                        agent._emit_status(
+                            "↻ Native tools were not being used; switching this "
+                            "model to compatibility tool mode."
+                        )
+
+                    agent._runtime_turn_nudge = build_execution_recovery_nudge(
+                        _summarize_user_message_for_log(original_user_message),
+                        supervisor_plan=_supervisor_plan,
+                    )
+                    final_response = None
+                    continue
+
+                # ── Dropped structured-tool recovery ─────────────────
+                # Any provider can occasionally return finish_reason=tool_calls
+                # while shipping an empty parsed tool array (proxy truncation,
+                # adapter bug, malformed stream).  Treat that as a transport-level
+                # execution stall, not as a Claude/Copilot special case.
                 if (
                     finish_reason == "tool_calls"
                     and not assistant_message.tool_calls
                     and getattr(agent, "_dropped_toolcall_retries", 0) < 3
                 ):
-                    agent._dropped_toolcall_retries = getattr(agent, "_dropped_toolcall_retries", 0) + 1
+                    agent._dropped_toolcall_retries = (
+                        getattr(agent, "_dropped_toolcall_retries", 0) + 1
+                    )
                     logger.warning(
-                        "finish_reason=tool_calls with empty tool_calls array "
-                        "(narration only) — re-prompting to emit the call "
-                        "(retry %d/3, model=%s provider=%s)",
-                        agent._dropped_toolcall_retries, agent.model, agent.provider,
+                        "finish_reason=tool_calls with empty tool_calls array — "
+                        "retrying execution (retry %d/3, model=%s provider=%s)",
+                        agent._dropped_toolcall_retries,
+                        agent.model,
+                        agent.provider,
                     )
                     agent._emit_status(
                         "↻ Model signaled a tool call but sent none — "
-                        f"re-prompting ({agent._dropped_toolcall_retries}/3)"
+                        f"retrying ({agent._dropped_toolcall_retries}/3)"
                     )
-                    # Both halves of the re-prompt pair are ephemeral recovery
-                    # scaffolding (mirrors the empty-response nudge pattern):
-                    # the interim narration-only assistant turn exists solely to
-                    # keep role alternation valid for the nudge, and the nudge
-                    # exists solely to drive the retry. Flag both so the
-                    # persistence layer never writes them to the durable
-                    # transcript and the finalization pop below can strip an
-                    # unanswered tail pair. A recovered (answered) pair stays
-                    # buried mid-list in live memory but is skipped by the
-                    # flush regardless of position.
-                    final_msg["_dropped_toolcall_nudge"] = True
-                    messages.append(final_msg)
-                    messages.append({
-                        "role": "user",
-                        "content": (
-                            "Your previous turn indicated a tool call but none was "
-                            "included. Do not narrate a plan or restate intent — issue "
-                            "the actual tool call now to continue the task."
-                        ),
-                        "_dropped_toolcall_nudge": True,
-                    })
-                    agent._session_messages = messages
+                    if (
+                        agent._dropped_toolcall_retries >= 2
+                        and getattr(agent, "_text_tool_fallback", True)
+                        and not getattr(agent, "_force_text_tool_bridge", False)
+                    ):
+                        agent._force_text_tool_bridge = True
+                        agent._emit_status(
+                            "↻ Structured tool calls are not arriving intact; "
+                            "switching this model to compatibility tool mode."
+                        )
+                    agent._runtime_turn_nudge = (
+                        "[Runtime continuation: Your previous output signaled a tool "
+                        "call but the provider delivered no executable call. Continue "
+                        "the same user task now and issue the actual available tool "
+                        "call. Do not stop at narration.]"
+                    )
                     final_response = None
                     continue
 
@@ -6395,6 +7033,7 @@ def run_conversation(
                         or messages[-1].get("_empty_recovery_synthetic")
                         or messages[-1].get("_empty_terminal_sentinel")
                         or messages[-1].get("_dropped_toolcall_nudge")
+                        or messages[-1].get("_phantom_refusal_nudge")
                     )
                 ):
                     messages.pop()

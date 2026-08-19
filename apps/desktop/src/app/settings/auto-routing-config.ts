@@ -2,7 +2,7 @@ import type { HermesConfigRecord } from '@/types/hermes'
 
 import { getNested, setNested } from './helpers'
 
-export const AUTO_ROUTING_LANES = ['reasoning', 'image', 'video'] as const
+export const AUTO_ROUTING_LANES = ['reasoning', 'image', 'video', 'coding'] as const
 
 export type AutoRoutingLane = (typeof AUTO_ROUTING_LANES)[number]
 
@@ -21,9 +21,9 @@ export interface PhantomBotAutoRouting {
 
 export const AUTO_ROUTING_OPTIONS: Record<AutoRoutingLane, readonly AutoRoutingOption[]> = {
   reasoning: [
+    { access: 'subscription', id: 'chatgpt.subscription', label: 'ChatGPT Plus subscription' },
     { access: 'model', id: 'openrouter.glm-5.2', label: 'OpenRouter · GLM 5.2' },
     { access: 'model', id: 'openrouter.kimi-k3', label: 'OpenRouter · Kimi K3' },
-    { access: 'api', id: 'openai.gpt-5.1-codex', label: 'OpenAI · GPT-5.1 Codex' },
     { access: 'api', id: 'anthropic.claude-sonnet-5', label: 'Anthropic · Claude Sonnet 5' },
     { access: 'api', id: 'gemini.gemini-2.5-flash', label: 'Gemini · 2.5 Flash' }
   ],
@@ -38,15 +38,19 @@ export const AUTO_ROUTING_OPTIONS: Record<AutoRoutingLane, readonly AutoRoutingO
     { access: 'api', id: 'gemini.video', label: 'Gemini · Video API' },
     { access: 'subscription', id: 'higgsfield.subscription', label: 'Higgsfield subscription · Video' },
     { access: 'subscription', id: 'gemini.subscription', label: 'Gemini subscription · Video' }
+  ],
+  coding: [
+    { access: 'model', id: 'phantom-local', label: 'Phantom · Local execution' }
   ]
 }
 
 export const DEFAULT_AUTO_ROUTING: PhantomBotAutoRouting = {
   version: 1,
   routes: {
-    reasoning: { option_id: 'openrouter.glm-5.2' },
-    image: { option_id: 'openai.gpt-image-1' },
-    video: { option_id: 'higgsfield.subscription' }
+    reasoning: { option_id: 'chatgpt.subscription' },
+    image: { option_id: 'chatgpt.subscription' },
+    video: { option_id: 'higgsfield.subscription' },
+    coding: { option_id: 'phantom-local' }
   }
 }
 
@@ -82,7 +86,8 @@ export function autoRoutingFromConfig(config: HermesConfigRecord): PhantomBotAut
     routes: {
       reasoning: { option_id: routeOptionId(routeRecord.reasoning, 'reasoning') },
       image: { option_id: routeOptionId(routeRecord.image, 'image') },
-      video: { option_id: routeOptionId(routeRecord.video, 'video') }
+      video: { option_id: routeOptionId(routeRecord.video, 'video') },
+      coding: { option_id: routeOptionId(routeRecord.coding, 'coding') }
     }
   }
 }

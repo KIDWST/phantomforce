@@ -301,6 +301,49 @@ def test_current_custom_endpoint_passthrough_marks_current_row(monkeypatch):
     assert row["models"] == ["glm-5.1", "qwen3"]
 
 
+@pytest.mark.parametrize(
+    ("status", "authenticated"),
+    [
+        ({"configured": False, "logged_in": False}, False),
+        ({"configured": True, "logged_in": True}, True),
+    ],
+)
+def test_chatgpt_plus_picker_row_reports_live_bridge_status(
+    monkeypatch, status, authenticated
+):
+    """The picker always offers Plus, but never pretends setup is complete."""
+    import agent.models_dev as models_dev
+    import hermes_cli.auth as auth
+    import hermes_cli.models as models
+    import hermes_cli.providers as providers
+
+    plus_overlay = providers.HERMES_OVERLAYS["chatgpt-plus"]
+    monkeypatch.setattr(models_dev, "PROVIDER_TO_MODELS_DEV", {})
+    monkeypatch.setattr(models_dev, "fetch_models_dev", lambda: {})
+    monkeypatch.setattr(providers, "HERMES_OVERLAYS", {"chatgpt-plus": plus_overlay})
+    monkeypatch.setattr(models, "CANONICAL_PROVIDERS", [])
+    monkeypatch.setattr(models, "_PROVIDER_MODELS", {"chatgpt-plus": ["chatgpt-plus"]})
+    monkeypatch.setattr(models, "OPENROUTER_MODELS", [])
+    monkeypatch.setattr(models, "get_curated_nous_model_ids", lambda: [])
+    monkeypatch.setattr(
+        models, "cached_provider_model_ids", lambda slug: ["chatgpt-plus"]
+    )
+    monkeypatch.setattr(auth, "_load_auth_store", lambda: {})
+    monkeypatch.setattr(auth, "get_api_key_provider_status", lambda slug: status)
+    monkeypatch.setattr(model_switch, "_credential_pool_is_usable", lambda slug: False)
+
+    rows = model_switch.list_authenticated_providers(
+        for_picker=True,
+        probe_custom_providers=False,
+        max_models=10,
+    )
+
+    assert [row["slug"] for row in rows] == ["chatgpt-plus"]
+    assert rows[0]["models"] == ["chatgpt-plus"]
+    assert rows[0]["authenticated"] is authenticated
+    assert ("warning" in rows[0]) is (not authenticated)
+
+
 # ---------------------------------------------------------------------------
 # list_authenticated_providers: alias/canonical de-dup for Kimi (#49439)
 # ---------------------------------------------------------------------------

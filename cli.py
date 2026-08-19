@@ -3163,8 +3163,23 @@ def _termux_example_image_path(filename: str = "cat.png") -> str:
     ]
     for root in candidates:
         if os.path.isdir(root):
-            return os.path.join(root, "Pictures", filename)
-    return os.path.join("~/storage/shared", "Pictures", filename)
+            return f"{root.rstrip('/')}/Pictures/{filename}"
+    return f"~/storage/shared/Pictures/{filename}"
+
+
+def _expand_cli_user_path(value: str) -> str:
+    """Expand ``~`` consistently in native and POSIX launch environments.
+
+    ``ntpath.expanduser`` ignores ``HOME`` on modern Python, but HOME is the
+    intentional override used by Termux/WSL bridges and isolated launches.
+    Honor an explicit HOME first and retain the platform fallback otherwise.
+    """
+    if value == "~" or value.startswith(("~/", "~\\")):
+        home = os.environ.get("HOME", "").strip()
+        if home:
+            tail = value[2:] if len(value) > 1 else ""
+            return os.path.join(home, tail) if tail else home
+    return os.path.expanduser(value)
 
 
 def _split_path_input(raw: str) -> tuple[str, str]:
@@ -3235,9 +3250,19 @@ def _resolve_attachment_path(raw_path: str) -> Path | None:
                 expanded = unquote(parsed.path or "")
                 if parsed.netloc and os.name == "nt":
                     expanded = f"//{parsed.netloc}{expanded}"
+                elif (
+                    os.name == "nt"
+                    and len(expanded) >= 3
+                    and expanded[0] == "/"
+                    and expanded[1].isalpha()
+                    and expanded[2] == ":"
+                ):
+                    # pathlib emits local file URIs as file:///C:/... while
+                    # native Windows paths must start at C:/..., not /C:/...
+                    expanded = expanded[1:]
         except Exception:
             expanded = token
-    expanded = os.path.expandvars(os.path.expanduser(expanded))
+    expanded = os.path.expandvars(_expand_cli_user_path(expanded))
     if os.name != "nt":
         normalized = expanded.replace("\\", "/")
         if len(normalized) >= 3 and normalized[1] == ":" and normalized[2] == "/" and normalized[0].isalpha():
@@ -9707,11 +9732,29 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin, CLIBillingMixin):
                             # Sanitize env to prevent credential leakage —
                             # quick commands run in the CLI process which
                             # has all API keys in os.environ.
-                            from tools.environments.local import _sanitize_subprocess_env
+                            from tools.environments.local import (
+                                _apply_windows_msys_bash_env_defaults,
+                                _find_bash,
+                                _sanitize_subprocess_env,
+                            )
                             sanitized_env = _sanitize_subprocess_env(os.environ.copy())
+                            run_command = exec_cmd
+                            run_with_shell = True
+                            if os.name == "nt":
+                                # Quick commands use the same shell language on
+                                # every supported platform.  cmd.exe does not
+                                # implement common snippets such as ``printf``
+                                # and interprets quoting differently, so route
+                                # Windows through the Git Bash runtime already
+                                # used by the terminal tool.
+                                _apply_windows_msys_bash_env_defaults(sanitized_env)
+                                run_command = [
+                                    _find_bash(), "--noprofile", "--norc", "-lc", exec_cmd,
+                                ]
+                                run_with_shell = False
                             from hermes_cli._subprocess_compat import windows_hide_flags
                             result = subprocess.run(
-                                exec_cmd, shell=True, capture_output=True,
+                                run_command, shell=run_with_shell, capture_output=True,
                                 text=True, encoding="utf-8", errors="replace", timeout=30, env=sanitized_env,
                                 # No console flash on Windows (#56747).
                                 creationflags=windows_hide_flags(),

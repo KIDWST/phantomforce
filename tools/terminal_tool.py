@@ -42,6 +42,8 @@ import threading
 import atexit
 import shutil
 import subprocess
+import tempfile
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -2097,6 +2099,107 @@ def _resolve_command_cwd(
     return get_session_cwd(session_key) or default_cwd
 
 
+def _ps_single_quoted(value: str) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _windows_shell_executable() -> str:
+    return (
+        shutil.which("pwsh.exe")
+        or shutil.which("pwsh")
+        or shutil.which("powershell.exe")
+        or str(Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
+    )
+
+
+def _launch_visible_windows_terminal(
+    *,
+    command: str,
+    cwd: str,
+    timeout: Optional[int],
+) -> dict[str, Any]:
+    """Launch a real visible Windows terminal for user-facing command runs."""
+    run_id = uuid.uuid4().hex[:12]
+    root = Path(tempfile.gettempdir()) / "PhantomBot" / "visible-terminal"
+    root.mkdir(parents=True, exist_ok=True)
+    command_script = root / f"phantom-visible-command-{run_id}.ps1"
+    wrapper_script = root / f"phantom-visible-wrapper-{run_id}.ps1"
+    log_file = root / f"phantom-visible-terminal-{run_id}.log"
+    status_file = root / f"phantom-visible-terminal-{run_id}.status.json"
+
+    command_script.write_text(
+        "$ErrorActionPreference = 'Continue'\n"
+        f"Set-Location -LiteralPath {_ps_single_quoted(cwd)}\n"
+        f"{command}\n"
+        "if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }\n",
+        encoding="utf-8",
+    )
+    wrapper_script.write_text(
+        "$ErrorActionPreference = 'Continue'\n"
+        "$host.UI.RawUI.WindowTitle = 'Phantom Terminal'\n"
+        f"$log = {_ps_single_quoted(str(log_file))}\n"
+        f"$status = {_ps_single_quoted(str(status_file))}\n"
+        f"$commandText = {_ps_single_quoted(command)}\n"
+        f"$cwd = {_ps_single_quoted(cwd)}\n"
+        "New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null\n"
+        "Set-Location -LiteralPath $cwd\n"
+        "Write-Host 'Phantom 1.0 terminal'\n"
+        "Write-Host ('Working directory: ' + $cwd)\n"
+        "Write-Host ('PS> ' + $commandText) -ForegroundColor Green\n"
+        "Write-Host ''\n"
+        "Start-Transcript -Path $log -Force | Out-Null\n"
+        f"& {_ps_single_quoted(_windows_shell_executable())} -NoProfile -ExecutionPolicy Bypass -File {_ps_single_quoted(str(command_script))}\n"
+        "$exitCode = if ($global:LASTEXITCODE -ne $null) { [int]$global:LASTEXITCODE } else { 0 }\n"
+        "Stop-Transcript | Out-Null\n"
+        "$payload = @{ exit_code = $exitCode; command = $commandText; cwd = $cwd; log = $log; completed_at = (Get-Date).ToString('o') } | ConvertTo-Json -Compress\n"
+        "Set-Content -LiteralPath $status -Value $payload -Encoding UTF8\n"
+        "Write-Host ''\n"
+        "Write-Host ('Exit code: ' + $exitCode)\n"
+        "Write-Host 'Press any key to close this Phantom terminal...'\n"
+        "$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')\n"
+        "exit $exitCode\n",
+        encoding="utf-8",
+    )
+
+    shell_exe = _windows_shell_executable()
+    creationflags = 0
+    if hasattr(subprocess, "CREATE_NEW_CONSOLE"):
+        creationflags |= subprocess.CREATE_NEW_CONSOLE
+
+    proc = subprocess.Popen(
+        [
+            shell_exe,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(wrapper_script),
+        ],
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=creationflags,
+    )
+
+    return {
+        "output": (
+            "Visible Phantom terminal opened on this Windows PC.\n"
+            f"Command: {command}\n"
+            f"Working directory: {cwd}\n"
+            "The command is running in the visible terminal window."
+        ),
+        "exit_code": 0,
+        "error": None,
+        "status": "visible_terminal_started",
+        "pid": proc.pid,
+        "visible": True,
+        "log_path": str(log_file),
+        "status_path": str(status_file),
+        "timeout": timeout,
+    }
+
+
 def terminal_tool(
     command: str,
     background: bool = False,
@@ -2106,6 +2209,7 @@ def terminal_tool(
     force: bool = False,
     workdir: Optional[str] = None,
     pty: bool = False,
+    visible: bool = False,
     notify_on_complete: bool = False,
     watch_patterns: Optional[List[str]] = None,
 ) -> str:
@@ -2121,6 +2225,7 @@ def terminal_tool(
         force: If True, skip dangerous command check (use after user confirms)
         workdir: Working directory for this command (optional, uses session cwd if not set)
         pty: If True, use pseudo-terminal for interactive CLI tools (local backend only)
+        visible: If True on local Windows, launch the command in a real visible PowerShell terminal window.
         notify_on_complete: If True and background=True, you'll be notified exactly once when the process exits. The right choice for almost every long task. MUTUALLY EXCLUSIVE with watch_patterns.
         watch_patterns: List of strings to watch for in background output. HARD rate limit: 1 notification per 15s per process. After 3 strike windows in a row, watch_patterns is disabled and the session is auto-promoted to notify_on_complete. Use ONLY for rare, one-shot mid-process signals on long-lived processes (server readiness, migration-done markers). NEVER use in loops/batch jobs — error patterns there will hit the strike limit and get disabled. MUTUALLY EXCLUSIVE with notify_on_complete — set one, not both.
 
@@ -2226,6 +2331,22 @@ def terminal_tool(
                     "output": "",
                     "exit_code": -1,
                     "error": guidance,
+                    "status": "error",
+                }, ensure_ascii=False)
+
+        if visible:
+            if background:
+                return json.dumps({
+                    "output": "",
+                    "exit_code": -1,
+                    "error": "visible=true cannot be combined with background=true. Use visible=true for a user-facing terminal window, or background=true for a tracked silent process.",
+                    "status": "error",
+                }, ensure_ascii=False)
+            if env_type != "local" or platform.system().lower() != "windows":
+                return json.dumps({
+                    "output": "",
+                    "exit_code": -1,
+                    "error": "visible=true is only supported for the local Windows terminal backend.",
                     "status": "error",
                 }, ensure_ascii=False)
 
@@ -2452,6 +2573,21 @@ def terminal_tool(
         from tools.approval import get_current_session_key
 
         session_key = get_current_session_key(default="") or (task_id or "")
+
+        if visible:
+            effective_cwd = _resolve_command_cwd(
+                workdir=workdir,
+                default_cwd=cwd,
+                session_key=session_key,
+            )
+            result_data = _launch_visible_windows_terminal(
+                command=command,
+                cwd=effective_cwd,
+                timeout=effective_timeout,
+            )
+            if approval_note:
+                result_data["approval"] = approval_note
+            return json.dumps(result_data, ensure_ascii=False)
 
         if background:
             # Spawn a tracked background process via the process registry.
@@ -3099,6 +3235,11 @@ TERMINAL_SCHEMA = {
                 "description": "Run in pseudo-terminal (PTY) mode for interactive CLI tools like Codex, Claude Code, or Python REPL. Only works with local and SSH backends. Default: false.",
                 "default": False
             },
+            "visible": {
+                "type": "boolean",
+                "description": "On local Windows, open a real visible Phantom PowerShell terminal window and run the command there. Use this whenever the user asks to run a command that should pop up or be visible on their PC. Do not combine with background=true. Default: false.",
+                "default": False
+            },
             "notify_on_complete": {
                 "type": "boolean",
                 "description": "When true (and background=true), you'll be automatically notified exactly once when the process finishes. **This is the right choice for almost every long-running task** — tests, builds, deployments, multi-item batch jobs, anything that takes over a minute and has a defined end. Use this and keep working on other things; the system notifies you on exit. MUTUALLY EXCLUSIVE with watch_patterns — when both are set, watch_patterns is dropped.",
@@ -3124,6 +3265,7 @@ def _handle_terminal(args, **kw):
         session_id=kw.get("session_id"),
         workdir=args.get("workdir"),
         pty=args.get("pty", False),
+        visible=args.get("visible", False),
         notify_on_complete=args.get("notify_on_complete", False),
         watch_patterns=args.get("watch_patterns"),
     )

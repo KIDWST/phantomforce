@@ -9,6 +9,7 @@ Two strategies:
 """
 
 import asyncio
+import socket
 
 import pytest
 
@@ -182,7 +183,10 @@ def test_deliver_wake_raises_after_exhausted_retries(monkeypatch):
     import gateway.wake as wake_mod
 
     monkeypatch.setattr(wake_mod, "_RETRY_DELAYS_SECONDS", (0.01,))
-    # Nothing is listening on this port.
-    adapter = ApiServerLikeAdapter(host="127.0.0.1", port=1, key="k")
+    # Reserve an ephemeral port, then close it so nothing is listening there.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        unused_port = probe.getsockname()[1]
+    adapter = ApiServerLikeAdapter(host="127.0.0.1", port=unused_port, key="k")
     with pytest.raises(RuntimeError, match="gave up"):
         asyncio.run(deliver_wake(adapter, text="x", session_id="sid"))

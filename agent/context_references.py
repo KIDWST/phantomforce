@@ -365,6 +365,10 @@ async def _default_url_fetcher(url: str) -> str:
 
 
 def _resolve_path(cwd: Path, target: str, *, allowed_root: Path | None = None) -> Path:
+    if target == "~" or target.startswith(("~/", "~\\")):
+        explicit_home = os.environ.get("HOME")
+        if explicit_home:
+            target = explicit_home + target[1:]
     path = Path(os.path.expanduser(target))
     if not path.is_absolute():
         path = cwd / path
@@ -379,7 +383,10 @@ def _resolve_path(cwd: Path, target: str, *, allowed_root: Path | None = None) -
 
 def _ensure_reference_path_allowed(path: Path) -> None:
     from hermes_constants import get_hermes_home
-    home = Path(os.path.expanduser("~")).resolve()
+    # On Windows, expanduser intentionally prefers USERPROFILE and ignores a
+    # test/sandbox HOME override. Context references are also used by isolated
+    # profiles, so an explicit HOME must be authoritative here.
+    home = Path(os.environ.get("HOME") or os.path.expanduser("~")).resolve()
     hermes_home = get_hermes_home().resolve()
 
     blocked_exact = {home / rel for rel in _SENSITIVE_HOME_FILES}

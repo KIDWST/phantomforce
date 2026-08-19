@@ -7,6 +7,7 @@ import os
 import shutil
 import stat
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Union
 from urllib.parse import urlparse
@@ -111,8 +112,31 @@ def atomic_replace(tmp_path: Union[str, Path], target: Union[str, Path]) -> str:
     target_str = str(target)
     real_path = os.path.realpath(target_str) if os.path.islink(target_str) else target_str
     tmp_str = str(tmp_path)
+    replace_attempt = 0
+    replace_error: OSError | None = None
+    while True:
+        try:
+            os.replace(tmp_str, real_path)
+            return real_path
+        except OSError as exc:
+            # Windows can transiently deny a replace while another thread's
+            # just-completed replace is still being released by the filesystem
+            # or an on-access scanner. Retrying the unique temp file preserves
+            # atomicity and makes concurrent state writers reliable.
+            if (
+                os.name == "nt"
+                and exc.errno in {errno.EACCES, errno.EPERM}
+                and replace_attempt < 8
+            ):
+                time.sleep(min(0.08, 0.005 * (2 ** replace_attempt)))
+                replace_attempt += 1
+                continue
+            replace_error = exc
+            break
+
     try:
-        os.replace(tmp_str, real_path)
+        assert replace_error is not None
+        raise replace_error
     except OSError as exc:
         if exc.errno not in (errno.EXDEV, errno.EBUSY):
             raise

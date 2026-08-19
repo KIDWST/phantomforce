@@ -44,6 +44,7 @@ from hermes_cli._subprocess_compat import windows_hide_flags
 from hermes_cli.config import load_config, _expand_env_vars
 from hermes_cli.fallback_config import get_fallback_chain
 from hermes_time import now as _hermes_now
+from tools.daemon_pool import DaemonThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -2280,16 +2281,29 @@ def _run_job_script(
         # shutil.which returns None — fall back to a clear error rather
         # than a FileNotFoundError with a confusing "[WinError 2]"
         # traceback.
-        _bash = shutil.which("bash") or (
-            "/bin/bash" if os.path.isfile("/bin/bash") else None
-        )
+        if sys.platform == "win32":
+            try:
+                from tools.environments.local import _find_bash
+
+                _bash = _find_bash()
+            except RuntimeError:
+                _bash = None
+        else:
+            _bash = shutil.which("bash") or (
+                "/bin/bash" if os.path.isfile("/bin/bash") else None
+            )
         if _bash is None:
             return False, (
                 f"Cannot run .sh/.bash script {path.name!r}: bash not found on PATH. "
                 "On Windows, install Git for Windows (which ships Git Bash) "
                 "or rewrite the script as Python (.py)."
         )
-        argv = [_bash, str(path)]
+        script_arg = str(path)
+        if sys.platform == "win32":
+            from tools.environments.local import _bash_safe_path
+
+            script_arg = _bash_safe_path(script_arg)
+        argv = [_bash, script_arg]
         env_overlay: dict[str, str] = {}
     else:
         python_exe, env_overlay = _windows_cron_python_invocation(sys.executable)
@@ -2307,6 +2321,10 @@ def _run_job_script(
             }
         env = _sanitize_subprocess_env(os.environ.copy())
         env.update(env_overlay)
+        if sys.platform == "win32" and suffix in {".sh", ".bash"}:
+            from tools.environments.local import _apply_windows_msys_bash_env_defaults
+
+            _apply_windows_msys_bash_env_defaults(env)
         # Use the job's workdir as the subprocess cwd when configured,
         # otherwise default to the scripts-dir parent (back-compat).
         # NEVER mutate the Python process cwd — that would leak into
@@ -2942,7 +2960,15 @@ def run_job(
             _session_db_timeout = 10.0
 
         if _session_db_timeout > 0:
-            _session_db_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            # This probe is explicitly abandonable: a corrupt filesystem or
+            # wedged SQLite connect must not keep a one-shot cron process alive
+            # after the timeout fires.  Stdlib ThreadPoolExecutor workers are
+            # non-daemon and its atexit hook joins them even after
+            # shutdown(wait=False), defeating the timeout at interpreter exit.
+            _session_db_pool = DaemonThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="cron-session-db",
+            )
             try:
                 _session_db = _session_db_pool.submit(SessionDB).result(timeout=_session_db_timeout)
             finally:

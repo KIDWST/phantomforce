@@ -37,10 +37,17 @@ _RST = "\033[0m"
 
 
 def cprint(text: str):
-    """Print ANSI-colored text through prompt_toolkit's renderer."""
-    from prompt_toolkit import print_formatted_text as _pt_print
-    from prompt_toolkit.formatted_text import ANSI as _PT_ANSI
-    _pt_print(_PT_ANSI(text))
+    """Print ANSI text through prompt_toolkit, with a headless-safe fallback."""
+    try:
+        from prompt_toolkit import print_formatted_text as _pt_print
+        from prompt_toolkit.formatted_text import ANSI as _PT_ANSI
+
+        _pt_print(_PT_ANSI(text))
+    except Exception:
+        # Native Windows test/service processes may have stdout but no console
+        # screen buffer. Display must never turn a successful operation into a
+        # failure merely because prompt_toolkit cannot construct Win32Output.
+        print(text)
 
 
 # =========================================================================
@@ -472,7 +479,7 @@ def get_latest_release_tag(repo_dir: Optional[Path] = None) -> Optional[tuple]:
 
 def format_banner_version_label() -> str:
     """Return the version label shown in the startup banner title."""
-    base = f"Hermes Agent v{VERSION} ({RELEASE_DATE})"
+    base = f"PhantomBot v{VERSION} ({RELEASE_DATE})"
     state = get_git_banner_state()
     if not state:
         return base

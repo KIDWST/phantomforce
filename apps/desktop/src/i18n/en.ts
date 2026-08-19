@@ -231,7 +231,7 @@ export const en: Translations = {
       'nav.profiles': 'Open profiles',
       'nav.skills': 'Open skills',
       'nav.messaging': 'Open messaging',
-      'nav.artifacts': 'Open artifacts',
+      'nav.artifacts': 'Open outputs',
       'nav.cron': 'Open scheduled jobs',
       'nav.agents': 'Open agents',
       'session.new': 'New session',
@@ -337,6 +337,7 @@ export const en: Translations = {
       archivedChats: 'Archived Chats',
       about: 'About',
       billing: 'Billing',
+      chatgptPlus: 'ChatGPT Plus',
       notifications: 'Notifications',
       plugins: 'Plugins'
     },
@@ -1227,9 +1228,10 @@ export const en: Translations = {
     settingsFields: 'Settings fields',
     mcpServers: 'MCP servers',
     archivedChats: 'Archived chats',
-    sections: { maintenance: 'Maintenance', sessions: 'Sessions', system: 'System', usage: 'Usage' },
+    sections: { maintenance: 'Maintenance', runs: 'Engineering runs', sessions: 'Sessions', system: 'System', usage: 'Usage' },
     sectionDescriptions: {
       maintenance: 'Diagnostics, backups, curator, and memory data',
+      runs: 'Live plans, tool evidence, checkpoints, and verification',
       sessions: 'Search and manage sessions',
       system: 'Status, logs, and system actions',
       usage: 'Token, cost, and skill activity over time'
@@ -1237,11 +1239,12 @@ export const en: Translations = {
     nav: {
       newChat: { title: 'New session', detail: 'Start a fresh session' },
       settings: { title: 'Settings', detail: 'Configure PhantomBot' },
-      skills: { title: 'Capabilities', detail: 'Skills, tools, and MCP servers' },
+      skills: { title: 'Skills', detail: 'Skills, tools, and MCP servers' },
       messaging: { title: 'Messaging', detail: 'Set up Telegram, Slack, Discord, and more' },
-      artifacts: { title: 'Artifacts', detail: 'Browse generated outputs' }
+      artifacts: { title: 'Outputs', detail: 'Browse generated images, files, and links' }
     },
     sectionEntries: {
+      runs: { title: 'Engineering runs', detail: 'Inspect plans, tools, changes, and evidence' },
       sessions: { title: 'Sessions panel', detail: 'Search, pin, and manage sessions' },
       system: { title: 'System panel', detail: 'Gateway status, logs, restart/update' },
       usage: { title: 'Usage panel', detail: 'Token, cost, and skill activity' }
@@ -1773,17 +1776,17 @@ export const en: Translations = {
   },
 
   artifacts: {
-    search: 'Search artifacts...',
-    refresh: 'Refresh artifacts',
-    refreshing: 'Refreshing artifacts',
-    indexing: 'Indexing recent session artifacts',
+    search: 'Search outputs...',
+    refresh: 'Refresh outputs',
+    refreshing: 'Refreshing outputs',
+    indexing: 'Indexing recent session outputs',
     tabAll: 'All',
     tabImages: 'Images',
     tabFiles: 'Files',
     tabLinks: 'Links',
-    noArtifactsTitle: 'No artifacts found',
+    noArtifactsTitle: 'No outputs found',
     noArtifactsDesc: 'Generated images and file outputs will appear here as sessions produce them.',
-    failedLoad: 'Artifacts failed to load',
+    failedLoad: 'Outputs failed to load',
     openFailed: 'Open failed',
     itemsImage: 'images',
     itemsLink: 'links',
@@ -1810,9 +1813,9 @@ export const en: Translations = {
   sidebar: {
     nav: {
       'new-session': 'New session',
-      skills: 'Capabilities',
+      skills: 'Skills',
       messaging: 'Messaging',
-      artifacts: 'Artifacts'
+      artifacts: 'Outputs'
     },
     searchAria: 'Search sessions',
     searchPlaceholder: 'Search sessions…',

@@ -135,9 +135,11 @@ import {
 } from './native-oauth'
 import { runNativeLogin } from './native-oauth-login'
 import { serializeJsonBody, setJsonRequestHeaders } from './oauth-net-request'
+import { findAncestorSourceRoot } from './packaged-source-root'
 import { createKeepAwake } from './power-save'
 import { FirstRunSetupResetError, runPrimaryBackendStartup } from './primary-backend-startup'
 import { rehomePrimaryConnection } from './primary-connection-rehome'
+import { installProcessOutputGuards } from './process-output-guard'
 import { PRODUCT_IDENTITY } from './product-identity'
 import { decideProfileDeleteAction, profileNameFromDeleteRequest, resolveRouteProfile } from './profile-delete-routing'
 import * as remoteLifecycle from './remote-lifecycle'
@@ -222,6 +224,8 @@ import { readWindowsUserEnvVar } from './windows-user-env'
 import { isPackagedInstallPath as isPackagedInstallPathUnderRoots } from './workspace-cwd'
 import { readWslWindowsClipboardImage } from './wsl-clipboard-image'
 import { resolvePickerDefaultPath } from './wsl-path-bridge'
+
+installProcessOutputGuards()
 
 const USER_DATA_OVERRIDE = process.env.HERMES_DESKTOP_USER_DATA_DIR
 
@@ -394,6 +398,16 @@ app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
 app.commandLine.appendSwitch('disable-background-timer-throttling')
 
 const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, '../..')
+
+const PACKAGED_SOURCE_REPO_ROOT = IS_PACKAGED
+  ? findAncestorSourceRoot(path.dirname(process.execPath), isHermesSourceRoot)
+  : null
+
+const CHATGPT_PLUS_BACKEND_HOST = process.env.PHANTOM_CHATGPT_BACKEND_HOST || '127.0.0.1'
+const CHATGPT_PLUS_BACKEND_PORT = Number.parseInt(process.env.PHANTOM_CHATGPT_BACKEND_PORT || '8792', 10) || 8792
+const CHATGPT_PLUS_BACKEND_URL = `http://${CHATGPT_PLUS_BACKEND_HOST}:${CHATGPT_PLUS_BACKEND_PORT}`
+let chatGptPlusProcess = null
+let chatGptPlusStartPromise = null
 
 // Build-time install stamp -- the git ref this .exe was built against.
 //
@@ -634,9 +648,11 @@ const WINDOW_BUTTON_POSITION = {
 // It's only the pre-layout fallback — the renderer measures the exact overlay
 // width live via the Window Controls Overlay API.
 const APP_ICON_PATHS = [
-  path.join(APP_ROOT, 'public', 'apple-touch-icon.png'),
-  path.join(APP_ROOT, 'dist', 'apple-touch-icon.png'),
-  path.join(unpackedPathFor(APP_ROOT), 'dist', 'apple-touch-icon.png')
+  path.join(process.resourcesPath, 'icon.ico'),
+  path.join(APP_ROOT, 'assets', 'icon.ico'),
+  path.join(APP_ROOT, 'public', 'phantombot-mark.png'),
+  path.join(APP_ROOT, 'dist', 'phantombot-mark.png'),
+  path.join(unpackedPathFor(APP_ROOT), 'dist', 'phantombot-mark.png')
 ]
 
 let rendererTitleBarTheme = null
@@ -1265,7 +1281,7 @@ function openExternalUrl(rawUrl) {
     return true
   }
 
-  if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
+  if (!['http:', 'https:', 'mailto:', 'ms-powerautomate:'].includes(parsed.protocol)) {
     return false
   }
 
@@ -2269,6 +2285,7 @@ function resolveUpdateRoot() {
   const candidates = [
     process.env.HERMES_DESKTOP_HERMES_ROOT && path.resolve(process.env.HERMES_DESKTOP_HERMES_ROOT),
     !IS_PACKAGED && isHermesSourceRoot(SOURCE_REPO_ROOT) ? SOURCE_REPO_ROOT : null,
+    PACKAGED_SOURCE_REPO_ROOT,
     isHermesSourceRoot(ACTIVE_HERMES_ROOT) ? ACTIVE_HERMES_ROOT : null
   ].filter(Boolean)
 
@@ -3640,14 +3657,21 @@ function writeDefaultProjectDir(dir) {
 
 function createPythonBackend(root, label, backendArgs, options: any = {}) {
   const python = findPythonForRoot(root)
+  const activeVenvPython = getVenvPython(VENV_ROOT)
 
-  if (!python) {
+  if (!python && !fileExists(activeVenvPython)) {
     return null
   }
 
   const venvRoot = path.join(root, 'venv')
   const venvPython = getVenvPython(venvRoot)
-  const command = IS_WINDOWS && fileExists(venvPython) ? venvPython : python
+
+  const command =
+    IS_WINDOWS && fileExists(venvPython)
+      ? venvPython
+      : IS_WINDOWS && fileExists(activeVenvPython)
+        ? activeVenvPython
+        : python
 
   return {
     kind: 'python',
@@ -3708,6 +3732,21 @@ function resolveHermesBackend(backendArgs) {
   //    (In dev with no checkout, SOURCE_REPO_ROOT won't pass isHermesSourceRoot.)
   if (!IS_PACKAGED && isHermesSourceRoot(SOURCE_REPO_ROOT)) {
     const backend = createPythonBackend(SOURCE_REPO_ROOT, `Hermes source at ${SOURCE_REPO_ROOT}`, backendArgs)
+
+    if (backend) {
+      return backend
+    }
+  }
+
+  // An unpacked developer package lives below the checkout that produced it.
+  // Keep its Electron shell and Python backend on the same revision instead
+  // of silently pairing a new shell with an older managed Hermes install.
+  if (PACKAGED_SOURCE_REPO_ROOT) {
+    const backend = createPythonBackend(
+      PACKAGED_SOURCE_REPO_ROOT,
+      `Hermes source at ${PACKAGED_SOURCE_REPO_ROOT}`,
+      backendArgs
+    )
 
     if (backend) {
       return backend
@@ -5017,6 +5056,16 @@ function registerPowerResumeListeners() {
 
 function getAppIconPath() {
   return APP_ICON_PATHS.find(fileExists)
+}
+
+function getAppIcon() {
+  const iconPath = getAppIconPath()
+  if (!iconPath) {
+    return undefined
+  }
+
+  const icon = nativeImage.createFromPath(iconPath)
+  return icon.isEmpty() ? undefined : icon
 }
 
 function sendOpenUpdatesRequested() {
@@ -7633,6 +7682,147 @@ function stopBackendChild(child) {
   stopBackendChildImpl(child, { forceKillProcessTree, isWindows: IS_WINDOWS })
 }
 
+function resolveChatGptPlusBackendScript() {
+  const candidates = [
+    process.env.PHANTOM_CHATGPT_BACKEND_SCRIPT,
+    path.join(SOURCE_REPO_ROOT, 'services', 'chatgpt_plus_backend.py'),
+    process.resourcesPath ? path.join(process.resourcesPath, 'services', 'chatgpt_plus_backend.py') : null,
+    path.join(APP_ROOT, 'services', 'chatgpt_plus_backend.py')
+  ].filter(Boolean)
+
+  return candidates.find(candidate => fs.existsSync(candidate)) || null
+}
+
+function resolveChatGptPlusPython() {
+  const names = IS_WINDOWS ? ['python.exe', 'python'] : ['python3', 'python']
+  const venvBin = path.join(ACTIVE_HERMES_ROOT, 'venv', IS_WINDOWS ? 'Scripts' : 'bin')
+
+  const candidates = [
+    process.env.PHANTOM_CHATGPT_PYTHON,
+    ...names.map(name => path.join(venvBin, name)),
+    ...names
+  ].filter(Boolean)
+
+  return candidates.find(candidate => !candidate.includes(path.sep) || fs.existsSync(candidate)) || names[0]
+}
+
+async function readChatGptPlusHealth({ timeoutMs = 1200 } = {}) {
+  try {
+    const health = (await fetchJson(`${CHATGPT_PLUS_BACKEND_URL}/health`, null, { timeoutMs })) as any
+
+    return {
+      available: Boolean(health?.ok),
+      baseUrl: CHATGPT_PLUS_BACKEND_URL,
+      browserUp: Boolean(health?.browser_up),
+      error: health?.last_error || null,
+      loggedIn: health?.logged_in === true,
+      pid: chatGptPlusProcess?.pid ?? null,
+      running: true,
+      service: health?.service || 'phantom-chatgpt-plus-backend',
+      version: health?.version || null
+    }
+  } catch (error) {
+    return {
+      available: false,
+      baseUrl: CHATGPT_PLUS_BACKEND_URL,
+      browserUp: false,
+      error: error?.message || String(error),
+      loggedIn: false,
+      pid: chatGptPlusProcess?.pid ?? null,
+      running: Boolean(chatGptPlusProcess && chatGptPlusProcess.exitCode === null && !chatGptPlusProcess.killed),
+      service: 'phantom-chatgpt-plus-backend',
+      version: null
+    }
+  }
+}
+
+async function waitForChatGptPlusHealth(timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs
+  let last = await readChatGptPlusHealth()
+
+  while (!last.available && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 750))
+    last = await readChatGptPlusHealth()
+  }
+
+  return last
+}
+
+async function ensureChatGptPlusBackend() {
+  const existing = await readChatGptPlusHealth()
+
+  if (existing.available) {
+    return existing
+  }
+
+  if (chatGptPlusStartPromise) {
+    return chatGptPlusStartPromise
+  }
+
+  chatGptPlusStartPromise = (async () => {
+    const script = resolveChatGptPlusBackendScript()
+
+    if (!script) {
+      throw new Error('ChatGPT Plus backend script was not found.')
+    }
+
+    const python = resolveChatGptPlusPython()
+
+    rememberLog(`Starting ChatGPT Plus bridge via ${python} ${script}`)
+
+    const child = spawn(
+      python,
+      [script],
+      hiddenWindowsChildOptions({
+        cwd: path.dirname(script),
+        env: {
+          ...process.env,
+          HERMES_HOME,
+          PHANTOM_CHATGPT_BACKEND_HOST: CHATGPT_PLUS_BACKEND_HOST,
+          PHANTOM_CHATGPT_BACKEND_PORT: String(CHATGPT_PLUS_BACKEND_PORT),
+          PHANTOM_CHATGPT_HEADLESS: process.env.PHANTOM_CHATGPT_HEADLESS || '0',
+          PHANTOM_CHATGPT_HIDE_WINDOW: process.env.PHANTOM_CHATGPT_HIDE_WINDOW || '1',
+          PYTHONUTF8: process.env.PYTHONUTF8 || '1'
+        },
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+    )
+
+    chatGptPlusProcess = child
+    child.stdout.on('data', rememberLog)
+    child.stderr.on('data', rememberLog)
+    child.once('exit', (code, signal) => {
+      rememberLog(`ChatGPT Plus bridge exited (${signal || code})`)
+
+      if (chatGptPlusProcess === child) {
+        chatGptPlusProcess = null
+      }
+    })
+
+    child.once('error', error => {
+      rememberLog(`ChatGPT Plus bridge failed to start: ${error.message}`)
+
+      if (chatGptPlusProcess === child) {
+        chatGptPlusProcess = null
+      }
+    })
+
+    const health = await waitForChatGptPlusHealth()
+
+    if (!health.available) {
+      throw new Error(`ChatGPT Plus bridge did not become ready: ${health.error || 'timeout'}`)
+    }
+
+    return health
+  })()
+
+  try {
+    return await chatGptPlusStartPromise
+  } finally {
+    chatGptPlusStartPromise = null
+  }
+}
+
 // Soft gateway-mode apply: tear down the primary without resetting boot UI or
 // reloading the renderer. The shell stays up; the renderer wipes session lists
 // (so skeletons retrigger) and re-dials. Distinct from hard re-home (profile
@@ -8264,13 +8454,33 @@ async function startHermes() {
     // anonymous probe before route matching; the desktop-issued token lets the
     // missing route surface and activates the /api/status fallback.
     await Promise.race([waitForHermes(baseUrl, token, undefined, 'token'), backendStartFailed])
-    backendReady = true
-    backendStartFailure = null
 
     const authToken = await adoptServedDashboardToken(baseUrl, token, {
       childAlive: () => hermesProcess.exitCode === null && !hermesProcess.killed,
       rememberLog
     })
+
+    // HTTP readiness is not desktop readiness: the renderer's entire live
+    // surface uses /api/ws, which has its own upgrade/auth/origin path. Prove
+    // that exact handoff in the main process before publishing a connection.
+    // This prevents a healthy /api/status response from turning into the
+    // opaque renderer-side "Could not connect to Hermes gateway" failure.
+    if (typeof globalThis.WebSocket !== 'function') {
+      throw new Error('Hermes gateway WebSocket validation is unavailable in this desktop runtime.')
+    }
+
+    const wsUrl = `ws://127.0.0.1:${port}/api/ws?token=${encodeURIComponent(authToken)}`
+    const wsProbe = await Promise.race([
+      probeGatewayWebSocket(wsUrl, { WebSocketImpl: globalThis.WebSocket }),
+      backendStartFailed
+    ])
+
+    if (!wsProbe.ok) {
+      throw new Error(`Hermes gateway HTTP check passed, but the live WebSocket handoff failed: ${wsProbe.reason}`)
+    }
+
+    backendReady = true
+    backendStartFailure = null
 
     updateBootProgress({
       phase: 'backend.ready',
@@ -8286,13 +8496,27 @@ async function startHermes() {
       source: 'local',
       authMode: 'token',
       token: authToken,
-      wsUrl: `ws://127.0.0.1:${port}/api/ws?token=${encodeURIComponent(authToken)}`,
+      wsUrl,
       logs: hermesLog.slice(-80),
       ...getWindowState()
     }
-  })().catch(error => {
+  })().catch(async error => {
     if (!backendConnectionState.clearPromiseForAttempt(connectionAttempt)) {
       throw error
+    }
+
+    // A failure after spawn (token adoption, WS validation, etc.) used to
+    // clear only the promise and leave the child attached. Retry would then
+    // start another child while the previous gateway kept its port alive.
+    // Invalidate the owned attempt and reap its process before recovery can
+    // launch a replacement. Stale attempts cannot reach this branch because
+    // clearPromiseForAttempt above validates their generation/promise.
+    const failedProcess = backendConnectionState.getProcess()
+
+    if (failedProcess) {
+      backendConnectionState.invalidate()
+      stopBackendChild(failedProcess)
+      await waitForBackendExit(failedProcess)
     }
 
     if (error instanceof FirstRunSetupResetError) {
@@ -8484,13 +8708,13 @@ function nextInstanceBounds() {
 // (the renderer's getConnection() joins the already-running one), and loads the
 // plain renderer URL so the full app renders.
 function createInstanceWindow() {
-  const icon = getAppIconPath()
+  const icon = getAppIcon()
 
   const win = new BrowserWindow({
     ...nextInstanceBounds(),
     minWidth: WINDOW_MIN_WIDTH,
     minHeight: WINDOW_MIN_HEIGHT,
-    title: 'Hermes',
+    title: APP_NAME,
     titleBarStyle: 'hidden',
     titleBarOverlay: getTitleBarOverlayOptions(),
     trafficLightPosition: IS_MAC ? WINDOW_BUTTON_POSITION : undefined,
@@ -8676,13 +8900,13 @@ function closePetOverlay() {
 }
 
 function createWindow() {
-  const icon = getAppIconPath()
+  const icon = getAppIcon()
   const savedWindowState = readWindowState()
   mainWindow = new BrowserWindow({
     ...computeWindowOptions(savedWindowState, screen.getAllDisplays()),
     minWidth: WINDOW_MIN_WIDTH,
     minHeight: WINDOW_MIN_HEIGHT,
-    title: 'Hermes',
+    title: APP_NAME,
     // Frameless title bar on every platform so the renderer can paint the
     // "hide sidebar" button (and other left-side titlebar tools) flush with
     // the top edge — matching the macOS layout where the traffic lights sit
@@ -8946,6 +9170,8 @@ ipcMain.handle('hermes:connection:revalidate', async () => {
     return result
   })
 })
+ipcMain.handle('hermes:chatgpt-plus:health', async () => readChatGptPlusHealth())
+ipcMain.handle('hermes:chatgpt-plus:start', async () => ensureChatGptPlusBackend())
 ipcMain.handle('hermes:backend:touch', async (_event, profile) => {
   touchPoolBackend(profile)
 
@@ -9144,7 +9370,7 @@ ipcMain.handle('hermes:bootstrap:repair', async () => {
   backendStartFailure = null
   remoteReauthFailure = null
   getFirstRunSetupGate().resetForRepair()
-  resetHermesConnection()
+  await teardownPrimaryBackendAndWait()
 
   return { ok: true }
 })
@@ -11122,6 +11348,11 @@ app.whenReady().then(() => {
   registerPowerResumeListeners()
   keepAwake.set(readPersistedKeepAwake())
   createWindow()
+  // Phantom V1's knowledge and planning supervisor is a first-class runtime
+  // dependency. Start it eagerly; failures remain fail-open to the local model.
+  void ensureChatGptPlusBackend().catch(error => {
+    rememberLog(`ChatGPT Plus bridge cold-start failed: ${error.message}`)
+  })
 
   // Win/Linux cold start: the launching phantombot:// URL is in our own argv.
   const _coldStartLink = _extractDeepLink(process.argv)
@@ -11224,6 +11455,8 @@ app.on('before-quit', event => {
 
   stopBackendChild(backendConnectionState.getProcess())
   stopAllPoolBackends()
+  stopBackendChild(chatGptPlusProcess)
+  chatGptPlusProcess = null
 })
 
 app.on('window-all-closed', () => {

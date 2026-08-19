@@ -31,6 +31,7 @@ from agent.model_metadata import (
     fetch_model_metadata,
     _MODEL_CACHE_TTL,
     estimate_request_tokens_rough,
+    parse_available_output_tokens_from_error,
 )
 
 
@@ -1647,6 +1648,15 @@ class TestParseContextLimitFromError:
         """Very large number (>10M) should be rejected."""
         msg = "maximum context length is 99999999999"
         assert parse_context_limit_from_error(msg) is None
+
+
+class TestParseAvailableOutputTokensFromError:
+    def test_openrouter_affordability_402(self):
+        msg = (
+            "HTTP 402: This request requires more credits, or fewer max_tokens. "
+            "You requested up to 65536 tokens, but can only afford 55936."
+        )
+        assert parse_available_output_tokens_from_error(msg) == 55936
 
 
 # =========================================================================

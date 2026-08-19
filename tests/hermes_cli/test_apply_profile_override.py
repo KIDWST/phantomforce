@@ -16,6 +16,20 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolated_platform_default_home(tmp_path, monkeypatch):
+    """Keep this profile-parser suite isolated on every host platform."""
+    import hermes_constants
+
+    monkeypatch.setattr(
+        hermes_constants,
+        "_get_platform_default_hermes_home",
+        lambda: tmp_path / ".hermes",
+    )
+
 
 
 def _run_apply_profile_override(
@@ -125,6 +139,7 @@ class TestApplyProfileOverrideHermesHomeGuard:
         assert result is not None
         assert "coder" in result
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="sudo/pwd is POSIX-only")
     def test_sudo_explicit_profile_resolves_invoking_users_profile(self, tmp_path, monkeypatch):
         """sudo elias ... should resolve `-p elias` under SUDO_USER, not root."""
         root_home = tmp_path / "root"
@@ -322,4 +337,3 @@ class TestSupervisedChildIgnoresStickyProfile:
         result = os.environ.get("HERMES_HOME")
         assert result is not None
         assert result.endswith("coder")
-

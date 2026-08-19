@@ -54,12 +54,22 @@ def _run_gateway_import(hermes_home: Path, initial_env: dict[str, str]) -> dict[
                 print(f"{{k}}={{v}}")
         """
     )
-    env = dict(initial_env)
+    # A native Windows child needs runtime variables such as SystemRoot and
+    # ComSpec for networking/import initialization. Start from the host env,
+    # then explicitly clear only the bridge keys this test owns.
+    env = os.environ.copy()
+    for key in (
+        "HERMES_MAX_ITERATIONS",
+        "HERMES_AGENT_TIMEOUT",
+        "HERMES_AGENT_TIMEOUT_WARNING",
+        "HERMES_GATEWAY_BUSY_INPUT_MODE",
+        "HERMES_GATEWAY_BUSY_TEXT_MODE",
+        "HERMES_GATEWAY_PLATFORM_CONNECT_TIMEOUT",
+        "HERMES_TIMEZONE",
+    ):
+        env.pop(key, None)
+    env.update(initial_env)
     env["HERMES_HOME"] = str(hermes_home)
-    # Keep PATH / PYTHONPATH so venv imports resolve.
-    for k in ("PATH", "PYTHONPATH", "VIRTUAL_ENV", "HOME"):
-        if k in os.environ and k not in env:
-            env[k] = os.environ[k]
 
     result = subprocess.run(
         [sys.executable, "-c", script],

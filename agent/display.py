@@ -1044,6 +1044,17 @@ class KawaiiSpinner:
         "analyzing", "computing", "synthesizing", "formulating", "brainstorming",
     ]
 
+    PHANTOM_THINKING_QUIPS = [
+        "*byting chips*", "*phoning home*", "*asking the void nicely*",
+        "*untangling ghost wires*", "*consulting the tiny council*",
+        "*dusting the neural attic*", "*shaking the answer tree*",
+        "*feeding the compute hamsters*", "*checking under the hood*",
+    ]
+
+    @classmethod
+    def get_phantom_thinking_quips(cls) -> list:
+        return cls.PHANTOM_THINKING_QUIPS
+
     @classmethod
     def get_waiting_faces(cls) -> list:
         """Return waiting faces from the active skin, falling back to KAWAII_WAITING."""
@@ -1506,5 +1517,4 @@ def get_cute_tool_message(
 # =========================================================================
 # Honcho session line (one-liner with clickable OSC 8 hyperlink)
 # =========================================================================
-
 

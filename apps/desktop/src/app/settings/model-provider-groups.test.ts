@@ -16,13 +16,13 @@ describe('model provider access groups', () => {
     const grouped = splitModelProviders([
       provider('openrouter', 'api_key'),
       provider('google', 'api_key'),
-      provider('openai-codex', 'oauth_device_code'),
+      provider('claude-code', 'oauth_device_code'),
       provider('qwen-oauth', 'external'),
       provider('custom', 'custom')
     ])
 
     expect(grouped.modelProviders.map(item => item.slug)).toEqual(['openrouter', 'google', 'custom'])
-    expect(grouped.subscriptions.map(item => item.slug)).toEqual(['openai-codex', 'qwen-oauth'])
+    expect(grouped.subscriptions.map(item => item.slug)).toEqual(['claude-code', 'qwen-oauth'])
   })
 
   it('uses provider metadata rather than treating every named model route as a subscription', () => {

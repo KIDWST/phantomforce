@@ -37,8 +37,8 @@ from agent.model_metadata import (
     MINIMUM_CONTEXT_LENGTH,
     fetch_model_metadata,
     is_local_endpoint,
-    query_ollama_num_ctx,
 )
+from agent.ollama_runtime import configure_agent_ollama_runtime
 from agent.process_bootstrap import _install_safe_stdio
 from agent.subdirectory_hints import SubdirectoryHintTracker
 from agent.think_scrubber import StreamingThinkScrubber
@@ -58,6 +58,25 @@ from utils import base_url_host_matches, is_truthy_value
 # ``logger = logging.getLogger(__name__)``, which resolves to "run_agent"
 # from inside that module.)
 logger = logging.getLogger("run_agent")
+
+
+def _default_continuity_tail_user_messages(provider: Any, model: Any) -> int:
+    """Keep recent intent anchors for Phantom's compact local runtimes."""
+    provider_id = str(provider or "").strip().lower()
+    model_id = str(model or "").strip().lower()
+    is_phantom_runtime = provider_id in {
+        "phantom",
+        "custom:phantom",
+        "qwen3-coder-local",
+        "kimi-k3-direct",
+    } or (
+        model_id == "phantom"
+        or model_id.startswith("phantom:")
+        or model_id.startswith("phantom-unleashed")
+        or model_id.startswith("phantom-v1")
+        or model_id.startswith("kimi-k3-hf")
+    )
+    return 3 if is_phantom_runtime else 1
 
 
 def _ra():
@@ -1706,18 +1725,24 @@ def init_agent(
     except Exception:
         pass
 
-    # Tool-use enforcement config: "auto" (default — matches hardcoded
-    # model list), true (always), false (never), or list of substrings.
+    # Tool-use enforcement config: "auto" (default — universal for any
+    # model when tools are loaded), true (always), false (never), or list of
+    # model substrings for an intentionally narrower policy.
     _agent_section = _agent_cfg.get("agent", {})
     if not isinstance(_agent_section, dict):
         _agent_section = {}
     agent._tool_use_enforcement = _agent_section.get("tool_use_enforcement", "auto")
 
-    # Intent-ack continuation config: "auto" (default — codex_responses only,
-    # the historical gate), true (all api_modes), false (never), or a list of
-    # model-name substrings.  Resolved against the active api_mode/model in the
-    # conversation loop's intent-ack block.
+    # Intent-ack continuation config: "auto" (default — universal for any
+    # model/API mode when tools are loaded), true (same), false (never), or a
+    # list of model-name substrings for an intentionally narrower policy.
     agent._intent_ack_continuation = _agent_section.get("intent_ack_continuation", "auto")
+
+    # Native tool calling is preferred.  This compatibility path is activated
+    # only when the active endpoint/model is known to lack it or explicitly
+    # rejects the native tool schema at request time.
+    agent._text_tool_fallback = _agent_section.get("text_tool_fallback", True)
+    agent._force_text_tool_bridge = False
 
     # Universal task-completion guidance toggle.  Default True.  Surfaced
     # as a separate flag from tool_use_enforcement because the guidance
@@ -1830,25 +1855,32 @@ def init_agent(
     compression_target_ratio = float(_compression_cfg.get("target_ratio", 0.20))
     compression_protect_last = int(_compression_cfg.get("protect_last_n", 20))
     # Minimum REAL (actionable) user messages guaranteed to survive in the
-    # uncompressed tail (compression.min_tail_user_messages).  Default 1
-    # preserves current behavior exactly — the existing single-user tail
-    # anchor.  Values > 1 extend the guarantee to the last N actionable
-    # user turns.  Booleans rejected (bool subclasses int), non-int-like
-    # values fall back to 1, floor at 1.
-    _raw_min_tail_users = _compression_cfg.get("min_tail_user_messages", 1)
+    # uncompressed tail (compression.min_tail_user_messages). Phantom's
+    # compact local routes default to three intent anchors so a large tool
+    # result cannot evict the request being executed. An explicit config
+    # value still wins. Booleans are rejected (bool subclasses int),
+    # non-int-like values fall back to the route default.
+    _route_min_tail_users = _default_continuity_tail_user_messages(
+        agent.provider, agent.model
+    )
+    _raw_min_tail_users = _compression_cfg.get(
+        "min_tail_user_messages", _route_min_tail_users
+    )
     if isinstance(_raw_min_tail_users, bool):
-        compression_min_tail_users = 1
+        compression_min_tail_users = _route_min_tail_users
     elif isinstance(_raw_min_tail_users, int):
         compression_min_tail_users = _raw_min_tail_users
     elif isinstance(_raw_min_tail_users, float):
         compression_min_tail_users = (
-            int(_raw_min_tail_users) if _raw_min_tail_users.is_integer() else 1
+            int(_raw_min_tail_users)
+            if _raw_min_tail_users.is_integer()
+            else _route_min_tail_users
         )
     else:
         try:
             compression_min_tail_users = int(str(_raw_min_tail_users).strip())
         except (TypeError, ValueError):
-            compression_min_tail_users = 1
+            compression_min_tail_users = _route_min_tail_users
     if compression_min_tail_users < 1:
         compression_min_tail_users = 1
     # Cap on compression retry rounds before a turn gives up with "max
@@ -1956,15 +1988,15 @@ def init_agent(
         _compression_cfg.get("in_place"), default=False
     )
     codex_app_server_auto_compaction = str(
-        _compression_cfg.get("codex_app_server_auto", "native") or "native"
+        _compression_cfg.get("codex_app_server_auto", "hermes") or "hermes"
     ).lower()
     if codex_app_server_auto_compaction not in {"native", "hermes", "off"}:
         _ra().logger.warning(
-            "Invalid compression.codex_app_server_auto=%r; using 'native'. "
+            "Invalid compression.codex_app_server_auto=%r; using 'hermes'. "
             "Valid values are: native, hermes, off.",
             codex_app_server_auto_compaction,
         )
-        codex_app_server_auto_compaction = "native"
+        codex_app_server_auto_compaction = "hermes"
     # Opt-in idle compaction: compact a session up front when it resumes after
     # this many seconds of inactivity (0 = disabled). Time-based, so it
     # complements the size-based threshold above. Consumed by build_turn_context().
@@ -2532,53 +2564,19 @@ def init_agent(
     agent.session_cost_status = "unknown"
     agent.session_cost_source = "none"
     
-    # ── Ollama num_ctx injection ──
-    # Ollama defaults to 2048 context regardless of the model's capabilities.
-    # When running against an Ollama server, detect the model's max context
-    # and pass num_ctx on every chat request so the full window is used.
-    # User override: set model.ollama_num_ctx in config.yaml to cap VRAM use.
-    # If model.context_length is set, it caps num_ctx so the user's VRAM
-    # budget is respected even when GGUF metadata advertises a larger window.
-    agent._ollama_num_ctx: int | None = None
-    _ollama_num_ctx_override = None
-    if isinstance(_model_cfg, dict):
-        _ollama_num_ctx_override = _model_cfg.get("ollama_num_ctx")
-    if _ollama_num_ctx_override is not None:
-        try:
-            agent._ollama_num_ctx = int(_ollama_num_ctx_override)
-        except (TypeError, ValueError):
-            _ra().logger.debug("Invalid ollama_num_ctx config value: %r", _ollama_num_ctx_override)
-    if agent._ollama_num_ctx is None and agent.base_url and is_local_endpoint(agent.base_url):
-        try:
-            # ``agent.api_key`` may be a callable (Entra token provider).
-            # Ollama detection makes a manual HTTP request and expects a
-            # string — Azure Foundry isn't a local endpoint so this branch
-            # never fires for Entra, but guard defensively.
-            _key_for_ollama = agent.api_key if isinstance(agent.api_key, str) else ""
-            _detected = query_ollama_num_ctx(agent.model, agent.base_url, api_key=_key_for_ollama or "")
-            if _detected and _detected > 0:
-                agent._ollama_num_ctx = _detected
-        except Exception as exc:
-            _ra().logger.debug("Ollama num_ctx detection failed: %s", exc)
-    # Cap auto-detected ollama_num_ctx to the user's explicit context_length.
-    # Without this, GGUF metadata can advertise 256K+ which Ollama honours
-    # by allocating that much VRAM — blowing up small GPUs even though the
-    # user explicitly set a smaller context_length in config.yaml.
-    if (
-        agent._ollama_num_ctx
-        and _config_context_length
-        and _ollama_num_ctx_override is None  # don't override explicit ollama_num_ctx
-        and agent._ollama_num_ctx > _config_context_length
-    ):
-        _ra().logger.info(
-            "Ollama num_ctx capped: %d -> %d (model.context_length override)",
-            agent._ollama_num_ctx, _config_context_length,
-        )
-        agent._ollama_num_ctx = _config_context_length
+    # ── Ollama launch + resource-aware request options ──
+    _ollama_runtime = configure_agent_ollama_runtime(
+        agent,
+        model_cfg=_model_cfg if isinstance(_model_cfg, dict) else None,
+        config_context_length=_config_context_length,
+        log=_ra().logger,
+    )
     if agent._ollama_num_ctx and not agent.quiet_mode:
         _ra().logger.info(
-            "Ollama num_ctx: will request %d tokens (model max from /api/show)",
+            "Ollama runtime: status=%s num_ctx=%s options=%s",
+            _ollama_runtime.get("status"),
             agent._ollama_num_ctx,
+            getattr(agent, "_ollama_options", None) or {},
         )
 
     # Codex gpt-5.x autoraise notice: show at most once per profile/config

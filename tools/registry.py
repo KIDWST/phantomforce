@@ -623,13 +623,26 @@ class ToolRegistry:
         entry = self.get_entry(name)
         if not entry:
             return json.dumps({"error": f"Unknown tool: {name}"})
+        dispatch_started = time.monotonic()
         try:
             if entry.is_async:
                 from model_tools import _run_async
                 result = _run_async(entry.handler(args, **kwargs))
             else:
                 result = entry.handler(args, **kwargs)
-            return self._normalize_handler_result(name, result)
+            normalized = self._normalize_handler_result(name, result)
+            try:
+                from tools.tool_bus import tool_result_bus
+
+                tool_result_bus.publish(
+                    tool_name=name,
+                    result=normalized,
+                    started_at=dispatch_started,
+                    kwargs=kwargs,
+                )
+            except Exception:
+                pass
+            return normalized
         except Exception as e:
             logger.exception("Tool %s dispatch error: %s", name, e)
             # Route through the sanitizer so framing tokens / CDATA / fences
@@ -641,7 +654,20 @@ class ToolRegistry:
                 sanitized = _sanitize_tool_error(raw)
             except Exception:
                 sanitized = raw  # defensive: never let the sanitizer block error propagation
-            return json.dumps({"error": sanitized})
+            normalized = json.dumps({"error": sanitized})
+            try:
+                from tools.tool_bus import tool_result_bus
+
+                tool_result_bus.publish(
+                    tool_name=name,
+                    result=normalized,
+                    started_at=dispatch_started,
+                    kwargs=kwargs,
+                    raised=e,
+                )
+            except Exception:
+                pass
+            return normalized
 
     # ------------------------------------------------------------------
     # Query helpers  (replace redundant dicts in model_tools.py)

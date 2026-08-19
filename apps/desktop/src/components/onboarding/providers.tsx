@@ -5,7 +5,6 @@ import type { OAuthProvider } from '@/types/hermes'
 
 const PROVIDER_DISPLAY: Record<string, { order: number; title: string }> = {
   nous: { order: 0, title: 'Nous Portal' },
-  'openai-codex': { order: 1, title: 'OpenAI OAuth (ChatGPT)' },
   'minimax-oauth': { order: 2, title: 'MiniMax' },
   'qwen-oauth': { order: 3, title: 'Qwen Code' },
   'xai-oauth': { order: 4, title: 'xAI Grok' },
@@ -16,6 +15,10 @@ const PROVIDER_DISPLAY: Record<string, { order: number; title: string }> = {
 }
 
 const assetPath = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
+
+export const HIDDEN_OAUTH_PROVIDER_IDS = new Set(['openai-codex'])
+export const visibleOAuthProviders = (providers: readonly OAuthProvider[]) =>
+  providers.filter(provider => !HIDDEN_OAUTH_PROVIDER_IDS.has(provider.id))
 
 export const providerTitle = (p: OAuthProvider) => PROVIDER_DISPLAY[p.id]?.title ?? p.name
 const orderOf = (p: OAuthProvider) => PROVIDER_DISPLAY[p.id]?.order ?? 99

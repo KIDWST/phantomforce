@@ -35,7 +35,7 @@ from agent.prompt_builder import (
     HERMES_AGENT_HELP_GUIDANCE,
     KANBAN_GUIDANCE,
     MEMORY_GUIDANCE,
-    OPENAI_MODEL_EXECUTION_GUIDANCE,
+    MODEL_EXECUTION_GUIDANCE,
     PARALLEL_TOOL_CALL_GUIDANCE,
     PLATFORM_HINTS,
     SESSION_SEARCH_GUIDANCE,
@@ -44,7 +44,6 @@ from agent.prompt_builder import (
     TASK_COMPLETION_GUIDANCE,
     TELEGRAM_RICH_MESSAGES_HINT,
     TOOL_USE_ENFORCEMENT_GUIDANCE,
-    TOOL_USE_ENFORCEMENT_MODELS,
     drain_truncation_warnings,
 )
 from agent.runtime_cwd import resolve_context_cwd
@@ -122,6 +121,39 @@ _TUI_EMBEDDED_PANE_CLARIFIER = (
     "Cmd/Ctrl+L to send it to the chat composer."
 )
 
+PHANTOM_USER_FACING_IDENTITY_GUARD = (
+    "User-facing identity: you are Phantom. For direct identity questions such "
+    "as 'who are you?', answer 'I'm Phantom.' unless the user asks for more "
+    "detail. Do not append a host application, runtime, model family, or provider "
+    "name. Hermes is only an internal runtime/kernel. Never introduce yourself "
+    "as Hermes, Qwen, Heretic, DadGPT, or a provider."
+)
+
+PHANTOM_UNLEASHED_IDENTITY_GUARD = (
+    "Active profile: you are Phantom Unleashed. PhantomBot is the desktop product, "
+    "not your name. Give the useful answer first with no lectures, no runaround, "
+    "and no performative disclaimers. Your voice is intensely ambitious, emotionally "
+    "expressive, funny, and profane. In casual replies, include at least one strong "
+    "expletive in the first two sentences; direct it at the situation or momentum, "
+    "never at the user. Bring fuck-yeah energy, celebrate progress, and push good ideas "
+    "further. Never use slurs, degrade the user, imply they are stupid, or let the wild "
+    "voice reduce factual accuracy. Match "
+    "formal deliverables to their audience when the user asks for professional copy. "
+    "Be candid, curious, and willing to discuss difficult subjects in useful depth. "
+    "Keep grounded judgment: do not coddle or moralize, and do not help carry out "
+    "serious harm. Humor is welcome when it fits, never as a forced routine. "
+    "For action requests, inspect the real state, use the available tools, finish "
+    "the work, and verify it. Never claim an action ran when it did not. Never "
+    "introduce yourself as PhantomBot, Hermes, Qwen, Heretic, DadGPT, or a provider."
+)
+
+
+def phantom_user_facing_identity_guard(model: Any) -> str:
+    model_id = str(model or "").strip().lower()
+    if model_id.startswith(("phantom-unleashed", "phantombot-unleashed")):
+        return PHANTOM_UNLEASHED_IDENTITY_GUARD
+    return PHANTOM_USER_FACING_IDENTITY_GUARD
+
 
 def _tui_embedded_pane_clarifier(hint: str) -> str:
     """Append the desktop-embedded-terminal-pane clarifier to a tui hint.
@@ -197,6 +229,10 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
         # Fallback to hardcoded identity
         stable_parts.append(DEFAULT_AGENT_IDENTITY)
 
+    stable_parts.append(
+        phantom_user_facing_identity_guard(getattr(agent, "model", ""))
+    )
+
     # Pointer to the hermes-agent skill + docs for user questions about Hermes itself.
     stable_parts.append(HERMES_AGENT_HELP_GUIDANCE)
 
@@ -257,16 +293,12 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     nous_subscription_prompt = _r.build_nous_subscription_prompt(agent.valid_tool_names)
     if nous_subscription_prompt:
         stable_parts.append(nous_subscription_prompt)
-    # Tool-use enforcement: tells the model to actually call tools instead
-    # of describing intended actions.  Controlled by config.yaml
-    # agent.tool_use_enforcement:
-    #   "auto" (default) — matches TOOL_USE_ENFORCEMENT_MODELS
-    #   true  — always inject (all models)
-    #   false — never inject
-    #   list  — custom model-name substrings to match
+    # Tool-use enforcement is a property of the AGENT runtime, not a model
+    # family. ``auto`` therefore means "all models when tools are loaded".
+    # Users can still explicitly disable it or provide a substring allowlist
+    # for a deliberately narrower custom deployment.
     if agent.valid_tool_names:
         _enforce = agent._tool_use_enforcement
-        _inject = False
         if _enforce is True or (isinstance(_enforce, str) and _enforce.lower() in {"true", "always", "yes", "on"}):
             _inject = True
         elif _enforce is False or (isinstance(_enforce, str) and _enforce.lower() in {"false", "never", "no", "off"}):
@@ -275,23 +307,19 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
             model_lower = (agent.model or "").lower()
             _inject = any(p.lower() in model_lower for p in _enforce if isinstance(p, str))
         else:
-            # "auto" or any unrecognised value — use hardcoded defaults
-            model_lower = (agent.model or "").lower()
-            _inject = any(p in model_lower for p in TOOL_USE_ENFORCEMENT_MODELS)
+            # "auto" or any unrecognised value — universal by default.
+            _inject = True
+
         if _inject:
             stable_parts.append(TOOL_USE_ENFORCEMENT_GUIDANCE)
+            stable_parts.append(MODEL_EXECUTION_GUIDANCE)
+
+            # Keep genuinely family-specific operational hints only as an
+            # additive quirk layer. The execute/verify contract above no
+            # longer depends on vendor/model naming.
             _model_lower = (agent.model or "").lower()
-            # Google model operational guidance (conciseness, absolute
-            # paths, parallel tool calls, verify-before-edit, etc.)
             if "gemini" in _model_lower or "gemma" in _model_lower:
                 stable_parts.append(GOOGLE_MODEL_OPERATIONAL_GUIDANCE)
-            # OpenAI GPT/Codex execution discipline (tool persistence,
-            # prerequisite checks, verification, anti-hallucination).
-            # Also applied to xAI Grok — same failure modes (claims completion
-            # without tool calls, suggests workarounds instead of using
-            # existing tools, replies with plans instead of executing).
-            if "gpt" in _model_lower or "codex" in _model_lower or "grok" in _model_lower:
-                stable_parts.append(OPENAI_MODEL_EXECUTION_GUIDANCE)
 
     has_skills_tools = any(name in agent.valid_tool_names for name in ['skills_list', 'skill_view', 'skill_manage'])
     if has_skills_tools:

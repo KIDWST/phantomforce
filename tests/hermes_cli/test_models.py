@@ -73,11 +73,15 @@ class TestFetchOpenRouterModels:
         with patch("hermes_cli.models._urlopen_model_catalog_request", return_value=_Resp()):
             models = fetch_openrouter_models(force_refresh=True)
 
-        assert models == [
-            ("anthropic/claude-opus-4.8", "recommended"),
-            ("qwen/qwen3.7-max", ""),
-            ("nvidia/nemotron-3-super-120b-a12b:free", "free"),
-        ]
+        # The remotely published manifest owns picker ordering and may change
+        # independently of this checkout. Assert the behavior under test
+        # (live pricing tags + complete merged membership), not a network-
+        # controlled order.
+        assert dict(models) == {
+            "anthropic/claude-opus-4.8": "recommended",
+            "qwen/qwen3.7-max": "",
+            "nvidia/nemotron-3-super-120b-a12b:free": "free",
+        }
 
 
     def test_falls_back_to_static_snapshot_on_fetch_failure(self, monkeypatch):
@@ -90,12 +94,11 @@ class TestFetchOpenRouterModels:
 
         assert models == OPENROUTER_MODELS
 
-    def test_filters_out_models_without_tool_support(self, monkeypatch):
-        """Models whose supported_parameters omits 'tools' must not appear in the picker.
+    def test_keeps_text_models_without_native_tools_but_filters_non_text_models(self, monkeypatch):
+        """Text-output models remain selectable even when native tools are absent.
 
-        hermes-agent is tool-calling-first — surfacing a non-tool model leads to
-        immediate runtime failures when the user selects it. Ported from
-        Kilo-Org/kilocode#9068.
+        The runtime compatibility bridge supplies local tools to those models.
+        Image-only models still do not belong in the main conversational slot.
         """
         class _Resp:
             def __enter__(self):
@@ -106,16 +109,23 @@ class TestFetchOpenRouterModels:
 
             def read(self):
                 # opus-4.6 advertises tools → kept
-                # nano-image has explicit supported_parameters that OMITS tools → dropped
+                # plain-text-no-tools omits native tools but outputs text → kept
+                # nano-image outputs image only → dropped
                 # qwen3.7-max advertises tools → kept
                 return (
                     b'{"data":['
                     b'{"id":"anthropic/claude-opus-4.6","pricing":{"prompt":"0.000015","completion":"0.000075"},'
-                    b'"supported_parameters":["temperature","tools","tool_choice"]},'
+                    b'"supported_parameters":["temperature","tools","tool_choice"],'
+                    b'"architecture":{"output_modalities":["text"]}},'
+                    b'{"id":"example/plain-text-no-tools","pricing":{"prompt":"0.000001","completion":"0.000001"},'
+                    b'"supported_parameters":["temperature"],'
+                    b'"architecture":{"output_modalities":["text"]}},'
                     b'{"id":"google/gemini-3-pro-image-preview","pricing":{"prompt":"0.00001","completion":"0.00003"},'
-                    b'"supported_parameters":["temperature","response_format"]},'
+                    b'"supported_parameters":["temperature","response_format"],'
+                    b'"architecture":{"output_modalities":["image"]}},'
                     b'{"id":"qwen/qwen3.7-max","pricing":{"prompt":"0.000000325","completion":"0.00000195"},'
-                    b'"supported_parameters":["tools","temperature"]}'
+                    b'"supported_parameters":["tools","temperature"],'
+                    b'"architecture":{"output_modalities":["text"]}}'
                     b']}'
                 )
 
@@ -125,6 +135,7 @@ class TestFetchOpenRouterModels:
             "OPENROUTER_MODELS",
             [
                 ("anthropic/claude-opus-4.6", ""),
+                ("example/plain-text-no-tools", ""),
                 ("google/gemini-3-pro-image-preview", ""),
                 ("qwen/qwen3.7-max", ""),
             ],
@@ -138,8 +149,9 @@ class TestFetchOpenRouterModels:
 
         ids = [mid for mid, _ in models]
         assert "anthropic/claude-opus-4.6" in ids
+        assert "example/plain-text-no-tools" in ids
         assert "qwen/qwen3.7-max" in ids
-        # Image-only model advertised supported_parameters WITHOUT tools → must be dropped.
+        # Image-only model is not a conversational agent brain → must be dropped.
         assert "google/gemini-3-pro-image-preview" not in ids
 
     def test_permissive_when_supported_parameters_missing(self, monkeypatch):
@@ -217,6 +229,30 @@ class TestOpenRouterToolSupportHelper:
         assert _openrouter_model_supports_tools(
             {"id": "x", "supported_parameters": []}
         ) is False
+
+
+class TestOpenRouterAgentCompatibilityHelper:
+    def test_text_output_without_native_tools_is_compatible(self):
+        from hermes_cli.models import _openrouter_model_is_agent_compatible
+
+        assert _openrouter_model_is_agent_compatible({
+            "id": "example/text-model",
+            "supported_parameters": ["temperature"],
+            "architecture": {"output_modalities": ["text"]},
+        }) is True
+
+    def test_non_text_output_is_not_compatible(self):
+        from hermes_cli.models import _openrouter_model_is_agent_compatible
+
+        assert _openrouter_model_is_agent_compatible({
+            "id": "example/image-model",
+            "architecture": {"output_modalities": ["image"]},
+        }) is False
+
+    def test_missing_modality_metadata_is_permissive(self):
+        from hermes_cli.models import _openrouter_model_is_agent_compatible
+
+        assert _openrouter_model_is_agent_compatible({"id": "example/legacy-text"}) is True
 
 
 class TestFindOpenrouterSlug:

@@ -44,6 +44,7 @@ import {
   updateCronJob
 } from '@/hermes'
 import { type Translations, useI18n } from '@/i18n'
+import { openExternalLink } from '@/lib/external-link'
 import { AlertTriangle } from '@/lib/icons'
 import { requestModelOptions } from '@/lib/model-options'
 import { asText } from '@/lib/text'
@@ -468,7 +469,20 @@ export function CronView({ onClose, onOpenSession, setStatusbarItemGroup: _setSt
 
   return (
     <Panel closeLabel={c.close} onClose={onClose}>
-      <PanelHeader subtitle={c.count(totalCount)} title={c.title} />
+      <PanelHeader
+        actions={
+          <>
+            <Button onClick={() => openExternalLink('ms-powerautomate:')} size="sm" type="button" variant="outline">
+              Power Automate
+            </Button>
+            <Button onClick={() => setEditor({ mode: 'create' })} size="sm" type="button">
+              {c.newCron}
+            </Button>
+          </>
+        }
+        subtitle={c.count(totalCount)}
+        title="Automations"
+      />
 
       {loading && jobs.length === 0 ? (
         <PageLoader label={c.loading} />

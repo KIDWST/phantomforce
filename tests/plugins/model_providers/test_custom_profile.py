@@ -122,3 +122,13 @@ class TestCustomReasoningWithNumCtx:
         )
         assert eb == {"options": {"num_ctx": 8192}}
         assert tl == {"reasoning_effort": "high"}
+
+    def test_num_ctx_merges_resource_options(self, custom_profile):
+        eb, tl = custom_profile.build_api_kwargs_extras(
+            reasoning_config=None,
+            ollama_num_ctx=8192,
+            ollama_options={"num_thread": 10, "num_batch": 256},
+            model="huihui-qwen3.6-35b-uncensored:q3",
+        )
+        assert eb == {"options": {"num_thread": 10, "num_batch": 256, "num_ctx": 8192}}
+        assert tl == {}

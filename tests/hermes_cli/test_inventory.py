@@ -24,6 +24,10 @@ from unittest.mock import patch
 
 from hermes_cli.inventory import (
     ConfigContext,
+    _apply_capabilities,
+    _declared_phantom_models,
+    _ensure_phantom_provider_row,
+    _filter_explicit_provider_rows,
     build_models_payload,
     load_picker_context,
 )
@@ -156,6 +160,79 @@ def test_with_overrides_no_args_returns_self_or_equivalent():
     assert ctx.with_overrides() == ctx
 
 
+def test_phantom_explicit_picker_keeps_every_configured_provider():
+    ctx = _empty_ctx(provider="custom:phantom", model="Dadgpt-default")
+    rows = [
+        {
+            "slug": "phantom",
+            "models": ["Dadgpt-default"],
+            "is_user_defined": True,
+        },
+        {"slug": "chatgpt-plus", "models": ["chatgpt-plus"]},
+        {"slug": "openrouter", "models": ["openai/gpt-5.5"]},
+        {"slug": "anthropic", "models": ["claude-sonnet-4.6"]},
+    ]
+
+    with patch(
+        "hermes_cli.auth.is_provider_explicitly_configured",
+        side_effect=lambda slug: slug in {"chatgpt-plus", "openrouter"},
+    ):
+        filtered = _filter_explicit_provider_rows(rows, ctx)
+
+    assert [row["slug"] for row in filtered] == [
+        "phantom",
+        "chatgpt-plus",
+        "openrouter",
+    ]
+
+
+def test_phantom_picker_exposes_only_two_public_profiles():
+    assert _declared_phantom_models({"models": ["retired-internal-model"]}, "legacy-model") == [
+        "phantom",
+        "phantom-unleashed",
+    ]
+
+
+def test_existing_phantom_row_is_consolidated_with_both_public_profiles():
+    ctx = _empty_ctx(provider="custom:phantom", model="Dadgpt-default")
+    ctx = ctx.__class__(
+        **{
+            **ctx.__dict__,
+            "user_providers": {
+                "phantom": {
+                    "name": "Phantom",
+                    "base_url": "http://127.0.0.1:11434/v1",
+                    "models": ["phantom"],
+                }
+            },
+        }
+    )
+    rows = [
+        {
+            "slug": "custom:phantom",
+            "name": "Legacy Phantom",
+            "models": ["Dadgpt-default"],
+            "authenticated": True,
+        }
+    ]
+
+    normalized = _ensure_phantom_provider_row(rows, ctx)
+
+    assert normalized == [
+        {
+            "slug": "phantom",
+            "name": "Phantom",
+            "models": ["phantom", "phantom-unleashed"],
+            "authenticated": True,
+            "is_current": True,
+            "is_user_defined": True,
+            "total_models": 2,
+            "source": "user-config",
+            "api_url": "http://127.0.0.1:11434/v1",
+        }
+    ]
+
+
 # ─── build_models_payload ──────────────────────────────────────────────
 
 
@@ -177,6 +254,43 @@ def _nous_row(model: str = "openai/gpt-5.5") -> dict:
         "is_user_defined": False,
         "source": "built-in",
     }
+
+
+def test_local_ollama_capability_overrides_unknown_model_default():
+    rows = [{
+        "slug": "phantom",
+        "name": "Phantom",
+        "api_url": "http://127.0.0.1:11434/v1",
+        "models": ["phantom"],
+    }]
+    with (
+        patch("agent.models_dev.get_model_capabilities", return_value=None),
+        patch("agent.ollama_runtime.is_local_ollama_endpoint", return_value=True),
+        patch("hermes_cli.models.ollama_model_supports_thinking", return_value=False) as probe,
+    ):
+        _apply_capabilities(rows)
+
+    assert rows[0]["capabilities"]["phantom"]["reasoning"] is False
+    probe.assert_called_once_with(
+        "phantom", "http://127.0.0.1:11434/v1", timeout=1.0
+    )
+
+
+def test_local_ollama_thinking_capability_enables_reasoning_control():
+    rows = [{
+        "slug": "custom",
+        "name": "Local models",
+        "api_url": "http://localhost:11434/v1",
+        "models": ["deepseek-r1"],
+    }]
+    with (
+        patch("agent.models_dev.get_model_capabilities", return_value=None),
+        patch("agent.ollama_runtime.is_local_ollama_endpoint", return_value=True),
+        patch("hermes_cli.models.ollama_model_supports_thinking", return_value=True),
+    ):
+        _apply_capabilities(rows)
+
+    assert rows[0]["capabilities"]["deepseek-r1"]["reasoning"] is True
 
 
 def test_build_models_payload_returns_expected_shape():
@@ -347,7 +461,7 @@ def test_pricing_uses_cached_nous_tier_by_default():
         ),
         patch("hermes_cli.models.check_nous_free_tier", return_value=False) as mock_free,
     ):
-        build_models_payload(ctx, pricing=True)
+        build_models_payload(ctx, pricing=True, refresh=True)
 
     mock_free.assert_called_once_with(force_fresh=False)
 
@@ -368,9 +482,82 @@ def test_pricing_can_force_fresh_nous_tier():
         ),
         patch("hermes_cli.models.check_nous_free_tier", return_value=False) as mock_free,
     ):
-        build_models_payload(ctx, pricing=True, force_fresh_nous_tier=True)
+        build_models_payload(
+            ctx, pricing=True, force_fresh_nous_tier=True, refresh=True
+        )
 
     mock_free.assert_called_once_with(force_fresh=True)
+
+
+def test_normal_picker_payload_forbids_live_pricing_and_provider_probes():
+    rows = [_nous_row()]
+    ctx = _empty_ctx(provider="nous", model="openai/gpt-5.5")
+    with (
+        _list_auth_returning(rows) as mock_list,
+        patch(
+            "hermes_cli.models.get_pricing_for_provider",
+            side_effect=AssertionError("network pricing path reached"),
+        ),
+        patch(
+            "hermes_cli.models.check_nous_free_tier",
+            side_effect=AssertionError("account network path reached"),
+        ),
+    ):
+        payload = build_models_payload(
+            ctx, pricing=True, capabilities=True, refresh=False
+        )
+
+    assert any(row["slug"] == "nous" for row in payload["providers"])
+    assert mock_list.call_args.kwargs["no_network"] is True
+
+
+def test_normal_payload_is_end_to_end_network_silent():
+    """A normal inventory build may read caches but cannot start network work."""
+    import socket
+
+    import agent.models_dev as models_dev
+    import hermes_cli.codex_models as codex_models
+
+    ctx = ConfigContext(
+        current_provider="phantom",
+        current_model="phantom",
+        current_base_url="http://127.0.0.1:11434/v1",
+        user_providers={
+            "phantom": {
+                "name": "Phantom",
+                "base_url": "http://127.0.0.1:11434/v1",
+                "models": ["phantom", "phantom-unleashed"],
+            }
+        },
+        custom_providers=[],
+    )
+    with (
+        patch.object(
+            socket.socket,
+            "connect",
+            side_effect=AssertionError("network socket opened"),
+        ),
+        patch.object(
+            models_dev,
+            "_maybe_start_background_refresh",
+            side_effect=AssertionError("models.dev background refresh started"),
+        ),
+        patch.object(
+            codex_models,
+            "_maybe_start_background_refresh",
+            side_effect=AssertionError("Codex background refresh started"),
+        ),
+    ):
+        payload = build_models_payload(
+            ctx,
+            pricing=True,
+            capabilities=True,
+            refresh=False,
+            for_picker=True,
+        )
+
+    assert payload["model"] == "phantom"
+    assert any(row["slug"] == "phantom" for row in payload["providers"])
 
 
 def test_include_unconfigured_appends_canonical_skeletons():

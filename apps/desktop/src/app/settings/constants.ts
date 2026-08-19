@@ -768,6 +768,8 @@ export const SECTIONS: DesktopConfigSection[] = [
       'agent.api_max_retries',
       'agent.service_tier',
       'agent.tool_use_enforcement',
+      'agent.intent_ack_continuation',
+      'agent.text_tool_fallback',
       'delegation.model',
       'delegation.provider',
       'delegation.max_iterations',

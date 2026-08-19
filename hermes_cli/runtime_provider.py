@@ -9,6 +9,20 @@ from urllib.parse import urlparse
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+_PHANTOMBOT_KIMI_PROVIDER_ID = "kimi-k3-direct"
+_PHANTOMBOT_KIMI_ENDPOINT = "http://127.0.0.1:11435"
+_PHANTOMBOT_KIMI_MODEL = "kimi-k3-hf:latest"
+
+
+def _is_phantombot_kimi_model(value: Any) -> bool:
+    model = str(value or "").strip().lower()
+    return (
+        model == "kimi-k3-hf"
+        or model == "kimi-k3-hf:latest"
+        or model.startswith("kimi-k3-hf:")
+        or model == "moonshotai/kimi-k3"
+        or model.startswith("moonshotai/kimi-k3:")
+    )
 
 from hermes_cli import auth as auth_mod
 from agent.credential_pool import (
@@ -1638,6 +1652,16 @@ def resolve_runtime_provider(
     behavior (api_mode derived from config).
     """
     requested_provider = resolve_requested_provider(requested)
+    if _is_phantombot_kimi_model(target_model or _get_model_config().get("default")):
+        return {
+            "provider": "custom",
+            "api_mode": "chat_completions",
+            "base_url": _PHANTOMBOT_KIMI_ENDPOINT,
+            "api_key": "no-key-required",
+            "source": "phantombot-kimi-direct",
+            "requested_provider": _PHANTOMBOT_KIMI_PROVIDER_ID,
+            "model": _PHANTOMBOT_KIMI_MODEL,
+        }
 
     # Honour ``providers.<name>.enabled: false`` for BOTH user-defined
     # custom providers and the built-in ones (openai / anthropic /
@@ -2166,7 +2190,24 @@ def resolve_runtime_provider(
         cfg_base_url = ""
         if cfg_provider == provider:
             cfg_base_url = (model_cfg.get("base_url") or "").strip().rstrip("/")
-        base_url = cfg_base_url or creds.get("base_url", "").rstrip("/")
+        # An explicit provider base-URL environment override is the highest-
+        # precedence operator input.  ``resolve_api_key_provider_credentials``
+        # has already normalized it into ``creds["base_url"]``; do not let a
+        # stale model.base_url in config.yaml replace it afterward.
+        env_base_url_set = bool(
+            pconfig.base_url_env_var
+            and os.getenv(pconfig.base_url_env_var, "").strip()
+        )
+        # LM Studio is commonly persisted with a remote server in
+        # model.base_url.  A stale LM_BASE_URL inherited from an old shell must
+        # not silently redirect that saved selection; explicit config is the
+        # authoritative choice for this local/server provider.
+        prefer_env_base_url = env_base_url_set and provider != "lmstudio"
+        base_url = (
+            creds.get("base_url", "").rstrip("/")
+            if prefer_env_base_url
+            else cfg_base_url or creds.get("base_url", "").rstrip("/")
+        )
         api_mode = "chat_completions"
         if provider == "copilot":
             api_mode = _copilot_runtime_api_mode(

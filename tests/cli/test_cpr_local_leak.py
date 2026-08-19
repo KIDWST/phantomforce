@@ -41,6 +41,8 @@ class TestClassicCliOutputSelection:
 
     def test_application_receives_cpr_not_supported_without_ssh(self, monkeypatch):
         """Classic-CLI Application construction must get CPR-disabled output."""
+        if os.name == "nt":
+            pytest.skip("prompt_toolkit's POSIX input backend requires termios")
         from prompt_toolkit.application import Application
         from prompt_toolkit.layout import FormattedTextControl, Layout, Window
         from prompt_toolkit.renderer import CPR_Support

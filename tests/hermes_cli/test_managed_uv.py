@@ -12,6 +12,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _default_posix_platform():
+    """Most tests exercise the POSIX contract regardless of host OS."""
+    with patch("hermes_cli.managed_uv.platform.system", return_value="Linux"):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -92,6 +99,7 @@ class TestResolveUv:
             result = resolve_uv()
             assert result == str(tmp_path / "bin" / "uv")
 
+    @pytest.mark.skipif(os.name == "nt", reason="Windows does not expose POSIX execute bits")
     def test_non_executable_file_returns_none(self, tmp_path):
         uv = tmp_path / "bin" / "uv"
         uv.parent.mkdir(parents=True)
@@ -117,7 +125,11 @@ class TestEnsureUv:
 
     def test_installs_if_missing(self, tmp_path):
         with patch("hermes_cli.managed_uv.get_hermes_home", return_value=tmp_path), \
-             patch("hermes_cli.managed_uv._install_uv") as mock_install:
+             patch("hermes_cli.managed_uv._install_uv") as mock_install, \
+             patch(
+                 "hermes_cli.managed_uv.subprocess.run",
+                 return_value=SimpleNamespace(stdout="uv 0.1.2\n"),
+             ):
             # Simulate the installer creating the binary
             def fake_install(target):
                 _make_executable(target)
@@ -153,6 +165,9 @@ class TestEnsureUv:
         ), patch(
             "hermes_cli.managed_uv.repair_vulnerable_runtime",
             return_value=repair,
+        ), patch(
+            "hermes_cli.managed_uv.subprocess.run",
+            return_value=SimpleNamespace(stdout="uv 0.1.2\n"),
         ):
             path = ensure_uv(repair_observer=observed.append)
 

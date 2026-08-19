@@ -335,6 +335,8 @@ def build_turn_context(
     stream_callback,
     persist_user_message: Optional[Any],
     persist_user_timestamp: Optional[float] = None,
+    persist_user_display_kind: Optional[str] = None,
+    persist_user_display_metadata: Optional[Dict[str, Any]] = None,
     *,
     restore_or_build_system_prompt,
     install_safe_stdio,
@@ -540,6 +542,10 @@ def build_turn_context(
     messages.append(user_msg)
     current_turn_user_idx = len(messages) - 1
     agent._persist_user_message_idx = current_turn_user_idx
+    if persist_user_display_kind:
+        user_msg["display_kind"] = persist_user_display_kind
+    if persist_user_display_metadata:
+        user_msg["display_metadata"] = persist_user_display_metadata
 
     # Track user turns for memory flush and periodic nudge logic.
     agent._user_turn_count += 1
@@ -757,7 +763,7 @@ def build_turn_context(
                 getattr(
                     agent,
                     "codex_app_server_auto_compaction",
-                    "native",
+                    "hermes",
                 )
                 or "native"
             ).lower()
@@ -802,7 +808,7 @@ def build_turn_context(
             logger.info(
                 "Skipping Hermes preflight compression for codex app-server "
                 "(mode=%s); Hermes will not start thread compaction here.",
-                getattr(agent, "codex_app_server_auto_compaction", "native"),
+                getattr(agent, "codex_app_server_auto_compaction", "hermes"),
             )
         else:
             _should_compress_now = _compressor.should_compress(_preflight_tokens)
@@ -1103,7 +1109,12 @@ def build_turn_context(
                 else _gateway_notes
             )
 
-    # Per-turn file-mutation verifier state.
+    # Per-turn execution + verification state.  These counters are deliberately
+    # reset at the user-turn boundary so a tool call from an old conversation
+    # turn can never make a later model response look "already acted on".
+    agent._turn_tool_call_count = 0
+    agent._turn_tool_names = set()
+    agent._runtime_turn_nudge = None
     agent._turn_failed_file_mutations = {}
     agent._turn_file_mutation_paths = set()
     agent._verification_stop_nudges = 0

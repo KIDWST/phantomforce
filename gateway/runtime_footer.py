@@ -37,10 +37,14 @@ def _home_relative_cwd(cwd: str) -> str:
     if not cwd:
         return ""
     try:
-        home = os.path.expanduser("~")
+        home = os.environ.get("HOME", "").strip() or os.path.expanduser("~")
+        home = os.path.abspath(home)
         p = os.path.abspath(cwd)
-        if home and (p == home or p.startswith(home + os.sep)):
-            return "~" + p[len(home):]
+        p_case = os.path.normcase(p)
+        home_case = os.path.normcase(home)
+        if home and (p_case == home_case or p_case.startswith(home_case + os.sep)):
+            relative = p[len(home):].replace(os.sep, "/")
+            return "~" + relative
         return p
     except Exception:
         return cwd

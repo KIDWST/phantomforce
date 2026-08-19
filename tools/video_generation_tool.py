@@ -553,6 +553,12 @@ def _build_dynamic_video_schema() -> Dict[str, Any]:
             notice = ""
         if notice:
             parts.append(f"- storage: {notice}")
+    if provider.name == "higgsfield":
+        parts.append(
+            "- video editing/remix: use `higgsfield_video_edit` with a local "
+            "video path, upload/job id, or HTTPS URL; use `video_generate` for "
+            "new text/image/reference-to-video jobs"
+        )
 
     return {"description": "\n".join(parts)}
 

@@ -32,7 +32,7 @@ Usage:
 
 Environment:
     HERMES_TEST_WORKERS  Override worker count (default: os.cpu_count())
-    HERMES_TEST_PATHS    Override discovery roots (colon-sep, default: 'tests')
+    HERMES_TEST_PATHS    Override discovery roots (OS path-sep, default: 'tests')
 
 Exit code: 0 if every file's pytest exited 0; 1 otherwise.
 """
@@ -42,13 +42,27 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, Future
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+
+# The runner emits compact Unicode progress markers. Nested invocations on
+# Windows can otherwise inherit a legacy cp1252 console even when their parent
+# was launched in UTF-8 mode, turning a harmless checkmark into a callback
+# exception and hiding the real test result.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        # Keep the console's native encoding so callers using ``text=True``
+        # decode with the same codec; replace only unsupported glyphs.
+        _stream.reconfigure(errors="replace")
 
 
 # Default test discovery roots.
@@ -298,6 +312,47 @@ _FLAKY_RESULTS: List[Tuple[Path, str]] = []
 _flaky_lock = threading.Lock()
 
 
+def _isolated_pytest_args(file: Path, pytest_args: List[str]) -> tuple[List[str], Path]:
+    """Give every per-file process its own pytest temp root.
+
+    Pytest's default ``<TEMP>/pytest-of-<user>`` is process-global. Running a
+    subprocess per file in parallel makes those processes race while creating
+    and pruning that directory, which is especially destructive on Windows
+    where an open SQLite handle turns the race into WinError 5/32. A caller's
+    explicit ``--basetemp`` remains the parent, but never the shared leaf.
+    """
+    forwarded: List[str] = []
+    requested_root: str | None = None
+    index = 0
+    while index < len(pytest_args):
+        value = pytest_args[index]
+        if value == "--basetemp" and index + 1 < len(pytest_args):
+            requested_root = pytest_args[index + 1]
+            index += 2
+            continue
+        if value.startswith("--basetemp="):
+            requested_root = value.split("=", 1)[1]
+            index += 1
+            continue
+        forwarded.append(value)
+        index += 1
+
+    parent = (
+        Path(requested_root).expanduser()
+        if requested_root
+        else Path(tempfile.gettempdir()) / f"phantombot-pytest-{os.getpid()}"
+    )
+    # Pytest creates the basetemp leaf itself, but assumes its parent exists.
+    # A user-supplied parent is allowed to be new (for example a CI artifact
+    # directory), so establish only that exact parent before handing the
+    # unique leaf to the child process.
+    parent.mkdir(parents=True, exist_ok=True)
+    safe_stem = "".join(char if char.isalnum() else "-" for char in file.stem)[:48] or "test"
+    leaf = parent / f"{safe_stem}-{uuid.uuid4().hex}"
+    forwarded.append(f"--basetemp={leaf}")
+    return forwarded, leaf
+
+
 def _run_one_file_once(
     file: Path,
     pytest_args: List[str],
@@ -305,17 +360,27 @@ def _run_one_file_once(
     file_timeout: float,
 ) -> Tuple[Path, int, str, dict[str, int], float]:
     """Single attempt of a per-file pytest subprocess (see _run_one_file)."""
-    cmd = [sys.executable, "-m", "pytest", str(file), *pytest_args]
+    isolated_args, isolated_basetemp = _isolated_pytest_args(file, pytest_args)
+    cmd = [sys.executable, "-m", "pytest", str(file), *isolated_args]
     
     subproc_start = time.monotonic()
     # launch the pytest process
+    child_env = os.environ.copy()
+    if sys.platform == "win32":
+        # The repository is UTF-8, while native Windows Python otherwise
+        # inherits the active ANSI code page (commonly cp1252).  A large class
+        # of source-inspection and fixture tests legitimately uses the default
+        # text encoding, so make the test subprocess contract deterministic.
+        child_env.setdefault("PYTHONUTF8", "1")
+        child_env.setdefault("PYTHONIOENCODING", "utf-8")
+
     proc = subprocess.Popen(
         cmd,
         cwd=repo_root,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace",
-        env=os.environ,
+        env=child_env,
         # POSIX: place the child at the head of its own process group so
         # _kill_tree can SIGKILL the group atomically.
         # Windows: this maps to CREATE_NEW_PROCESS_GROUP in CPython 3.12+;
@@ -354,11 +419,25 @@ def _run_one_file_once(
         _kill_tree(proc, pgid=pgid)
         raise
     else:
-        # Happy path: pytest exited on its own. Kill the group anyway in
-        # case it left grandchildren behind; already-dead is a no-op.
-        _kill_tree(proc, pgid=pgid)
+        # POSIX process-group IDs remain usable after the leader exits, so a
+        # group kill safely reaps leaked grandchildren.  Windows has no
+        # equivalent stable group handle here: once the pytest leader exits,
+        # its numeric PID can be reused immediately.  Running `taskkill` on
+        # that dead PID under high concurrency can therefore kill an unrelated
+        # new test worker.  On Windows, tree-kill only while the known leader
+        # is still alive (timeout/exception paths above).
+        if sys.platform != "win32":
+            _kill_tree(proc, pgid=pgid)
 
         output +=  "\n"
+
+    try:
+        shutil.rmtree(isolated_basetemp)
+    except OSError:
+        # Windows antivirus/indexers can briefly retain a handle after pytest
+        # exits. The path is unique to this one attempt, so leaving it for the
+        # OS temp cleaner cannot collide with another worker or retry.
+        pass
 
     if rc == 5:
         # No tests collected in THIS file — legitimate per-file: a
@@ -662,8 +741,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--paths",
-        default=os.environ.get("HERMES_TEST_PATHS", ":".join(_DEFAULT_ROOTS)),
-        help="Colon-separated discovery roots (default: 'tests')",
+        default=os.environ.get("HERMES_TEST_PATHS", os.pathsep.join(_DEFAULT_ROOTS)),
+        help="OS path-separator-delimited discovery roots (default: 'tests')",
     )
     parser.add_argument(
         "--include-integration",
@@ -722,7 +801,7 @@ def main() -> int:
         "--files",
         metavar="LIST",
         help=(
-            "Explicit colon-separated list of test files to run. Bypasses "
+            "Explicit OS path-separator-delimited list of test files to run. Bypasses "
             "discovery entirely — used by CI matrix jobs that receive their "
             "file list from the generate job."
         ),
@@ -859,7 +938,7 @@ def main() -> int:
 
     # --files: explicit file list from the CI generate job — skip discovery.
     if args.files:
-        files = [repo_root / f for f in args.files.split(":") if f.strip()]
+        files = [repo_root / f for f in args.files.split(os.pathsep) if f.strip()]
         roots = []
     else:
         # Resolve discovery roots: positional path args override --paths if any
@@ -867,7 +946,7 @@ def main() -> int:
         if args.paths_positional:
             roots = [repo_root / p for p in args.paths_positional]
         else:
-            roots = [repo_root / p for p in args.paths.split(":") if p]
+            roots = [repo_root / p for p in args.paths.split(os.pathsep) if p]
 
         if args.include_integration:
             # Caller takes responsibility — typically used via explicit -k filter.
@@ -890,7 +969,7 @@ def main() -> int:
             "slice": [
                 {
                     "index": i + 1,
-                    "files": ":".join(_format_file(f, repo_root) for f in bucket),
+                    "files": os.pathsep.join(_format_file(f, repo_root) for f in bucket),
                 }
                 for i, bucket in enumerate(slices)
             ]

@@ -8,8 +8,39 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from utils import atomic_replace, fast_safe_load
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(
+        dotenv_path: str | os.PathLike | None = None,
+        *,
+        override: bool = False,
+        encoding: str = "utf-8",
+        **_: object,
+    ) -> bool:
+        """Minimal fallback so desktop source-mode startup never requires python-dotenv."""
+        if dotenv_path is None:
+            return False
+        path = Path(dotenv_path)
+        try:
+            lines = path.read_text(encoding=encoding).splitlines()
+        except FileNotFoundError:
+            return False
+        for raw in lines:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if key.startswith("export "):
+                key = key[len("export "):].strip()
+            if not key or (not override and key in os.environ):
+                continue
+            value = value.strip().strip('"').strip("'")
+            os.environ[key] = value
+        return True
 
 
 # Env var name suffixes that indicate credential values.  These are the

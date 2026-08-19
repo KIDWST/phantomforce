@@ -1,6 +1,6 @@
 import { useAuiState } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
-import { type FC, type ReactNode, useEffect, useState } from 'react'
+import { type FC, type ReactNode, useEffect, useMemo, useState } from 'react'
 
 import { useElapsedSeconds } from '@/components/chat/activity-timer'
 import { ActivityTimerText } from '@/components/chat/activity-timer-text'
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import { $backgroundResume } from '@/store/background-delegation'
 import { $compactionActive } from '@/store/compaction'
 import { $activeSessionAwaitingInput } from '@/store/prompts'
-import { $activeSessionId, $turnStartedAt } from '@/store/session'
+import { $activeSessionId, $phantomRoute, $thinkingStatus, $turnStartedAt, type PhantomRoute } from '@/store/session'
 
 const StatusRow: FC<{ children: ReactNode; label: string } & React.ComponentPropsWithoutRef<'div'>> = ({
   children,
@@ -33,6 +33,17 @@ const StatusRow: FC<{ children: ReactNode; label: string } & React.ComponentProp
 // Fixed label while auto-compaction runs — decoupled from backend status text.
 const COMPACTION_LABEL = 'Summarizing thread'
 
+export const PHANTOM_THINKING_QUIPS = [
+  '*byting chips*',
+  '*phoning home*',
+  '*asking the void nicely*',
+  '*untangling ghost wires*',
+  '*consulting the tiny council*',
+  '*dusting the neural attic*',
+  '*shaking the answer tree*',
+  '*feeding the compute hamsters*'
+] as const
+
 const CompactionHint: FC = () => (
   <span className="shimmer min-w-0 truncate text-muted-foreground/55">{COMPACTION_LABEL}</span>
 )
@@ -42,6 +53,62 @@ function useActiveTurnTimerKey(): string | undefined {
   const turnStartedAt = useStore($turnStartedAt)
 
   return activeSessionId && turnStartedAt ? `turn:${activeSessionId}:${turnStartedAt}` : undefined
+}
+
+function usePhantomThinkingQuip(active: boolean): string {
+  const backendStatus = useStore($thinkingStatus)
+  const [index, setIndex] = useState(0)
+  const phrases = useMemo(
+    () =>
+      backendStatus
+        ? [backendStatus, ...PHANTOM_THINKING_QUIPS.filter(quip => quip !== backendStatus)]
+        : PHANTOM_THINKING_QUIPS,
+    [backendStatus]
+  )
+
+  useEffect(() => {
+    setIndex(0)
+
+    if (!active) {
+      return
+    }
+
+    const timer = window.setInterval(() => setIndex(current => current + 1), 3200)
+
+    return () => window.clearInterval(timer)
+  }, [active, backendStatus])
+
+  return phrases[index % phrases.length] ?? PHANTOM_THINKING_QUIPS[0]
+}
+
+const ThinkingQuip: FC<{ children: string }> = ({ children }) => (
+  <span className="shimmer min-w-0 truncate text-muted-foreground/60">{children}</span>
+)
+
+const ROUTE_LABELS: Record<PhantomRoute, string> = {
+  deep: 'Deep',
+  direct: 'Direct',
+  focus: 'Focus',
+  instant: 'Instant'
+}
+
+const PhantomRouteBadge: FC = () => {
+  const route = useStore($phantomRoute)
+
+  if (!route) {
+    return null
+  }
+
+  return (
+    <span
+      className="phantom-route-badge shrink-0"
+      data-route={route}
+      title={`Phantom adaptive lane: ${ROUTE_LABELS[route]}`}
+    >
+      <span aria-hidden="true" className="phantom-route-badge__pulse" />
+      {ROUTE_LABELS[route]}
+    </span>
+  )
 }
 
 export const CenteredThreadSpinner: FC = () => {
@@ -70,15 +137,17 @@ export const ResponseLoadingIndicator: FC = () => {
   const timerKey = useActiveTurnTimerKey()
   const elapsed = useElapsedSeconds(true, timerKey)
   const compacting = useStore($compactionActive)
+  const quip = usePhantomThinkingQuip(!compacting)
 
   return (
     <StatusRow
       className="text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height)"
       data-slot="aui_response-loading"
-      label={compacting ? COMPACTION_LABEL : t.assistant.thread.loadingResponse}
+      label={compacting ? COMPACTION_LABEL : `${t.assistant.thread.loadingResponse}: ${quip}`}
     >
       <span aria-hidden="true" className="dither inline-block size-3 rounded-[2px] text-midground/80 animate-pulse" />
-      {compacting && <CompactionHint />}
+      <PhantomRouteBadge />
+      {compacting ? <CompactionHint /> : <ThinkingQuip>{quip}</ThinkingQuip>}
       <ActivityTimerText seconds={elapsed} />
     </StatusRow>
   )
@@ -144,6 +213,7 @@ export const StreamStallIndicator: FC = () => {
 
   const [stalled, setStalled] = useState(false)
   const compacting = useStore($compactionActive)
+  const quip = usePhantomThinkingQuip(!compacting)
   const turnTimerKey = useActiveTurnTimerKey()
   // A pending clarify / approval / sudo / secret means the turn is paused on the
   // user, not working — so don't resurrect the "thinking" timer while they
@@ -168,10 +238,11 @@ export const StreamStallIndicator: FC = () => {
     <StatusRow
       className="mt-1.5"
       data-slot="aui_stream-stall"
-      label={compacting ? COMPACTION_LABEL : 'PhantomBot is thinking'}
+      label={compacting ? COMPACTION_LABEL : `PhantomBot is thinking: ${quip}`}
     >
       <span aria-hidden="true" className="dither inline-block size-3 rounded-[2px] text-midground/80 animate-pulse" />
-      {compacting && <CompactionHint />}
+      <PhantomRouteBadge />
+      {compacting ? <CompactionHint /> : <ThinkingQuip>{quip}</ThinkingQuip>}
       <ActivityTimerText seconds={elapsed} />
     </StatusRow>
   )

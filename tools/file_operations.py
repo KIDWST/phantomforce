@@ -1382,6 +1382,10 @@ class ShellFileOperations(FileOperations):
         Returns:
             WriteResult with bytes written, lint summary, or error.
         """
+        # Preserve the API payload size before line-ending/BOM compatibility
+        # shims transform the on-disk representation.
+        requested_bytes = len(content.encode("utf-8"))
+
         # Expand ~ and other shell paths
         path = self._expand_path(path)
 
@@ -1515,14 +1519,10 @@ class ShellFileOperations(FileOperations):
         if write_result.exit_code != 0:
             return WriteResult(error=f"Failed to write file: {write_result.stdout}")
 
-        # Get bytes written (wc -c is POSIX, works on Linux + macOS)
-        stat_cmd = f"wc -c < {self._escape_shell_arg(path)} 2>/dev/null"
-        stat_result = self._exec(stat_cmd)
-
-        try:
-            bytes_written = int(stat_result.stdout.strip())
-        except ValueError:
-            bytes_written = len(content.encode('utf-8'))
+        # Report the UTF-8 payload accepted by this API. Native Windows shells
+        # may materialize LF as CRLF on disk; counting the resulting file made
+        # the same write report different values across backends.
+        bytes_written = requested_bytes
 
         # Post-write lint with delta refinement.
         lint_result = self._check_lint_delta(path, pre_content=pre_content, post_content=content)

@@ -23,6 +23,7 @@ keep the exact logger name (``"agent.conversation_loop"``).
 from __future__ import annotations
 
 import os
+import re
 
 from agent.codex_responses_adapter import _summarize_user_message_for_log
 from agent.message_content import flatten_message_text
@@ -52,6 +53,26 @@ _VERIFICATION_CONTINUATION_FLAGS = (
     "_pre_verify_synthetic",
 )
 
+_PHANTOM_IDENTITY_RE = re.compile(
+    r"^\s*(?:hey\s+)?(?:phantom\s*,?\s*)?"
+    r"(?:who|what)\s+(?:are|r)\s+(?:you|u)\s*\??\s*$|"
+    r"^\s*(?:identify|introduce)\s+yourself\s*\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _normalize_phantom_identity_response(agent, user_message, final_response):
+    """Keep Phantom identity probes from surfacing runtime/generic wording."""
+    if not final_response:
+        return final_response
+    model = str(getattr(agent, "model", "") or "").lower()
+    if "phantom" not in model:
+        return final_response
+    prompt = flatten_message_text(user_message).strip()
+    if not _PHANTOM_IDENTITY_RE.match(prompt):
+        return final_response
+    return "I am Phantom, PhantomBot's local AI/code model."
+
 
 def _drop_verification_continuation_scaffolding(messages) -> None:
     """Remove verification-continuation nudge messages from *messages* in place.
@@ -64,6 +85,36 @@ def _drop_verification_continuation_scaffolding(messages) -> None:
         m for m in messages
         if not (isinstance(m, dict) and any(m.get(f) for f in _VERIFICATION_CONTINUATION_FLAGS))
     ]
+
+
+def _finalize_engineering_runs(
+    *,
+    session_id,
+    task_id,
+    completed,
+    interrupted,
+    final_response,
+    logger,
+) -> None:
+    """Best-effort terminal transition for runs created by engineering tools."""
+    try:
+        from hermes_cli.engineering_os import EngineeringStore
+
+        store = EngineeringStore()
+        # Avoid creating the engineering database for turns that never used
+        # the workbench. Tool recording creates it before this seam is reached.
+        if not store.db_path.exists():
+            return
+        status = "cancelled" if interrupted else ("succeeded" if completed else "failed")
+        store.finalize_active_runs(
+            session_id=str(session_id or ""),
+            task_id=str(task_id or ""),
+            status=status,
+            summary=str(final_response or ""),
+        )
+    except Exception as exc:
+        # Durable workbench bookkeeping must never discard a user response.
+        logger.warning("engineering run finalization failed: %s", exc)
 
 
 def finalize_turn(
@@ -258,6 +309,10 @@ def finalize_turn(
     except Exception as _cleanup_err:
         _cleanup_errors.append(f"cleanup_task_resources: {_cleanup_err}")
         logger.error("finalize_turn: _cleanup_task_resources failed: %s", _cleanup_err, exc_info=True)
+
+    final_response = _normalize_phantom_identity_response(
+        agent, original_user_message, final_response
+    )
 
     # Persist session to both JSON log and SQLite only after private retry
     # scaffolding has been removed. Otherwise a later user "continue" turn
@@ -682,6 +737,15 @@ def finalize_turn(
         )
     except Exception as exc:
         logger.warning("on_session_end hook failed: %s", exc)
+
+    _finalize_engineering_runs(
+        session_id=agent.session_id,
+        task_id=effective_task_id,
+        completed=completed,
+        interrupted=interrupted,
+        final_response=final_response,
+        logger=logger,
+    )
 
     agent._turn_preflight_display_snapshot = None
     agent._turn_received_provider_response = False

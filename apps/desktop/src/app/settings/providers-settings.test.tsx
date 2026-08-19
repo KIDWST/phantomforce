@@ -291,7 +291,7 @@ describe('ProvidersSettings', () => {
           version: 1,
           routes: {
             reasoning: { option_id: 'openrouter.kimi-k3' },
-            image: { option_id: 'openai.gpt-image-1' },
+            image: { option_id: 'chatgpt.subscription' },
             video: { option_id: 'higgsfield.subscription' }
           }
         }

@@ -105,6 +105,35 @@ describe('useStatusSnapshot', () => {
     })
   })
 
+  it('reports active-session health separately from a broken global default', async () => {
+    const requestGatewayMock = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'setup.status') {
+        return { provider_configured: true } as never
+      }
+
+      return (params?.provider === 'phantom'
+        ? { ok: true }
+        : { error: 'The global provider is disabled.', ok: false }) as never
+    })
+    const requestGateway = requestGatewayMock as unknown as GatewayRequester
+
+    const { result } = renderHook(() => useStatusSnapshot('open', requestGateway, 'phantom'))
+
+    await flushAsync()
+
+    expect(result.current.inferenceStatus).toMatchObject({
+      activeProvider: 'phantom',
+      configurationDrift: true,
+      globalDefault: {
+        ready: false,
+        reason: expect.stringContaining('global provider is disabled')
+      },
+      ready: true
+    })
+    expect(requestGatewayMock).toHaveBeenCalledWith('setup.runtime_check', { provider: 'phantom' })
+    expect(requestGatewayMock).toHaveBeenCalledWith('setup.runtime_check', undefined)
+  })
+
   it('clears readiness immediately when the gateway disconnects', async () => {
     const pendingStatus = deferred<never>()
 

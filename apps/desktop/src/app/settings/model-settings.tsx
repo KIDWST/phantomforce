@@ -33,6 +33,7 @@ import type {
 } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { AlertTriangle, Cpu, Loader2 } from '@/lib/icons'
+import { displayModelName } from '@/lib/model-status-label'
 import { DEFAULT_REASONING_EFFORT, REASONING_EFFORT_VALUES } from '@/lib/reasoning-effort'
 import { cn } from '@/lib/utils'
 import { notifyError } from '@/store/notifications'
@@ -129,12 +130,15 @@ const NO_PROVIDERS: readonly ModelOptionProvider[] = [{ name: '—', slug: '', m
 
 const SUBSCRIPTION_PROVIDER_SLUGS = new Set([
   'nous',
-  'openai-codex',
   'claude-code',
   'minimax-oauth',
   'qwen-oauth',
   'xai-oauth'
 ])
+
+const HIDDEN_MODEL_PROVIDER_SLUGS = new Set(['openai-codex'])
+const visibleModelProviders = (providers: readonly ModelOptionProvider[]) =>
+  providers.filter(provider => !HIDDEN_MODEL_PROVIDER_SLUGS.has(provider.slug.trim().toLowerCase()))
 
 /** Provider setup has two materially different credential paths. Keep them
  * visibly separated so a model endpoint is never presented as a subscription
@@ -325,15 +329,21 @@ export function ModelSettings({ onMainModelChanged }: ModelSettingsProps) {
         return
       }
 
-      setMainModel({ model: modelInfo.model, provider: modelInfo.provider })
-      setProviders(modelOptions.providers || [])
+      const visibleProviders = visibleModelProviders(modelOptions.providers || [])
+      const savedProviderHidden = HIDDEN_MODEL_PROVIDER_SLUGS.has(modelInfo.provider.trim().toLowerCase())
+      const visibleFallback = visibleProviders[0]
+      const nextProvider = savedProviderHidden ? visibleFallback?.slug ?? '' : modelInfo.provider
+      const nextModel = savedProviderHidden ? visibleFallback?.models?.[0] ?? '' : modelInfo.model
+
+      setMainModel({ model: nextModel, provider: nextProvider })
+      setProviders(visibleProviders)
 
       if (replaceSelection) {
-        setSelectedProvider(modelInfo.provider)
-        setSelectedModel(modelInfo.model)
+        setSelectedProvider(nextProvider)
+        setSelectedModel(nextModel)
       } else {
-        setSelectedProvider(prev => prev || modelInfo.provider)
-        setSelectedModel(prev => prev || modelInfo.model)
+        setSelectedProvider(prev => prev || nextProvider)
+        setSelectedModel(prev => prev || nextModel)
       }
 
       setAuxiliary(auxiliaryModels)
@@ -657,8 +667,10 @@ export function ModelSettings({ onMainModelChanged }: ModelSettingsProps) {
         return
       }
 
-      setProviders(options.providers || [])
-      const refreshedRow = options.providers?.find(p => p.slug === slug)
+      const visibleProviders = visibleModelProviders(options.providers || [])
+
+      setProviders(visibleProviders)
+      const refreshedRow = visibleProviders.find(p => p.slug === slug)
       const fallbackModel = refreshedRow?.models?.[0] ?? ''
       setSelectedModel(nextModel || fallbackModel)
     } catch (err) {
@@ -864,7 +876,7 @@ export function ModelSettings({ onMainModelChanged }: ModelSettingsProps) {
                 <SelectContent>
                   {withActive(selectedProviderModels, selectedModel).map(model => (
                     <SelectItem key={model} value={model}>
-                      {model}
+                      {displayModelName(model)}
                     </SelectItem>
                   ))}
                 </SelectContent>

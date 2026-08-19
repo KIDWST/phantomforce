@@ -62,7 +62,7 @@ class TestFailoverReason:
             "multimodal_tool_content_unsupported",
             "provider_policy_blocked",
             "content_policy_blocked",
-            "thinking_signature", "long_context_tier",
+            "thinking_unsupported", "thinking_signature", "long_context_tier",
             "oauth_long_context_beta_forbidden",
             "llama_cpp_grammar_pattern",
             "unknown",
@@ -799,6 +799,26 @@ class TestClassifyApiError:
         )
         assert result.reason == FailoverReason.timeout
         assert result.should_compress is False
+
+    # ── Provider-specific: unsupported thinking controls ──
+
+    def test_ollama_model_does_not_support_thinking_is_retryable(self):
+        e = MockAPIError(
+            '"phantom" does not support thinking',
+            status_code=400,
+        )
+        result = classify_api_error(e, provider="custom", model="phantom")
+        assert result.reason == FailoverReason.thinking_unsupported
+        assert result.retryable is True
+        assert result.should_compress is False
+
+    def test_unsupported_thinking_phrase_requires_400(self):
+        e = MockAPIError(
+            '"phantom" does not support thinking',
+            status_code=500,
+        )
+        result = classify_api_error(e, provider="custom", model="phantom")
+        assert result.reason != FailoverReason.thinking_unsupported
 
     # ── Provider-specific: Anthropic thinking signature ──
 
@@ -2169,4 +2189,3 @@ class Test408RequestTimeout:
         assert result.retryable is False
         assert result.should_fallback is True
         assert result.should_compress is False
-

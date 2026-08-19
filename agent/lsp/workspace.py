@@ -38,6 +38,13 @@ def normalize_path(path: str) -> str:
     LSP servers (rust-analyzer cares about Cargo workspace identity)
     and we want the canonical path the user typed when possible.
     """
+    if path == "~" or path.startswith(("~/", "~\\")):
+        # Windows' expanduser ignores HOME in favour of USERPROFILE. Honour an
+        # explicit HOME first so sandboxed/profile-aware callers get the same
+        # deterministic behavior on every platform.
+        explicit_home = os.environ.get("HOME")
+        if explicit_home:
+            path = explicit_home + path[1:]
     return os.path.abspath(os.path.expanduser(path))
 
 

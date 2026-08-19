@@ -143,15 +143,17 @@ def test_coding_prompt_preserves_legacy_workspace_order(monkeypatch):
     monkeypatch.setattr(system_prompt, "STEER_CHANNEL_NOTE", "STEER")
     monkeypatch.setattr(system_prompt, "get_hermes_home", lambda: Path("/hermes"))
 
+    expected_home = str(Path("/hermes"))
     expected_profile = (
         "Active Hermes profile: default. Other profiles (if any) live "
-        "under /hermes/profiles/<name>/. Each profile has its own skills/, "
+        f"under {expected_home}/profiles/<name>/. Each profile has its own skills/, "
         "plugins/, cron/, and memories/ that affect a different session than "
         "this one. Do not modify another profile's skills/plugins/cron/memories "
         "unless the user explicitly directs you to."
     )
     expected = "\n\n".join((
         "IDENTITY",
+        "PHANTOM_IDENTITY",
         "HELP",
         "STEER",
         "CODING_STABLE",
@@ -169,6 +171,10 @@ def test_coding_prompt_preserves_legacy_workspace_order(monkeypatch):
         patch("run_agent.build_environment_hints", return_value=""),
         patch("run_agent.build_context_files_prompt", return_value="CONTEXT_FILES"),
         patch(
+            "agent.system_prompt.phantom_user_facing_identity_guard",
+            return_value="PHANTOM_IDENTITY",
+        ),
+        patch(
             "agent.coding_context.coding_system_prompt_parts",
             return_value=(
                 ["CODING_STABLE"],
@@ -182,7 +188,7 @@ def test_coding_prompt_preserves_legacy_workspace_order(monkeypatch):
         prompt = build_system_prompt(agent, system_message="SYSTEM_MESSAGE")
 
     assert prompt == expected
-    assert agent._cached_system_prompt_static == "\n\n".join(expected.split("\n\n")[:4])
+    assert agent._cached_system_prompt_static == "\n\n".join(expected.split("\n\n")[:5])
 
 
 class TestTelegramRichMessagesHint:

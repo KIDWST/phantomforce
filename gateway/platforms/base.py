@@ -1168,7 +1168,7 @@ def _media_delivery_strict_mode() -> bool:
 def _media_delivery_denied_paths() -> List[Path]:
     """Return absolute denylist paths under which delivery is never allowed."""
     denied = [Path(p) for p in _MEDIA_DELIVERY_DENIED_PREFIXES]
-    home = Path(os.path.expanduser("~"))
+    home = _runtime_user_home()
     for sub in _MEDIA_DELIVERY_DENIED_HOME_SUBPATHS:
         denied.append(home / sub)
     # The active Hermes profile and shared Hermes root both contain control
@@ -1225,6 +1225,25 @@ def _media_delivery_denied_paths() -> List[Path]:
     return denied
 
 
+def _runtime_user_home() -> Path:
+    """Resolve the current user's home, honoring native HOME on Windows.
+
+    ``os.path.expanduser`` on Windows ignores HOME and reads USERPROFILE.
+    Gateway services and containers legitimately inject HOME directly, so
+    relying on expanduser would omit their credential directories from the
+    media exfiltration denylist.
+    """
+    configured = os.environ.get("HOME", "").strip()
+    if configured:
+        candidate = Path(configured)
+        if candidate.is_absolute():
+            return candidate
+    try:
+        return Path.home()
+    except RuntimeError:
+        return Path(configured or os.curdir).resolve(strict=False)
+
+
 def _path_under_denied_prefix(resolved: Path) -> bool:
     """Return True if ``resolved`` lives under a deny-listed system path.
 
@@ -1240,7 +1259,7 @@ def _path_under_denied_prefix(resolved: Path) -> bool:
     credential location or another user's home.
     """
     try:
-        home = Path(os.path.expanduser("~")).resolve(strict=False)
+        home = _runtime_user_home().resolve(strict=False)
     except (OSError, RuntimeError, ValueError):
         home = None
     for denied in _media_delivery_denied_paths():
@@ -1310,7 +1329,11 @@ def validate_media_delivery_path(path: str) -> Optional[str]:
     if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in "`\"'":
         candidate = candidate[1:-1].strip()
     candidate = candidate.lstrip("`\"'").rstrip("`\"',.;:)}]")
-    if not candidate:
+    # Reject control characters before expanduser/pathlib touch the value.
+    # On Windows a crafted ``~\x00...`` can survive expanduser when HOME is
+    # unavailable and otherwise leak into the extracted-media result even
+    # though it can never name a valid file.
+    if not candidate or any(ord(ch) < 32 or ord(ch) == 127 for ch in candidate):
         return None
 
     try:
@@ -3876,7 +3899,7 @@ class BasePlatformAdapter(ABC):
         scan_content = BasePlatformAdapter._mask_json_string_media(scan_content)
         for match in media_pattern.finditer(scan_content):
             path = _normalize_media_tag_path(match.group("path"))
-            if path:
+            if path and not any(ord(ch) < 32 or ord(ch) == 127 for ch in path):
                 try:
                     media.append((os.path.expanduser(path), has_voice_tag))
                 except (OSError, RuntimeError, ValueError):

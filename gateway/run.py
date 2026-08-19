@@ -12006,16 +12006,29 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
                             # Sanitize env to prevent credential leakage —
                             # quick commands run in the gateway process which
                             # has all API keys in os.environ.
-                            from tools.environments.local import _sanitize_subprocess_env
-                            sanitized_env = _sanitize_subprocess_env(os.environ.copy())
-                            proc = await asyncio.create_subprocess_shell(
-                                exec_cmd,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE,
-                                env=sanitized_env,
+                            from tools.environments.local import (
+                                _apply_windows_msys_bash_env_defaults,
+                                _find_bash,
+                                _sanitize_subprocess_env,
                             )
+                            sanitized_env = _sanitize_subprocess_env(os.environ.copy())
+                            if os.name == "nt":
+                                _apply_windows_msys_bash_env_defaults(sanitized_env)
+                                proc = await asyncio.create_subprocess_exec(
+                                    _find_bash(), "--noprofile", "--norc", "-lc", exec_cmd,
+                                    stdout=asyncio.subprocess.PIPE,
+                                    stderr=asyncio.subprocess.PIPE,
+                                    env=sanitized_env,
+                                )
+                            else:
+                                proc = await asyncio.create_subprocess_shell(
+                                    exec_cmd,
+                                    stdout=asyncio.subprocess.PIPE,
+                                    stderr=asyncio.subprocess.PIPE,
+                                    env=sanitized_env,
+                                )
                             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-                            output = (stdout or stderr).decode().strip()
+                            output = (stdout or stderr).decode("utf-8", errors="replace").strip()
                             # Redact any remaining sensitive patterns in output
                             if output:
                                 from agent.redact import redact_sensitive_text

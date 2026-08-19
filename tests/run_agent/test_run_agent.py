@@ -1503,11 +1503,12 @@ class TestToolUseEnforcementConfig:
         prompt = agent._build_system_prompt()
         assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
 
-    def test_auto_skips_for_claude(self):
+    def test_auto_injects_for_claude(self):
+        """Auto is an agent-runtime policy, not a vendor allowlist."""
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
         agent = self._make_agent(model="anthropic/claude-sonnet-4", tool_use_enforcement="auto")
         prompt = agent._build_system_prompt()
-        assert TOOL_USE_ENFORCEMENT_GUIDANCE not in prompt
+        assert TOOL_USE_ENFORCEMENT_GUIDANCE in prompt
 
     def test_auto_injects_for_grok(self):
         """xAI Grok / xai-oauth models hit the same enforcement path as GPT."""
@@ -1548,14 +1549,14 @@ class TestToolUseEnforcementConfig:
         prompt = agent._build_system_prompt()
         assert OPENAI_MODEL_EXECUTION_GUIDANCE in prompt
 
-    def test_auto_does_not_inject_execution_guidance_for_claude(self):
-        """Sanity: execution guidance stays off for non-targeted families."""
-        from agent.prompt_builder import OPENAI_MODEL_EXECUTION_GUIDANCE
+    def test_auto_injects_execution_guidance_for_claude(self):
+        """Execution/verification discipline is shared by every agent model."""
+        from agent.prompt_builder import MODEL_EXECUTION_GUIDANCE
         agent = self._make_agent(
             model="anthropic/claude-sonnet-4", tool_use_enforcement="auto"
         )
         prompt = agent._build_system_prompt()
-        assert OPENAI_MODEL_EXECUTION_GUIDANCE not in prompt
+        assert MODEL_EXECUTION_GUIDANCE in prompt
 
     def test_true_forces_for_all_models(self):
         from agent.prompt_builder import TOOL_USE_ENFORCEMENT_GUIDANCE
@@ -2146,6 +2147,19 @@ class TestBuildApiKwargs:
         messages = [{"role": "user", "content": "hi"}]
         kwargs = agent._build_api_kwargs(messages)
         assert kwargs.get("extra_body", {}).get("think") is False
+
+    def test_registered_ollama_provider_uses_request_local_context(self, agent):
+        """The registered-provider path initializes num_ctx before returning."""
+        agent.provider = "custom"
+        agent.base_url = "http://localhost:11434/v1"
+        agent._base_url_lower = agent.base_url.lower()
+        agent.model = "phantom"
+        agent._ollama_num_ctx = 262144
+        messages = [{"role": "user", "content": "run the smoke test"}]
+
+        kwargs = agent._build_api_kwargs(messages)
+
+        assert kwargs["extra_body"]["options"]["num_ctx"] == 65536
 
     def test_ollama_think_false_on_enabled_false(self, agent):
         """Custom (Ollama) provider with enabled=false should inject think=false."""
@@ -8632,6 +8646,31 @@ class TestSupportsReasoningExtraBody:
         ):
             agent.model = model
             assert agent._supports_reasoning_extra_body() is True, model
+
+    def test_local_ollama_uses_native_thinking_capability(self):
+        agent = self._make_agent()
+        agent.provider = "custom"
+        agent.base_url = "http://127.0.0.1:11434/v1"
+        agent._base_url_lower = agent.base_url.lower()
+        agent.model = "phantom"
+
+        with patch.object(
+            agent, "_ollama_supports_thinking_cached", return_value=False
+        ) as probe:
+            assert agent._supports_reasoning_extra_body() is False
+        probe.assert_called_once_with()
+
+    def test_local_ollama_thinking_model_is_enabled(self):
+        agent = self._make_agent()
+        agent.provider = "custom"
+        agent.base_url = "http://localhost:11434/v1"
+        agent._base_url_lower = agent.base_url.lower()
+        agent.model = "deepseek-r1"
+
+        with patch.object(
+            agent, "_ollama_supports_thinking_cached", return_value=True
+        ):
+            assert agent._supports_reasoning_extra_body() is True
 
 
 class TestMemoryContextSanitization:

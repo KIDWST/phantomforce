@@ -429,6 +429,78 @@ def _parse_single_entry(
 _TOP_LEVEL_PAYLOAD_KEYS = {"tool_name", "args", "session_id", "parent_session_id"}
 
 
+def _windows_user_home() -> str:
+    """Return a usable native home for ``~`` expansion on Windows."""
+    home = os.environ.get("HOME", "").strip()
+    if len(home) >= 3 and home[1:3] in {":\\", ":/"}:
+        return home
+    profile = os.environ.get("USERPROFILE", "").strip()
+    if profile:
+        return profile
+    drive = os.environ.get("HOMEDRIVE", "").strip()
+    tail = os.environ.get("HOMEPATH", "").strip()
+    return drive + tail if drive and tail else ""
+
+
+def _expand_hook_path(value: str) -> str:
+    """Expand a path token without accepting WSL HOME in Windows children."""
+    if not value.startswith("~"):
+        return value
+    if not IS_WINDOWS:
+        return os.path.expanduser(value)
+    home = _windows_user_home()
+    if not home:
+        return value
+    if value == "~":
+        return home
+    if value.startswith(("~/", "~\\")):
+        return os.path.join(home, value[2:])
+    return value
+
+
+def _parse_hook_command(command: str, *, expand_paths: bool = True) -> List[str]:
+    """Split a configured command while preserving Windows backslashes."""
+    parts = shlex.split(command, posix=not IS_WINDOWS)
+    parsed: List[str] = []
+    for part in parts:
+        if (
+            IS_WINDOWS
+            and len(part) >= 2
+            and part[0] == part[-1]
+            and part[0] in "\"'"
+        ):
+            part = part[1:-1]
+        parsed.append(_expand_hook_path(part) if expand_paths else part)
+    return parsed
+
+
+def _windows_hook_argv(argv: List[str]) -> List[str]:
+    """Route portable hook script forms through native Windows runtimes."""
+    if not IS_WINDOWS or not argv:
+        return argv
+
+    executable = argv[0]
+    lower = executable.lower()
+    script_suffix = Path(executable).suffix.lower()
+
+    if lower in {"python", "python3", "python.exe", "python3.exe"}:
+        return [sys.executable, *argv[1:]]
+
+    if lower in {"bash", "bash.exe", "sh", "sh.exe"}:
+        from tools.environments.local import _find_bash
+
+        return [_find_bash(), *argv[1:]]
+
+    if script_suffix in {".sh", ".bash"}:
+        from tools.environments.local import _find_bash
+
+        script = executable.replace("\\", "/")
+        return [_find_bash(), script, *argv[1:]]
+    if script_suffix in {".py", ".pyw"}:
+        return [sys.executable, executable, *argv[1:]]
+    return argv
+
+
 def _spawn(spec: ShellHookSpec, stdin_json: str) -> Dict[str, Any]:
     """Run ``spec.command`` as a subprocess with ``stdin_json`` on stdin.
 
@@ -448,7 +520,7 @@ def _spawn(spec: ShellHookSpec, stdin_json: str) -> Dict[str, Any]:
         "error": None,
     }
     try:
-        argv = shlex.split(os.path.expanduser(spec.command))
+        argv = _windows_hook_argv(_parse_hook_command(spec.command))
     except ValueError as exc:
         result["error"] = f"command {spec.command!r} cannot be parsed: {exc}"
         return result
@@ -813,7 +885,7 @@ def _command_script_path(command: str) -> str:
     common bare-path form.
     """
     try:
-        parts = shlex.split(command)
+        parts = _parse_hook_command(command, expand_paths=False)
     except ValueError:
         return command
     if not parts:
@@ -822,7 +894,7 @@ def _command_script_path(command: str) -> str:
         if part.lower().endswith(_SCRIPT_EXTENSIONS):
             return part
     for part in parts:
-        if "/" in part or part.startswith("~"):
+        if "/" in part or "\\" in part or part.startswith("~"):
             return part
     return parts[0]
 
@@ -877,7 +949,7 @@ def script_mtime_iso(command: str) -> Optional[str]:
     if not path:
         return None
     try:
-        expanded = os.path.expanduser(path)
+        expanded = _expand_hook_path(path)
         return datetime.fromtimestamp(
             os.path.getmtime(expanded), tz=timezone.utc,
         ).isoformat().replace("+00:00", "Z")
@@ -896,15 +968,17 @@ def script_is_executable(command: str) -> bool:
     path = _command_script_path(command)
     if not path:
         return False
-    expanded = os.path.expanduser(path)
+    expanded = _expand_hook_path(path)
     if not os.path.isfile(expanded):
         return False
     try:
-        argv = shlex.split(command)
+        argv = _parse_hook_command(command, expand_paths=False)
     except ValueError:
         return False
     is_bare_invocation = bool(argv) and argv[0] == path
-    required = os.X_OK if is_bare_invocation else os.R_OK
+    # Windows executes .sh/.py hooks through their interpreter above, so an
+    # executable permission bit is neither available nor required.
+    required = os.R_OK if IS_WINDOWS else (os.X_OK if is_bare_invocation else os.R_OK)
     return os.access(expanded, required)
 
 

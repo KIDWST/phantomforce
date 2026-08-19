@@ -1796,8 +1796,11 @@ class TestPrompt:
         """If cancel is called during prompt, stop_reason should be 'cancelled'."""
         new_resp = await agent.new_session(cwd=".")
         state = agent.session_manager.get_session(new_resp.session_id)
+        state.queued_prompts.append("this must not run after cancel")
+        calls = {"count": 0}
 
         def mock_run(*args, **kwargs):
+            calls["count"] += 1
             # Simulate cancel being set during execution
             state.cancel_event.set()
             return {"final_response": "interrupted", "messages": []}
@@ -1812,6 +1815,8 @@ class TestPrompt:
         resp = await agent.prompt(prompt=prompt, session_id=new_resp.session_id)
 
         assert resp.stop_reason == "cancelled"
+        assert state.queued_prompts == []
+        assert calls["count"] == 1
 
 
 # ---------------------------------------------------------------------------

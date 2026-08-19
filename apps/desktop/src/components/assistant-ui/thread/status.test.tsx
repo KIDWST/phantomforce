@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { __resetElapsedTimerRegistryForTests } from '@/components/chat/activity-timer'
 import { I18nProvider } from '@/i18n'
-import { $activeSessionId, $turnStartedAt } from '@/store/session'
+import { $activeSessionId, $phantomRoute, $thinkingStatus, $turnStartedAt } from '@/store/session'
 
 import { ResponseLoadingIndicator } from './status'
 
@@ -26,6 +26,8 @@ describe('ResponseLoadingIndicator timer', () => {
     cleanup()
     $activeSessionId.set(null)
     $turnStartedAt.set(null)
+    $thinkingStatus.set('')
+    $phantomRoute.set(null)
     __resetElapsedTimerRegistryForTests()
     vi.useRealTimers()
   })
@@ -52,5 +54,22 @@ describe('ResponseLoadingIndicator timer', () => {
     renderIndicator()
 
     expect(screen.getAllByText((_, node) => node?.textContent === '8s').length).toBeGreaterThan(0)
+  })
+
+  it('shows backend personality status then rotates to a local quip', () => {
+    $thinkingStatus.set('(¬‿¬) *phoning home*...')
+    renderIndicator()
+
+    expect(screen.getByText('(¬‿¬) *phoning home*...')).toBeTruthy()
+    act(() => vi.advanceTimersByTime(3_200))
+    expect(screen.getByText('*byting chips*')).toBeTruthy()
+  })
+
+  it('shows a public adaptive lane without exposing provider internals', () => {
+    $phantomRoute.set('focus')
+    renderIndicator()
+
+    expect(screen.getByText('Focus')).toBeTruthy()
+    expect(screen.queryByText(/chatgpt|high/i)).toBeNull()
   })
 })

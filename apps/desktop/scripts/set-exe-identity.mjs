@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// set-exe-identity.mjs — stamp the Hermes icon + version metadata onto the
-// built Hermes.exe using rcedit, completely decoupled from electron-builder's
+// set-exe-identity.mjs — stamp the PhantomBot icon + version metadata onto the
+// built PhantomBot.exe using rcedit, completely decoupled from electron-builder's
 // signing path.
 //
 // WHY THIS EXISTS
@@ -13,8 +13,8 @@
 // try to extract winCodeSign.
 //
 // The cost of disabling signAndEditExecutable is that electron-builder also
-// skips rcedit, so the unpacked Hermes.exe keeps the stock Electron icon and
-// "Electron" taskbar name. This script restores the icon + identity by calling
+// skips rcedit, so the unpacked PhantomBot.exe keeps the stock Electron icon
+// and taskbar name. This script restores the icon + identity by calling
 // rcedit DIRECTLY. rcedit is a pure PE resource editor: no signing, no certs,
 // no winCodeSign, no symlinks.
 //
@@ -28,12 +28,12 @@
 // shipped a stock "Electron" exe. Keeping it in afterPack closes that gap.
 //
 // Also runnable standalone for ad-hoc re-stamping:
-//   node scripts/set-exe-identity.mjs <path-to-Hermes.exe>
+//   node scripts/set-exe-identity.mjs <path-to-PhantomBot.exe>
 //
 // Exits 0 on success, non-zero on failure when run as a CLI. As a hook,
 // stampExeIdentity() resolves on success and rejects on failure; the caller
-// (after-pack.mjs) swallows the rejection so a stamp failure never fails an
-// otherwise-good build (worst case: stock icon, not a broken app).
+// (after-pack.mjs) fails the build on rejection so a stock desktop identity is
+// never shipped unnoticed.
 
 import { resolve, join } from 'node:path'
 import { existsSync } from 'node:fs'
@@ -42,7 +42,7 @@ import { rcedit } from 'rcedit'
 
 import { isMain } from './utils.mjs'
 
-// Stamp the Hermes icon + identity onto `exe`. Resolves on success, throws on
+// Stamp the PhantomBot icon + identity onto `exe`. Resolves on success, throws on
 // failure. `desktopRoot` defaults to this script's package root so the icon and
 // the rcedit dependency resolve regardless of cwd.
 async function stampExeIdentity(exe, desktopRoot = resolve(import.meta.dirname, '..')) {
@@ -62,14 +62,14 @@ async function stampExeIdentity(exe, desktopRoot = resolve(import.meta.dirname, 
   await rcedit(exe, {
     icon,
     'version-string': {
-      ProductName: 'Hermes',
-      FileDescription: 'Hermes',
-      CompanyName: 'Nous Research',
-      LegalCopyright: 'Copyright (c) 2026 Nous Research'
+      ProductName: 'PhantomBot',
+      FileDescription: 'PhantomBot',
+      CompanyName: 'PhantomForce',
+      LegalCopyright: 'Copyright (c) 2026 PhantomForce'
     }
   })
 
-  console.log('[set-exe-identity] done — Hermes icon + identity stamped')
+  console.log('[set-exe-identity] done - PhantomBot icon + identity stamped')
 }
 
 export { stampExeIdentity }

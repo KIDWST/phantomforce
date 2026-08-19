@@ -421,6 +421,23 @@ class TestChatCompletionsBuildKwargs:
         )
         assert kw["extra_body"]["options"]["num_ctx"] == 32768
 
+    def test_ollama_keep_alive_zero_is_top_level(self, transport):
+        from providers import get_provider_profile
+        profile = get_provider_profile("custom")
+        kw = transport.build_kwargs(
+            model="phantom", messages=[{"role": "user", "content": "Hi"}],
+            provider_profile=profile,
+            ollama_num_ctx=4096,
+            ollama_options={"num_thread": 4, "num_batch": 64},
+            ollama_keep_alive=0,
+        )
+        assert kw["extra_body"]["keep_alive"] == 0
+        assert kw["extra_body"]["options"] == {
+            "num_ctx": 4096,
+            "num_thread": 4,
+            "num_batch": 64,
+        }
+
     def test_custom_think_false(self, transport):
         from providers import get_provider_profile
         profile = get_provider_profile("custom")
@@ -431,6 +448,46 @@ class TestChatCompletionsBuildKwargs:
             reasoning_config={"effort": "none"},
         )
         assert kw["extra_body"]["think"] is False
+
+    def test_ollama_non_thinking_model_omits_reasoning_controls(self, transport):
+        from providers import get_provider_profile
+        profile = get_provider_profile("custom")
+        kw = transport.build_kwargs(
+            model="phantom",
+            messages=[{"role": "user", "content": "Hi"}],
+            provider_profile=profile,
+            reasoning_config={"enabled": True, "effort": "medium"},
+            supports_reasoning=False,
+            ollama_options={},
+        )
+        assert "reasoning_effort" not in kw
+        assert "think" not in kw.get("extra_body", {})
+
+    def test_ollama_thinking_model_keeps_reasoning_effort(self, transport):
+        from providers import get_provider_profile
+        profile = get_provider_profile("custom")
+        kw = transport.build_kwargs(
+            model="deepseek-r1",
+            messages=[{"role": "user", "content": "Hi"}],
+            provider_profile=profile,
+            reasoning_config={"enabled": True, "effort": "medium"},
+            supports_reasoning=True,
+            ollama_options={},
+        )
+        assert kw["reasoning_effort"] == "medium"
+
+    def test_recovered_route_suppresses_custom_reasoning_controls(self, transport):
+        from providers import get_provider_profile
+        profile = get_provider_profile("custom")
+        kw = transport.build_kwargs(
+            model="phantom",
+            messages=[{"role": "user", "content": "Hi"}],
+            provider_profile=profile,
+            reasoning_config={"enabled": True, "effort": "medium"},
+            reasoning_suppressed=True,
+        )
+        assert "reasoning_effort" not in kw
+        assert "think" not in kw.get("extra_body", {})
 
     def test_gemini_native_without_explicit_reasoning_config_keeps_existing_behavior(self, transport):
         msgs = [{"role": "user", "content": "Hi"}]
@@ -624,6 +681,35 @@ class TestChatCompletionsBuildKwargs:
         )
         # Qwen default: 65536 from profile.default_max_tokens
         assert kw["max_tokens"] == 65536
+
+    def test_openrouter_default_max_tokens_is_economical(self, transport):
+        import model_tools  # noqa: F401 - triggers provider plugin discovery
+        from providers import get_provider_profile
+
+        profile = get_provider_profile("openrouter")
+        msgs = [{"role": "user", "content": "Hi"}]
+        kw = transport.build_kwargs(
+            model="anthropic/claude-sonnet-4.6",
+            messages=msgs,
+            provider_profile=profile,
+            max_tokens_param_fn=lambda n: {"max_tokens": n},
+        )
+        assert kw["max_tokens"] == 8192
+
+    def test_openrouter_user_max_tokens_still_wins(self, transport):
+        import model_tools  # noqa: F401 - triggers provider plugin discovery
+        from providers import get_provider_profile
+
+        profile = get_provider_profile("openrouter")
+        msgs = [{"role": "user", "content": "Hi"}]
+        kw = transport.build_kwargs(
+            model="deepseek/deepseek-v4-pro",
+            messages=msgs,
+            provider_profile=profile,
+            max_tokens=4096,
+            max_tokens_param_fn=lambda n: {"max_tokens": n},
+        )
+        assert kw["max_tokens"] == 4096
 
     def test_anthropic_max_output_for_claude_on_aggregator(self, transport):
         msgs = [{"role": "user", "content": "Hi"}]

@@ -185,3 +185,29 @@ infographics/
 infograficos/
 infografico/
 native/fts5_cjk/*.so
+
+# PhantomBot local build, recovery, and hermetic-test artifacts. These are
+# reproducible machine state, never product source.
+/%SystemDrive%/
+/.artifacts/
+/artifacts/
+/backups/
+/apps/desktop/release-*/
+/.codex-pytest-*/
+/.pytest-*/
+/.tmp/
+/.tmp-*/
+/.phantombot-*-backup-*/
+/.phantombot-run-logs/
+/.phantombot-*.log
+
+# Local mission intake/reference files are retained on the machine but are not
+# runtime source and must not ride inside desktop updates.
+/CODEX_LAUNCHER_PROMPT.txt
+/PHANTOMBOT_CURRENT_UI_BASELINE.png
+/PHANTOMBOT_ULTIMATE_3M_CODEX_MASTER_PROMPT.md
+/PROMPT_METADATA.json
+/README.txt
+/SCOPE_GUARD_SEED.md
+/UNLEASHED_PERSONALITY_CONTRACT.md
+/C*phantombot-pytest-*

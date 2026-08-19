@@ -8,6 +8,7 @@ deadline timeouts. These tests pin all of that without spawning real codex.
 from __future__ import annotations
 
 import time
+import threading
 from unittest.mock import patch
 from typing import Any, Optional
 
@@ -619,6 +620,29 @@ class TestRunTurn:
                        notification_poll_timeout=0.01)
         assert r.interrupted is True
         assert r.error and "timed out" in r.error
+
+    def test_external_cancel_event_interrupts_turn_without_deadline_wait(self):
+        client = FakeClient()
+        cancel = threading.Event()
+        calls = {"count": 0}
+
+        def take_notification(timeout=0.0):
+            calls["count"] += 1
+            cancel.set()
+            return None
+
+        client.take_notification = take_notification
+        s = make_session(client)
+        r = s.run_turn(
+            "cancel me",
+            turn_timeout=30.0,
+            notification_poll_timeout=0.01,
+            cancel_event=cancel,
+        )
+
+        assert r.interrupted is True
+        assert ("turn/interrupt", {"threadId": "thread-fake-001", "turnId": "turn-fake-001"}) in client.requests
+        assert calls["count"] == 1
 
     def test_deadline_uses_monotonic_clock(self):
         client = FakeClient()

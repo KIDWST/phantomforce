@@ -234,27 +234,20 @@ class TestFetchModelsDev:
         assert md._models_dev_cache == SAMPLE_REGISTRY
 
     @patch("agent.models_dev.requests.get")
-    def test_stale_disk_cache_falls_through_to_network(self, mock_get):
-        """When the disk cache is OLDER than TTL, we must hit the network
-        (and only fall back to the stale disk data if network fails)."""
+    def test_stale_disk_cache_returns_immediately_and_schedules_refresh(self, mock_get):
+        """A stale disk entry is usable picker data; refresh is asynchronous."""
         import agent.models_dev as md
         md._models_dev_cache = {}
         md._models_dev_cache_time = 0
 
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = SAMPLE_REGISTRY
-        mock_resp.raise_for_status = MagicMock()
-        mock_get.return_value = mock_resp
-
-        # Disk cache exists but is older than the TTL — must NOT short-circuit.
         with patch.object(md, "_disk_cache_age_seconds",
                           return_value=md._MODELS_DEV_CACHE_TTL + 60), \
              patch.object(md, "_load_disk_cache", return_value=SAMPLE_REGISTRY), \
-             patch.object(md, "_save_disk_cache"):
+             patch.object(md, "_maybe_start_background_refresh", return_value=True) as start:
             result = fetch_models_dev()
 
-        mock_get.assert_called_once()
+        mock_get.assert_not_called()
+        start.assert_called_once_with()
         assert "anthropic" in result
 
     @patch("agent.models_dev.requests.get")
@@ -283,25 +276,56 @@ class TestFetchModelsDev:
         assert "anthropic" in result
 
     @patch("agent.models_dev.requests.get")
-    def test_missing_disk_cache_falls_through_to_network(self, mock_get):
-        """If the disk cache file doesn't exist (first-ever run, or it
-        was deleted), fall through cleanly to network."""
+    def test_missing_disk_cache_returns_default_immediately_and_schedules_refresh(self, mock_get):
+        """First run never blocks on models.dev; the catalog warms in background."""
         import agent.models_dev as md
         md._models_dev_cache = {}
         md._models_dev_cache_time = 0
 
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = SAMPLE_REGISTRY
-        mock_resp.raise_for_status = MagicMock()
-        mock_get.return_value = mock_resp
-
         with patch.object(md, "_disk_cache_age_seconds", return_value=None), \
-             patch.object(md, "_save_disk_cache"):
+             patch.object(md, "_load_disk_cache", return_value={}), \
+             patch.object(md, "_maybe_start_background_refresh", return_value=True) as start:
             result = fetch_models_dev()
 
-        mock_get.assert_called_once()
-        assert "anthropic" in result
+        mock_get.assert_not_called()
+        start.assert_called_once_with()
+        assert result == {}
+
+    @patch("agent.models_dev.requests.get")
+    def test_cache_only_read_never_starts_background_network(self, mock_get):
+        """Inventory reads can suppress even asynchronous outbound refreshes."""
+        import agent.models_dev as md
+        md._models_dev_cache = SAMPLE_REGISTRY
+        md._models_dev_cache_time = 0
+
+        with patch.object(md, "_maybe_start_background_refresh") as start:
+            result = fetch_models_dev(allow_background_refresh=False)
+
+        assert result == SAMPLE_REGISTRY
+        start.assert_not_called()
+        mock_get.assert_not_called()
+
+    @patch("agent.models_dev.requests.get")
+    def test_stale_memory_rapid_reads_start_only_one_refresh(self, mock_get):
+        import agent.models_dev as md
+        md._models_dev_cache = SAMPLE_REGISTRY
+        md._models_dev_cache_time = 0
+        md._refresh_in_progress = False
+        md._refresh_start_count = 0
+
+        blocker = __import__("threading").Event()
+
+        def blocked_fetch():
+            blocker.wait(timeout=1)
+            return {}
+
+        with patch.object(md, "_synchronous_fetch", side_effect=blocked_fetch):
+            assert fetch_models_dev() == SAMPLE_REGISTRY
+            assert fetch_models_dev() == SAMPLE_REGISTRY
+            assert fetch_models_dev() == SAMPLE_REGISTRY
+            assert md.get_models_dev_refresh_state()["background_refresh_count"] == 1
+            blocker.set()
+        mock_get.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

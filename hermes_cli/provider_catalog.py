@@ -49,8 +49,19 @@ _ACCOUNTS_AUTH_TYPES: frozenset[str] = frozenset(
         "oauth_minimax",
         "external_process",  # copilot-acp: spawns `copilot --acp --stdio`
         "copilot",           # GitHub Copilot token / gh auth
+        "local_browser_bridge",  # ChatGPT Plus: signed-in local browser session
     }
 )
+
+# Runtime compatibility can legitimately differ from configuration UX.
+# ChatGPT Plus speaks an OpenAI-compatible loopback protocol and therefore
+# reuses the api-key runtime adapter with a local placeholder, but users do
+# not paste a key: the dedicated desktop surface starts a signed-in browser
+# bridge.  Expose that truth in the catalog without destabilising runtime
+# credential resolution.
+_CATALOG_AUTH_TYPE_OVERRIDES: dict[str, str] = {
+    "chatgpt-plus": "local_browser_bridge",
+}
 
 
 @dataclass(frozen=True)
@@ -128,7 +139,7 @@ def provider_catalog() -> list[ProviderDescriptor]:
 
         # auth_type: registry is authoritative; fall back to profile, then the
         # Hermes overlay (e.g. moa → "virtual"), then api_key.
-        auth_type = (
+        auth_type = _CATALOG_AUTH_TYPE_OVERRIDES.get(slug) or (
             (getattr(cfg, "auth_type", "") if cfg else "")
             or (getattr(prof, "auth_type", "") if prof else "")
             or (getattr(overlay, "auth_type", "") if overlay else "")

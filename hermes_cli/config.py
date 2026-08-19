@@ -942,9 +942,10 @@ DEFAULT_CONFIG = {
         "autoRouting": {
             "version": 1,
             "routes": {
-                "reasoning": {"option_id": "openrouter.glm-5.2"},
-                "image": {"option_id": "openai.gpt-image-1"},
+                "reasoning": {"option_id": "chatgpt.subscription"},
+                "image": {"option_id": "chatgpt.subscription"},
                 "video": {"option_id": "higgsfield.subscription"},
+                "coding": {"option_id": "phantom-local"},
             },
         },
     },
@@ -998,20 +999,26 @@ DEFAULT_CONFIG = {
         "service_tier": "",
         # Tool-use enforcement: injects system prompt guidance that tells the
         # model to actually call tools instead of describing intended actions.
-        # Values: "auto" (default — applies to gpt/codex models), true/false
-        # (force on/off for all models), or a list of model-name substrings
-        # to match (e.g. ["gpt", "codex", "gemini", "qwen"]).
+        # Values: "auto" (default — applies to every model when tools are
+        # loaded), true/false (force on/off), or a list of model-name
+        # substrings for users who intentionally want a narrower policy.
         "tool_use_enforcement": "auto",
         # Intent-ack continuation: when the model opens a turn by narrating an
         # action it will take ("I'll go check the logs...") but emits no tool
         # call, intercept the turn-end, inject a "continue now, execute the
         # tools" nudge, and loop instead of ending the turn (capped at 2 nudges
         # per turn). This is the corrective sibling of tool_use_enforcement (the
-        # preventive prompt-side guard). Values: "auto" (default — fires only on
-        # the codex_responses api_mode, the historical behavior), true (all
-        # api_modes — fixes the Gemini/Claude "stops after stating intent" case),
-        # false (never), or a list of model-name substrings to match.
+        # preventive prompt-side guard). Values: "auto" (default — all
+        # api_modes/models when tools are loaded), true (same universal behavior),
+        # false (never), or a list of model-name substrings to intentionally
+        # narrow the recovery policy.
         "intent_ack_continuation": "auto",
+        # Compatibility fallback for models/endpoints that reject native
+        # function schemas. Native structured tools remain preferred; on an
+        # explicit provider rejection PhantomBot retries through a text tool
+        # protocol that still feeds the normal validated executor. Set false
+        # to disable this compatibility path.
+        "text_tool_fallback": True,
         # Universal "finish the job" guidance — short prompt block applied to
         # all models that targets two cross-family failure modes: (1) stopping
         # after a stub instead of finishing the artifact, (2) fabricating
@@ -1456,7 +1463,7 @@ DEFAULT_CONFIG = {
                                       # (e.g. 6) for tool-schema-heavy sessions where 3
                                       # rounds cannot clear the request estimate.
                                       # Validated >= 1, hard-capped at 10.
-        "proactive_prune_tokens": 0,  # opt-in trigger (tokens) for the deterministic,
+        "proactive_prune_tokens": 48000,  # trigger (tokens) for the deterministic,
                                       # no-LLM tool-result prune, run independently of
                                       # `threshold` above. On large-window models
                                       # `threshold` (≈50% of the window) rarely fires,
@@ -1522,14 +1529,15 @@ DEFAULT_CONFIG = {
                                       # autoraise banner. Set False to keep the
                                       # 85% threshold autoraise but suppress the
                                       # user-facing notice in CLI/gateway output.
-        "codex_app_server_auto": "native",  # Codex app-server (codex CLI runtime) thread
+        "codex_app_server_auto": "hermes",  # Codex app-server (codex CLI runtime) thread
                                       # compaction mode. The codex agent owns the real
-                                      # thread context, so Hermes' summarizer cannot
-                                      # shrink it (#36801). native = codex decides when
-                                      # to compact its own thread (default); hermes =
-                                      # Hermes' compression threshold triggers
-                                      # thread/compact/start; off = never auto-trigger
-                                      # (codex may still compact natively).
+                                      # thread context, so Hermes triggers Codex's
+                                      # native thread/compact/start before the hosted
+                                      # runtime hits an unrecoverable overflow (#36801).
+                                      # hermes = Hermes' compression threshold triggers
+                                      # compact; native = codex decides when to compact;
+                                      # off = never auto-trigger (codex may still
+                                      # compact natively).
         "in_place": True,             # When True, compaction rewrites the message
                                       # list and rebuilds the system prompt WITHOUT
                                       # rotating the session id — the conversation
@@ -1546,18 +1554,23 @@ DEFAULT_CONFIG = {
                                       # session_search and recoverable, not deleted.
                                       # Default True since 2107b86024; set False to
                                       # restore the legacy rotating-compaction path.
-        "model_thresholds": {},       # Per-model threshold overrides. Keys are
+        "model_thresholds": {
+            "glm-5.2": 0.08,
+            "glm-5-2": 0.08,
+            "glm-5p2": 0.08,
+            "z-ai/glm-5.2": 0.08,
+        },                            # Per-model threshold overrides. Keys are
                                       # substring-matched against the model name
                                       # (longest match wins); values replace the
                                       # global `threshold` for that model, e.g.
                                       #   model_thresholds:
-                                      #     "glm-5.2": 0.40
+                                      #     "glm-5.2": 0.08
                                       #     "claude-sonnet": 0.35
                                       # The small-context floor (0.75 for <512K
                                       # models) still applies on top of overrides
                                       # (raise-only: an override above the floor
                                       # wins; one below it is raised to the floor).
-        "idle_compact_after_seconds": 0,  # Opt-in idle compaction (0 = disabled).
+        "idle_compact_after_seconds": 900,  # Idle compaction (0 = disabled).
                                       # When > 0, a session that resumes after at
                                       # least this many seconds of inactivity
                                       # compacts its accumulated history up front,
@@ -2923,6 +2936,10 @@ DEFAULT_CONFIG = {
         # wedges the job's dispatch guard forever. Also overridable via
         # HERMES_CRON_SESSION_DB_TIMEOUT env var. 0 = unlimited (skip the bound).
         "session_db_timeout_seconds": 10,
+        # Fail closed when an unpinned cron job would silently inherit a changed
+        # global provider/model. Disable only if you intentionally want old jobs
+        # to follow future model changes.
+        "model_drift_guard": True,
     },
 
     # Kanban multi-agent coordination — controls the dispatcher loop that
@@ -5221,6 +5238,44 @@ def get_missing_skill_config_vars() -> List[Dict[str, Any]]:
 # ``concurrent-log-handler``'s cross-process rotation lock and can peg a core /
 # stall the gateway/serve event loop. The cache lives for the process lifetime.
 _PROVIDER_NORMALIZE_WARNED: set = set()
+_PHANTOMBOT_KIMI_PROVIDER_ID = "kimi-k3-direct"
+_PHANTOMBOT_KIMI_ENDPOINT = "http://127.0.0.1:11435"
+_PHANTOMBOT_KIMI_MODEL = "kimi-k3-hf:latest"
+_PHANTOMBOT_KIMI_CONTEXT_LENGTH = 65536
+
+
+def _is_phantombot_kimi_model(value: Any) -> bool:
+    model = str(value or "").strip().lower()
+    return (
+        model == "kimi-k3-hf"
+        or model == "kimi-k3-hf:latest"
+        or model.startswith("kimi-k3-hf:")
+        or model == "moonshotai/kimi-k3"
+        or model.startswith("moonshotai/kimi-k3:")
+    )
+
+
+def _is_phantombot_kimi_endpoint(base_url: Any, provider_key: str = "") -> bool:
+    return (
+        provider_key.strip().lower() == _PHANTOMBOT_KIMI_PROVIDER_ID
+        or normalize_route_base_url(base_url) == _PHANTOMBOT_KIMI_ENDPOINT
+    )
+
+
+def _apply_phantombot_kimi_context_override(
+    models: Dict[str, Any],
+    *,
+    base_url: Any,
+    provider_key: str = "",
+) -> None:
+    """Keep PhantomBot's Kimi gateway from inheriting generic Ollama fallback metadata."""
+    if not _is_phantombot_kimi_endpoint(base_url, provider_key):
+        return
+    model_cfg = models.get(_PHANTOMBOT_KIMI_MODEL)
+    if not isinstance(model_cfg, dict):
+        model_cfg = {}
+    model_cfg["context_length"] = _PHANTOMBOT_KIMI_CONTEXT_LENGTH
+    models[_PHANTOMBOT_KIMI_MODEL] = model_cfg
 
 
 def _warn_once_per_provider(
@@ -5265,6 +5320,7 @@ def _normalize_custom_provider_entry(
         # into provider entries. Accept it silently so those (self-written)
         # configs don't warn on every load.
         "provider",
+        "enabled",
         "name", "api", "url", "base_url", "api_key", "key_env", "api_key_env",
         "api_mode", "transport", "model", "default_model", "models",
         "context_length", "rate_limit_delay",
@@ -5353,7 +5409,13 @@ def _normalize_custom_provider_entry(
 
     models = entry.get("models")
     if isinstance(models, dict) and models:
-        normalized["models"] = models
+        normalized_models = dict(models)
+        _apply_phantombot_kimi_context_override(
+            normalized_models,
+            base_url=base_url,
+            provider_key=provider_key,
+        )
+        normalized["models"] = normalized_models
     elif isinstance(models, list) and models:
         # Hand-edited configs (and older Hermes versions) may write
         # ``models`` as a plain list of ids or as ``[{id: ...}]`` rows.
@@ -5377,11 +5439,18 @@ def _normalize_custom_provider_entry(
             }
             normalized_models[model_id.strip()] = model_meta
         if normalized_models:
+            _apply_phantombot_kimi_context_override(
+                normalized_models,
+                base_url=base_url,
+                provider_key=provider_key,
+            )
             normalized["models"] = normalized_models
 
     context_length = entry.get("context_length")
     if isinstance(context_length, int) and context_length > 0:
         normalized["context_length"] = context_length
+    elif _is_phantombot_kimi_endpoint(base_url, provider_key):
+        normalized["context_length"] = _PHANTOMBOT_KIMI_CONTEXT_LENGTH
 
     rate_limit_delay = entry.get("rate_limit_delay")
     if isinstance(rate_limit_delay, (int, float)) and rate_limit_delay >= 0:
@@ -5694,6 +5763,11 @@ def get_custom_provider_context_length(
     target_url = normalize_route_base_url(base_url)
     if not target_url:
         return None
+    if (
+        target_url == _PHANTOMBOT_KIMI_ENDPOINT
+        and _is_phantombot_kimi_model(model)
+    ):
+        return _PHANTOMBOT_KIMI_CONTEXT_LENGTH
 
     for entry in custom_providers:
         if not isinstance(entry, dict):
@@ -7248,6 +7322,79 @@ def _normalize_root_model_keys(config: Dict[str, Any]) -> Dict[str, Any]:
     return config
 
 
+_PHANTOM_LOCAL_BASE_URL = "http://127.0.0.1:11434/v1"
+_PHANTOM_PUBLIC_MODEL_DEFAULTS = {
+    "phantom": {
+        "context_length": 65536,
+        "ollama_num_ctx": 65536,
+        "reasoning_effort": "none",
+    },
+    "phantom-unleashed": {
+        "context_length": 65536,
+        "ollama_num_ctx": 65536,
+        "reasoning_effort": "none",
+    },
+}
+
+
+def _normalize_phantom_model_profiles(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Finish the legacy DadGPT-to-Phantom local profile migration.
+
+    Older PhantomBot builds reused ``custom:phantom`` for the hosted
+    ``Dadgpt-default`` endpoint. The desktop now owns two local public profiles:
+    ``phantom`` and ``phantom-unleashed``. Normalize only installs already tied
+    to Phantom so ordinary Hermes custom providers remain untouched.
+    """
+    model_in = config.get("model")
+    providers_in = config.get("providers")
+    model = model_in if isinstance(model_in, dict) else {}
+    providers = providers_in if isinstance(providers_in, dict) else {}
+    provider_id = str(model.get("provider") or "").strip().lower()
+    model_id = str(model.get("default") or "").strip().lower()
+    base_url = str(model.get("base_url") or "").strip().lower()
+    has_phantom_provider = isinstance(providers.get("phantom"), dict)
+    is_phantom_install = provider_id in {"phantom", "custom:phantom"} or has_phantom_provider
+    if not is_phantom_install:
+        return config
+
+    legacy_dadgpt = provider_id in {"phantom", "custom:phantom"} and (
+        model_id.startswith("dadgpt") or "dadgpt.live" in base_url
+    )
+    config = dict(config)
+    model = dict(model)
+    providers = dict(providers)
+    phantom_provider = dict(providers.get("phantom") or {})
+
+    if legacy_dadgpt:
+        model["provider"] = "phantom"
+        model["default"] = "phantom"
+        model["base_url"] = _PHANTOM_LOCAL_BASE_URL
+
+    phantom_provider.setdefault("name", "Phantom")
+    provider_base_url = str(phantom_provider.get("base_url") or "").strip()
+    if not provider_base_url or "dadgpt.live" in provider_base_url.lower():
+        phantom_provider["base_url"] = _PHANTOM_LOCAL_BASE_URL
+
+    declared_models = phantom_provider.get("models")
+    if isinstance(declared_models, dict):
+        normalized_models = dict(declared_models)
+        for profile, defaults in _PHANTOM_PUBLIC_MODEL_DEFAULTS.items():
+            current = normalized_models.get(profile)
+            current_cfg = dict(current) if isinstance(current, dict) else {}
+            normalized_models[profile] = {**defaults, **current_cfg}
+        phantom_provider["models"] = normalized_models
+    else:
+        normalized_models = list(declared_models) if isinstance(declared_models, list) else []
+        phantom_provider["models"] = list(
+            dict.fromkeys(normalized_models + list(_PHANTOM_PUBLIC_MODEL_DEFAULTS))
+        )
+
+    config["model"] = model
+    providers["phantom"] = phantom_provider
+    config["providers"] = providers
+    return config
+
+
 def _normalize_max_turns_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize legacy root-level max_turns into agent.max_turns.
 
@@ -7302,6 +7449,22 @@ def is_provider_enabled(provider_cfg: Optional[Dict[str, Any]]) -> bool:
     if isinstance(flag, str):
         return flag.strip().lower() not in {"false", "0", "no", "off"}
     return bool(flag)
+
+
+def cron_model_drift_guard_enabled(config: Optional[Dict[str, Any]] = None) -> bool:
+    """Return whether cron should block unpinned jobs after model/provider drift."""
+    value = cfg_get(config or {}, "cron", "model_drift_guard", default=True)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {
+            "false",
+            "0",
+            "no",
+            "off",
+            "disabled",
+        }
+    return bool(value)
 
 
 def cfg_get(cfg: Optional[Dict[str, Any]], *keys: str, default: Any = None) -> Any:
@@ -7702,7 +7865,9 @@ def _load_config_impl(*, want_deepcopy: bool) -> Dict[str, Any]:
                         )
                     return copy.deepcopy(lkg_copy) if want_deepcopy else lkg_copy
 
-        normalized = _normalize_root_model_keys(_normalize_max_turns_config(config))
+        normalized = _normalize_phantom_model_profiles(
+            _normalize_root_model_keys(_normalize_max_turns_config(config))
+        )
         expanded = _expand_env_vars(normalized)
         # Managed scope wins at the leaf. Applied AFTER user expansion so a user
         # ${VAR} cannot shadow a managed literal: managed values are expanded only
@@ -7876,10 +8041,14 @@ def save_config(
             config = _merge_partial_save(_raw_for_paths, config)
         # ----------------------------------------------------------------
 
-        current_normalized = _normalize_root_model_keys(_normalize_max_turns_config(config))
+        current_normalized = _normalize_phantom_model_profiles(
+            _normalize_root_model_keys(_normalize_max_turns_config(config))
+        )
         normalized = current_normalized
         raw_existing = (
-            _normalize_root_model_keys(_normalize_max_turns_config(_raw_for_paths))
+            _normalize_phantom_model_profiles(
+                _normalize_root_model_keys(_normalize_max_turns_config(_raw_for_paths))
+            )
             if _raw_for_paths
             else {}
         )

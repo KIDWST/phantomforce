@@ -46,9 +46,45 @@ def _get_platform_default_hermes_home() -> Path:
     """Return the platform-native default Hermes home path."""
     if sys.platform == "win32":
         local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
-        base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
+        if local_appdata:
+            return Path(local_appdata) / "hermes"
+
+        # pathlib.Path.home() raises RuntimeError when a supervised or
+        # intentionally-scrubbed Windows process has none of HOME,
+        # USERPROFILE, HOMEDRIVE/HOMEPATH.  Resolve the native variables
+        # ourselves first, then use a deterministic last-resort profile path
+        # instead of crashing during module import.
+        try:
+            # Keep Path.home() as the normal fallback.  Besides matching
+            # pathlib semantics, this lets embedded/test runtimes provide a
+            # home without mutating process-global environment variables.
+            user_home = str(Path.home())
+        except RuntimeError:
+            user_home = ""
+        if not user_home:
+            user_home = os.environ.get("USERPROFILE", "").strip()
+        if not user_home:
+            drive = os.environ.get("HOMEDRIVE", "").strip()
+            tail = os.environ.get("HOMEPATH", "").strip()
+            if drive and tail:
+                user_home = drive + tail
+        if not user_home:
+            home = os.environ.get("HOME", "").strip()
+            # WSL launchers can pass a POSIX HOME to a native Windows child;
+            # that is not a usable Windows profile path.
+            if len(home) >= 3 and home[1:3] in {":\\", ":/"}:
+                user_home = home
+        if not user_home:
+            username = os.environ.get("USERNAME", "").strip() or "Default"
+            system_drive = os.environ.get("SystemDrive", "").strip() or "C:"
+            user_home = str(Path(system_drive + os.sep) / "Users" / username)
+        base = Path(user_home) / "AppData" / "Local"
         return base / "hermes"
-    return Path.home() / ".hermes"
+    try:
+        return Path.home() / ".hermes"
+    except RuntimeError:
+        home = os.environ.get("HOME", "").strip()
+        return (Path(home) if home else Path.cwd()) / ".hermes"
 
 
 def _hermes_home_from_env() -> Path:
@@ -961,6 +997,15 @@ def resolve_per_model_reasoning_effort(model: str, overrides: dict | None) -> di
     return None
 
 
+def _model_disables_native_reasoning(model: str) -> bool:
+    """Return True for local models that reject provider-native thinking flags."""
+    normalized = str(model or "").strip().lower()
+    if not normalized:
+        return False
+    bare = normalized.rsplit("/", 1)[-1]
+    return bare == "phantom" or bare.startswith("phantom:") or bare.startswith("phantom-v1") or bare.startswith("qwen3-coder")
+
+
 def resolve_reasoning_config(cfg: dict | None, model: str = "") -> dict | None:
     """Resolve the effective reasoning config for *model* from a config dict.
 
@@ -1003,6 +1048,9 @@ def resolve_reasoning_config(cfg: dict | None, model: str = "") -> dict | None:
             ).strip()
         else:
             model = ""
+
+    if _model_disables_native_reasoning(model):
+        return {"enabled": False}
 
     overrides = agent_cfg.get("reasoning_overrides") or {}
     per_model = resolve_per_model_reasoning_effort(model, overrides)

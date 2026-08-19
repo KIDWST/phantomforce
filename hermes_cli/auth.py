@@ -150,6 +150,7 @@ SERVICE_PROVIDER_NAMES: Dict[str, str] = {
 # provider as configured. This sentinel is sent only to LM Studio, never to
 # any remote service.
 LMSTUDIO_NOAUTH_PLACEHOLDER = "dummy-lm-api-key"
+CHATGPT_PLUS_NOAUTH_PLACEHOLDER = "dummy-chatgpt-plus-key"
 
 
 # =============================================================================
@@ -188,6 +189,14 @@ PROVIDER_REGISTRY: Dict[str, ProviderConfig] = {
         name="OpenAI Codex",
         auth_type="oauth_external",
         inference_base_url=DEFAULT_CODEX_BASE_URL,
+    ),
+    "chatgpt-plus": ProviderConfig(
+        id="chatgpt-plus",
+        name="ChatGPT Plus",
+        auth_type="api_key",
+        inference_base_url="http://127.0.0.1:8792/v1",
+        api_key_env_vars=(),
+        base_url_env_var="PHANTOM_CHATGPT_PLUS_BASE_URL",
     ),
     "openai-api": ProviderConfig(
         id="openai-api",
@@ -6705,6 +6714,27 @@ def get_api_key_provider_status(provider_id: str) -> Dict[str, Any]:
     else:
         base_url = pconfig.inference_base_url
 
+    if provider_id == "chatgpt-plus":
+        health_url = base_url.rstrip("/").removesuffix("/v1") + "/health"
+        try:
+            response = httpx.get(health_url, timeout=2.0)
+            payload = response.json() if response.status_code < 500 else {}
+        except Exception as exc:
+            payload = {"last_error": str(exc)}
+        bridge_ok = bool(payload.get("ok") and payload.get("browser_up"))
+        logged_in = payload.get("logged_in") is True
+
+        return {
+            "configured": bridge_ok,
+            "provider": provider_id,
+            "name": pconfig.name,
+            "key_source": key_source or "local_bridge",
+            "base_url": base_url,
+            "logged_in": logged_in,
+            "browser_up": bool(payload.get("browser_up")),
+            "last_error": payload.get("last_error"),
+        }
+
     return {
         "configured": bool(api_key),
         "provider": provider_id,
@@ -6874,11 +6904,11 @@ def resolve_api_key_provider_credentials(provider_id: str) -> Dict[str, Any]:
     key_source = ""
     api_key, key_source = _resolve_api_key_provider_secret(provider_id, pconfig)
 
-    # No-auth LM Studio: substitute a placeholder so runtime / auxiliary_client
-    # see the local server as configured. doctor still reports unconfigured
-    # because get_api_key_provider_status uses the raw secret resolver.
-    if not api_key and provider_id == "lmstudio":
-        api_key = LMSTUDIO_NOAUTH_PLACEHOLDER
+    # No-auth local providers: substitute a placeholder so runtime /
+    # auxiliary_client see the local server as configured. The ChatGPT Plus
+    # placeholder is only sent to the local bridge on 127.0.0.1.
+    if not api_key and provider_id in {"lmstudio", "chatgpt-plus"}:
+        api_key = CHATGPT_PLUS_NOAUTH_PLACEHOLDER if provider_id == "chatgpt-plus" else LMSTUDIO_NOAUTH_PLACEHOLDER
         key_source = key_source or "default"
 
     env_url = ""

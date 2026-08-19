@@ -1140,17 +1140,17 @@ export {
   buildPinArgs,
   buildPosixPinArgs,
   cachedScriptPath,
-  hasExistingGitCheckout,
   githubRawScriptUrl,
+  hasExistingGitCheckout,
   installedAgentInstallScript,
   installRefForStamp,
   isPinnedCommit,
   // Exposed for testability
   parseStageResult,
+  repositoryCacheKey,
   resolveCheckoutHead,
   resolveInstallScript,
   resolveLocalInstallScript,
   resolveMarkerPinnedCommit,
-  repositoryCacheKey,
   runBootstrap
 }

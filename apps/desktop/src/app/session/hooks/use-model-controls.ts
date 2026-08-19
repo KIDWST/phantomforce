@@ -176,6 +176,12 @@ export function useModelControls({ queryClient, requestGateway }: ModelControlsO
         liveGatewayProfile
       )
 
+      // Re-selecting the active row is a UI no-op. Avoid asking the gateway to
+      // rebuild the same runtime and append another durable model-switch event.
+      if (selection.model === prevModel && selection.provider === prevProvider) {
+        return true
+      }
+
       // No live session yet: the pick is pure UI state. session.create reads
       // $currentModel/$currentProvider and applies it as that session's override.
       if (!liveSessionId) {

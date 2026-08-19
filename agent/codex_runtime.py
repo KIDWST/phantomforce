@@ -28,6 +28,26 @@ from agent.stream_single_writer import claim_stream_writer, stream_writer_is_cur
 logger = logging.getLogger(__name__)
 
 
+def _is_terminal_codex_context_or_usage_error(error: Any) -> bool:
+    """Return true for Codex app-server failures that must not be retried.
+
+    These errors are produced by Codex's own hosted runtime/compactor. Replaying
+    the same turn after "Cannot compress further" or a hosted 429 only burns
+    quota and can ignore a user's pause because no prompt mutation can fix it.
+    """
+    text = str(error or "").lower()
+    if not text:
+        return False
+    terminal_markers = (
+        "context length exceeded",
+        "cannot compress further",
+        "usage limit has been reached",
+        "usage_limit_reached",
+        "http 429",
+    )
+    return any(marker in text for marker in terminal_markers)
+
+
 def _coerce_usage_int(value: Any) -> int:
     if isinstance(value, bool):
         return 0
@@ -692,7 +712,10 @@ def run_codex_app_server_turn(
     # return reaches us. Do NOT append again — that would duplicate.
 
     try:
-        turn = agent._codex_session.run_turn(user_input=user_message)
+        turn = agent._codex_session.run_turn(
+            user_input=user_message,
+            cancel_event=getattr(agent, "_external_cancel_event", None),
+        )
     except Exception as exc:
         logger.exception("codex app-server turn failed")
         # Crash → unconditionally drop the session so the next turn
@@ -757,6 +780,30 @@ def run_codex_app_server_turn(
         except Exception:
             pass
         agent._codex_session = None
+
+    _terminal_context_or_usage_error = _is_terminal_codex_context_or_usage_error(
+        getattr(turn, "error", None)
+    )
+    if _terminal_context_or_usage_error:
+        logger.warning(
+            "codex app-server terminal context/usage error; retiring session "
+            "without retry: %s",
+            turn.error,
+        )
+        try:
+            if getattr(agent, "_codex_session", None) is not None:
+                agent._codex_session.close()
+        except Exception:
+            pass
+        agent._codex_session = None
+        turn.should_retire = True
+        if not turn.final_text:
+            turn.final_text = (
+                "Codex runtime stopped: context is over the hosted thread "
+                "limit and Codex reported it cannot compress further, or the "
+                "hosted Codex runtime returned HTTP 429. This is a terminal "
+                "runtime stop for this turn; Hermes will not retry it."
+            )
 
     # Splice projected messages into the conversation. The projector emits
     # standard {role, content, tool_calls, tool_call_id} entries, which
@@ -848,6 +895,7 @@ def run_codex_app_server_turn(
         "completed": not turn.interrupted and turn.error is None,
         "partial": turn.interrupted or turn.error is not None,
         "interrupted": _user_interrupted,
+        "terminal_context_or_usage_error": _terminal_context_or_usage_error,
         **(
             {"interrupt_message": _interrupt_message}
             if _interrupt_message

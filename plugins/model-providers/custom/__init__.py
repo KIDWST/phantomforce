@@ -26,15 +26,22 @@ class CustomProfile(ProviderProfile):
         *,
         reasoning_config: dict | None = None,
         ollama_num_ctx: int | None = None,
+        ollama_options: dict[str, Any] | None = None,
+        supports_reasoning: bool = False,
+        is_ollama: bool = False,
+        reasoning_suppressed: bool = False,
         **ctx: Any,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         extra_body: dict[str, Any] = {}
         top_level: dict[str, Any] = {}
 
         # Ollama context window
-        if ollama_num_ctx:
+        if ollama_options or ollama_num_ctx:
             options = extra_body.get("options", {})
-            options["num_ctx"] = ollama_num_ctx
+            if isinstance(ollama_options, dict):
+                options.update(ollama_options)
+            if ollama_num_ctx:
+                options["num_ctx"] = ollama_num_ctx
             extra_body["options"] = options
 
         # Reasoning / thinking control for custom OpenAI-compatible endpoints
@@ -51,7 +58,14 @@ class CustomProfile(ProviderProfile):
         # Ollama-only flag and thinking is already server-default-on for these
         # backends, so forcing it risks a 400 on GLM/vLLM endpoints that don't
         # recognize it. Mirrors the DeepSeek/Zai profile precedent.
-        if reasoning_config and isinstance(reasoning_config, dict):
+        # Ollama rejects ``reasoning_effort`` outright when the selected model
+        # lacks its native ``thinking`` capability.  Other custom OpenAI-
+        # compatible endpoints do not publish Ollama capabilities, so preserve
+        # their legacy pass-through unless recovery explicitly suppresses it.
+        allow_reasoning_controls = not reasoning_suppressed and (
+            not is_ollama or supports_reasoning
+        )
+        if allow_reasoning_controls and reasoning_config and isinstance(reasoning_config, dict):
             _effort = (reasoning_config.get("effort") or "").strip().lower()
             _enabled = reasoning_config.get("enabled", True)
             if _effort == "none" or _enabled is False:
@@ -85,6 +99,12 @@ custom = CustomProfile(
     name="custom",
     aliases=(
         "ollama",
+        "ollama-launch",
+        "local-ollama",
+        "custom:local-ollama",
+        "phantom",
+        "custom:phantom",
+        "qwen3-coder-local",
         "local",
         "vllm",
         "llamacpp",

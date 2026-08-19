@@ -1596,7 +1596,19 @@ def _apply_main_model_assignment(
         clear_model_endpoint_credentials(model_cfg, clear_api_mode=False)
     if new_provider != prev_provider:
         clear_model_endpoint_credentials(model_cfg, clear_api_key=False)
-    model_cfg.pop("context_length", None)
+    normalized_base_url = str(base_url or model_cfg.get("base_url") or "").strip().rstrip("/")
+    is_phantombot_kimi = (
+        provider.strip().lower() == "kimi-k3-direct"
+        or normalized_base_url == "http://127.0.0.1:11435"
+        or str(model or "").strip().lower() in {"kimi-k3-hf", "kimi-k3-hf:latest"}
+    )
+    if is_phantombot_kimi:
+        model_cfg["provider"] = "kimi-k3-direct"
+        model_cfg["default"] = "kimi-k3-hf:latest"
+        model_cfg["base_url"] = "http://127.0.0.1:11435"
+        model_cfg["context_length"] = 65536
+    else:
+        model_cfg.pop("context_length", None)
     return model_cfg
 
 
@@ -10014,7 +10026,7 @@ _OAUTH_PROVIDER_CATALOG: tuple[Dict[str, Any], ...] = (
     },
     {
         "id": "openai-codex",
-        "name": "OpenAI OAuth (ChatGPT)",
+        "name": "OpenAI OAuth (Codex)",
         "flow": "device_code",
         "cli_command": "hermes auth add openai-codex",
         "docs_url": "https://platform.openai.com/docs",

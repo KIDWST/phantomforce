@@ -20,6 +20,7 @@ POSIX-only: Windows has its own grandchild lifecycle (no shared session,
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -27,6 +28,7 @@ import sys
 import textwrap
 import time
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -36,6 +38,70 @@ import pytest
 # so concurrent invocations of the suite don't clobber each other.
 _HANDOFF_DIR = Path(os.environ.get("TMPDIR", "/tmp")) / "hermes-isolation-probe"
 _HANDOFF_DIR.mkdir(exist_ok=True)
+
+
+def _runner_module():
+    runner = Path(__file__).resolve().parent.parent / "scripts" / "run_tests_parallel.py"
+    spec = importlib.util.spec_from_file_location("run_tests_parallel_under_test", runner)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_parallel_files_receive_distinct_basetemp_leaves(tmp_path: Path) -> None:
+    runner = _runner_module()
+    first_args, first = runner._isolated_pytest_args(Path("tests/test_a.py"), ["-q", f"--basetemp={tmp_path}"])
+    second_args, second = runner._isolated_pytest_args(Path("tests/test_b.py"), ["--basetemp", str(tmp_path), "-q"])
+
+    assert first != second
+    assert first.parent == tmp_path
+    assert second.parent == tmp_path
+    assert tmp_path.is_dir()
+    assert sum(arg.startswith("--basetemp=") for arg in first_args) == 1
+    assert sum(arg.startswith("--basetemp=") for arg in second_args) == 1
+
+
+def test_windows_happy_path_never_taskkills_reusable_exited_pid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A completed Windows worker PID must never be handed to taskkill.
+
+    Windows can reuse the numeric PID immediately after ``communicate``
+    returns.  Killing that dead PID is therefore capable of terminating a
+    different parallel test process that inherited the number.
+    """
+    runner = _runner_module()
+    fake_proc = MagicMock()
+    fake_proc.pid = 4242
+    fake_proc.returncode = 0
+    fake_proc.communicate.return_value = ("1 passed in 0.01s", None)
+    captured: dict[str, object] = {}
+
+    def fake_popen(*args, **kwargs):
+        captured["env"] = kwargs["env"]
+        return fake_proc
+
+    monkeypatch.setattr(runner.sys, "platform", "win32")
+    monkeypatch.setattr(runner.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        runner,
+        "_isolated_pytest_args",
+        lambda _file, args: (args, tmp_path / "unused-basetemp"),
+    )
+    kill_tree = MagicMock()
+    monkeypatch.setattr(runner, "_kill_tree", kill_tree)
+
+    _, rc, _, _, _ = runner._run_one_file_once(
+        Path("tests/test_probe.py"), ["-q"], tmp_path, 30,
+    )
+
+    assert rc == 0
+    kill_tree.assert_not_called()
+    child_env = captured["env"]
+    assert isinstance(child_env, dict)
+    assert child_env["PYTHONUTF8"] == "1"
+    assert child_env["PYTHONIOENCODING"] == "utf-8"
 
 
 def _handoff_path_for(nonce: str) -> Path:
@@ -247,7 +313,7 @@ def test_bare_value_flag_keeps_its_value(tmp_path: Path) -> None:
     assert proc.returncode == 0, proc.stdout
     # Exactly one test selected: the per-file summary shows "1✓" (1 passed).
     # test_beta is deselected by the -k filter.
-    assert "1✓" in proc.stdout or "1 passed" in proc.stdout, proc.stdout
+    assert "1✓" in proc.stdout or "1 tests passed" in proc.stdout, proc.stdout
     assert "2✓" not in proc.stdout, (
         f"both tests ran — -k filter did not apply:\n{proc.stdout}"
     )
