@@ -522,6 +522,7 @@ import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js"
 import { callDeepSeekV4Flash } from "./phantom-ai/providers/deepseek-v4-transport.js";
 import { callLocalOllamaChat, getLocalOllamaStatus } from "./phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
+import { fetchOpenRouterModels } from "./phantom-ai/providers/openrouter-models.js";
 import { sanitizeProviderDetail } from "./phantom-ai/provider-error.js";
 import {
   AI_RUNTIME_PROVIDER_IDS,
@@ -811,6 +812,10 @@ const AiProviderCredentialSchema = z.object({
 const AiProviderCredentialDeleteSchema = z.object({
   tenant_id: z.string().trim().max(80).optional(),
   provider_id: z.enum(AI_CREDENTIAL_PROVIDER_IDS),
+});
+const AiRuntimeModelsQuerySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  provider_id: z.literal("openrouter_glm"),
 });
 
 function safeCustomizationTenantId(value: unknown, fallback: string) {
@@ -4743,6 +4748,7 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
     });
   }
   if (providerId === "openrouter_glm") {
+    const credential = await getAiProviderCredential(ctx.tenantId, "openrouter_glm");
     return callOpenRouterGlm52(
       {
         requestId: ctx.requestId,
@@ -4756,12 +4762,13 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
         adminOperatorLane: true,
       },
       {
+        credential,
+        modelId: ctx.requestedModelId || ctx.requestedModel,
         env: {
           ...process.env,
           PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
           PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
           PHANTOM_OPENROUTER_TIMEOUT_MS: String(timeoutMs),
-          ...(ctx.requestedModelId ? { OPENROUTER_MODEL: ctx.requestedModelId } : {}),
         },
       },
     );
@@ -5446,7 +5453,9 @@ async function publicAiRuntimeState(config: AiRuntimeConfig) {
       ...manager,
       providers: manager.providers.map((provider) => {
         const providerId = providerIdByDisplayId[provider.display_id];
-        const credentialConfigured = providerId === "deepseek_api" && providerCredentials.deepseek_api.configured;
+        const credentialConfigured = providerId === "deepseek_api" || providerId === "openrouter_glm"
+          ? Boolean(providerCredentials[providerId]?.configured)
+          : false;
         return {
           ...provider,
           selected: config.allowed_provider_ids.includes(providerId) || config.phantom_bot.allowed_provider_ids.includes(providerId),
@@ -5500,6 +5509,35 @@ app.get("/phantom-ai/runtime/config", async (request, reply) => {
       ? Number((error as { statusCode: number }).statusCode)
       : 500;
     return reply.status(statusCode).send({ ok: false, error: error instanceof Error ? error.message : "AI runtime configuration could not be read." });
+  }
+});
+
+app.get("/phantom-ai/runtime/models", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = AiRuntimeModelsQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  try {
+    const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+    const credential = await getAiProviderCredential(tenantId, "openrouter_glm");
+    const models = await fetchOpenRouterModels({ credential });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      provider_id: parsed.data.provider_id,
+      configured: Boolean(credential),
+      dynamic: models.length > 0,
+      models,
+      secret_returned: false,
+    };
+  } catch (error) {
+    return reply.status(502).send({
+      ok: false,
+      error: error instanceof Error ? error.message : "OpenRouter models could not be loaded.",
+      provider_id: parsed.data.provider_id,
+      models: [],
+      secret_returned: false,
+    });
   }
 });
 
@@ -7580,7 +7618,6 @@ app.get("/api/phantomplay/devroom/stats", async () => ({ ok: true, ...devRoomSta
 type PhantomPlayAiModelOption = { id: string; name: string };
 type PhantomPlayAiProviderId = "auto" | "codex" | "claude" | "openrouter" | "local";
 
-const PHANTOMPLAY_OPENROUTER_MODELS_ENDPOINT = "https://openrouter.ai/api/v1/models";
 const PHANTOMPLAY_AI_MODEL_FALLBACKS: Record<PhantomPlayAiProviderId, PhantomPlayAiModelOption[]> = {
   auto: [{ id: "", name: "Automatic model routing" }],
   codex: [
@@ -7625,41 +7662,6 @@ function openRouterDesktopConfigured() {
     && Boolean(process.env.OPENROUTER_API_KEY?.trim());
 }
 
-function parseOpenRouterModels(value: unknown): PhantomPlayAiModelOption[] {
-  if (!value || typeof value !== "object") return [];
-  const data = (value as Record<string, unknown>).data;
-  if (!Array.isArray(data)) return [];
-  return data
-    .map((item): PhantomPlayAiModelOption | null => {
-      if (!item || typeof item !== "object") return null;
-      const record = item as Record<string, unknown>;
-      const id = typeof record.id === "string" ? record.id.trim() : "";
-      if (!id) return null;
-      const name = typeof record.name === "string" && record.name.trim() ? record.name.trim() : id;
-      return { id, name };
-    })
-    .filter((item): item is PhantomPlayAiModelOption => Boolean(item))
-    .slice(0, 500);
-}
-
-async function fetchOpenRouterModelsForPhantomPlay() {
-  const headers: Record<string, string> = {};
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6500);
-  try {
-    const response = await fetch(PHANTOMPLAY_OPENROUTER_MODELS_ENDPOINT, {
-      headers,
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`OpenRouter models returned HTTP ${response.status}`);
-    return parseOpenRouterModels(await response.json());
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 app.get("/api/phantomplay/ai-models", async (request, reply) => {
   const requestIp = request.ip.replace(/^::ffff:/u, "");
   if (!phantomPlayDesktopLocalAllowed(requestIp)) {
@@ -7694,7 +7696,7 @@ app.get("/api/phantomplay/ai-models", async (request, reply) => {
     };
   }
   try {
-    const models = await fetchOpenRouterModelsForPhantomPlay();
+    const models = await fetchOpenRouterModels({ credential: process.env.OPENROUTER_API_KEY });
     return { ok: true, provider, configured: true, dynamic: models.length > 0, models: models.length ? models : fallback };
   } catch (error) {
     return {

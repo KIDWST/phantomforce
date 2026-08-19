@@ -10,7 +10,9 @@ import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop,
 import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-167";
 import {
   getAiRuntimeState,
+  getAiProviderModelCatalog,
   loadAiRuntimeConfig,
+  loadAiProviderModels,
   persistAiRuntimeConfig,
   removeAiProviderCredential,
   refreshAiRuntimeProviders,
@@ -22,7 +24,7 @@ const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
 
 const SETTINGS_TABS = [
-  { id: "model", label: "Model", category: "AI Brain" },
+  { id: "model", label: "Gateway & brain", category: "AI Brain" },
   { id: "loop", label: "Loop routing", category: "AI Brain" },
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
   { id: "bridge", label: "ChatGPT Bridge", category: "AI Brain" },
@@ -159,6 +161,10 @@ const PROVIDER_MODES = [
 ];
 
 function providerModels(provider) {
+  if (provider.id === "openrouter") {
+    const discovered = getAiProviderModelCatalog("openrouter_glm").models.map((model) => model.id).filter(Boolean);
+    return [...new Set([...provider.models, ...discovered])];
+  }
   if (provider.id !== "local") return provider.models;
   const installed = localModelStatus.models
     .map((model) => model.model || model.name)
@@ -362,14 +368,22 @@ export function getOperatorInfrastructureStatus(surface = "platform") {
   }
   const activeTruth = activeState?.status === "online"
     ? "Real"
+    : activeState?.truth_state === "configured"
+      ? "Configured"
     : activeState?.status === "offline"
       ? "Unavailable"
       : "Checking";
   return {
     label: `${activeProvider.name} · ${activeTruth}`,
-    detail: activeState?.status === "online" ? `Real · ${activeProvider.name} / ${modelLabel}` : activeState?.status === "offline" ? `Unavailable · ${activeState.detail || "Choose Connect or another provider"}` : `Checking · ${activeProvider.name} / ${modelLabel}`,
-    tone: activeState?.status === "online" ? "ok" : activeState?.status === "offline" || (activeProvider.id === "local" && localModelStatus.error) ? "error" : "warn",
-    configured: activeState?.status === "online",
+    detail: activeState?.status === "online"
+      ? `Real · ${activeProvider.name} / ${modelLabel}`
+      : activeState?.truth_state === "configured"
+        ? `Configured · ${activeProvider.name} / ${modelLabel}`
+        : activeState?.status === "offline"
+          ? `Unavailable · ${activeState.detail || "Choose Connect or another provider"}`
+          : `Checking · ${activeProvider.name} / ${modelLabel}`,
+    tone: activeState?.status === "online" ? "ok" : activeState?.truth_state === "configured" ? "warn" : activeState?.status === "offline" || (activeProvider.id === "local" && localModelStatus.error) ? "error" : "warn",
+    configured: activeState?.status === "online" || activeState?.truth_state === "configured",
   };
 }
 
@@ -545,19 +559,33 @@ function renderSelectedModelControls(route, routeId) {
   return route.selectedProviders.map((providerId) => {
     const provider = providerFor(providerId);
     const selectedModel = route.models[provider.id] || provider.models[0];
-    const models = providerModels(provider);
-    const listId = `ai-models-${provider.id}`;
-    const control = provider.allowCustomModel
-      ? `<input type="text" list="${listId}" data-ai-route="${esc(routeId)}" data-ai-provider-model="${provider.id}" value="${esc(selectedModel)}" autocomplete="off" spellcheck="false" aria-label="${esc(provider.name)} model ID"/>
-         <datalist id="${listId}">${models.map((model) => `<option value="${esc(model)}">${esc(provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}</datalist>`
-      : `<select data-ai-route="${esc(routeId)}" data-ai-provider-model="${provider.id}">
-          ${models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(modelDisplayLabel(model))}</option>`).join("")}
-        </select>`;
+    const models = [...new Set([selectedModel, ...providerModels(provider)].filter(Boolean))];
+    const control = `<select data-ai-route="${esc(routeId)}" data-ai-provider-model="${provider.id}" aria-label="${esc(provider.name)} model">
+      ${models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(providerModelLabel(provider.id, model))}</option>`).join("")}
+    </select>`;
     return `<label class="set-control set-provider-model"><span>${esc(provider.name)} model</span>
       ${control}
-      ${provider.id === "local" ? `<i>${esc(localProviderStatusText())}</i>` : ""}
+      ${provider.id === "local" ? `<i>${esc(localProviderStatusText())}</i>` : provider.id === "openrouter" ? `<i>${esc(openRouterModelStatusText())}</i>` : ""}
     </label>`;
   }).join("");
+}
+
+function providerModelLabel(providerId, modelId) {
+  if (providerId === "local") return localModelLabel(modelId);
+  if (providerId === "openrouter") {
+    const model = getAiProviderModelCatalog("openrouter_glm").models.find((item) => item.id === modelId);
+    const context = Number(model?.context_length);
+    return `${model?.name || modelDisplayLabel(modelId)}${Number.isFinite(context) && context > 0 ? ` · ${Math.round(context / 1000)}k context` : ""}`;
+  }
+  return modelDisplayLabel(modelId);
+}
+
+function openRouterModelStatusText() {
+  const catalogue = getAiProviderModelCatalog("openrouter_glm");
+  if (catalogue.loading) return "Reading the OpenRouter model catalogue...";
+  if (catalogue.error) return catalogue.error;
+  if (catalogue.loaded && catalogue.models.length) return `${catalogue.models.length} OpenRouter models available`;
+  return "Load the live OpenRouter model catalogue";
 }
 
 function localModelLabel(modelId) {
@@ -925,9 +953,64 @@ function renderAiRouteCard(routeId, route, title, note) {
     </section>`;
 }
 
+function renderProviderCredentialSetup({ providerId, publicId, mark, title, placeholder, status, note }) {
+  const configured = Boolean(status?.configured);
+  return `
+    <section class="set-provider-setup ${configured ? "is-configured" : ""}" data-provider-credential-card="${esc(providerId)}">
+      <div class="set-provider-setup-copy">
+        <span class="set-provider-mark">${esc(mark)}</span>
+        <span>
+          <b>${esc(title)}</b>
+          <i>${configured ? `Connected ${esc(status.key_hint || "")}. ${esc(note)}` : `Add a key once. It is encrypted on the server and never returned to this browser. ${esc(note)}`}</i>
+        </span>
+      </div>
+      <div class="set-provider-setup-actions">
+        <input type="password" data-provider-api-key="${esc(providerId)}" placeholder="${esc(placeholder)}" autocomplete="new-password" spellcheck="false" aria-label="${esc(title)} API key"/>
+        <button class="btn btn-primary" type="button" data-provider-save="${esc(providerId)}">${configured ? "Replace key" : `Connect ${esc(title)}`}</button>
+        ${status?.removable ? `<button class="btn btn-quiet" type="button" data-provider-remove="${esc(providerId)}">Remove</button>` : ""}
+        <button class="btn btn-quiet" type="button" data-provider-platform="${esc(publicId)}">Set as platform brain</button>
+      </div>
+      <p class="set-credential-message" data-provider-message="${esc(providerId)}"></p>
+    </section>`;
+}
+
+function renderGatewayLoopControls() {
+  const loop = loadPhantomLoop();
+  const provider = LOOP_PROVIDERS.find((item) => item.id === loop.targetProvider) || LOOP_PROVIDERS[0];
+  return `
+    <section class="set-gateway-loop">
+      <div class="set-gateway-loop-copy">
+        <p class="set-eyebrow">Optional second pass</p>
+        <h4>Phantom Loop</h4>
+        <p>Send a draft through another selected model for critique or refinement. The loop never replaces the Platform brain or PhantomBot model.</p>
+      </div>
+      <label class="set-switch set-switch-large" title="Toggle Phantom Loop">
+        <input type="checkbox" data-loop-toggle ${loop.enabled ? "checked" : ""}/><span></span>
+      </label>
+      <div class="set-control-grid">
+        <label class="set-control"><span>Loop provider</span>
+          <select data-loop-field="targetProvider">${optionList(LOOP_PROVIDERS.map((item) => ({ id: item.id, label: item.name })), loop.targetProvider)}</select>
+        </label>
+        <label class="set-control"><span>Loop model</span>
+          <select data-loop-field="targetModel">${optionList(provider.models.map((model) => ({ id: model, label: modelDisplayLabel(model) })), loop.targetModel)}</select>
+        </label>
+        <label class="set-control"><span>Depth</span>
+          <select data-loop-field="depth">${optionList([
+            { id: "one_pass", label: "One pass" },
+            { id: "two_pass", label: "Two passes" },
+            { id: "auto", label: "Automatic" },
+          ], loop.depth)}</select>
+        </label>
+      </div>
+      <button class="btn btn-quiet" type="button" data-open-loop-settings>Advanced loop controls</button>
+    </section>`;
+}
+
 function renderModelTab(settings) {
   const runtime = getAiRuntimeState();
   const deepSeekCredential = runtime.providerCredentials?.deepseek_api || {};
+  const openRouterCredential = runtime.providerCredentials?.openrouter_glm || {};
+  const openRouterCatalogue = getAiProviderModelCatalog("openrouter_glm");
   const persistenceLabel = runtime.saving
     ? "Saving organization brain…"
     : runtime.error
@@ -942,8 +1025,8 @@ function renderModelTab(settings) {
       <div class="set-section set-ai-control-center">
         <div class="set-sec-head">
           <div>
-            <p class="set-eyebrow">AI control center</p>
-            <h3>Choose the brain for each part of PhantomForce</h3>
+            <p class="set-eyebrow">Gateway control center</p>
+            <h3>Choose exactly what powers PhantomForce</h3>
             <p class="set-note">The platform brain controls pages, planning, workspace intelligence, and automations. PhantomBot has its own model choice, so changing chat never silently changes the rest of the business.</p>
           </div>
         </div>
@@ -951,23 +1034,37 @@ function renderModelTab(settings) {
           <span><b>Runtime truth</b><i>${esc(persistenceLabel)}</i></span>
           <button class="btn btn-quiet" type="button" data-ai-runtime-refresh ${runtime.refreshing ? "disabled" : ""}>${runtime.refreshing ? "Checking…" : "Check providers now"}</button>
         </div>
-        <div class="set-deepseek-setup ${deepSeekCredential.configured ? "is-configured" : ""}">
-          <div class="set-deepseek-copy">
-            <span class="set-provider-mark">DS</span>
-            <span><b>DeepSeek V4 Flash</b><i>${deepSeekCredential.configured ? `Connected ${esc(deepSeekCredential.key_hint || "")}` : "Add an API key once; it is encrypted on the server and never returned to this browser."}</i></span>
-          </div>
-          <div class="set-deepseek-actions">
-            <input type="password" data-deepseek-api-key placeholder="DeepSeek API key" autocomplete="new-password" spellcheck="false" aria-label="DeepSeek API key"/>
-            <button class="btn btn-primary" type="button" data-deepseek-save>${deepSeekCredential.configured ? "Replace key" : "Connect DeepSeek"}</button>
-            ${deepSeekCredential.removable ? '<button class="btn btn-quiet" type="button" data-deepseek-remove>Remove</button>' : ""}
-            <button class="btn btn-quiet" type="button" data-deepseek-platform>Use for platform</button>
-          </div>
-          <p class="set-credential-message" data-deepseek-message></p>
+        <div class="set-provider-setup-grid">
+          ${renderProviderCredentialSetup({
+            providerId: "deepseek_api",
+            publicId: "deepseek",
+            mark: "DS",
+            title: "DeepSeek",
+            placeholder: "DeepSeek API key",
+            status: deepSeekCredential,
+            note: "Use any supported DeepSeek model in the route below.",
+          })}
+          ${renderProviderCredentialSetup({
+            providerId: "openrouter_glm",
+            publicId: "openrouter",
+            mark: "OR",
+            title: "OpenRouter",
+            placeholder: "OpenRouter API key",
+            status: openRouterCredential,
+            note: openRouterCatalogue.models.length
+              ? `${openRouterCatalogue.models.length} live models are ready in the dropdowns.`
+              : "Connect, then load the live model catalogue.",
+          })}
+        </div>
+        <div class="set-model-catalogue-bar">
+          <span><b>OpenRouter model catalogue</b><i>${esc(openRouterModelStatusText())}</i></span>
+          <button class="btn btn-quiet" type="button" data-openrouter-model-refresh ${openRouterCatalogue.loading ? "disabled" : ""}>${openRouterCatalogue.loading ? "Loading models..." : "Refresh model list"}</button>
         </div>
         <div class="set-route-grid">
           ${renderAiRouteCard("platform", settings, "Platform brain", "Controls every AI-assisted page, planning flow, automation draft, workspace decision, and Prompt the Outcome request.")}
           ${renderAiRouteCard("phantombot", settings.phantomBot, "PhantomBot", "Controls PhantomBot conversations only. It can use a faster, local, subscription, or API model without changing the platform brain.")}
         </div>
+        ${renderGatewayLoopControls()}
         ${settings.selectedProviders.includes("local") || settings.phantomBot.selectedProviders.includes("local") ? `
           <div class="set-rule-list">
             <span>Local uses Ollama on this machine (${esc(localModelStatus.baseUrl)}). A named model is usable only when Ollama reports it as installed.</span>
@@ -1465,6 +1562,17 @@ export function renderOperatorSettings(el, opts = {}) {
   const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
   const activeTab = initialTab || loadSettingsTab();
   const activeContext = SETTINGS_CONTEXT[activeTab];
+  const hero = activeTab === "model"
+    ? {
+        eyebrow: "Platform gateway",
+        title: "PhantomForce Brain & Gateway",
+        note: "Connect provider keys, choose the organization-wide Platform brain, choose PhantomBot separately, and control optional loop routing from one place.",
+      }
+    : {
+        eyebrow: "Operator brain",
+        title: "Phantom Console settings",
+        note: "Phantom AI is the chatbot. Phantom Console is the operating layer around it: organization-wide model routing, Phantom Loop, memory depth, Termina hands, and the approval/autopilot boundary. Provider credentials stay encrypted on the server.",
+      };
   if (initialTab) saveSettingsTab(initialTab);
 
   const TAB_CONTENT = {
@@ -1485,9 +1593,9 @@ export function renderOperatorSettings(el, opts = {}) {
     <div class="settings settings-operator">
       <div class="set-section set-ai-hero">
         <div>
-          <p class="set-eyebrow">Operator brain</p>
-          <h3>Phantom Console settings</h3>
-          <p class="set-note">Phantom AI is the chatbot. Phantom Console is the operating layer around it: organization-wide model routing, Phantom Loop, memory depth, Termina hands, and the approval/autopilot boundary. Provider credentials stay on the server; the public demo still cannot send, upload, charge, or touch private systems.</p>
+          <p class="set-eyebrow">${esc(hero.eyebrow)}</p>
+          <h3>${esc(hero.title)}</h3>
+          <p class="set-note">${esc(hero.note)}</p>
         </div>
         ${renderSafetySummary(settings)}
       </div>
@@ -1556,12 +1664,6 @@ export function renderOperatorSettings(el, opts = {}) {
       saveAndRender();
     };
     select.onchange = commitModel;
-    if (select.tagName === "INPUT") {
-      select.oninput = () => {
-        window.clearTimeout(select._phantomModelSaveTimer);
-        select._phantomModelSaveTimer = window.setTimeout(commitModel, 450);
-      };
-    }
   });
 
   el.querySelectorAll("[data-ai-preferred]").forEach((preferred) => {
@@ -1571,46 +1673,60 @@ export function renderOperatorSettings(el, opts = {}) {
     };
   });
 
-  const deepSeekMessage = el.querySelector("[data-deepseek-message]");
-  const deepSeekSave = el.querySelector("[data-deepseek-save]");
-  if (deepSeekSave) deepSeekSave.onclick = async () => {
-    const input = el.querySelector("[data-deepseek-api-key]");
-    const apiKey = String(input?.value || "").trim();
-    if (!apiKey) {
-      if (deepSeekMessage) deepSeekMessage.textContent = "Enter the DeepSeek API key first.";
-      input?.focus();
-      return;
-    }
-    deepSeekSave.disabled = true;
-    if (deepSeekMessage) deepSeekMessage.textContent = "Encrypting and saving on the server…";
-    try {
-      await saveAiProviderCredential("deepseek_api", apiKey);
-      if (input) input.value = "";
-      if (deepSeekMessage) deepSeekMessage.textContent = "DeepSeek is connected. The key was not kept in this browser.";
-      if (el.isConnected) renderOperatorSettings(el, opts);
-    } catch (error) {
-      deepSeekSave.disabled = false;
-      if (deepSeekMessage) deepSeekMessage.textContent = error instanceof Error ? error.message : "DeepSeek could not be connected.";
-    }
-  };
-  const deepSeekRemove = el.querySelector("[data-deepseek-remove]");
-  if (deepSeekRemove) deepSeekRemove.onclick = async () => {
-    deepSeekRemove.disabled = true;
-    try {
-      await removeAiProviderCredential("deepseek_api");
-      if (el.isConnected) renderOperatorSettings(el, opts);
-    } catch (error) {
-      deepSeekRemove.disabled = false;
-      if (deepSeekMessage) deepSeekMessage.textContent = error instanceof Error ? error.message : "DeepSeek could not be disconnected.";
-    }
-  };
-  const deepSeekPlatform = el.querySelector("[data-deepseek-platform]");
-  if (deepSeekPlatform) deepSeekPlatform.onclick = () => {
-    settings.provider = "deepseek";
-    settings.providerMode = "multiple";
-    settings.selectedProviders = ["deepseek", "local", "private"];
-    settings.models.deepseek = "deepseek-v4-flash";
-    saveAndRender();
+  el.querySelectorAll("[data-provider-save]").forEach((button) => {
+    button.onclick = async () => {
+      const providerId = button.dataset.providerSave;
+      const input = el.querySelector(`[data-provider-api-key="${providerId}"]`);
+      const message = el.querySelector(`[data-provider-message="${providerId}"]`);
+      const apiKey = String(input?.value || "").trim();
+      if (!apiKey) {
+        if (message) message.textContent = "Enter the API key first.";
+        input?.focus();
+        return;
+      }
+      button.disabled = true;
+      if (message) message.textContent = "Encrypting and saving on the server...";
+      try {
+        await saveAiProviderCredential(providerId, apiKey);
+        if (providerId === "openrouter_glm") await loadAiProviderModels("openrouter_glm", { force: true }).catch(() => null);
+        if (input) input.value = "";
+        if (el.isConnected) renderOperatorSettings(el, opts);
+      } catch (error) {
+        button.disabled = false;
+        if (message) message.textContent = error instanceof Error ? error.message : "The provider could not be connected.";
+      }
+    };
+  });
+  el.querySelectorAll("[data-provider-remove]").forEach((button) => {
+    button.onclick = async () => {
+      const providerId = button.dataset.providerRemove;
+      const message = el.querySelector(`[data-provider-message="${providerId}"]`);
+      button.disabled = true;
+      try {
+        await removeAiProviderCredential(providerId);
+        if (el.isConnected) renderOperatorSettings(el, opts);
+      } catch (error) {
+        button.disabled = false;
+        if (message) message.textContent = error instanceof Error ? error.message : "The provider could not be disconnected.";
+      }
+    };
+  });
+  el.querySelectorAll("[data-provider-platform]").forEach((button) => {
+    button.onclick = () => {
+      const providerId = button.dataset.providerPlatform;
+      settings.provider = providerId;
+      settings.providerMode = "single";
+      settings.selectedProviders = [providerId];
+      saveAndRender();
+    };
+  });
+
+  const openRouterModelRefresh = el.querySelector("[data-openrouter-model-refresh]");
+  if (openRouterModelRefresh) openRouterModelRefresh.onclick = () => {
+    void loadAiProviderModels("openrouter_glm", { force: true })
+      .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
+      .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
+    renderOperatorSettings(el, opts);
   };
 
   const localRefresh = el.querySelector("[data-local-model-refresh]");
@@ -1703,12 +1819,25 @@ export function renderOperatorSettings(el, opts = {}) {
   const loopToggle = el.querySelector("[data-loop-toggle]");
   if (loopToggle) loopToggle.onchange = () => saveLoopAndRender({ enabled: loopToggle.checked });
 
+  const openLoopSettings = el.querySelector("[data-open-loop-settings]");
+  if (openLoopSettings) openLoopSettings.onclick = () => {
+    saveSettingsTab("loop");
+    renderOperatorSettings(el, opts);
+  };
+
   const ghostModeToggle = el.querySelector("[data-ghost-mode-toggle]");
   if (ghostModeToggle) ghostModeToggle.onchange = () => setGhostModeAndRender(el, opts, ghostModeToggle.checked);
   if (!ghostModeStatus.loaded && !ghostModeStatus.loading) refreshGhostMode(el, opts);
 
   el.querySelectorAll("[data-loop-field]").forEach((field) => {
-    field.onchange = () => saveLoopAndRender({ [field.dataset.loopField]: field.value });
+    field.onchange = () => {
+      if (field.dataset.loopField === "targetProvider") {
+        const nextProvider = LOOP_PROVIDERS.find((provider) => provider.id === field.value) || LOOP_PROVIDERS[0];
+        saveLoopAndRender({ targetProvider: nextProvider.id, targetModel: nextProvider.models[0] });
+        return;
+      }
+      saveLoopAndRender({ [field.dataset.loopField]: field.value });
+    };
   });
 
   const costSelect = el.querySelector("[data-loop-cost]");
@@ -1768,6 +1897,12 @@ export function renderOperatorSettings(el, opts = {}) {
   const runtime = getAiRuntimeState();
   if (activeTab === "model" && !runtime.loaded && !runtime.loading) {
     void hydrateOperatorRuntimeSettings()
+      .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
+      .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
+  }
+  const openRouterCatalogue = getAiProviderModelCatalog("openrouter_glm");
+  if (activeTab === "model" && !openRouterCatalogue.loaded && !openRouterCatalogue.loading) {
+    void loadAiProviderModels("openrouter_glm")
       .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
       .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
   }

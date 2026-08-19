@@ -9,7 +9,7 @@ import {
   session,
 } from "./store.js?v=phantom-live-20260819-167";
 import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260819-167";
-import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260819-167";
+import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings } from "./settings.js?v=phantom-live-20260819-167";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -863,34 +863,17 @@ function osSound(kind) {
   else if (kind === "toast") { blip(784, 0.16, "sine", 0.045); blip(1047, 0.14, "sine", 0.026, 0.07); }
   else if (kind === "hover") { const now = Date.now(); if (now - lastHoverBlip < 90) return; lastHoverBlip = now; blip(1280, 0.04, "sine", 0.016); }
 }
-/* MODEL footer pill: switch AI infrastructure right from the bottom bar
-   instead of only pointing at Settings. Reuses the same mini-settings widget
-   already wired for the chat panel — no separate provider-switching logic. */
+/* The footer gateway is a direct route into the organization-wide brain page.
+   PhantomBot keeps its own compact chat control, but the platform gateway needs
+   enough room for credentials, model catalogues, independent routes, and loop. */
 function mountModelSwitcher() {
   const toggle = $("[data-os-model-toggle]");
-  const popover = $("[data-os-model-popover]");
-  if (!toggle || !popover || toggle.dataset.osBound) return;
+  if (!toggle || toggle.dataset.osBound) return;
   toggle.dataset.osBound = "1";
-
-  const close = () => {
-    popover.hidden = true;
-    toggle.setAttribute("aria-expanded", "false");
-  };
-  const open = () => {
-    renderOperatorMiniSettings(popover, {
-      openSettings: () => { close(); $('[data-nav-id="settings"]')?.click(); },
-      onChange: () => setOperatorModelStatus(),
-    });
-    popover.hidden = false;
-    toggle.setAttribute("aria-expanded", "true");
-  };
-  toggle.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (popover.hidden) open(); else close();
+  toggle.addEventListener("click", () => {
+    try { localStorage.setItem("pf.settings.tab.v1", "model"); } catch {}
+    $("[data-nav-id=\"settings\"]")?.click();
   });
-  popover.addEventListener("click", (event) => event.stopPropagation());
-  document.addEventListener("click", () => { if (!popover.hidden) close(); });
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !popover.hidden) close(); });
 }
 
 function mountSoundToggle() {
