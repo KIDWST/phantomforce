@@ -13,7 +13,11 @@ assert.match(mediaLab, /image:\s*normalizeLaneId\(savedRouting\.image \|\| IMAGE
 assert.match(mediaLab, /video:\s*normalizeLaneId\(savedRouting\.video \|\| PRIMARY_MEDIA_LANE\)/u, "Saved video routing must default to Higgsfield.");
 assert.match(mediaLab, /"seedance_2_0"[\s\S]*"seedance_2_0_pro"[\s\S]*"kling3_0"[\s\S]*"soul_v2"[\s\S]*"cinema"[\s\S]*"cast"[\s\S]*"location"[\s\S]*"marketing_studio_video"/u, "Higgsfield video model choices must remain selectable.");
 assert.match(mediaLab, /if \(req\.provider === IMAGE_MEDIA_LANE\)[\s\S]*generateChatGptImageRequest/u, "Image generation must use the ChatGPT image request path.");
-const higgsfieldBlock = mediaLab.match(/id: PRIMARY_MEDIA_LANE[\s\S]*?\n\s*\},\n\s*\{/u)?.[0] || "";
+const higgsfieldStart = mediaLab.indexOf("id: PRIMARY_MEDIA_LANE");
+const higgsfieldEnd = mediaLab.indexOf('id: "claude"', higgsfieldStart);
+const higgsfieldBlock = higgsfieldStart >= 0 && higgsfieldEnd > higgsfieldStart
+  ? mediaLab.slice(higgsfieldStart, higgsfieldEnd)
+  : "";
 assert.ok(higgsfieldBlock, "Higgsfield provider block must exist.");
 assert.doesNotMatch(higgsfieldBlock, /modalities: \[[^\]]*"image"/u, "Higgsfield must not advertise image generation.");
 

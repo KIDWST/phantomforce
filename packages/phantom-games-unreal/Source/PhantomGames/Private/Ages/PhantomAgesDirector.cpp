@@ -22,9 +22,9 @@
 
 namespace
 {
-    const FVector FixedBattlefieldCameraLocation(0.0f, -8400.0f, 14500.0f);
-    const FRotator FixedBattlefieldCameraRotation(-60.0f, 90.0f, 0.0f);
-    constexpr float FixedBattlefieldOrthoWidth = 28000.0f;
+    const FVector FixedBattlefieldCameraLocation(0.0f, -18500.0f, 12500.0f);
+    const FRotator FixedBattlefieldCameraRotation(-34.0f, 90.0f, 0.0f);
+    constexpr float FixedBattlefieldOrthoWidth = 34500.0f;
 
     APhantomAgesDirector* AgesDirector(const UObject* Context)
     {
@@ -1146,18 +1146,18 @@ void APhantomAgesHUD::DrawHUD()
     const float UI=FMath::Clamp(FMath::Min(W/1920.0f,H/1080.0f),0.78f,1.08f); auto S=[UI](float V){return V*UI;};
     UFont* F=GEngine?GEngine->GetMediumFont():nullptr;
     const FLinearColor Panel(0.006f,0.014f,0.024f,0.94f),Card(0.026f,0.046f,0.060f,0.97f),Cyan(0.14f,0.94f,0.88f),Gold(1.0f,0.72f,0.18f),Red(1.0f,0.20f,0.24f);
-    const float Top=S(92.0f), Bottom=S(190.0f), Pad=S(18.0f);
+    const float Top=S(88.0f), Bottom=S(184.0f), Pad=S(18.0f);
     DrawRect(Panel,0,0,W,Top); DrawRect(Cyan,0,Top-S(3),W,S(3));
-    DrawText(TEXT("PHANTOM AGES"),FLinearColor::White,Pad,S(10),F,S(0.78f));
-    DrawText(AgeName(Director->GetAge()),Cyan,Pad,S(41),F,S(0.52f));
-    DrawText(FString::Printf(TEXT("GOLD %04d   XP %03d/%03d   ARMY %02d/%02d   +%d/s   K/L %d/%d"),Director->GetGold(),Director->GetExperience(),Director->GetAdvanceCost(),Director->GetPlayerArmyCount(),Director->GetArmyCap(),Director->GetPlayerIncome(),Director->GetPlayerKills(),Director->GetPlayerLosses()),FLinearColor(0.82f,0.90f,0.95f),W*0.22f,S(15),F,S(0.50f));
-    DrawText(FString::Printf(TEXT("FORT F%d  POWER P%d  RANGE R%d   SPEED %.0fX"),Director->GetTowerFortificationLevel(),Director->GetTowerPowerLevel(),Director->GetTowerRangeLevel(),Director->GetBattleSpeed()),Gold,W*0.22f,S(46),F,S(0.46f));
+    DrawText(TEXT("PHANTOM AGES"),FLinearColor::White,Pad,S(9),F,S(1.02f));
+    DrawText(AgeName(Director->GetAge()),Cyan,Pad,S(47),F,S(0.70f));
+    DrawText(FString::Printf(TEXT("GOLD %04d   XP %03d/%03d   ARMY %02d/%02d   +%d/s   K/L %d/%d"),Director->GetGold(),Director->GetExperience(),Director->GetAdvanceCost(),Director->GetPlayerArmyCount(),Director->GetArmyCap(),Director->GetPlayerIncome(),Director->GetPlayerKills(),Director->GetPlayerLosses()),FLinearColor(0.82f,0.90f,0.95f),W*0.22f,S(13),F,S(0.68f));
+    DrawText(FString::Printf(TEXT("FORT F%d  POWER P%d  RANGE R%d   SPEED %.0fX"),Director->GetTowerFortificationLevel(),Director->GetTowerPowerLevel(),Director->GetTowerRangeLevel(),Director->GetBattleSpeed()),Gold,W*0.22f,S(48),F,S(0.61f));
     if(Director->GetPlayerTower()&&Director->GetEnemyTower())
     {
         const float L=FMath::Clamp(Director->GetPlayerTower()->Health/Director->GetPlayerTower()->MaxHealth,0.0f,1.0f), R=FMath::Clamp(Director->GetEnemyTower()->Health/Director->GetEnemyTower()->MaxHealth,0.0f,1.0f);
         const float BW=W*0.20f; DrawRect(FLinearColor(0.03f,0.04f,0.05f),W*0.56f,S(22),BW,S(10)); DrawRect(Cyan,W*0.56f,S(22),BW*L,S(10));
         DrawRect(FLinearColor(0.03f,0.04f,0.05f),W*0.78f,S(22),BW,S(10)); DrawRect(Red,W*0.78f,S(22),BW*R,S(10));
-        DrawText(TEXT("YOUR FORTRESS"),Cyan,W*0.56f,S(42),F,S(0.36f)); DrawText(TEXT("ENEMY FORTRESS"),Red,W*0.78f,S(42),F,S(0.36f));
+        DrawText(TEXT("YOUR FORTRESS"),Cyan,W*0.56f,S(42),F,S(0.50f)); DrawText(TEXT("ENEMY FORTRESS"),Red,W*0.78f,S(42),F,S(0.50f));
     }
 
     const float Y=H-Bottom; DrawRect(Panel,0,Y,W,Bottom); DrawRect(Cyan,0,Y,W,S(3));
@@ -1166,17 +1166,17 @@ void APhantomAgesHUD::DrawHUD()
     {
         const EPhantomAgesUnitType Type=Director->GetRosterUnit(Slot); const bool bValid=Slot<Director->GetRosterCount(); const float X=Pad+Slot*(UnitW+Gap);
         DrawRect(bValid?Card:FLinearColor(0.02f,0.025f,0.03f,0.92f),X,Y+S(18),UnitW,Bottom-S(36)); DrawRect(bValid?Cyan:FLinearColor(0.20f,0.22f,0.24f),X,Y+S(18),S(5),Bottom-S(36));
-        if(bValid){DrawText(FString::Printf(TEXT("[%d] %s"),Slot+1,EraRosterName(Director->GetAge(),Slot)),FLinearColor::White,X+S(13),Y+S(32),F,S(0.52f)); DrawText(FString::Printf(TEXT("%d GOLD"),Director->GetUnitCost(Type)),Gold,X+S(13),Y+S(68),F,S(0.43f)); DrawText(FString::Printf(TEXT("QUEUE %d  // LMB +1  SHIFT +5  RMB -1"),Director->GetQueuedCount(Slot)),FLinearColor(0.58f,0.72f,0.78f),X+S(13),Y+S(104),F,S(0.29f));}
+        if(bValid){DrawText(FString::Printf(TEXT("[%d] %s"),Slot+1,EraRosterName(Director->GetAge(),Slot)),FLinearColor::White,X+S(13),Y+S(30),F,S(0.72f)); DrawText(FString::Printf(TEXT("%d GOLD"),Director->GetUnitCost(Type)),Gold,X+S(13),Y+S(72),F,S(0.58f)); DrawText(FString::Printf(TEXT("QUEUE %d   LMB +1   RMB -1"),Director->GetQueuedCount(Slot)),FLinearColor(0.58f,0.72f,0.78f),X+S(13),Y+S(108),F,S(0.42f));}
     }
     const TCHAR* Labels[5]={TEXT("EVOLVE"),TEXT("VOLLEY"),TEXT("FORTIFY"),TEXT("POWER"),TEXT("RANGE")};
     const float ActionStart=W*0.50f, ActionArea=W*0.48f, ActionW=(ActionArea-Gap*4)/5.0f;
     for(int32 I=0;I<5;++I)
     {
-        const float X=ActionStart+I*(ActionW+Gap); DrawRect(Card,X,Y+S(18),ActionW,Bottom-S(36)); DrawRect(I==0?Gold:Cyan,X,Y+S(18),S(5),Bottom-S(36)); DrawText(Labels[I],FLinearColor::White,X+S(12),Y+S(34),F,S(0.45f));
+        const float X=ActionStart+I*(ActionW+Gap); DrawRect(Card,X,Y+S(18),ActionW,Bottom-S(36)); DrawRect(I==0?Gold:Cyan,X,Y+S(18),S(5),Bottom-S(36)); DrawText(Labels[I],FLinearColor::White,X+S(12),Y+S(32),F,S(0.65f));
         FString Detail; if(I==0)Detail=FString::Printf(TEXT("%d XP"),Director->GetAdvanceCost()); else if(I==1)Detail=Director->GetPulseRemaining()<=0?TEXT("READY"):TEXT("COOLDOWN"); else if(I==2)Detail=FString::Printf(TEXT("%dg"),Director->GetTowerFortificationCost()); else if(I==3)Detail=FString::Printf(TEXT("%dg"),Director->GetTowerPowerCost()); else Detail=FString::Printf(TEXT("%dg"),Director->GetTowerRangeCost());
-        DrawText(Detail,I==0?Gold:FLinearColor(0.65f,0.80f,0.84f),X+S(12),Y+S(73),F,S(0.38f)); DrawText(TEXT("CLICK"),FLinearColor(0.42f,0.60f,0.66f),X+S(12),Y+S(109),F,S(0.30f));
+        DrawText(Detail,I==0?Gold:FLinearColor(0.65f,0.80f,0.84f),X+S(12),Y+S(76),F,S(0.54f)); DrawText(TEXT("CLICK"),FLinearColor(0.42f,0.60f,0.66f),X+S(12),Y+S(112),F,S(0.42f));
     }
-    DrawText(FString::Printf(TEXT("RESEARCH Q ARMOR %d  W MELEE %d  E RANGE %d  R SIEGE %d  T SPEED %d  Y ECON %d     FIXED CAMERA // BOTH TOWERS ALWAYS VISIBLE"),Director->GetResearchLevel(EPhantomAgesResearch::TroopArmor),Director->GetResearchLevel(EPhantomAgesResearch::InfantryDamage),Director->GetResearchLevel(EPhantomAgesResearch::RangedDamage),Director->GetResearchLevel(EPhantomAgesResearch::SiegeEngineering),Director->GetResearchLevel(EPhantomAgesResearch::MarchSpeed),Director->GetResearchLevel(EPhantomAgesResearch::WarEconomy)),FLinearColor(0.68f,0.78f,0.82f),Pad,H-S(21),F,S(0.29f));
+    DrawText(FString::Printf(TEXT("RESEARCH  Q ARMOR %d   W MELEE %d   E RANGE %d   R SIEGE %d   T SPEED %d   Y ECON %d"),Director->GetResearchLevel(EPhantomAgesResearch::TroopArmor),Director->GetResearchLevel(EPhantomAgesResearch::InfantryDamage),Director->GetResearchLevel(EPhantomAgesResearch::RangedDamage),Director->GetResearchLevel(EPhantomAgesResearch::SiegeEngineering),Director->GetResearchLevel(EPhantomAgesResearch::MarchSpeed),Director->GetResearchLevel(EPhantomAgesResearch::WarEconomy)),FLinearColor(0.68f,0.78f,0.82f),Pad,H-S(22),F,S(0.43f));
     if(!Director->GetMatchResult().IsEmpty()){DrawRect(FLinearColor(0,0,0,0.88f),W*0.35f,H*0.42f,W*0.30f,S(95));DrawText(Director->GetMatchResult(),Director->GetMatchResult()==TEXT("VICTORY")?Cyan:Red,W*0.44f,H*0.45f,F,S(1.0f));}
 }
 
@@ -1193,13 +1193,13 @@ void APhantomAgesDirector::BeginPlay()
 
     // A match now opens as an actual war, not two empty towers waiting for the user to discover a button.
     // Stone Age still owns the progression; these are legitimate age-0 armies, not unlocked future cheats.
-    for (int32 I=0; I<18; ++I)
+    for (int32 I=0; I<6; ++I)
     {
         SpawnUnit(EPhantomAgesTeam::Player, (I%3==0)?EPhantomAgesUnitType::FireArcher:((I%3==1)?EPhantomAgesUnitType::SpearHunter:EPhantomAgesUnitType::Clubman), 0);
         SpawnUnit(EPhantomAgesTeam::Enemy,  (I%3==0)?EPhantomAgesUnitType::FireArcher:((I%3==1)?EPhantomAgesUnitType::SpearHunter:EPhantomAgesUnitType::Clubman), 0);
     }
-    Gold = FMath::Max(Gold, 520);
-    EnemyGold = FMath::Max(EnemyGold, 520);
+    Gold = FMath::Max(Gold, 360);
+    EnemyGold = FMath::Max(EnemyGold, 360);
 }
 
 void APhantomAgesDirector::BuildBattlefield()
@@ -1532,7 +1532,7 @@ void APhantomAgesDirector::SpawnUnit(EPhantomAgesTeam Team, EPhantomAgesUnitType
     const int32 SpeedLevel = Team == EPhantomAgesTeam::Player ? GetResearchLevel(EPhantomAgesResearch::MarchSpeed) : FMath::Min(5, Age / 2);
     Unit->Configure(Team, Type, Age, Armor, DamageLevel, SpeedLevel);
     // Age of War readability: combatants must read clearly from a fixed side camera.
-    Unit->SetActorScale3D(FVector(3.75f));
+    Unit->SetActorScale3D(FVector(4.65f));
 }
 
 void APhantomAgesDirector::PurchaseResearch(EPhantomAgesResearch Research)

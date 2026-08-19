@@ -152,6 +152,7 @@ private:
     float AttackRemaining = 0.0f;
 
     void RefreshHealthBar();
+    void UpdateHealthBarVisibility();
 };
 
 UCLASS()
@@ -295,6 +296,7 @@ private:
     float ComputeDamageAgainst(AActor* TargetActor) const;
     void AutoGatherNearestResource();
     void RefreshHealthBar();
+    void UpdateHealthBarVisibility();
 };
 
 UCLASS()

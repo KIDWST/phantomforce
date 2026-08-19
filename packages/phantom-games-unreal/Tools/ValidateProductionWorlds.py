@@ -71,6 +71,7 @@ for game,(path,start,radius,min_total,min_near,min_real_near) in specs.items():
         fail.append(game+': could not load '+path);continue
     aa=list(actorsys.get_all_level_actors() or [])
     production=[a for a in aa if any(str(t)=='PhantomProductionWorldV11' for t in (a.get_editor_property('tags') or []))]
+    player_starts=[a for a in aa if isinstance(a,unreal.PlayerStart)]
     near=[a for a in production if dist2d(a,start)<=radius]
     paths=[mesh_path(a) for a in production]
     basic=[(label(a),mesh_path(a)) for a in production if '/Engine/BasicShapes/' in mesh_path(a)]
@@ -82,7 +83,8 @@ for game,(path,start,radius,min_total,min_near,min_real_near) in specs.items():
         if 'terrain' in l or 'road_' in l or 'stream_' in l or 'river_' in l:continue
         d=dims(a)
         if max(d)>8000:max_nonterrain.append((label(a),d,mesh_path(a)))
-    r={'actors':len(production),'near_start':len(near),'real_near_start':len(real_near),'authored_material_real_near':len(authored_material_near),'basic_shapes':basic[:20],'oversize_nonterrain':max_nonterrain[:20]}
+    r={'actors':len(production),'player_starts':[label(a) for a in player_starts],'near_start':len(near),'real_near_start':len(real_near),'authored_material_real_near':len(authored_material_near),'basic_shapes':basic[:20],'oversize_nonterrain':max_nonterrain[:20]}
+    if not player_starts:fail.append(f'{game}: no PlayerStart; default pawn/HUD cannot initialize reliably')
     if len(production)<min_total:fail.append(f'{game}: actors {len(production)} < {min_total}')
     if len(near)<min_near:fail.append(f'{game}: near-start actors {len(near)} < {min_near}')
     if len(real_near)<min_real_near:fail.append(f'{game}: imported/non-generated near-start art {len(real_near)} < {min_real_near}')

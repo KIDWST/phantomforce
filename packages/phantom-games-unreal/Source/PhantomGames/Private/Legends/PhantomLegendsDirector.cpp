@@ -115,35 +115,25 @@ void APhantomLegendsResourceNode::Configure(EPhantomLegendsResource NewType, int
     ResourceType = NewType;
     Remaining = NewAmount;
     UStaticMesh* ResourceVisual = nullptr;
-    UMaterialInterface* MaterialOverride = nullptr;
-    FVector VisualScale = FVector::OneVector;
 
     switch (ResourceType)
     {
         case EPhantomLegendsResource::Wood:
-            // Use the RTS baseline forest cluster with its authored wood/foliage materials. The
-            // old generated tree had no material slots and read as a translucent egg at command zoom.
-            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"));
-            if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B"));
-            VisualScale = FVector(2.35f);
+            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_B.SM_CC0_Tree_B"));
+            if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"));
             break;
         case EPhantomLegendsResource::Stone:
             ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock"));
             if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0010_Rocks.U_Legends_0010_Rocks"));
-            VisualScale = FVector(4.0f);
             break;
         case EPhantomLegendsResource::Gold:
-            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0007_Gold.U_Legends_0007_Gold"));
-            if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Curated/Legends/SM_Legends_Mine.SM_Legends_Mine"));
-            VisualScale = FVector(4.6f);
+            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Curated/Legends/SM_Legends_Mine.SM_Legends_Mine"));
+            if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Legends/V9/Economy/SM_V9_Mine.SM_V9_Mine"));
             break;
         case EPhantomLegendsResource::Shard:
-            // The generated dream crystal silhouette reads as a translucent egg from the RTS
-            // camera. Reuse the faceted authored ore cluster and distinguish shards with glow.
-            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0007_Gold.U_Legends_0007_Gold"));
+            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A"));
+            if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Legends/V9/Economy/SM_V9_CrystalNode.SM_V9_CrystalNode"));
             if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock"));
-            MaterialOverride = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_SkeletonMage_GLTF/Skeleton_Mage/Materials/Glow.Glow"));
-            VisualScale = FVector(4.2f);
             break;
     }
 
@@ -160,12 +150,29 @@ void APhantomLegendsResourceNode::Configure(EPhantomLegendsResource NewType, int
     }
 
     BaseMesh->SetStaticMesh(ResourceVisual);
-    BaseMesh->SetRelativeLocation(FVector::ZeroVector);
+    const FLinearColor ResourceColor = ResourceType == EPhantomLegendsResource::Wood
+        ? FLinearColor(0.10f, 0.42f, 0.16f)
+        : (ResourceType == EPhantomLegendsResource::Stone
+            ? FLinearColor(0.34f, 0.38f, 0.42f)
+            : (ResourceType == EPhantomLegendsResource::Gold
+                ? FLinearColor(0.92f, 0.55f, 0.08f)
+                : FLinearColor(0.10f, 0.78f, 0.90f)));
+    ApplyColor(BaseMesh, ResourceColor);
+    const FBoxSphereBounds Bounds = ResourceVisual->GetBounds();
+    const FVector FullSize = Bounds.BoxExtent * 2.0f;
+    const float RawDimension = ResourceType == EPhantomLegendsResource::Wood
+        ? FMath::Max(1.0f, FullSize.Z)
+        : FMath::Max(1.0f, FMath::Max3(FullSize.X, FullSize.Y, FullSize.Z));
+    const float TargetSize = ResourceType == EPhantomLegendsResource::Wood ? 1150.0f
+        : (ResourceType == EPhantomLegendsResource::Gold ? 760.0f
+        : (ResourceType == EPhantomLegendsResource::Shard ? 640.0f : 480.0f));
+    const float FitScale = FMath::Clamp(TargetSize / RawDimension, 0.01f, 80.0f);
+    const float LocalBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * FitScale;
+    BaseMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -LocalBottom));
     BaseMesh->SetRelativeRotation(FRotator::ZeroRotator);
-    BaseMesh->SetRelativeScale3D(VisualScale);
+    BaseMesh->SetRelativeScale3D(FVector(FitScale));
     BaseMesh->SetVisibility(true, true);
     BaseMesh->SetHiddenInGame(false, true);
-    if (MaterialOverride) BaseMesh->SetMaterial(0, MaterialOverride);
     Tags.Add(FName(*FString::Printf(TEXT("Resource.%s"), ResourceName(ResourceType))));
 }
 
@@ -220,10 +227,12 @@ APhantomLegendsStructure::APhantomLegendsStructure()
     HealthBack->SetupAttachment(Root);
     HealthBack->SetStaticMesh(Cube);
     HealthBack->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    HealthBack->SetVisibility(false);
     HealthFill = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HealthFill"));
     HealthFill->SetupAttachment(Root);
     HealthFill->SetStaticMesh(Cube);
     HealthFill->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    HealthFill->SetVisibility(false);
 }
 
 void APhantomLegendsStructure::Configure(
@@ -240,8 +249,8 @@ void APhantomLegendsStructure::Configure(
     const FLinearColor Accent = bLegion ? FLinearColor(0.18f, 0.9f, 1.0f) : FLinearColor(0.82f, 0.08f, 1.0f);
 
     const TCHAR* ExternalStructurePath = StructureType == EPhantomLegendsStructureType::Stronghold
-        ? (bLegion ? TEXT("/Game/Phantom/Generated/Legends/V9/Architecture/SM_V9_BlueKeep.SM_V9_BlueKeep")
-                   : TEXT("/Game/Phantom/Generated/Legends/V9/Architecture/SM_V9_RedKeep.SM_V9_RedKeep"))
+        ? (bLegion ? TEXT("/Game/Phantom/Generated/Legends/SM_LegionKeep.SM_LegionKeep")
+                   : TEXT("/Game/Phantom/Generated/Legends/SM_RiftKeep.SM_RiftKeep"))
         : (StructureType == EPhantomLegendsStructureType::DefenseTower
             ? (bLegion ? TEXT("/Game/Phantom/Generated/Legends/V9/Architecture/SM_V9_BlueTower.SM_V9_BlueTower")
                        : TEXT("/Game/Phantom/Generated/Legends/V9/Architecture/SM_V9_RedTower.SM_V9_RedTower"))
@@ -255,10 +264,14 @@ void APhantomLegendsStructure::Configure(
     VisualModel->SetVisibility(bUseExternalVisual);
     if (bUseExternalVisual)
     {
-        VisualModel->SetRelativeLocation(FVector::ZeroVector);
         VisualModel->SetRelativeRotation(FRotator::ZeroRotator);
-        const float VisualScale = StructureType == EPhantomLegendsStructureType::Stronghold ? 1.35f
-            : (StructureType == EPhantomLegendsStructureType::DefenseTower ? 1.05f : 2.0f);
+        const FBoxSphereBounds VisualBounds = ExternalStructure->GetBounds();
+        const float RawHeight = FMath::Max(1.0f, VisualBounds.BoxExtent.Z * 2.0f);
+        const float TargetHeight = StructureType == EPhantomLegendsStructureType::Stronghold ? 1550.0f
+            : (StructureType == EPhantomLegendsStructureType::DefenseTower ? 900.0f : 1350.0f);
+        const float VisualScale = FMath::Clamp(TargetHeight / RawHeight, 0.02f, 40.0f);
+        const float LocalBottom = (VisualBounds.Origin.Z - VisualBounds.BoxExtent.Z) * VisualScale;
+        VisualModel->SetRelativeLocation(FVector(0.0f, 0.0f, -LocalBottom));
         VisualModel->SetRelativeScale3D(FVector(VisualScale));
     }
 
@@ -357,6 +370,16 @@ void APhantomLegendsStructure::RefreshHealthBar()
     const float Z = StructureType == EPhantomLegendsStructureType::DefenseTower ? 470.0f : 760.0f;
     HealthFill->SetRelativeScale3D(FVector(2.0f * Ratio, 0.065f, 0.038f));
     HealthFill->SetRelativeLocation(FVector(-100.0f * (1.0f - Ratio), -268.0f, Z));
+    UpdateHealthBarVisibility();
+}
+
+void APhantomLegendsStructure::UpdateHealthBarVisibility()
+{
+    const bool bShowHealth = Health > 0.0f && Health < MaxHealth;
+    HealthBack->SetVisibility(bShowHealth, true);
+    HealthFill->SetVisibility(bShowHealth, true);
+    HealthBack->SetHiddenInGame(!bShowHealth, true);
+    HealthFill->SetHiddenInGame(!bShowHealth, true);
 }
 
 float APhantomLegendsStructure::GetCombatRadius() const
@@ -586,10 +609,12 @@ APhantomLegendsUnit::APhantomLegendsUnit()
     HealthBack->SetRelativeLocation(FVector(0.0f, -46.0f, 86.0f));
     HealthBack->SetRelativeScale3D(FVector(0.68f, 0.06f, 0.035f));
     HealthBack->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    HealthBack->SetVisibility(false);
     HealthFill = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HealthFill"));
     HealthFill->SetupAttachment(GetCapsuleComponent());
     HealthFill->SetStaticMesh(Cube);
     HealthFill->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    HealthFill->SetVisibility(false);
     GetCharacterMovement()->MaxWalkSpeed = 390.0f;
     GetCharacterMovement()->MaxAcceleration = 2200.0f;
     GetCharacterMovement()->BrakingDecelerationWalking = 1800.0f;
@@ -754,7 +779,7 @@ void APhantomLegendsUnit::ConfigureRole(EPhantomLegendsRole NewRole, EPhantomLeg
     ApplyColor(LeftLeg, Main * 0.62f);
     ApplyColor(RightLeg, Main * 0.62f);
     ApplyColor(HelmetMesh, bWorker ? Main * 0.7f : Accent * 0.78f);
-    HelmetMesh->SetVisibility(!bWorker || Role == EPhantomLegendsRole::Ranger);
+    HelmetMesh->SetVisibility(bShowFallbackRig && (!bWorker || Role == EPhantomLegendsRole::Ranger));
     LeftArm->SetRelativeScale3D(Role == EPhantomLegendsRole::Brute ? FVector(0.16f, 0.16f, 0.48f) : FVector(0.12f, 0.12f, 0.42f));
     RightArm->SetRelativeScale3D(Role == EPhantomLegendsRole::Brute ? FVector(0.16f, 0.16f, 0.48f) : FVector(0.12f, 0.12f, 0.42f));
     ApplyColor(CrestMesh, Accent);
@@ -854,6 +879,7 @@ void APhantomLegendsUnit::SetSelected(bool bNewSelected)
 {
     bSelected = bNewSelected && IsPlayerUnit();
     SelectionRing->SetVisibility(bSelected);
+    RefreshHealthBar();
 }
 
 void APhantomLegendsUnit::SetOrderLocation(const FVector& Location)
@@ -980,6 +1006,16 @@ void APhantomLegendsUnit::RefreshHealthBar()
     const float Ratio = MaxHealth > 0.0f ? FMath::Clamp(Health / MaxHealth, 0.0f, 1.0f) : 0.0f;
     HealthFill->SetRelativeScale3D(FVector(0.64f * Ratio, 0.05f, 0.024f));
     HealthFill->SetRelativeLocation(FVector(-32.0f * (1.0f - Ratio), -52.0f, 86.0f));
+    UpdateHealthBarVisibility();
+}
+
+void APhantomLegendsUnit::UpdateHealthBarVisibility()
+{
+    const bool bShowHealth = Health > 0.0f && (bSelected || Health < MaxHealth);
+    HealthBack->SetVisibility(bShowHealth, true);
+    HealthFill->SetVisibility(bShowHealth, true);
+    HealthBack->SetHiddenInGame(!bShowHealth, true);
+    HealthFill->SetHiddenInGame(!bShowHealth, true);
 }
 
 void APhantomLegendsUnit::Tick(float DeltaSeconds)
@@ -1128,14 +1164,14 @@ APhantomLegendsPawn::APhantomLegendsPawn()
     SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("StrategyBoom"));
     SpringArm->SetupAttachment(CameraRoot);
     // Conventional RTS default: start high enough to read the whole tactical situation.
-    SpringArm->TargetArmLength = 9800.0f;
-    SpringArm->SetRelativeRotation(FRotator(-58.0f, -45.0f, 0.0f));
+    SpringArm->TargetArmLength = 8200.0f;
+    SpringArm->SetRelativeRotation(FRotator(-48.0f, -42.0f, 0.0f));
     SpringArm->bDoCollisionTest = false;
     SpringArm->bEnableCameraLag = true;
     SpringArm->CameraLagSpeed = 14.0f;
     StrategyCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("StrategyCamera"));
     StrategyCamera->SetupAttachment(SpringArm);
-    StrategyCamera->FieldOfView = 50.0f;
+    StrategyCamera->FieldOfView = 58.0f;
     AutoPossessPlayer = EAutoReceiveInput::Player0;
 }
 
@@ -1235,12 +1271,12 @@ void APhantomLegendsPawn::Tick(float DeltaSeconds)
                 const bool bOrbit=PlayerController->IsInputKeyDown(EKeys::LeftAlt)||PlayerController->IsInputKeyDown(EKeys::RightAlt);
                 if(bOrbit && SpringArm)
                 {
-                    FRotator R=SpringArm->GetRelativeRotation(); R.Yaw+=Delta.X*0.16f; R.Pitch=FMath::Clamp(R.Pitch-Delta.Y*0.11f,-78.0f,-24.0f); SpringArm->SetRelativeRotation(R);
+                    FRotator R=SpringArm->GetRelativeRotation(); R.Yaw+=Delta.X*0.16f; R.Pitch=FMath::Clamp(R.Pitch-Delta.Y*0.11f,-72.0f,-30.0f); SpringArm->SetRelativeRotation(R);
                 }
                 else
                 {
                     const float DragScale = SpringArm
-                        ? FMath::GetMappedRangeValueClamped(FVector2D(3200.0f, 12000.0f), FVector2D(2.0f, 7.0f), SpringArm->TargetArmLength)
+                        ? FMath::GetMappedRangeValueClamped(FVector2D(3800.0f, 14000.0f), FVector2D(2.0f, 7.0f), SpringArm->TargetArmLength)
                         : 3.0f;
                     AddActorWorldOffset((-ScreenRight * Delta.X + ScreenForward * Delta.Y) * DragScale);
                 }
@@ -1255,9 +1291,9 @@ void APhantomLegendsPawn::Tick(float DeltaSeconds)
             if (SpringArm && FMath::Abs(DirectWheel) > 0.001f)
             {
                 SpringArm->TargetArmLength = FMath::Clamp(
-                    SpringArm->TargetArmLength - DirectWheel * 1150.0f,
-                    3200.0f,
-                    12000.0f);
+                    SpringArm->TargetArmLength - DirectWheel * 1000.0f,
+                    3800.0f,
+                    14000.0f);
             }
 
             int32 ViewportWidth = 0;
@@ -1297,7 +1333,7 @@ void APhantomLegendsPawn::Tick(float DeltaSeconds)
     const FVector Forward = ScreenForward * FMath::Clamp(ForwardInput + DirectForward + EdgeForward, -1.0f, 1.0f);
     const FVector Right = ScreenRight * FMath::Clamp(RightInput + DirectRight + EdgeRight, -1.0f, 1.0f);
     const float ZoomAlpha = SpringArm
-        ? FMath::GetMappedRangeValueClamped(FVector2D(3200.0f, 12000.0f), FVector2D(0.62f, 1.55f), SpringArm->TargetArmLength)
+        ? FMath::GetMappedRangeValueClamped(FVector2D(3800.0f, 14000.0f), FVector2D(0.62f, 1.55f), SpringArm->TargetArmLength)
         : 1.0f;
     const float PanModifier = PlayerController && (PlayerController->IsInputKeyDown(EKeys::LeftShift)||PlayerController->IsInputKeyDown(EKeys::RightShift)) ? 2.0f
         : (PlayerController && (PlayerController->IsInputKeyDown(EKeys::LeftControl)||PlayerController->IsInputKeyDown(EKeys::RightControl)) ? 0.5f : 1.0f);
@@ -1310,7 +1346,7 @@ void APhantomLegendsPawn::Tick(float DeltaSeconds)
 
     if (SpringArm)
     {
-        SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - ZoomInput * 1150.0f, 3200.0f, 12000.0f);
+        SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - ZoomInput * 1000.0f, 3800.0f, 14000.0f);
     }
     ZoomInput = 0.0f;
 }
@@ -1362,11 +1398,11 @@ void APhantomLegendsPawn::MoveRight(float Value) { RightInput = Value; }
 void APhantomLegendsPawn::Zoom(float Value) { ZoomInput = Value; }
 void APhantomLegendsPawn::ZoomIn()
 {
-    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - 3200.0f, 1200.0f, 80000.0f);
+    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - 2200.0f, 3800.0f, 14000.0f);
 }
 void APhantomLegendsPawn::ZoomOut()
 {
-    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength + 3200.0f, 1200.0f, 80000.0f);
+    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength + 2200.0f, 3800.0f, 14000.0f);
 }
 void APhantomLegendsPawn::RotateLeft()
 {
@@ -1513,8 +1549,8 @@ void APhantomLegendsPawn::FocusCapital()
 void APhantomLegendsPawn::ResetCamera()
 {
     if (!SpringArm) return;
-    SpringArm->SetRelativeRotation(FRotator(-58.0f,-45.0f,0.0f));
-    SpringArm->TargetArmLength = 9800.0f;
+    SpringArm->SetRelativeRotation(FRotator(-48.0f,-42.0f,0.0f));
+    SpringArm->TargetArmLength = 8200.0f;
 }
 
 void APhantomLegendsPawn::HandleControlGroup(int32 GroupIndex)
@@ -1599,24 +1635,24 @@ void APhantomLegendsHUD::DrawHUD()
     }
 
     // AoE-style top resource strip.
-    const float TopH=S(78.0f);
+    const float TopH=S(72.0f);
     DrawRect(Panel,0,0,Width,TopH);
-    DrawText(TEXT("PHANTOM LEGENDS"),FLinearColor::White,Pad,S(12.0f),Medium,S(0.72f));
-    DrawText(FString::Printf(TEXT("GOLD %d     WOOD %d     STONE %d     SHARDS %d     POP %d/%d"),Director->GetGold(),Director->GetWood(),Director->GetStone(),Director->GetLegacyShards(),Director->GetLegionPopulation(),Director->GetPopulationCap()),FLinearColor(0.82f,0.90f,0.95f),S(270.0f),S(13.0f),Medium,S(0.58f));
-    DrawText(FString::Printf(TEXT("STRONGHOLD %d     VETERANS %d     %d SELECTED"),Director->GetStrongholdLevel(),Director->GetVeteranUnitCount(),Director->GetSelectedCount()),Director->GetSelectedCount()>0?Select:FLinearColor(0.62f,0.70f,0.78f),S(270.0f),S(45.0f),Medium,S(0.54f));
+    DrawText(TEXT("PHANTOM LEGENDS"),FLinearColor::White,Pad,S(9.0f),Medium,S(0.92f));
+    DrawText(FString::Printf(TEXT("GOLD %d     WOOD %d     STONE %d     SHARDS %d     POP %d/%d"),Director->GetGold(),Director->GetWood(),Director->GetStone(),Director->GetLegacyShards(),Director->GetLegionPopulation(),Director->GetPopulationCap()),FLinearColor(0.82f,0.90f,0.95f),S(285.0f),S(10.0f),Medium,S(0.70f));
+    DrawText(FString::Printf(TEXT("STRONGHOLD %d     VETERANS %d     %d SELECTED"),Director->GetStrongholdLevel(),Director->GetVeteranUnitCount(),Director->GetSelectedCount()),Director->GetSelectedCount()>0?Select:FLinearColor(0.62f,0.70f,0.78f),S(285.0f),S(41.0f),Medium,S(0.62f));
     DrawText(FString::Printf(TEXT("RIFT RAID %02d"),Director->GetRaidWave()+1),FLinearColor(1.0f,0.24f,0.52f),Width-S(235.0f),S(13.0f),Medium,S(0.62f));
     const FString RaidText=Director->GetRaidersAlive()>0?FString::Printf(TEXT("%d HOSTILES"),Director->GetRaidersAlive()):FString::Printf(TEXT("BREACH %.0fs"),Director->GetRaidRemaining());
     DrawText(RaidText,FLinearColor::White,Width-S(235.0f),S(45.0f),Medium,S(0.52f));
 
     // Bottom command deck, intentionally large enough to operate without memorizing hotkeys.
-    const float DockH=S(138.0f), DockY=Height-DockH;
+    const float DockH=S(150.0f), DockY=Height-DockH;
     DrawRect(Panel,0,DockY,Width,DockH); DrawRect(Purple,0,DockY,Width,S(3.0f));
-    const TCHAR* Labels[]={TEXT("WORKER"),TEXT("GUARD"),TEXT("TOWER"),TEXT("RANGER"),TEXT("BRUTE")};
+    const TCHAR* Labels[]={TEXT("[Q] WORKER"),TEXT("[W] GUARD"),TEXT("[E] TOWER"),TEXT("[R] RANGER"),TEXT("[T] BRUTE")};
     const TCHAR* Costs[]={TEXT("75 GOLD"),TEXT("110 GOLD"),TEXT("120W + 80S"),TEXT("140 GOLD"),TEXT("180G + 80S")};
     const float ButtonW=FMath::Min(S(190.0f),(Width-S(36.0f))/5.0f-S(8.0f));
-    for(int32 I=0;I<5;++I){const float X=Pad+I*(ButtonW+S(8.0f));DrawRect(FLinearColor(0.035f,0.050f,0.073f,0.98f),X,DockY+S(14.0f),ButtonW,S(62.0f));DrawRect(Purple,X,DockY+S(14.0f),S(4.0f),S(62.0f));DrawText(Labels[I],FLinearColor::White,X+S(12.0f),DockY+S(23.0f),Medium,S(0.48f));DrawText(Costs[I],FLinearColor(1.0f,0.72f,0.22f),X+S(12.0f),DockY+S(49.0f),Medium,S(0.42f));}
-    DrawText(Director->GetRealmStatus(),FLinearColor(0.72f,0.82f,0.90f),Pad,DockY+S(87.0f),Medium,S(0.48f));
-    DrawText(TEXT("LMB/DRAG SELECT   SHIFT ADD   CTRL FILTER   RMB ORDER/DRAG FACING   A ATTACK-MOVE   H HOLD   P PATROL   1-9 GROUPS   WASD/EDGE/MMB PAN   WHEEL ZOOM"),FLinearColor(0.42f,0.86f,0.98f),Pad,DockY+S(112.0f),Medium,S(0.43f));
+    for(int32 I=0;I<5;++I){const float X=Pad+I*(ButtonW+S(8.0f));DrawRect(FLinearColor(0.035f,0.050f,0.073f,0.98f),X,DockY+S(14.0f),ButtonW,S(72.0f));DrawRect(Purple,X,DockY+S(14.0f),S(4.0f),S(72.0f));DrawText(Labels[I],FLinearColor::White,X+S(12.0f),DockY+S(23.0f),Medium,S(0.62f));DrawText(Costs[I],FLinearColor(1.0f,0.72f,0.22f),X+S(12.0f),DockY+S(54.0f),Medium,S(0.52f));}
+    DrawText(Director->GetRealmStatus(),FLinearColor(0.72f,0.82f,0.90f),Pad,DockY+S(96.0f),Medium,S(0.60f));
+    DrawText(TEXT("DRAG SELECT   RMB ORDER   A ATTACK-MOVE   H HOLD   P PATROL   1-9 GROUPS"),FLinearColor(0.42f,0.86f,0.98f),Pad,DockY+S(124.0f),Medium,S(0.50f));
 
     // Compact tactical minimap.
     const float MapW=S(215.0f), MapH=S(145.0f), MapX=Width-MapW-S(24.0f), MapY=TopH+S(18.0f);
@@ -1638,10 +1674,19 @@ void APhantomLegendsDirector::BeginPlay()
     Super::BeginPlay();
     LoadProgress();
     BuildRealm();
-    // AoE-style opening economy at the player capital; the enemy capital is kilometers away.
-    // Start with a visible working settlement and army. The prior six-unit opening made a 4 km RTS look abandoned.
-    for(int32 I=0;I<16;++I) SpawnUnit(EPhantomLegendsRole::Worker,EPhantomLegendsFaction::Legion);
-    for(int32 I=0;I<28;++I) SpawnUnit(I%4==0?EPhantomLegendsRole::Ranger:(I%4==1?EPhantomLegendsRole::Guard:(I%4==2?EPhantomLegendsRole::Brute:EPhantomLegendsRole::Ranger)),EPhantomLegendsFaction::Legion);
+    // A deliberate opening formation keeps economy, army and threat readable at a glance.
+    const FVector LegionAnchor=Stronghold?Stronghold->GetActorLocation():FVector(-120000.0f,-95000.0f,35.0f);
+    for(int32 I=0;I<8;++I)
+    {
+        SpawnUnit(EPhantomLegendsRole::Worker,EPhantomLegendsFaction::Legion,
+            LegionAnchor+FVector(900.0f+(I%4)*330.0f,-900.0f+(I/4)*620.0f,55.0f));
+    }
+    for(int32 I=0;I<12;++I)
+    {
+        const EPhantomLegendsRole UnitRole=I%3==0?EPhantomLegendsRole::Ranger:(I%3==1?EPhantomLegendsRole::Guard:EPhantomLegendsRole::Brute);
+        SpawnUnit(UnitRole,EPhantomLegendsFaction::Legion,
+            LegionAnchor+FVector(2600.0f+(I%4)*420.0f,700.0f+(I/4)*560.0f,55.0f));
+    }
     // A scouting patrol starts at the first contested river crossing, not on top of the capital.
     SpawnUnit(EPhantomLegendsRole::Raider, EPhantomLegendsFaction::Rift, FVector(-111500.0f,-87000.0f,90.0f));
     SpawnUnit(EPhantomLegendsRole::Raider, EPhantomLegendsFaction::Rift, FVector(-110900.0f,-87500.0f,90.0f));
@@ -1651,7 +1696,7 @@ void APhantomLegendsDirector::BeginPlay()
     SpawnUnit(EPhantomLegendsRole::Brute, EPhantomLegendsFaction::Rift, FVector(-108800.0f,-88400.0f,90.0f));
     if (APhantomLegendsPawn* StrategyPawn=Cast<APhantomLegendsPawn>(UGameplayStatics::GetPlayerPawn(this,0)))
     {
-        if(Stronghold) StrategyPawn->SetActorLocation(Stronghold->GetActorLocation()+FVector(0.0f,0.0f,90.0f));
+        if(Stronghold) StrategyPawn->SetActorLocation(Stronghold->GetActorLocation()+FVector(1900.0f,200.0f,90.0f));
     }
     RaidersAlive = 6;
     RealmStatus = TEXT("RIFT PATROL SIGHTED // TAB SELECTS ARMY, RIGHT-CLICK HOSTILES TO ATTACK");
@@ -1705,8 +1750,8 @@ void APhantomLegendsDirector::Tick(float DeltaSeconds)
 
 void APhantomLegendsDirector::BuildRealm()
 {
-    SpawnSun(3.9f, FRotator(-47.0f,-34.0f,0.0f), FLinearColor(1.0f,0.91f,0.80f));
-    SetWorldMood(FLinearColor(0.035f,0.065f,0.085f),0.0018f,FLinearColor(0.30f,0.34f,0.38f));
+    SpawnSun(4.25f, FRotator(-45.0f,-34.0f,0.0f), FLinearColor(1.0f,0.88f,0.70f));
+    SetWorldMood(FLinearColor(0.08f,0.12f,0.10f),0.0014f,FLinearColor(0.34f,0.42f,0.48f));
 
     // V10 PRODUCTION MAP: macro terrain, roads, river, capitals, settlements and forests are
     // persistent editor-authored actors. Runtime creates only interactive RTS state. This avoids
@@ -1717,13 +1762,23 @@ void APhantomLegendsDirector::BuildRealm()
         if (AStaticMeshActor* RealmCollision=SpawnBlock(TEXT("RealmCollision"),FVector(0,0,-40),FVector(409600,409600,80),FLinearColor::Black))
             RealmCollision->SetActorHiddenInGame(true);
         Stronghold=GetWorld()->SpawnActor<APhantomLegendsStructure>(FVector(-120000,-95000,35),FRotator(0,18,0));
-        if(Stronghold){Stronghold->Configure(EPhantomLegendsStructureType::Stronghold,EPhantomLegendsFaction::Legion,StrongholdLevel);Stronghold->SetActorHiddenInGame(true);}
+        if(Stronghold)
+        {
+            Stronghold->Configure(EPhantomLegendsStructureType::Stronghold,EPhantomLegendsFaction::Legion,StrongholdLevel);
+            Stronghold->SetActorHiddenInGame(true);
+            Stronghold->SetActorScale3D(FVector::ZeroVector);
+        }
         RiftGate=GetWorld()->SpawnActor<APhantomLegendsStructure>(FVector(120000,95000,35),FRotator(0,198,0));
-        if(RiftGate){RiftGate->Configure(EPhantomLegendsStructureType::RiftGate,EPhantomLegendsFaction::Rift,FMath::Max(1,RaidWave));RiftGate->SetActorHiddenInGame(true);}
+        if(RiftGate)
+        {
+            RiftGate->Configure(EPhantomLegendsStructureType::RiftGate,EPhantomLegendsFaction::Rift,FMath::Max(1,RaidWave));
+            RiftGate->SetActorHiddenInGame(true);
+            RiftGate->SetActorScale3D(FVector::ZeroVector);
+        }
         struct FProdResource{FVector P;EPhantomLegendsResource Type;int32 Amount;};
         const FProdResource Nodes[]={
-            {FVector(-112000,-90000,40),EPhantomLegendsResource::Wood,1600},{FVector(-108000,-97000,40),EPhantomLegendsResource::Stone,1300},
-            {FVector(-116000,-104000,40),EPhantomLegendsResource::Gold,1200},{FVector(-102000,-89000,40),EPhantomLegendsResource::Shard,800},
+            {FVector(-104000,-81000,40),EPhantomLegendsResource::Wood,1600},{FVector(-103000,-101000,40),EPhantomLegendsResource::Stone,1300},
+            {FVector(-110000,-112000,40),EPhantomLegendsResource::Gold,1200},{FVector(-96000,-86000,40),EPhantomLegendsResource::Shard,800},
             {FVector(-75000,65000,40),EPhantomLegendsResource::Gold,1500},{FVector(72000,-68000,40),EPhantomLegendsResource::Shard,1100},
             {FVector(-26000,132000,40),EPhantomLegendsResource::Wood,1800},{FVector(31000,-132000,40),EPhantomLegendsResource::Stone,1600}
         };

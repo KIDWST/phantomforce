@@ -856,10 +856,10 @@ ACubetownHero::ACubetownHero()
     SpringArm->SetUsingAbsoluteRotation(false);
     SpringArm->bUsePawnControlRotation = true;
     // Modern third-person adventure framing: behind the hero, not a tactical overhead camera.
-    SpringArm->TargetArmLength = 610.0f;
+    SpringArm->TargetArmLength = 640.0f;
     SpringArm->TargetOffset = FVector(0.0f, 0.0f, 130.0f);
     SpringArm->SocketOffset = FVector(0.0f, 34.0f, 12.0f);
-    SpringArm->SetRelativeRotation(FRotator(-14.0f, 0.0f, 0.0f));
+    SpringArm->SetRelativeRotation(FRotator(-18.0f, 0.0f, 0.0f));
     SpringArm->bDoCollisionTest = true;
     SpringArm->ProbeSize = 16.0f;
     SpringArm->bEnableCameraLag = true;
@@ -868,7 +868,7 @@ ACubetownHero::ACubetownHero()
     SpringArm->CameraRotationLagSpeed = 14.0f;
     AdventureCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("AdventureCamera"));
     AdventureCamera->SetupAttachment(SpringArm);
-    AdventureCamera->FieldOfView = 76.0f;
+    AdventureCamera->FieldOfView = 72.0f;
 
     UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
     UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -1483,7 +1483,7 @@ void ACubetownHUD::DrawHUD()
     const float UIScale=FMath::Clamp(FMath::Min(Width/1920.0f,Height/1080.0f),0.78f,1.75f);
     const auto S=[UIScale](float V){return V*UIScale;};
     UFont* Medium=GEngine?GEngine->GetMediumFont():nullptr;
-    const FLinearColor Panel(0.075f,0.035f,0.055f,0.84f), Mint(0.96f,0.36f,0.42f);
+    const FLinearColor Panel(0.055f,0.030f,0.048f,0.82f), Mint(0.96f,0.36f,0.42f);
     const float Pad=S(18.0f);
 
     // Third-person interaction reticle. Mining, attacks and Maker placement use this center aim point.
@@ -1494,48 +1494,47 @@ void ACubetownHUD::DrawHUD()
     DrawLine(CX,CY+S(2.0f),CX,CY+S(8.0f),FLinearColor(0.86f,1.0f,0.94f,0.85f),2.0f);
 
     // Adventure HUD: only the information needed while moving through the world.
-    DrawRect(Panel,Pad,Pad,S(610.0f),S(96.0f));
-    DrawRect(Mint,Pad,Pad,S(5.0f),S(96.0f));
-    DrawText(FString::Printf(TEXT("CUBETOWN // %s"),*Director->GetRegionName(Hero->GetActorLocation())),FLinearColor(1.0f,0.91f,0.76f),Pad+S(20.0f),Pad+S(13.0f),Medium,S(0.68f));
-    DrawText(Director->GetQuestStatus(),FLinearColor(0.78f,0.88f,0.92f),Pad+S(20.0f),Pad+S(45.0f),Medium,S(0.48f));
-    DrawText(FString::Printf(TEXT("SHRINES %d/3   ECHO %03d   %02d:%02d   %s"),Director->GetShrinesRestored(),Director->GetEchoEnergy(),FMath::FloorToInt(Director->GetTimeOfDayHours()),FMath::FloorToInt(FMath::Fmod(Director->GetTimeOfDayHours(),1.0f)*60.0f),*Director->GetWeatherName()),FLinearColor(1.0f,0.76f,0.34f),Pad+S(20.0f),Pad+S(71.0f),Medium,S(0.45f));
+    DrawRect(Panel,Pad,Pad,S(470.0f),S(104.0f));
+    DrawRect(Mint,Pad,Pad,S(5.0f),S(104.0f));
+    DrawText(FString::Printf(TEXT("CUBETOWN // %s"),*Director->GetRegionName(Hero->GetActorLocation())),FLinearColor(1.0f,0.91f,0.76f),Pad+S(20.0f),Pad+S(12.0f),Medium,S(0.82f));
+    DrawText(Director->GetQuestStatus(),FLinearColor(0.78f,0.88f,0.92f),Pad+S(20.0f),Pad+S(50.0f),Medium,S(0.58f));
+    DrawText(FString::Printf(TEXT("SHRINES %d/3   ECHO %03d   %02d:%02d   %s"),Director->GetShrinesRestored(),Director->GetEchoEnergy(),FMath::FloorToInt(Director->GetTimeOfDayHours()),FMath::FloorToInt(FMath::Fmod(Director->GetTimeOfDayHours(),1.0f)*60.0f),*Director->GetWeatherName()),FLinearColor(1.0f,0.76f,0.34f),Pad+S(20.0f),Pad+S(78.0f),Medium,S(0.52f));
 
     // A premium first session always answers two questions: what should I do, and what can I do here?
     // These markers are derived from live world actors, so they remain accurate after saves and progression.
     const FString ObjectiveMarker=Director->GetObjectiveMarker(Hero->GetActorLocation());
     if(!ObjectiveMarker.IsEmpty())
     {
-        const float ObjectiveW=S(520.0f),ObjectiveX=(Width-ObjectiveW)*0.5f;
-        DrawRect(FLinearColor(0.075f,0.035f,0.055f,0.86f),ObjectiveX,Pad,ObjectiveW,S(42.0f));
-        DrawRect(FLinearColor(1.0f,0.62f,0.24f),ObjectiveX,Pad,ObjectiveW,S(4.0f));
-        DrawText(ObjectiveMarker,FLinearColor(1.0f,0.91f,0.76f),ObjectiveX+S(18.0f),Pad+S(12.0f),Medium,S(0.50f));
+        const float ObjectiveW=S(360.0f),ObjectiveX=Width-ObjectiveW-Pad;
+        DrawRect(FLinearColor(0.055f,0.030f,0.048f,0.86f),ObjectiveX,Pad+S(112.0f),ObjectiveW,S(44.0f));
+        DrawRect(FLinearColor(1.0f,0.62f,0.24f),ObjectiveX,Pad+S(112.0f),S(5.0f),S(44.0f));
+        DrawText(ObjectiveMarker,FLinearColor(1.0f,0.91f,0.76f),ObjectiveX+S(18.0f),Pad+S(124.0f),Medium,S(0.56f));
     }
 
-    const float HeartW=S(260.0f), HeartX=Pad, HeartY=Height-S(64.0f);
-    DrawRect(Panel,HeartX,HeartY,HeartW,S(45.0f));
-    DrawText(TEXT("HEARTS"),FLinearColor(1.0f,0.72f,0.76f),HeartX+S(14.0f),HeartY+S(11.0f),Medium,S(0.46f));
-    DrawRect(FLinearColor(0.07f,0.08f,0.09f),HeartX+S(88.0f),HeartY+S(17.0f),S(150.0f),S(12.0f));
-    DrawRect(FLinearColor(1.0f,0.24f,0.38f),HeartX+S(88.0f),HeartY+S(12.0f),S(150.0f)*Hero->GetHealth()/120.0f,S(9.0f));
-    DrawRect(FLinearColor(0.07f,0.08f,0.09f),HeartX+S(88.0f),HeartY+S(26.0f),S(150.0f),S(7.0f));
-    DrawRect(FLinearColor(0.26f,0.92f,0.52f),HeartX+S(88.0f),HeartY+S(26.0f),S(150.0f)*Hero->GetStamina()/100.0f,S(7.0f));
+    const float HeartW=S(286.0f), HeartX=Pad, HeartY=Height-S(76.0f);
+    DrawRect(Panel,HeartX,HeartY,HeartW,S(57.0f));
+    DrawText(TEXT("LIFE"),FLinearColor(1.0f,0.72f,0.76f),HeartX+S(14.0f),HeartY+S(10.0f),Medium,S(0.58f));
+    for(int32 I=0;I<6;++I){const bool Full=Hero->GetHealth()>=((I+1)*20.0f);DrawRect(Full?FLinearColor(1.0f,0.24f,0.38f):FLinearColor(0.20f,0.09f,0.12f),HeartX+S(66.0f+I*31.0f),HeartY+S(12.0f),S(23.0f),S(17.0f));}
+    DrawRect(FLinearColor(0.07f,0.08f,0.09f),HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f),S(7.0f));
+    DrawRect(FLinearColor(0.26f,0.92f,0.52f),HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f)*Hero->GetStamina()/100.0f,S(7.0f));
 
-    const float ActionW=FMath::Min(S(720.0f),Width-S(560.0f));
-    const float ActionX=(Width-ActionW)*0.5f, ActionY=Height-S(64.0f);
-    DrawRect(Panel,ActionX,ActionY,ActionW,S(45.0f));
-    DrawText(FString::Printf(TEXT("[LMB] COMBO  [RMB] GUARD  [ALT] DODGE  [F] LOCK  [E] INTERACT  [HOLD Q] %s  [B] BUILD"),EchoName(Director->GetSelectedEcho())),FLinearColor(0.96f,0.84f,0.74f),ActionX+S(16.0f),ActionY+S(12.0f),Medium,S(0.44f));
+    const float SlotW=S(112.0f), SlotGap=S(8.0f), SlotY=Height-S(82.0f), SlotStart=Width-Pad-(SlotW*3.0f+SlotGap*2.0f);
+    const FString SlotLabels[]={FString::Printf(TEXT("[Q] %s"),EchoName(Director->GetSelectedEcho())),TEXT("[B] BUILD"),TEXT("[TAB] BAG")};
+    for(int32 I=0;I<3;++I){const float X=SlotStart+I*(SlotW+SlotGap);DrawRect(Panel,X,SlotY,SlotW,S(63.0f));DrawRect(I==0?FLinearColor(0.96f,0.30f,0.40f):FLinearColor(0.96f,0.68f,0.30f),X,SlotY,SlotW,S(4.0f));DrawText(SlotLabels[I],FLinearColor(1.0f,0.91f,0.78f),X+S(11.0f),SlotY+S(20.0f),Medium,S(0.56f));}
 
     const FString InteractionPrompt=Director->GetInteractionPrompt(Hero->GetActorLocation());
     if(!InteractionPrompt.IsEmpty() && !Director->IsBuildMode())
     {
-        const float PromptW=S(440.0f),PromptX=(Width-PromptW)*0.5f,PromptY=Height-S(118.0f);
+        const float PromptW=S(440.0f),PromptX=(Width-PromptW)*0.5f,PromptY=Height-S(92.0f);
         DrawRect(FLinearColor(0.12f,0.045f,0.07f,0.94f),PromptX,PromptY,PromptW,S(42.0f));
         DrawRect(FLinearColor(0.96f,0.30f,0.40f),PromptX,PromptY,S(5.0f),S(42.0f));
         DrawText(InteractionPrompt,FLinearColor(1.0f,0.92f,0.78f),PromptX+S(18.0f),PromptY+S(12.0f),Medium,S(0.52f));
     }
 
-    DrawRect(Panel,Width-S(300.0f)-Pad,Pad,S(300.0f),S(72.0f));
-    DrawText(FString::Printf(TEXT("MIRA %d   ROWAN %d   PIP %d"),Director->GetFriendship(0),Director->GetFriendship(1),Director->GetFriendship(2)),FLinearColor(1.0f,0.58f,0.78f),Width-S(284.0f)-Pad,Pad+S(13.0f),Medium,S(0.46f));
-    DrawText(Director->IsGuardianDefeated()?TEXT("HEARTSTONE SAFE"):TEXT("RIFT THREAT ACTIVE"),Director->IsGuardianDefeated()?Mint:FLinearColor(0.82f,0.62f,1.0f),Width-S(284.0f)-Pad,Pad+S(42.0f),Medium,S(0.43f));
+    DrawRect(Panel,Width-S(360.0f)-Pad,Pad,S(360.0f),S(96.0f));
+    DrawText(TEXT("TOWN LIFE"),FLinearColor(1.0f,0.90f,0.74f),Width-S(342.0f)-Pad,Pad+S(11.0f),Medium,S(0.66f));
+    DrawText(FString::Printf(TEXT("MIRA %d/5   ROWAN %d/5   PIP %d/5"),Director->GetFriendship(0),Director->GetFriendship(1),Director->GetFriendship(2)),FLinearColor(1.0f,0.58f,0.78f),Width-S(342.0f)-Pad,Pad+S(43.0f),Medium,S(0.54f));
+    DrawText(Director->IsGuardianDefeated()?TEXT("HEARTSTONE SAFE"):TEXT("RIFT THREAT ACTIVE"),Director->IsGuardianDefeated()?Mint:FLinearColor(0.82f,0.62f,1.0f),Width-S(342.0f)-Pad,Pad+S(70.0f),Medium,S(0.50f));
 
     if(Hero->IsLockedOn())
     {
@@ -1734,8 +1733,8 @@ void ACubetownDirector::SpawnDreamWorldDetails()
 
 void ACubetownDirector::BuildDreamWorld()
 {
-    DreamSun=SpawnSun(5.2f,FRotator(-42.0f,-28.0f,0.0f),FLinearColor(1.0f,0.78f,0.58f));
-    SetWorldMood(FLinearColor(0.32f,0.46f,0.62f),0.0011f,FLinearColor(0.52f,0.62f,0.78f));
+    DreamSun=SpawnSun(3.9f,FRotator(-42.0f,-28.0f,0.0f),FLinearColor(1.0f,0.80f,0.64f));
+    SetWorldMood(FLinearColor(0.12f,0.18f,0.22f),0.0015f,FLinearColor(0.34f,0.46f,0.60f));
 
     // V10 PRODUCTION MAP CONTRACT: the visible environment already exists in CubeTown_World.
     // Never build the old runtime world on top of it again. That V10 rescue: previous double-world bug was a major

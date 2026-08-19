@@ -56,6 +56,7 @@
     "test:media-generation-lifecycle": "tsx scripts/test-media-generation-lifecycle.ts",
     "test:content-publication-lifecycle": "tsx scripts/test-content-publication-lifecycle.ts",
     "test:agent-assist-bridge": "tsx scripts/test-agent-assist-bridge.ts",
+    "test:phantombot-media-bridge-live": "tsx scripts/test-phantombot-media-bridge-live.ts",
     "chatgpt:adapter": "node scripts/chatgpt-assist-adapter.mjs",
     "test:termina-bridge": "tsx scripts/test-termina-bridge.ts",
     "test:hermes-acp-transport": "tsx scripts/test-hermes-acp-transport.ts",

@@ -58,7 +58,11 @@ def target_cm(semantic):
     if 'road_24m' in s:return 2400,False
     if 'river_60m' in s:return 6000,False
     if 'bridge' in s:return 1800,False
-    if 'capital_keep' in s:return 3000,True
+    if 'capital_keep' in s or 'capitalkeep' in s:return 1400,True
+    if 'leg_blue_tower' in s or 'leg_red_tower' in s:return 650,True
+    if 'backdrop_far' in s:return 4600,False
+    if 'backdrop_near' in s:return 6200,False
+    if 'backdrop' in s:return 5400,False
     if 'fortress_keep' in s:return 2600,True
     if 'castle' in s or 'keep' in s:return 2200,True
     if 'tower' in s:return 1500,True
@@ -145,9 +149,31 @@ def spawn(name,candidates,xyz,yaw=0,scale=(1,1,1),required=True,ground=True,mate
     except Exception:pass
     return a
 
+def spawn_player_start(name,xyz,yaw=0):
+    """Give character-based games a collision-safe initial spawn before BeginPlay repositions them."""
+    a=actors.spawn_actor_from_class(
+        unreal.PlayerStart,
+        unreal.Vector(*map(float,xyz)),
+        unreal.Rotator(0,0,float(yaw)),
+        transient=False,
+    )
+    if not a:raise RuntimeError('Could not create '+name)
+    try:a.set_actor_label(name)
+    except Exception:pass
+    try:a.set_editor_property('tags',list(a.get_editor_property('tags'))+[unreal.Name(TAG),unreal.Name(name)])
+    except Exception:pass
+    return a
+
 def new_world(path):
     if unreal.EditorAssetLibrary.does_asset_exist(path):
-        if not unreal.EditorAssetLibrary.delete_asset(path):raise RuntimeError('Could not replace '+path)
+        if not level.load_level(path):raise RuntimeError('Could not load '+path)
+        removed=0
+        for actor in list(actors.get_all_level_actors()):
+            if isinstance(actor,unreal.WorldSettings):
+                continue
+            if actors.destroy_actor(actor):removed+=1
+        unreal.log(f'PHANTOM WORLD RESET {path}: removed {removed} actors')
+        return
     if not level.new_level(path,False):raise RuntimeError('Could not create '+path)
 
 def save(path):
@@ -169,6 +195,7 @@ TREES=[['/Game/Phantom/Curated/Cube/SM_Cube_Tree_A','/Game/Phantom/External/CC0/
 
 def build_cubetown():
     path=WORLD_ROOT+'/CubeTown_World';new_world(path);c=0
+    spawn_player_start('CT_PlayerStart',(0,-10500,340),90);c+=1
     # Ground is the only generated large geometry: real PBR material + dense imported content above it.
     for ty in range(3):
       for tx in range(3):
@@ -222,7 +249,18 @@ def build_cubetown():
 
 def build_ages():
     path=WORLD_ROOT+'/PhantomAges_World';new_world(path);c=0
-    spawn('AGES_Terrain_Ages',V8('Ages','Terrain','SM_V8_AgesBattlefield'),(0,0,-20),ground=False,material=MATS['Dirt']);c+=1
+    spawn_player_start('AGES_PlayerStart',(0,-18500,4600),90);c+=1
+    # A side-view game needs visual ground both behind and in front of the combat lane. One shallow
+    # terrain tile left the lower half of the fixed camera looking through the edge of the world.
+    for index,y in enumerate((-10500,0,10500)):
+      spawn(f'AGES_Terrain_Ages_{index}',V8('Ages','Terrain','SM_V8_AgesBattlefield'),(0,y,-20),ground=False,material=MATS['Dirt']);c+=1
+    # Layered mountain silhouettes turn the fixed 3/4 battlefield into a complete scene instead
+    # of leaving a thin terrain strip floating between empty sky bands.
+    for index,(x,y,yaw,asset,band) in enumerate((
+      (-14500,9200,18,'SM_BackdropMountain_A','Far'),(-9000,8000,-12,'SM_BackdropMountain_B','Near'),
+      (-2500,9400,4,'SM_BackdropMountain_A','Far'),(4500,7900,15,'SM_BackdropMountain_B','Near'),
+      (10500,9300,-18,'SM_BackdropMountain_A','Far'),(15000,8200,8,'SM_BackdropMountain_B','Near'))):
+      spawn(f'AGES_Backdrop{band}_{index}',f'/Game/Phantom/Generated/Common/{asset}',(x,y,-40),yaw,ground=True);c+=1
     wall=['/Game/Phantom/Curated/Fab/Ages/SM_Fab_Wall','/Game/Phantom/Curated/Ages/SM_Ages_Wall','/Game/Phantom/External/CC0/Aliases/SM_CC0_CastleWall']
     tower=['/Game/Phantom/Curated/Fab/Ages/SM_Fab_Tower','/Game/Phantom/Curated/Ages/SM_Ages_Tower','/Game/Phantom/External/CC0/Aliases/SM_CC0_CastleTower']
     gate=['/Game/Phantom/Curated/Fab/Ages/SM_Fab_Gate','/Game/Phantom/Curated/Ages/SM_Ages_Gate','/Game/Phantom/External/CC0/Aliases/SM_CC0_Gate']
@@ -253,17 +291,21 @@ def build_ages():
 
 def build_legends():
     path=WORLD_ROOT+'/PhantomLegends_World';new_world(path);c=0
+    spawn_player_start('LEG_PlayerStart',(-126000,-93000,320),45);c+=1
     for ty in range(4):
       for tx in range(4):spawn(f'LEG_Terrain_Legends_{ty}{tx}',V8('Legends','Terrain',f'SM_V8_LegendsTerrain_{ty}{tx}'),((tx-1.5)*102400,(ty-1.5)*102400,-25),ground=False,material=MATS['Grass']);c+=1
     keep=['/Game/Phantom/Curated/Fab/Legends/SM_Fab_Keep','/Game/Phantom/Curated/Legends/SM_Legends_Keep','/Game/Phantom/External/CC0/Aliases/SM_CC0_Keep']
-    tower=['/Game/Phantom/Curated/Fab/Legends/SM_Fab_Tower','/Game/Phantom/Curated/Legends/SM_Legends_Tower','/Game/Phantom/External/CC0/Aliases/SM_CC0_CastleTower']
+    tower=['/Game/Phantom/External/CC0/Aliases/SM_CC0_CastleTower','/Game/Phantom/Curated/Fab/Legends/SM_Fab_Tower','/Game/Phantom/Curated/Legends/SM_Legends_Tower']
     wall=['/Game/Phantom/Curated/Fab/Legends/SM_Fab_Wall','/Game/Phantom/Curated/Legends/SM_Legends_Wall','/Game/Phantom/External/CC0/Aliases/SM_CC0_CastleWall']
     gate=['/Game/Phantom/Curated/Fab/Legends/SM_Fab_Gate','/Game/Phantom/Curated/Legends/SM_Legends_Gate','/Game/Phantom/External/CC0/Aliases/SM_CC0_Gate']
     barr=['/Game/Phantom/Curated/Fab/Legends/SM_Fab_Barracks','/Game/Phantom/Curated/Legends/SM_Legends_Barracks','/Game/Phantom/External/CC0/Aliases/SM_CC0_Barracks']
     house=['/Game/Phantom/Curated/Fab/Legends/SM_Fab_House','/Game/Phantom/External/CC0/Aliases/SM_CC0_House_A']
     def capital(prefix,cx,cy,flip=False):
       nonlocal c
-      spawn(prefix+'_CapitalKeep',keep,(cx,cy,0),180 if flip else 0,(1.25,1.25,1.25),forbid_generated=True);c+=1
+      # The recovered curated keep is a 27x17x111 source column; normalizing it to fortress height
+      # produced a featureless tower. The faction keeps are complete authored multi-part silhouettes.
+      # Dedicated keep roots collapse to one child shell after import. Do not place a fake central
+      # monolith: the verified inner buildings, gates, walls and live stronghold define the capital.
       # Dense playable capital: walls every 12m, towers every corner/edge, internal military/economy grid.
       for i,x in enumerate(range(-7200,7201,1200)):
         for yy in (-7800,7800):spawn(f'{prefix}_WallH_{i}_{yy}',wall,(cx+x,cy+yy,0),0,(.9,.9,.9),forbid_generated=True);c+=1
@@ -276,10 +318,11 @@ def build_legends():
           if ix==0 and iy==0:continue
           p=barr if (ix+iy)%3==0 else house
           spawn(f'{prefix}_Inner_{ix}_{iy}',p,(cx+ix*1800,cy+iy*1800,0),(ix*37+iy*19)%360,(.75,.75,.75),forbid_generated=True);c+=1
-      # Trees/resource perimeter around capital.
-      for i in range(70):
-        a=i*2.399;r=9500+(i%7)*900
-        spawn(f'{prefix}_Tree_{i}','/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A',(cx+math.cos(a)*r,cy+math.sin(a)*r,0),i*31,(.85,.85,.85),forbid_generated=True);c+=1
+      # Forests live in the satellite settlements and macro biome grid. Recovered tree roots are
+      # intentionally excluded from the capital opening because their canopy-only roots read poorly.
+      for i in range(10):
+        a=i*math.tau/10.0;r=10800+(i%3)*900
+        spawn(f'{prefix}_CourtyardRock_{i}','/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock',(cx+math.cos(a)*r,cy+math.sin(a)*r,0),i*37,(.8,.8,.8),forbid_generated=True);c+=1
     capital('LEG_Blue',-120000,-95000,False);capital('LEG_Red',120000,95000,True)
     # Roads connect meaningful places; river/bridges form strategic chokepoints.
     road=V10('Legends','Setpieces','SM_V10_RTSRoad_120m')
@@ -304,6 +347,7 @@ def build_legends():
 
 def build_strike():
     path=WORLD_ROOT+'/PhantomStrike_World';new_world(path);c=0
+    spawn_player_start('STRIKE_PlayerStart',(-9000,0,380),0);c+=1
     for ty in range(3):
       for tx in range(4):spawn(f'STRIKE_Terrain_Strike_{ty}{tx}',V8('Strike','Terrain',f'SM_V8_StrikeGround_{ty}{tx}'),(-18000+tx*12000,-12000+ty*12000,-20),ground=False,material=MATS['Asphalt']);c+=1
     road='/Game/Phantom/Strike/Street_Straight';intersection='/Game/Phantom/Strike/Street_4Way'

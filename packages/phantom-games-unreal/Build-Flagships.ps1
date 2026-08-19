@@ -6,6 +6,9 @@ param(
     [switch]$SkipExternalCC0Assets,
     [switch]$SkipGameplayProof,
     [switch]$KeepExistingUnrealProcesses,
+    [ValidatePattern('^[A-Za-z0-9._-]+$')][string]$CandidateLabel = 'V12',
+    [switch]$CandidateOnly,
+    [switch]$SkipContentRefresh,
     [ValidateRange(2,16)][int]$MaxParallelActions = 8,
     [switch]$FullSpeed
 )
@@ -208,31 +211,37 @@ Write-Host "Engine: $EngineRoot"
 Write-Host 'QA policy: package game -> auto-enter gameplay -> ONE 1920x1080 screenshot. No resolution matrix.' -ForegroundColor Yellow
 Write-Host "PC load policy: below-normal orchestrator priority and MaxParallelActions=$MaxParallelActions." -ForegroundColor Yellow
 
-# 0.5) Discover already-installed Epic/Fab samples and project content once. This is an audit only;
-# owned/imported project assets are actually curated later by HarvestOwnedFabAssets.py.
-$EpicAudit=Join-Path $ProjectRoot 'Tools\Audit-InstalledEpicContent.ps1'
-if(Test-Path $EpicAudit){try{& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $EpicAudit -ProjectRoot $ProjectRoot | Out-Host}catch{Write-Warning $_.Exception.Message}}
+if($SkipContentRefresh){
+    Write-Host 'Using the existing verified content state; acquisition and reimport are skipped.' -ForegroundColor Yellow
+    Assert-UnityBaselineHarvest
+    Assert-ImportedContent
+} else {
+    # 0.5) Discover already-installed Epic/Fab samples and project content once. This is an audit only;
+    # owned/imported project assets are actually curated later by HarvestOwnedFabAssets.py.
+    $EpicAudit=Join-Path $ProjectRoot 'Tools\Audit-InstalledEpicContent.ps1'
+    if(Test-Path $EpicAudit){try{& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $EpicAudit -ProjectRoot $ProjectRoot | Out-Host}catch{Write-Warning $_.Exception.Message}}
 
-# 1) Refresh current creator libraries and production PBR surface sources.
-if($SkipExternalCC0Assets){throw 'V11 refuses -SkipExternalCC0Assets because max-fidelity candidates require the current creator asset baseline.'}
-$Acquire=Join-Path $ProjectRoot 'Tools\AcquireCC0Assets.ps1'
-Invoke-NativeChecked 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Acquire,'-ProjectRoot',$ProjectRoot) 'CURRENT CREATOR ASSET ACQUISITION'
-$PolyAcquire=Join-Path $ProjectRoot 'Tools\AcquirePolyHavenProduction.ps1'
-Invoke-NativeChecked 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$PolyAcquire,'-ProjectRoot',$ProjectRoot) 'POLY HAVEN PBR PRODUCTION ACQUISITION'
+    # 1) Refresh current creator libraries and production PBR surface sources.
+    if($SkipExternalCC0Assets){throw 'V11 refuses -SkipExternalCC0Assets because max-fidelity candidates require the current creator asset baseline.'}
+    $Acquire=Join-Path $ProjectRoot 'Tools\AcquireCC0Assets.ps1'
+    Invoke-NativeChecked 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Acquire,'-ProjectRoot',$ProjectRoot) 'CURRENT CREATOR ASSET ACQUISITION'
+    $PolyAcquire=Join-Path $ProjectRoot 'Tools\AcquirePolyHavenProduction.ps1'
+    Invoke-NativeChecked 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$PolyAcquire,'-ProjectRoot',$ProjectRoot) 'POLY HAVEN PBR PRODUCTION ACQUISITION'
 
-# 2) Recover what already existed in the Unity version instead of pretending the Unreal rewrite started from zero.
-$UnityHarvest=Join-Path $ProjectRoot 'Tools\HarvestUnityBaseline.ps1'
-Invoke-NativeChecked 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$UnityHarvest,'-ProjectRoot',$ProjectRoot) 'UNITY BASELINE HARVEST'
-Assert-UnityBaselineHarvest
+    # 2) Recover what already existed in the Unity version instead of pretending the Unreal rewrite started from zero.
+    $UnityHarvest=Join-Path $ProjectRoot 'Tools\HarvestUnityBaseline.ps1'
+    Invoke-NativeChecked 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$UnityHarvest,'-ProjectRoot',$ProjectRoot) 'UNITY BASELINE HARVEST'
+    Assert-UnityBaselineHarvest
 
-# 3) Acquire current Poly Haven CC0 PBR surfaces, then compile editor exactly once.
-Invoke-NativeChecked $BuildTool @('PhantomGamesEditor','Win64','Development',$Project,'-WaitMutex','-NoHotReload') 'UNREAL EDITOR MODULE COMPILE'
+    # 3) Acquire current Poly Haven CC0 PBR surfaces, then compile editor exactly once.
+    Invoke-NativeChecked $BuildTool @('PhantomGamesEditor','Win64','Development',$Project,'-WaitMutex','-NoHotReload') 'UNREAL EDITOR MODULE COMPILE'
 
-# 4) ONE UnrealEditor-Cmd session: baseline library -> creator packs -> skeletal characters -> PBR -> Unity -> owned Fab -> worlds -> validation.
-$Pipeline=Join-Path $ProjectRoot 'Tools\PhantomOneShotEditorPipeline.py'
-Remove-Item (Join-Path $Saved 'PhantomOneShotEditorPipelineV11.txt') -Force -ErrorAction SilentlyContinue
-Invoke-NativeChecked $EditorCmd @($Project,"-ExecutePythonScript=$Pipeline",'-unattended','-nop4','-nosplash','-NoSound','-utf8output') 'ONE-SHOT CONTENT IMPORT'
-Assert-ImportedContent
+    # 4) ONE UnrealEditor-Cmd session: baseline library -> creator packs -> skeletal characters -> PBR -> Unity -> owned Fab -> worlds -> validation.
+    $Pipeline=Join-Path $ProjectRoot 'Tools\PhantomOneShotEditorPipeline.py'
+    Remove-Item (Join-Path $Saved 'PhantomOneShotEditorPipelineV11.txt') -Force -ErrorAction SilentlyContinue
+    Invoke-NativeChecked $EditorCmd @($Project,"-ExecutePythonScript=$Pipeline",'-unattended','-nop4','-nosplash','-NoSound','-utf8output') 'ONE-SHOT CONTENT IMPORT'
+    Assert-ImportedContent
+}
 
 $Games=@(
     @{Id='phantom-strike';Target='PhantomStrike';Executable='PhantomStrike.exe'},
@@ -250,9 +259,9 @@ if($CompileOnly -and -not $PackageWindows){
 # 5) V11 TRANSACTIONAL CANDIDATE PACKAGING.
 # Never delete the live PhantomPlay game first. Build into an isolated candidate root, launch that
 # candidate directly, take ONE real gameplay frame, and only promote after the visual gate passes.
-$CandidateRoot=Join-Path $ProjectRoot 'CandidateBuilds\V11'
-$ArtifactRoot=Join-Path $ProjectRoot 'BuildArtifacts\V11'
-$CandidateProofRoot=Join-Path $Saved 'PhantomGameplayProofV11Candidates'
+$CandidateRoot=Join-Path $ProjectRoot ("CandidateBuilds\"+$CandidateLabel)
+$ArtifactRoot=Join-Path $ProjectRoot ("BuildArtifacts\"+$CandidateLabel)
+$CandidateProofRoot=Join-Path $Saved ("PhantomGameplayProof"+$CandidateLabel+"Candidates")
 foreach($Path in @($CandidateRoot,$ArtifactRoot,$CandidateProofRoot)){
     if(Test-Path $Path){Remove-Item $Path -Recurse -Force}
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
@@ -273,8 +282,8 @@ foreach($Game in $Games){
     while($PackageRoot.Parent -and $PackageRoot.FullName.StartsWith($Archive) -and -not(Test-Path (Join-Path $PackageRoot.FullName 'Engine'))){$PackageRoot=$PackageRoot.Parent}
     Copy-Item (Join-Path $PackageRoot.FullName '*') $Output -Recurse -Force
     if(-not(Test-Path (Join-Path $Output $Game.Executable))){Copy-Item $BuiltPlayer.FullName (Join-Path $Output $Game.Executable) -Force}
-    Set-Content (Join-Path $Output 'PHANTOM_PRODUCTION_REBOOT_V11_CANDIDATE.txt') -Encoding UTF8 -Value @(
-        'PHANTOM PRODUCTION REBOOT V11 CANDIDATE',"game=$($Game.Id)","built=$([DateTime]::Now.ToString('s'))","engine=$EngineRoot",
+    Set-Content (Join-Path $Output ("PHANTOM_PRODUCTION_REBOOT_"+$CandidateLabel+"_CANDIDATE.txt")) -Encoding UTF8 -Value @(
+        "PHANTOM PRODUCTION REBOOT $CandidateLabel CANDIDATE","game=$($Game.Id)","built=$([DateTime]::Now.ToString('s'))","engine=$EngineRoot",
         'promotion=blocked_until_gameplay_visual_gate_passes',
         'runtime_primitives=not_allowed_as_missing-art-fallback',
         'imported_asset_units=semantic_bounds_normalized'
@@ -309,6 +318,15 @@ Invoke-NativeChecked 'powershell.exe' @(
 Write-Host ''
 Write-Host 'V11 AUTOMATED GATES PASSED. LIVE PHANTOMPLAY BUILDS ARE STILL UNTOUCHED.' -ForegroundColor Yellow
 Write-Host "Review the four actual gameplay screenshots here: $CandidateProofRoot" -ForegroundColor Yellow
+if($CandidateOnly){
+    Set-Content (Join-Path $CandidateRoot ($CandidateLabel+'_READY_FOR_REVIEW.txt')) -Encoding UTF8 -Value @(
+        "$CandidateLabel candidates built and passed automated structural/frame checks.",
+        'Live PhantomPlay builds were intentionally left untouched.',
+        "screenshots=$CandidateProofRoot"
+    )
+    Write-Host "$CandidateLabel candidate-only pass complete. Live builds unchanged." -ForegroundColor Green
+    exit 0
+}
 try { Start-Process explorer.exe $CandidateProofRoot } catch {}
 $Approval=Read-Host 'Type PROMOTE only if YOU personally approve all four screenshots. Anything else keeps the candidates separate'
 if($Approval -cne 'PROMOTE'){
