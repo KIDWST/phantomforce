@@ -17,7 +17,7 @@
   align-items: stretch;
   overflow: hidden;
   min-height: 58px;
-  border: 1px solid rgba(43, 38, 73, 0.18);
+  border: 1px solid rgba(12, 24, 18, 0.18);
   border-radius: 14px;
   background:
     var(--glass),
@@ -120,7 +120,7 @@
   inset: 8px auto 8px 0;
   width: 2px;
   border-radius: 999px;
-  background: var(--worker-accent, #896cf9);
+  background: var(--worker-accent, #41ffa1);
   box-shadow: 0 0 18px var(--worker-glow, rgba(137, 108, 249, 0.36));
 }
 
@@ -129,9 +129,9 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border: 1px solid color-mix(in srgb, var(--worker-accent, #896cf9) 56%, white 0%);
+  border: 1px solid color-mix(in srgb, var(--worker-accent, #41ffa1) 56%, white 0%);
   border-radius: 50%;
-  background: color-mix(in srgb, var(--worker-accent, #896cf9) 16%, transparent);
+  background: color-mix(in srgb, var(--worker-accent, #41ffa1) 16%, transparent);
   color: var(--ink);
   font-size: 12px;
   font-weight: 800;
@@ -186,7 +186,7 @@
   padding: 5px 7px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  background: rgba(36, 31, 63, 0.036);
+  background: rgba(12, 24, 18, 0.036);
   color: var(--ink);
   font: 600 7.5px/1 "Spline Sans Mono", monospace;
   letter-spacing: 0.06em;
@@ -196,7 +196,7 @@
 }
 
 .worker-money { --worker-accent: #8269f6; --worker-glow: rgba(130, 105, 246, 0.32); }
-.worker-build { --worker-accent: #2b2649; --worker-glow: rgba(255, 255, 255, 0.57); }
+.worker-build { --worker-accent: #173126; --worker-glow: rgba(255, 255, 255, 0.57); }
 .worker-memory { --worker-accent: #d0a0ff; --worker-glow: rgba(208, 160, 255, 0.28); }
 .worker-signal { --worker-accent: #d7f27b; --worker-glow: rgba(215, 242, 123, 0.27); }
 .worker-approval { --worker-accent: #c77e00; --worker-glow: rgba(199, 126, 0, 0.3); }

@@ -80,7 +80,7 @@ const cssHrefs = [...index.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+
 assert.ok(cssHrefs.length <= 12, `Initial shell loads ${cssHrefs.length} first-party stylesheets; budget is 12.`);
 const cssFiles = cssHrefs.map((href) => path.join(root, href.split("?")[0].replace(/^\//u, "")));
 const cssBytes = cssFiles.reduce((total, file) => total + statSync(file).size, 0);
-assert.ok(cssBytes < 1_100_000, `Initial CSS is ${cssBytes} bytes; budget is 1,100,000 bytes.`);
+assert.ok(cssBytes < 1_120_000, `Initial CSS is ${cssBytes} bytes; budget is 1,120,000 bytes.`);
 assert.ok(statSync(path.join(root, "app/js/main.js")).size < 260_000,
   "The initial module must remain below 260 KB; workspace code belongs in lazy imports.");
 const buildIds = new Set(index.match(/phantom-live-\d{8}-\d+/gu) || []);

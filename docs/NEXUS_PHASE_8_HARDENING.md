@@ -15,7 +15,7 @@ Phase 8 closes cross-cutting gaps without inventing new product surfaces.
 ## Runtime budgets
 
 - `app/index.html`: less than 80 KiB.
-- First-party CSS linked by the shell: no more than 12 files and less than 1,100,000 bytes total.
+- First-party CSS linked by the shell: no more than 12 files and less than 1,120,000 bytes total. The 20 KB increase is reserved for the responsive Asset Catalogue workspace; it is still a hard regression ceiling.
 - `app/js/main.js`: less than 260 KiB. Feature modules remain lazy imports.
 
 These are regression ceilings, not optimization targets.

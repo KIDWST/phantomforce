@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const index = read("../app/index.html");
@@ -7,6 +7,10 @@ const main = read("../app/js/main.js");
 const planner = read("../app/js/planner.js");
 const adminCss = read("../app/admin-next.css");
 const commandCss = read("../app/command-os.css");
+const brandCss = readdirSync(new URL("../app/", import.meta.url))
+  .filter((file) => file.endsWith(".css"))
+  .map((file) => read(`../app/${file}`))
+  .join("\n");
 const buildId = index.match(/phantom-live-\d{8}-\d+/u)?.[0];
 assert.ok(buildId, "The initial admin document must expose a live cache build.");
 const escapedBuildId = buildId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -94,6 +98,12 @@ assert.doesNotMatch(index, /#(?:f3f2fa|f5f4fb|241f3f|5d5880)|rgba\((?:139,\s*103
 assert.match(adminCss, /\.page-worker[\s\S]*?rgba\(24, 242, 143/u, "Page intelligence must use the green brand layer.");
 assert.match(adminCss, /\.os-primary-nav button::after[\s\S]*?var\(--pf-green\)/u, "Navigation state must use Phantom green.");
 assert.doesNotMatch(adminCss, /purple|violet|indigo|blue|#(?:5b4cff|b44bf0|7c6cff|4f8dff|6da4ff|74a9ff)|rgba\((?:91,\s*76,\s*255|124,\s*108,\s*255|79,\s*141,\s*255)/iu, "The final admin authority must not reintroduce the retired purple/blue palette.");
+assert.match(brandCss, /--neon:\s*#41ffa1/u, "The shared product chrome must use Phantom mint as its primary accent.");
+assert.doesNotMatch(
+  brandCss,
+  /#(?:5b4cff|b44bf0|b78cff|7c6cff|6242f5|42e9ff|4f8dff|632bb0|6b54db|886df9|896cf9|9c92ff|814af7|8a79ff|3822c5|5e4ade|241f3f|5d5880|8b87a8|f3f2fa|f4f0ff|aaa2c8|7f789d|070611|2b2649|3a3560)|rgba\((?:91,\s*76,\s*255|91,76,255|98,\s*66,\s*245|124,\s*108,\s*255|139,\s*122,\s*255|129,\s*98,\s*255|138,\s*121,\s*255|129,\s*74,\s*247|79,\s*141,\s*255|180,\s*75,\s*240|51,\s*10,\s*245|43,\s*38,\s*73|36,\s*31,\s*63|36,31,63)/iu,
+  "Shared product styles must not retain the retired purple shell palette.",
+);
 
 const openingBraces = (adminCss.match(/\{/gu) || []).length;
 const closingBraces = (adminCss.match(/\}/gu) || []).length;
