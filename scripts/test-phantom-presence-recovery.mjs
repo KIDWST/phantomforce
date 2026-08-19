@@ -35,8 +35,14 @@ assert.match(phantomAi, /data-phantombot-presence-canvas/u, "PhantomBot must exp
 assert.match(phantomAi, /mountPhantomPresence\(log\.querySelector/u, "PhantomBot must animate the recovered character.");
 assert.match(presence, /createPhantomCharacter/u, "Presence surfaces must use the original character engine.");
 assert.match(presence, /prefers-reduced-motion: reduce/u, "Character motion must respect reduced-motion preferences.");
+assert.match(presence, /const GESTURE_SEQUENCES = \{/u, "PhantomBot must choreograph full-body gestures by live state.");
+assert.match(presence, /idle:[\s\S]*welcome[\s\S]*present[\s\S]*point[\s\S]*laugh/u, "Idle PhantomBot must visibly welcome, present, point, and laugh.");
+assert.match(presence, /canvas\.dataset\.phantomGesture/u, "The active PhantomBot gesture must remain observable for desktop and browser verification.");
 assert.match(companion, /phantom:presence-state/u, "Existing agent states must drive every Phantom presence.");
 assert.match(css, /\.phantombot-presence-canvas/u, "Recovered PhantomBot character needs stable layout styling.");
+assert.match(css, /\.phantombot-presence\s*\{[\s\S]*?width:\s*clamp\(430px, 46vw, 680px\);[\s\S]*?height:\s*clamp\(380px, 52vh, 560px\);/u, "PhantomBot must render as a large presence on the shared web and desktop surface.");
+assert.match(css, /\.phantombot-presence-canvas\s*\{[\s\S]*?opacity:\s*\.34;[\s\S]*?mix-blend-mode:\s*screen;/u, "PhantomBot must remain visibly translucent instead of becoming an opaque mascot.");
+assert.doesNotMatch(css, /html\[data-command-os="2040"\] \.phantombot-presence\s*\{[\s\S]*?width:\s*190px;/u, "Desktop parity must never shrink PhantomBot back to the old 190px mascot.");
 assert.match(css, /\.phantompet-presence-canvas/u, "Recovered Overview pet needs stable full-body layout styling.");
 const petButtonCss = baseCss.match(/\.phantompet-presence\s*\{[\s\S]*?\n\}/u)?.[0] || "";
 assert.match(petButtonCss, /border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*overflow:\s*visible/u, "PhantomPet must remain a transparent, unclipped character presence.");

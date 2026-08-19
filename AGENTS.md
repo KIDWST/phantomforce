@@ -70,6 +70,16 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Giant translucent PhantomBot presence (2026-08-19)** — browser build
+  `phantom-live-20260819-172`. Removed the late desktop-parity regression that
+  shrank PhantomBot to a 190px mascot. The shared web/desktop surface now renders
+  a 430–680px translucent full-body apparition, with the workspace prompt layered
+  over the character and responsive phone sizing from the same contract. The
+  presence renderer now cycles deterministic painted welcome, present, point,
+  laugh, thinking, speaking, success, warning, error, and paused gestures based
+  on live state. Change-memory, Phantom presence, PhantomBot, command-surface,
+  desktop 17/17, phone/desktop Chrome visual sweeps, and release-critical 32/32
+  gates passed.
 - **PhantomPlay V18R1 installed promotion (2026-08-19)** — exact user
   authorization `PROMOTE` replaced the installed V11R15 four-game set with the
   reviewed V18R1 Windows Shipping builds through an atomic, fail-closed promotion.

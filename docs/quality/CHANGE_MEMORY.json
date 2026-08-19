@@ -2027,6 +2027,41 @@
       ]
     },
     {
+      "id": "phantombot-giant-translucent-gesture-floor",
+      "status": "active",
+      "title": "PhantomBot remains a giant translucent gesturing presence on web and desktop",
+      "ownerDecision": "PhantomBot is a large, transparent apparition rather than a small opaque mascot. The shared web surface and the installed desktop shell must use the same presence renderer and sizing contract. Idle, listening, thinking, speaking, success, warning, error, and paused states drive visible full-body painted gestures, with the active gesture exposed for runtime verification. Desktop parity rules cannot shrink the character back to the former 190px treatment.",
+      "requiredPatterns": [
+        {
+          "file": "app/command-os.css",
+          "pattern": "\\.phantombot-presence\\s*\\{[\\s\\S]*width: clamp\\(430px, 46vw, 680px\\)[\\s\\S]*height: clamp\\(380px, 52vh, 560px\\)[\\s\\S]*\\.phantombot-presence-canvas\\s*\\{[\\s\\S]*opacity: \\.34[\\s\\S]*mix-blend-mode: screen",
+          "description": "The shared PhantomBot empty state renders a huge translucent apparition instead of an opaque avatar."
+        },
+        {
+          "file": "app/js/phantom-presence.js",
+          "pattern": "const GESTURE_SEQUENCES = \\{[\\s\\S]*idle:[\\s\\S]*welcome[\\s\\S]*present[\\s\\S]*point[\\s\\S]*laugh[\\s\\S]*listening:[\\s\\S]*thinking:[\\s\\S]*speaking:[\\s\\S]*canvas\\.dataset\\.phantomGesture",
+          "description": "Every shared presence cycles through deterministic state-aware painted gestures and exposes the live pose for verification."
+        },
+        {
+          "file": "packages/phantombot-desktop/src/main.cjs",
+          "pattern": "http://127\\.0\\.0\\.1:5190/app/index\\.html[\\s\\S]*https://admin\\.phantomforce\\.online/app/index\\.html",
+          "description": "The installed desktop shell loads the same PhantomForce app and presence renderer as the browser."
+        },
+        {
+          "file": "scripts/test-phantom-presence-recovery.mjs",
+          "pattern": "large presence on the shared web and desktop surface[\\s\\S]*visibly translucent[\\s\\S]*old 190px mascot",
+          "description": "The regression gate protects size, translucency, gestures, and desktop parity together."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/command-os.css",
+          "pattern": "html\\[data-command-os=\"2040\"\\] \\.phantombot-presence\\s*\\{[\\s\\S]{0,240}width: 190px",
+          "description": "Desktop parity cannot reintroduce the shrunken PhantomBot mascot."
+        }
+      ]
+    },
+    {
       "id": "phantom-rumble-overdrive-wallbreaker-floor",
       "status": "active",
       "title": "Phantom Rumble remains the Overdrive wallbreaker build",

@@ -5550,13 +5550,15 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
 
 .phantombot-presence {
   position: relative;
+  z-index: 1;
   display: grid;
-  width: min(310px, 72vw);
-  height: min(290px, 36vh);
-  min-height: 210px;
-  margin-bottom: 6px;
+  width: clamp(430px, 46vw, 680px);
+  height: clamp(380px, 52vh, 560px);
+  min-height: 380px;
+  margin-bottom: -62px;
   place-items: center;
   isolation: isolate;
+  pointer-events: none;
 }
 
 .phantombot-presence::before {
@@ -5577,10 +5579,33 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
   display: block;
   width: 100%;
   height: 100%;
+  opacity: .34;
+  mix-blend-mode: screen;
   filter:
-    saturate(1.08)
-    drop-shadow(0 0 12px rgba(0, 255, 148, .42))
-    drop-shadow(0 18px 34px rgba(0, 0, 0, .7));
+    saturate(.92)
+    contrast(1.08)
+    drop-shadow(0 0 22px rgba(0, 255, 148, .2))
+    drop-shadow(0 24px 48px rgba(0, 0, 0, .34));
+  transition: opacity 240ms ease, filter 240ms ease;
+}
+
+.phantombot-presence-canvas[data-phantom-state="listening"],
+.phantombot-presence-canvas[data-phantom-state="thinking"],
+.phantombot-presence-canvas[data-phantom-state="building"],
+.phantombot-presence-canvas[data-phantom-state="looping"] {
+  opacity: .39;
+  filter:
+    saturate(1.02)
+    contrast(1.1)
+    drop-shadow(0 0 30px rgba(141, 124, 248, .22))
+    drop-shadow(0 24px 48px rgba(0, 0, 0, .34));
+}
+
+.phantombot-presence-canvas[data-phantom-state="speaking"],
+.phantombot-presence-canvas[data-phantom-state="success"],
+.phantombot-presence-canvas[data-phantom-state="warning"],
+.phantombot-presence-canvas[data-phantom-state="error"] {
+  opacity: .44;
 }
 
 .phantombot-presence-live {
@@ -5619,6 +5644,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
     inset 0 0 13px rgba(25, 245, 142, .18);
   animation: phantomPresenceRing 2.8s ease-in-out infinite;
   pointer-events: none;
+  opacity: .36;
 }
 
 .phantombot-empty > h1 {
@@ -5634,6 +5660,13 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
 .phantombot-empty {
   padding-top: 22px;
   padding-bottom: 96px;
+}
+
+.phantombot-empty > h1,
+.phantombot-empty > span,
+.phantombot-empty > .phantombot-starters {
+  position: relative;
+  z-index: 2;
 }
 
 @keyframes phantomPresenceOrbit {
@@ -5674,10 +5707,10 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
   }
 
   .phantombot-presence {
-    width: min(240px, 74vw);
-    height: min(220px, 29vh);
-    min-height: 164px;
-    margin-bottom: 0;
+    width: min(410px, 92vw);
+    height: clamp(280px, 42vh, 380px);
+    min-height: 280px;
+    margin-bottom: -44px;
   }
 
   .phantombot-empty {
@@ -6168,10 +6201,10 @@ html[data-command-os="2040"] .phantombot-empty {
 }
 
 html[data-command-os="2040"] .phantombot-presence {
-  width: 190px;
-  height: 172px;
-  min-height: 150px;
-  margin-bottom: 4px;
+  width: clamp(430px, 50vw, 680px);
+  height: clamp(380px, 52vh, 560px);
+  min-height: 380px;
+  margin-bottom: -62px;
 }
 
 html[data-command-os="2040"] .phantombot-empty > h1 {
@@ -6899,9 +6932,10 @@ html[data-command-os="2040"] .phantombot-session-clock {
   }
 
   html[data-command-os="2040"] .phantombot-presence {
-    width: min(188px, 64vw);
-    height: 150px;
-    min-height: 132px;
+    width: min(410px, 92vw);
+    height: clamp(280px, 42vh, 380px);
+    min-height: 280px;
+    margin-bottom: -44px;
   }
 
   html[data-command-os="2040"] .phantombot-empty > h1 {
