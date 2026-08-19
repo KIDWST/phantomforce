@@ -347,6 +347,9 @@ function auditPage() {
   const consoleRoot = document.querySelector("[data-console]");
   const nav = document.querySelector("[data-nav]");
   const commandRail = document.querySelector("[data-os-command-rail]");
+  const commandRailNav = commandRail?.querySelector(".os-primary-nav");
+  const commandRailActions = commandRail?.querySelector(".os-rail-actions");
+  const commandRailActive = commandRail?.querySelector(".os-primary-nav .is-active");
   const mobileHomebar = document.querySelector(".mobile-admin-homebar");
   const stickyTopbar = document.querySelector(".topbar2");
   const systemLine = document.querySelector(".os-system-line");
@@ -577,6 +580,27 @@ function auditPage() {
       visibleSurfaces: navSurfaces,
       mobileTop: mobileRect ? Math.round(mobileRect.top) : null,
       mobileBottom: mobileRect ? Math.round(mobileRect.bottom) : null,
+      commandRailPolish: (() => {
+        if (!isVisible(commandRail) || !isVisible(commandRailActions)) return null;
+        const railRect = commandRail.getBoundingClientRect();
+        const actionsRect = commandRailActions.getBoundingClientRect();
+        const navRect = commandRailNav?.getBoundingClientRect();
+        const actionsStyle = getComputedStyle(commandRailActions);
+        const activeStyle = commandRailActive ? getComputedStyle(commandRailActive) : null;
+        const lastNavControl = commandRailNav?.querySelector("button:last-child");
+        const lastNavRect = lastNavControl?.getBoundingClientRect();
+        return {
+          actionTopInset: Math.round(actionsRect.top - railRect.top),
+          actionBottomInset: Math.round(railRect.bottom - actionsRect.bottom),
+          actionBackground: actionsStyle.backgroundColor,
+          navActionOverlap: navRect ? Math.max(0, Math.round(navRect.right - actionsRect.left)) : 0,
+          activeRadius: activeStyle ? Number.parseFloat(activeStyle.borderTopLeftRadius) : null,
+          lastNavControlVisible: !!(lastNavRect && navRect && lastNavRect.left >= navRect.left - 1 && lastNavRect.right <= navRect.right + 1),
+          actionControlRadii: [...commandRailActions.querySelectorAll("button")]
+            .filter(isVisible)
+            .map((button) => Number.parseFloat(getComputedStyle(button).borderTopLeftRadius)),
+        };
+      })(),
     },
     phantomStore: {
       productCards: productCards.length,
@@ -839,6 +863,18 @@ function assertCase(result) {
   if (viewport.width > 900) {
     assert.equal(audit.nav.desktopVisible || audit.nav.commandRailVisible, true, `${label} ${viewport.width}: a desktop primary navigation surface must be visible.`);
     assert.equal(audit.nav.mobileVisible, false, `${label} ${viewport.width}: mobile bottom nav must not appear on desktop widths.`);
+    if (audit.nav.commandRailPolish) {
+      assert.ok(audit.nav.commandRailPolish.actionTopInset >= 6 && audit.nav.commandRailPolish.actionBottomInset >= 6, `${label} ${viewport.width}: utility controls must float inside the command rail instead of painting a full-height square.`);
+      assert.equal(audit.nav.commandRailPolish.actionBackground, "rgba(0, 0, 0, 0)", `${label} ${viewport.width}: utility cluster must not place a solid rectangle behind navigation actions.`);
+      assert.equal(audit.nav.commandRailPolish.navActionOverlap, 0, `${label} ${viewport.width}: utility controls must not overlap primary navigation.`);
+      if (audit.nav.commandRailPolish.activeRadius !== null) {
+        assert.ok(audit.nav.commandRailPolish.activeRadius >= 10, `${label} ${viewport.width}: active desktop navigation must use the refined rounded surface.`);
+      }
+      assert.ok(audit.nav.commandRailPolish.actionControlRadii.every((radius) => radius >= 10), `${label} ${viewport.width}: every visible utility control must use the refined rounded surface.`);
+      if (viewport.width >= 1440) {
+        assert.equal(audit.nav.commandRailPolish.lastNavControlVisible, true, `${label} ${viewport.width}: all primary divisions must remain visible without scrolling on a standard desktop.`);
+      }
+    }
   }
   if (page === "phantomstore") {
     assert.ok(audit.phantomStore.productCards >= 3, `${label} ${viewport.width}: PhantomStore must render real product cards even if live sync is offline.`);
@@ -953,6 +989,8 @@ async function main() {
         "exactly one compact nav surface visible through 900px",
         "compact Command OS rail hidden to prevent duplicate navigation",
         "one desktop primary navigation surface visible above tablet widths",
+        "desktop command rail has no full-height utility block or nav overlap",
+        "standard desktop keeps every primary division visible without scrolling",
         "document has no horizontal overflow",
         "visible elements do not escape viewport",
         "dark mode has no large pale/white UI surfaces",

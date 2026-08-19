@@ -1712,6 +1712,30 @@
           "description": "The automatic draft lane cannot silently spend Higgsfield credits."
         }
       ]
+    },
+    {
+      "id": "future-command-rail-material-floor",
+      "status": "active",
+      "title": "The desktop command rail is one continuous futuristic surface",
+      "ownerDecision": "The desktop header must look like one intentional command surface. It cannot paint a square, full-height color block, or mismatched panel behind Search, Approvals, account, or Menu. Active navigation and utility controls use compact rounded materials with clear focus and hover states. Standard desktop widths keep every primary division visible without scrolling; laptop widths retain the same accessible actions in icon-first form. The bottom system line uses the same refined floating instrument language.",
+      "requiredPatterns": [
+        {
+          "file": "app/command-os.css",
+          "pattern": "FUTURE SHELL[\\s\\S]*\\.os-command-rail[\\s\\S]*\\.os-primary-nav button\\.is-active[\\s\\S]*\\.os-rail-actions[\\s\\S]*background: transparent !important[\\s\\S]*\\.os-system-line",
+          "description": "The shared desktop shell uses one continuous rail with refined active, utility, account, menu, and system-line materials."
+        },
+        {
+          "file": "app/command-os.css",
+          "pattern": "@media \\(min-width: 901px\\) and \\(max-width: 1540px\\)[\\s\\S]*\\.os-rail-action[\\s\\S]*font-size: 0[\\s\\S]*\\.os-profile b[\\s\\S]*display: none",
+          "description": "Laptop density keeps accessible actions while switching their visible treatment to icon-first controls."
+        },
+        {
+          "file": "scripts/test-responsive-viewports.mjs",
+          "pattern": "commandRailPolish[\\s\\S]*utility controls must float inside the command rail[\\s\\S]*utility cluster must not place a solid rectangle[\\s\\S]*all primary divisions must remain visible",
+          "description": "Real Chrome evidence protects the exact visual defect and standard-desktop navigation visibility."
+        }
+      ],
+      "forbiddenPatterns": []
     }
   ]
 }

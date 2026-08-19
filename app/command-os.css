@@ -7012,3 +7012,258 @@ html[data-command-os="2040"] .phantombot-session-clock {
     overflow: hidden !important;
   }
 }
+
+/* ============================================================= */
+/*  FUTURE SHELL — one continuous rail, no boxed utility patch   */
+/* ============================================================= */
+/* The previous far-right color stop painted a rectangular block behind
+   Search and Approvals on wide displays. The rail now uses one continuous
+   material, while each interactive control owns its own compact hit surface. */
+@media (min-width: 901px) {
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-command-rail {
+    background:
+      radial-gradient(ellipse 44% 130% at 16% -45%, rgba(124, 108, 255, 0.16), transparent 66%),
+      radial-gradient(ellipse 34% 120% at 92% -70%, rgba(68, 229, 190, 0.085), transparent 70%),
+      linear-gradient(180deg, rgba(7, 12, 20, 0.985), rgba(2, 7, 12, 0.97)) !important;
+    box-shadow:
+      inset 0 -1px rgba(128, 170, 201, 0.14),
+      inset 0 1px rgba(255, 255, 255, 0.025),
+      0 18px 46px rgba(0, 0, 0, 0.28) !important;
+    isolation: isolate;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-command-rail::before {
+    content: "";
+    position: absolute;
+    right: 20px;
+    bottom: 0;
+    left: 20px;
+    z-index: -1;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent 0%, rgba(124, 108, 255, 0.72) 22%, rgba(74, 164, 255, 0.2) 52%, rgba(69, 230, 189, 0.54) 84%, transparent 100%);
+    opacity: 0.72;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-identity {
+    position: relative;
+    padding-left: 16px !important;
+    border-right-color: rgba(135, 171, 199, 0.13);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-identity::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 5px;
+    height: 24px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #7c6cff, #49e5ba);
+    box-shadow: 0 0 18px rgba(105, 155, 255, 0.48);
+    transform: translateY(-50%);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-identity-name {
+    color: #f7fbfd;
+    text-shadow: 0 0 22px rgba(112, 156, 255, 0.16);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav {
+    align-items: center;
+    gap: 3px;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav button {
+    align-self: center;
+    height: 40px;
+    margin-block: 0;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav button:hover {
+    border-color: rgba(128, 169, 202, 0.13) !important;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.018)) !important;
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+    transform: translateY(-1px);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav button.is-active {
+    border-color: rgba(113, 159, 255, 0.24) !important;
+    background:
+      radial-gradient(circle at 50% 120%, rgba(69, 230, 189, 0.12), transparent 52%),
+      linear-gradient(180deg, rgba(124, 108, 255, 0.13), rgba(63, 103, 166, 0.045)) !important;
+    box-shadow:
+      inset 0 1px rgba(255, 255, 255, 0.05),
+      inset 0 0 0 1px rgba(124, 108, 255, 0.04),
+      0 8px 28px rgba(42, 73, 130, 0.16);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav button.is-active::after {
+    right: 28%;
+    bottom: 4px;
+    left: 28%;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #7c6cff, #49e5ba);
+    box-shadow: 0 0 13px rgba(94, 173, 255, 0.68);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-actions {
+    position: relative;
+    align-self: center;
+    height: 48px;
+    gap: 6px;
+    padding-left: 18px;
+    border-left: 0;
+    border-radius: 0;
+    background: transparent !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-actions::before {
+    content: "";
+    position: absolute;
+    top: 9px;
+    bottom: 9px;
+    left: 3px;
+    width: 1px;
+    background: linear-gradient(180deg, transparent, rgba(129, 170, 201, 0.32), transparent);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-action,
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 38px;
+    height: 38px;
+    padding-inline: 11px;
+    border: 1px solid rgba(133, 171, 198, 0.1);
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.012));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+    transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-action:hover,
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-action.is-active,
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-more:hover,
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-more.is-open {
+    border-color: rgba(112, 164, 211, 0.28);
+    background: linear-gradient(180deg, rgba(74, 134, 208, 0.095), rgba(56, 92, 142, 0.035));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.045), 0 8px 24px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-action[data-cmdk-open]::before {
+    content: "⌕";
+    color: #76a9ff;
+    font: 600 17px/1 "Instrument Sans", sans-serif;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-action[data-nav-id="approvals"]::before {
+    content: "◇";
+    color: #56deb1;
+    font: 700 12px/1 "Spline Sans Mono", monospace;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-action[data-cmdk-open]::after {
+    margin-left: 2px;
+    border-color: rgba(133, 171, 198, 0.16);
+    border-radius: 6px;
+    background: rgba(2, 7, 12, 0.45);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-profile {
+    min-height: 40px;
+    height: 40px;
+    margin-left: 0;
+    padding: 4px 11px 4px 4px;
+    border-color: rgba(95, 205, 164, 0.18);
+    border-radius: 14px;
+    background:
+      radial-gradient(circle at 12% 50%, rgba(76, 224, 177, 0.09), transparent 45%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.012));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+    transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-profile:hover,
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-profile:focus-visible {
+    border-color: rgba(95, 226, 178, 0.34);
+    background:
+      radial-gradient(circle at 12% 50%, rgba(76, 224, 177, 0.14), transparent 48%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.016));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.05), 0 8px 28px rgba(23, 88, 68, 0.12);
+    transform: translateY(-1px);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-profile > span {
+    border-color: rgba(112, 151, 255, 0.36);
+    background: linear-gradient(145deg, rgba(124, 108, 255, 0.15), rgba(69, 230, 189, 0.08));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.05), 0 0 16px rgba(92, 126, 255, 0.12);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-more {
+    width: 38px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-more::after {
+    content: "•••";
+    color: #91a3af;
+    font: 700 10px/1 "Spline Sans Mono", monospace;
+    letter-spacing: 0.12em;
+    transform: translateX(1px);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
+    right: 12px !important;
+    bottom: 4px !important;
+    left: 12px !important;
+    width: auto !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    overflow: hidden;
+    border: 1px solid rgba(126, 166, 197, 0.13) !important;
+    border-radius: 12px;
+    background:
+      radial-gradient(ellipse 36% 180% at 50% 160%, rgba(124, 108, 255, 0.07), transparent 72%),
+      rgba(3, 8, 13, 0.92) !important;
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.025), 0 8px 28px rgba(0, 0, 0, 0.24);
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > span,
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > button {
+    padding-inline: clamp(10px, 1.1vw, 20px);
+    border-right-color: rgba(133, 171, 198, 0.075);
+  }
+}
+
+/* Laptop command density: keep the same controls and accessible names, but
+   collapse their visible labels so the primary divisions retain the rail. */
+@media (min-width: 901px) and (max-width: 1540px) {
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-action {
+    width: 38px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-action[data-cmdk-open]::after {
+    display: none;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-profile {
+    grid-template-columns: 30px;
+    width: 40px;
+    padding-right: 4px;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-profile b {
+    display: none;
+  }
+}
