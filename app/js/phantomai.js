@@ -14,26 +14,28 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260819-185";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260819-185";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260819-185";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260819-185";
-import { esc } from "./workspaces.js?v=phantom-live-20260819-185";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260819-185";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260819-185";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260819-185";
-import { setCompanionState } from "./companion.js?v=phantom-live-20260819-185";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260819-185";
+} from "./store.js?v=phantom-live-20260820-186";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260820-186";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260820-186";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260820-186";
+import { esc } from "./workspaces.js?v=phantom-live-20260820-186";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260820-186";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260820-186";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260820-186";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260820-186";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260820-186";
 import {
   getOperatorBrainChoices,
+  getOperatorBrainMesh,
   getOperatorInfrastructureStatus,
+  hydrateOperatorBrainMesh,
   setOperatorBrainChoice,
-} from "./settings.js?v=phantom-live-20260819-185";
+} from "./settings.js?v=phantom-live-20260820-186";
 import {
   buildPromptIntegrityEnvelope,
   MAX_PROMPT_CHARS,
   promptSizeError,
-} from "./prompt-integrity.js?v=phantom-live-20260819-185";
+} from "./prompt-integrity.js?v=phantom-live-20260820-186";
 
 const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -545,6 +547,137 @@ function sessionState(task, operator) {
   return { id: "ready", label: "Ready" };
 }
 
+function missionConstellation(task) {
+  const messages = task.messages || [];
+  const first = messages[0] || null;
+  const latest = messages.at(-1) || null;
+  const operator = latestOperator(task);
+  const artifacts = taskArtifacts(task);
+  const hasResponse = Boolean(latest?.say && !latest.pending && !latest.error);
+  const hasContext = taskContextCount(task) > 1;
+  const hasVerifiedReceipt = Boolean(operator?.receiptId && operator?.receiptVerified !== false);
+  const hasProof = hasVerifiedReceipt || artifacts.length > 0;
+  const awaitingApproval = operator?.state === "awaiting_approval";
+  const failed = ["failed", "blocked"].includes(operator?.state) || Boolean(latest?.error);
+  const working = runningRequest?.taskId === task.id || Boolean(latest?.pending);
+  const nextMove = hasResponse ? inferredNextMoves(task, latest)[0] : null;
+  const phases = [
+    {
+      id: "intent",
+      name: "Intent",
+      state: first ? "complete" : "ready",
+      detail: first ? "Objective captured" : "Waiting for the objective",
+    },
+    {
+      id: "context",
+      name: "Context",
+      state: hasContext ? "complete" : first ? "active" : "waiting",
+      detail: hasContext ? `${taskContextCount(task)} grounded signals` : first ? "Workspace context attached" : "No context yet",
+    },
+    {
+      id: "work",
+      name: "Work",
+      state: failed ? "attention" : awaitingApproval ? "blocked" : working ? "active" : hasResponse ? "complete" : "waiting",
+      detail: failed
+        ? "Needs attention"
+        : awaitingApproval
+          ? "Decision required"
+          : working
+            ? "In motion"
+            : hasResponse
+              ? operator?.state === "completed" ? "Execution complete" : "Response ready"
+              : "Not started",
+    },
+    {
+      id: "proof",
+      name: "Proof",
+      state: hasProof ? "verified" : hasResponse ? "ready" : "waiting",
+      detail: hasVerifiedReceipt
+        ? "Receipt verified"
+        : artifacts.length
+          ? `${artifacts.length} output${artifacts.length === 1 ? "" : "s"} attached`
+          : hasResponse
+            ? "Verification is the next gate"
+            : "Awaiting work",
+    },
+    {
+      id: "evolve",
+      name: "Next orbit",
+      state: nextMove ? "ready" : "waiting",
+      detail: nextMove ? nextMove[0] : "Appears after a response",
+    },
+  ];
+  return {
+    objective: first?.q || "Describe the outcome you want PhantomBot to own.",
+    phases,
+    confirmedCount: phases.filter((phase) => ["complete", "verified"].includes(phase.state)).length,
+    nextMove,
+    state: sessionState(task, operator),
+    operator,
+    artifacts,
+  };
+}
+
+function brainMeshHtml(mesh = getOperatorBrainMesh()) {
+  return `<section class="phantombot-brain-mesh" data-phantombot-brain-mesh-panel>
+    <header><div><span>LIVE BRAIN MESH</span><b>${esc(mesh.activeCount)} of ${esc(mesh.totalCount)} lanes active</b></div><button type="button" data-phantombot-manage-mesh>Manage mesh</button></header>
+    <div>${mesh.nodes.map((node) => `<article data-state="${esc(node.state)}">
+      <i aria-hidden="true"></i><span><b>${esc(node.name)}</b><small>${esc(node.status)} · ${esc(node.detail)}</small></span>
+    </article>`).join("")}</div>
+  </section>`;
+}
+
+function missionDetailHtml(mission) {
+  return `<section class="phantombot-mission-dossier">
+    <header><span>MISSION OBJECTIVE</span><h3>${esc(mission.objective)}</h3></header>
+    <ol>${mission.phases.map((phase, index) => `<li data-state="${esc(phase.state)}">
+      <span>${String(index + 1).padStart(2, "0")}</span><i aria-hidden="true"></i><div><b>${esc(phase.name)}</b><small>${esc(phase.detail)}</small></div>
+    </li>`).join("")}</ol>
+    <footer><b>${mission.confirmedCount} / ${mission.phases.length} signals confirmed</b><span>Only real replies, outputs, approvals, and receipts advance the map.</span></footer>
+  </section>`;
+}
+
+function buildContinuityPacket(task) {
+  const mission = missionConstellation(task);
+  const recent = task.messages.slice(-6).map((message, index) => [
+    `### Turn ${Math.max(1, task.messages.length - 5 + index)} · You`,
+    cleanText(message.q, 1600),
+    "",
+    "#### PhantomBot",
+    cleanText(message.say || "Response incomplete", 2400),
+  ].join("\n")).join("\n\n");
+  const proof = mission.operator?.receiptId
+    ? `- Verified receipt: ${mission.operator.receiptId}`
+    : mission.artifacts.length
+      ? mission.artifacts.map((artifact) => `- ${artifact.kind}: ${artifact.title}`).join("\n")
+      : "- No execution proof has been recorded yet.";
+  return [
+    "# PhantomBot Continuity Packet",
+    "",
+    `- Workspace: ${wsName(currentWs()) || "PhantomForce"}`,
+    `- Session: ${task.title || NEW_TASK_TITLE}`,
+    `- Mission state: ${mission.state.label}`,
+    `- Confirmed signals: ${mission.confirmedCount}/${mission.phases.length}`,
+    "",
+    "## Objective",
+    mission.objective,
+    "",
+    "## Mission map",
+    ...mission.phases.map((phase) => `- ${phase.name}: ${phase.detail} [${phase.state}]`),
+    "",
+    "## Proof",
+    proof,
+    "",
+    "## Recent working context",
+    recent || "No turns yet.",
+    "",
+    "## Safest next move",
+    mission.nextMove?.[1] || "Clarify the desired outcome before taking action.",
+    "",
+    "Continue from this evidence. Preserve approvals, do not invent completion, and verify consequential work before claiming it is done.",
+  ].join("\n");
+}
+
 function paintSessionHud() {
   if (!rootEl) return;
   const task = activeTask();
@@ -575,6 +708,31 @@ function paintSessionHud() {
     pin.setAttribute("aria-pressed", task.pinned ? "true" : "false");
     pin.innerHTML = `<span>${task.pinned ? "◆" : "◇"}</span> ${task.pinned ? "Pinned" : "Pin"}`;
   }
+  const mission = missionConstellation(task);
+  const constellation = rootEl.querySelector("[data-phantombot-constellation]");
+  if (constellation) {
+    const progress = constellation.querySelector("[data-phantombot-constellation-progress]");
+    const objective = constellation.querySelector("[data-phantombot-constellation-objective]");
+    const nodes = constellation.querySelector("[data-phantombot-constellation-nodes]");
+    const next = constellation.querySelector("[data-phantombot-mission-next]");
+    if (progress) progress.textContent = `${mission.confirmedCount} / ${mission.phases.length} confirmed`;
+    if (objective) objective.textContent = mission.objective;
+    if (nodes) nodes.innerHTML = mission.phases.map((phase, index) => `<li data-state="${esc(phase.state)}" title="${esc(phase.detail)}">
+      <span>${String(index + 1).padStart(2, "0")}</span><i aria-hidden="true"></i><b>${esc(phase.name)}</b><small>${esc(phase.detail)}</small>
+    </li>`).join("");
+    if (next) {
+      next.hidden = !mission.nextMove;
+      next.dataset.phantombotMissionNext = mission.nextMove?.[1] || "";
+      const label = next.querySelector("b");
+      if (label) label.textContent = mission.nextMove?.[0] || "Next move";
+    }
+  }
+  const mesh = getOperatorBrainMesh();
+  const meshButton = rootEl.querySelector("[data-phantombot-brain-mesh]");
+  if (meshButton) {
+    meshButton.dataset.state = mesh.loading ? "checking" : mesh.attentionCount ? "attention" : mesh.activeCount ? "connected" : "setup";
+    meshButton.innerHTML = `<i aria-hidden="true"></i><span><b>${mesh.loading ? "Mapping mesh" : `${mesh.activeCount} brain lane${mesh.activeCount === 1 ? "" : "s"} live`}</b><small>${mesh.loading ? "Checking real connections" : `${mesh.totalCount} governed lanes visible`}</small></span>`;
+  }
 }
 
 function detailEmpty(title, copy) {
@@ -594,6 +752,10 @@ function paintDetailDrawer() {
     button.setAttribute("aria-selected", active ? "true" : "false");
   });
 
+  if (detailTab === "mission") {
+    body.innerHTML = `${missionDetailHtml(missionConstellation(task))}${brainMeshHtml()}`;
+    return;
+  }
   if (detailTab === "timeline") {
     const entries = task.messages.map((message, index) => ({ message, index })).reverse();
     body.innerHTML = entries.length ? `<ol class="phantombot-detail-timeline">${entries.map(({ message, index }) => `
@@ -631,14 +793,14 @@ function paintDetailDrawer() {
     <div><dt>Artifacts</dt><dd>${artifacts.length}</dd></div>
     <div><dt>Memory</dt><dd>Workspace scoped</dd></div>
     <div><dt>Approval</dt><dd class="${approval ? "is-waiting" : ""}">${approval ? "Waiting for you" : "No decision pending"}</dd></div>
-  </dl>`;
+  </dl>${brainMeshHtml()}`;
 }
 
 function openDetailDrawer(tab = "context") {
   if (!rootEl) return;
   closeSessionMenu({ restoreFocus: false });
   closeModelMenu({ restoreFocus: false });
-  detailTab = ["context", "timeline", "steps", "artifacts"].includes(tab) ? tab : "context";
+  detailTab = ["mission", "context", "timeline", "steps", "artifacts"].includes(tab) ? tab : "context";
   const drawer = rootEl.querySelector("[data-phantombot-context-drawer]");
   if (!drawer) return;
   overlayReturnFocus.context = document.activeElement;
@@ -922,6 +1084,40 @@ function exportActiveTask() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   closeSessionMenu();
   setComposerStatus("Session brief exported", "live");
+}
+
+async function copyContinuityPacket() {
+  const task = activeTask();
+  const packet = buildContinuityPacket(task);
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(packet);
+    } else {
+      const fallback = document.createElement("textarea");
+      fallback.value = packet;
+      fallback.setAttribute("readonly", "");
+      fallback.style.position = "fixed";
+      fallback.style.opacity = "0";
+      document.body.appendChild(fallback);
+      fallback.select();
+      if (!document.execCommand("copy")) throw new Error("copy_failed");
+      fallback.remove();
+    }
+    closeSessionMenu();
+    setComposerStatus("Continuity packet copied — resume this mission anywhere", "live", 4200);
+  } catch {
+    setComposerStatus("Continuity packet could not be copied", "error", 4200);
+  }
+}
+
+function branchActiveTask() {
+  const task = activeTask();
+  if (!task.messages.length) {
+    setComposerStatus("Start the mission before creating a parallel path", "error");
+    return;
+  }
+  branchTaskAt(task.messages.length - 1);
+  setComposerStatus("Parallel mission path created", "live");
 }
 
 function branchTaskAt(messageIndex) {
@@ -1720,7 +1916,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260819-185")
+  import("./brain.js?v=phantom-live-20260820-186")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }
@@ -1835,6 +2031,15 @@ function bindRootActions(root) {
       }
       return;
     }
+    if (button.dataset.phantombotMissionNext) {
+      activatePhantomAiTab("chat");
+      if (chatBindings?.input) {
+        chatBindings.input.value = button.dataset.phantombotMissionNext;
+        chatBindings.resize();
+        chatBindings.input.focus();
+      }
+      return;
+    }
     if (button.matches("[data-phantombot-pin-active]")) {
       toggleTaskPin(activeTask().id);
       return;
@@ -1853,6 +2058,14 @@ function bindRootActions(root) {
     }
     if (button.matches("[data-phantombot-export-session]")) {
       exportActiveTask();
+      return;
+    }
+    if (button.matches("[data-phantombot-copy-continuity]")) {
+      await copyContinuityPacket();
+      return;
+    }
+    if (button.matches("[data-phantombot-branch-active]")) {
+      branchActiveTask();
       return;
     }
     if (button.matches("[data-phantombot-archive-session]")) {
@@ -2024,6 +2237,14 @@ function bindRootActions(root) {
       openDetailDrawer("context");
       return;
     }
+    if (button.matches("[data-phantombot-open-mission]")) {
+      openDetailDrawer("mission");
+      return;
+    }
+    if (button.matches("[data-phantombot-brain-mesh]")) {
+      openDetailDrawer("context");
+      return;
+    }
     if (button.matches("[data-phantombot-open-timeline]")) {
       openDetailDrawer("timeline");
       return;
@@ -2078,6 +2299,13 @@ function bindRootActions(root) {
     if (button.matches("[data-phantombot-manage-models]")) {
       closeModelMenu({ restoreFocus: false });
       try { localStorage.setItem("pf.settings.tab.v1", "model"); } catch {}
+      window.location.hash = "#page/settings";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      return;
+    }
+    if (button.matches("[data-phantombot-manage-mesh]")) {
+      closeDetailDrawer({ restoreFocus: false });
+      try { localStorage.setItem("pf.settings.tab.v1", "bridge"); } catch {}
       window.location.hash = "#page/settings";
       window.dispatchEvent(new HashChangeEvent("hashchange"));
       return;
@@ -2186,6 +2414,17 @@ export function mountPhantomAI(root) {
   bindKeyboardShortcuts();
   paintTaskRail();
   paintBrainIdentity();
+  void hydrateOperatorBrainMesh()
+    .then(() => {
+      if (!rootEl?.isConnected) return;
+      paintSessionHud();
+      paintDetailDrawer();
+    })
+    .catch(() => {
+      if (!rootEl?.isConnected) return;
+      paintSessionHud();
+      paintDetailDrawer();
+    });
   activatePhantomAiTab("chat");
   updateSessionClock();
   clearInterval(sessionClockTimer);

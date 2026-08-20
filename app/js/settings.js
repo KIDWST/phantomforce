@@ -1,13 +1,13 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260819-185";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260819-185";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260819-185";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-185";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260819-185";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-185";
-import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-185";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260820-186";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260820-186";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260820-186";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260820-186";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260820-186";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260820-186";
+import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260820-186";
 import {
   AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
@@ -20,7 +20,7 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260819-185";
+} from "./ai-runtime.js?v=phantom-live-20260820-186";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -501,6 +501,72 @@ async function refreshBridgeStatuses(el, opts) {
     refreshHiggsfieldBridge(el, opts, false),
   ]);
   if (el?.isConnected) renderOperatorSettings(el, opts);
+}
+
+export function getOperatorBrainMesh() {
+  const settings = loadOperatorSettings();
+  const overview = configuredConnectionOverview(settings);
+  const chatGpt = agentAssistBridgeStatus.status || {};
+  const higgsfield = higgsfieldBridgeStatus.status || {};
+  const bridges = [
+    {
+      id: "bridge-chatgpt",
+      name: "ChatGPT Plus Bridge",
+      state: agentAssistBridgeStatus.loading
+        ? "checking"
+        : chatGpt.executable
+          ? "connected"
+          : agentAssistBridgeStatus.error
+            ? "attention"
+            : "setup",
+      status: bridgeStatusLabel(chatGpt),
+      detail: chatGpt.executable
+        ? "Subscription reasoning lane is available to PhantomBot."
+        : agentAssistBridgeStatus.error || "Connect an account to add subscription-backed reasoning.",
+      settingsTab: "bridge",
+    },
+    {
+      id: "bridge-higgsfield",
+      name: "Higgsfield Bridge",
+      state: higgsfieldBridgeStatus.loading
+        ? "checking"
+        : higgsfield.status === "connected"
+          ? "connected"
+          : higgsfieldBridgeStatus.error || higgsfield.status === "error"
+            ? "attention"
+            : "setup",
+      status: higgsfieldStatusLabel(higgsfield),
+      detail: higgsfield.status === "connected"
+        ? higgsfield.message || "Creative production lane is available to Media Lab."
+        : higgsfieldBridgeStatus.error || higgsfield.message || "Connect Higgsfield to add the creative production lane.",
+      settingsTab: "bridge",
+    },
+  ];
+  const nodes = [...overview.brainRoutes, ...bridges];
+  const activeCount = nodes.filter((node) => node.state === "connected").length;
+  const attentionCount = nodes.filter((node) => node.state === "attention").length;
+  return {
+    loaded: Boolean(agentAssistBridgeStatus.loaded && higgsfieldBridgeStatus.loaded),
+    loading: Boolean(agentAssistBridgeStatus.loading || higgsfieldBridgeStatus.loading),
+    activeCount,
+    attentionCount,
+    totalCount: nodes.length,
+    routes: overview.brainRoutes,
+    bridges,
+    nodes,
+  };
+}
+
+export async function hydrateOperatorBrainMesh() {
+  const runtime = getAiRuntimeState();
+  await Promise.all([
+    !runtime.loaded && !runtime.loading
+      ? hydrateOperatorRuntimeSettings().catch(() => null)
+      : Promise.resolve(),
+    refreshAgentAssistBridge(null, null, false),
+    refreshHiggsfieldBridge(null, null, false),
+  ]);
+  return getOperatorBrainMesh();
 }
 
 function bridgeStatusLabel(status) {

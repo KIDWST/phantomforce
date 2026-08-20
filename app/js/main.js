@@ -6,57 +6,57 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260819-185";
+} from "./store.js?v=phantom-live-20260820-186";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems, cachedOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260819-185";
+} from "./organizationpulse.js?v=phantom-live-20260820-186";
 import {
   loadSecurityMonitorStatus, cachedSecurityMonitorStatus, securityMonitorIsAdmin, runSecurityMonitorScan, securityMonitorRunning,
-} from "./securitystatus.js?v=phantom-live-20260819-185";
-import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260819-185";
-import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260819-185";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-185";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-185";
-import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260819-185";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260819-185";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260819-185";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260819-185";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260819-185";
-import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260819-185";
-import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260819-185";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260819-185";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260819-185";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260819-185";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260819-185";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260819-185";
-import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260819-185";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260819-185";
-import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260819-185";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260819-185";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260819-185";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260819-185";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260819-185";
-import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260819-185";
+} from "./securitystatus.js?v=phantom-live-20260820-186";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260820-186";
+import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260820-186";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260820-186";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260820-186";
+import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260820-186";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260820-186";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260820-186";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260820-186";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260820-186";
+import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260820-186";
+import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260820-186";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260820-186";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260820-186";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260820-186";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260820-186";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260820-186";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260820-186";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260820-186";
+import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260820-186";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260820-186";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260820-186";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260820-186";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260820-186";
+import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260820-186";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260819-185";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260819-185";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260819-185";
+} from "./orgs.js?v=phantom-live-20260820-186";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260820-186";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260820-186";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260819-185";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260820-186";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260819-185";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260820-186";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260819-185";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260819-185";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260819-185";
-import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260819-185";
+} from "./customization.js?v=phantom-live-20260820-186";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260820-186";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260820-186";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260820-186";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -65,17 +65,17 @@ const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 const WORKSPACE_STYLE_BUNDLES = Object.freeze({
   phantomplay: [
-    "/app/phantomplay.css?v=phantom-live-20260819-185",
-    "/app/phantomplay-v2.css?v=phantom-live-20260819-185",
+    "/app/phantomplay.css?v=phantom-live-20260820-186",
+    "/app/phantomplay-v2.css?v=phantom-live-20260820-186",
   ],
-  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260819-185"],
-  phantomai: ["/app/creator-studio.css?v=phantom-live-20260819-185"],
+  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260820-186"],
+  phantomai: ["/app/creator-studio.css?v=phantom-live-20260820-186"],
   phantomhunter: [
-    "/app/phantomhunter.css?v=phantom-live-20260819-185",
-    "/app/phantomhunter-connect.css?v=phantom-live-20260819-185",
+    "/app/phantomhunter.css?v=phantom-live-20260820-186",
+    "/app/phantomhunter-connect.css?v=phantom-live-20260820-186",
   ],
-  media: ["/app/creator-studio.css?v=phantom-live-20260819-185"],
-  content: ["/app/creator-studio.css?v=phantom-live-20260819-185"],
+  media: ["/app/creator-studio.css?v=phantom-live-20260820-186"],
+  content: ["/app/creator-studio.css?v=phantom-live-20260820-186"],
 });
 
 const workspaceStylePromises = new Map();
@@ -162,7 +162,7 @@ function showWorkspaceTransition(transition, phase = "loading") {
   transition.node.setAttribute("role", phase === "error" ? "alert" : "status");
   transition.node.setAttribute("aria-live", phase === "error" ? "assertive" : "polite");
   transition.node.innerHTML = `<div class="workspace-transition-card">
-    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20260819-185" alt=""><i></i><i></i></div>
+    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20260820-186" alt=""><i></i><i></i></div>
     <p>${phase === "error" ? "PHANTOM RECOVERY" : "PHANTOM ROUTING"}</p>
     <h2>${phase === "error" ? "This workspace needs another moment." : `Preparing ${esc(transition.title)}`}</h2>
     <span>${phase === "error" ? "Nothing unfinished was shown. Try the transition again." : "Assembling your workspace."}</span>
@@ -1870,7 +1870,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260819-185";
+const POSE_VERSION = "phantom-live-20260820-186";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -4263,6 +4263,20 @@ const CUSTOM = {
               </div>
             </section>
 
+            <section class="phantombot-constellation" data-phantombot-constellation aria-label="Mission constellation">
+              <header>
+                <div><span>MISSION CONSTELLATION</span><b data-phantombot-constellation-objective>Describe the outcome you want PhantomBot to own.</b></div>
+                <small data-phantombot-constellation-progress>0 / 5 confirmed</small>
+              </header>
+              <ol data-phantombot-constellation-nodes></ol>
+              <footer>
+                <button type="button" data-phantombot-open-mission><span>✦</span><b>Inspect mission</b></button>
+                <button type="button" data-phantombot-mission-next hidden><span>↗</span><b>Next move</b></button>
+                <button type="button" data-phantombot-copy-continuity><span>⧉</span><b>Copy continuity</b></button>
+                <button type="button" data-phantombot-brain-mesh><i aria-hidden="true"></i><span><b>Mapping mesh</b><small>Checking real connections</small></span></button>
+              </footer>
+            </section>
+
             <div class="phantomai-pane" data-phantomai-pane="chat">
               <div class="phantomai-chat" data-phantomai-chat-mount>
                 <div class="phantomai-chat-log" data-phantomai-chat-log role="log" aria-live="polite" aria-relevant="additions"></div>
@@ -4296,9 +4310,11 @@ const CUSTOM = {
                   <div>
                     <button type="button" class="is-primary" data-phantombot-save-session-name>Save name</button>
                     <button type="button" data-phantombot-export-session>Export brief</button>
+                    <button type="button" data-phantombot-copy-continuity>Copy continuity</button>
+                    <button type="button" data-phantombot-branch-active>Parallel path</button>
                     <button type="button" data-phantombot-archive-session>Archive</button>
                   </div>
-                  <p>Archiving hides this session from the rail without deleting its workspace record.</p>
+                  <p>Continuity packets carry the objective, grounded context, proof, and safest next move without inventing completion.</p>
                 </section>
               </div>
             </div>
@@ -4335,6 +4351,7 @@ const CUSTOM = {
                 <button type="button" data-phantombot-close-context aria-label="Close details">×</button>
               </header>
               <nav role="tablist" aria-label="Session details">
+                <button type="button" role="tab" data-phantombot-detail-tab="mission">Mission</button>
                 <button type="button" role="tab" class="is-active" data-phantombot-detail-tab="context">Context</button>
                 <button type="button" role="tab" data-phantombot-detail-tab="timeline">Timeline</button>
                 <button type="button" role="tab" data-phantombot-detail-tab="steps">Steps</button>

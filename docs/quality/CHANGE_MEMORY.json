@@ -2250,6 +2250,50 @@
           "description": "The UI cannot invent a ChatGPT credit balance or unlimited entitlement."
         }
       ]
+    },
+    {
+      "id": "phantombot-interstellar-mission-intelligence-floor",
+      "status": "active",
+      "title": "PhantomBot keeps its mission constellation, continuity, and live brain mesh",
+      "ownerDecision": "PhantomBot must progress beyond a generic chat surface on both the shared web app and desktop shell. Every session keeps a truth-grounded mission constellation for intent, context, work, proof, and next orbit; proof advances only from real receipts or saved outputs. Users can inspect the mission, copy a portable continuity packet, or branch a parallel path without PhantomBot silently executing the suggested next move. The live brain mesh shows PhantomForce brain, PhantomBot brain, ChatGPT Plus Bridge, and Higgsfield Bridge from their real configuration and status routes. Desktop and compact web layouts remain the same shared product surface, and this intelligence layer must not be removed by a later visual rewrite.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "data-phantombot-constellation[\\s\\S]*data-phantombot-open-mission[\\s\\S]*data-phantombot-mission-next[\\s\\S]*data-phantombot-copy-continuity[\\s\\S]*data-phantombot-brain-mesh",
+          "description": "The shared PhantomBot surface retains its session mission map and user-controlled continuation actions."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "function missionConstellation[\\s\\S]*Intent[\\s\\S]*Context[\\s\\S]*Work[\\s\\S]*Proof[\\s\\S]*Next orbit[\\s\\S]*receiptId[\\s\\S]*artifacts\\.length",
+          "description": "The five mission phases remain derived from session truth and proof remains receipt/output backed."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "function buildContinuityPacket[\\s\\S]*Recent working context[\\s\\S]*Safest next move[\\s\\S]*do not invent completion[\\s\\S]*function copyContinuityPacket[\\s\\S]*navigator\\.clipboard\\?\\.writeText[\\s\\S]*document\\.execCommand\\(\"copy\"\\)",
+          "description": "Continuity packets remain portable, proof-aware, and usable in modern browsers and the desktop fallback."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "export function getOperatorBrainMesh[\\s\\S]*ChatGPT Plus Bridge[\\s\\S]*Higgsfield Bridge[\\s\\S]*export async function hydrateOperatorBrainMesh[\\s\\S]*refreshAgentAssistBridge[\\s\\S]*refreshHiggsfieldBridge",
+          "description": "The brain mesh stays tied to both real bridge health checks."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "function configuredConnectionOverview[\\s\\S]*PhantomForce brain[\\s\\S]*PhantomBot brain",
+          "description": "The mesh retains separately visible PhantomForce and PhantomBot organization brain routes."
+        },
+        {
+          "file": "app/phantombot-next.css",
+          "pattern": "\\.phantombot-constellation[\\s\\S]*\\.phantombot-mission-dossier[\\s\\S]*\\.phantombot-brain-mesh[\\s\\S]*@media \\(max-width: 760px\\)[\\s\\S]*@media \\(max-width: 540px\\)[\\s\\S]*prefers-reduced-motion",
+          "description": "The intelligence layer retains its desktop, compact, and reduced-motion presentation contracts."
+        },
+        {
+          "file": "scripts/test-phantombot-interstellar.mjs",
+          "pattern": "mission constellation must derive the complete flight path from session truth[\\s\\S]*Mission continuation must remain user-controlled[\\s\\S]*desktop shell must load the same hosted app surface as web",
+          "description": "A focused release gate protects truth, user control, and desktop/web parity together."
+        }
+      ],
+      "forbiddenPatterns": []
     }
   ]
 }

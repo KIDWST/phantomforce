@@ -70,6 +70,7 @@
     "test:phantom-hunter": "npm run test:phantom-hunter --workspace @phantomforce/server && node scripts/test-phantom-hunter-ui.mjs",
     "test:admin-ui": "node scripts/test-admin-ui-system.mjs",
     "test:phantombot-next": "node scripts/test-phantombot-next-level.mjs",
+    "test:phantombot-interstellar": "node scripts/test-phantombot-interstellar.mjs",
     "test:phantombot-media-bridges": "node scripts/test-phantombot-media-bridges.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
     "test:dropdown-readability": "node scripts/test-dropdown-readability.mjs",
