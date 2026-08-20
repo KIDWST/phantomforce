@@ -2,7 +2,7 @@
    Movable, page-aware Phantom system: preference-aware, drag-safe, and
    tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-178";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-179";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -12,7 +12,7 @@ import {
   loadCompanionPrefs,
   saveCompanionPagePlacement,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260819-178";
+} from "./companion-preferences.js?v=phantom-live-20260819-179";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -907,6 +907,9 @@ function createBuddyController() {
     };
     canvas.addEventListener("pointerup", release, { signal });
     canvas.addEventListener("pointercancel", release, { signal });
+    canvas.addEventListener("lostpointercapture", release, { signal });
+    window.addEventListener("pointerup", release, { capture: true, signal });
+    window.addEventListener("pointercancel", release, { capture: true, signal });
     canvas.addEventListener("dblclick", () => {
       if (docked) {
         prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
@@ -977,18 +980,21 @@ function createBuddyController() {
       resizing = false;
       resizeStart = null;
       if (event?.pointerId != null) { try { resizeHandle.releasePointerCapture(event.pointerId); } catch {} }
-      prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
       vx = 0;
       vy = 0;
       tx = x;
       ty = y;
       saveCurrentPagePlacement();
+      prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
       setState("idle", 900);
       applyPreferenceClasses();
       updatePointerHitState(true);
     };
     resizeHandle?.addEventListener("pointerup", releaseResize, { signal });
     resizeHandle?.addEventListener("pointercancel", releaseResize, { signal });
+    resizeHandle?.addEventListener("lostpointercapture", releaseResize, { signal });
+    window.addEventListener("pointerup", releaseResize, { capture: true, signal });
+    window.addEventListener("pointercancel", releaseResize, { capture: true, signal });
   }
 
   function startLoop() {

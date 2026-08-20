@@ -64,6 +64,9 @@ assert.match(buddy, /switchPageContext/u, "Companion must track route changes fo
 assert.match(buddy, /saveCurrentPagePlacement/u, "Companion drag and resize must save the page placement.");
 assert.match(buddy, /Math\.hypot\(event\.clientX - dragPointerStartX, event\.clientY - dragPointerStartY\)/u, "Drag detection must use total gesture distance rather than tiny pointer-event steps.");
 assert.match(buddy, /layer\.classList\.remove\("is-grabbed"\);[\s\S]*?vx = 0;[\s\S]*?vy = 0;[\s\S]*?if \(dragged\)/u, "Every drag release must stop retained pointer velocity.");
+assert.match(buddy, /canvas\.addEventListener\("lostpointercapture", release[\s\S]*?window\.addEventListener\("pointerup", release, \{ capture: true, signal \}\)/u, "Drag release must survive pointer capture loss and pointerup outside the companion canvas.");
+assert.match(buddy, /resizeHandle\?\.addEventListener\("lostpointercapture", releaseResize[\s\S]*?window\.addEventListener\("pointerup", releaseResize, \{ capture: true, signal \}\)/u, "Resize release must survive pointer capture loss and pointerup outside the resize handle.");
+assert.match(buddy, /const releaseResize = \(event\) => \{[\s\S]*?saveCurrentPagePlacement\(\);[\s\S]*?prefs = updateCompanionPrefs/u, "Custom size must be saved before preference refresh restores the current page placement.");
 assert.match(buddy, /undock\(\{ keepPosition: !!x && !!y, silent: true \}\)/u, "Preference refresh must preserve a live free placement when browser storage is unavailable.");
 assert.match(buddy, /!autoWanderAllowed\(\)[\s\S]*?vx = 0;[\s\S]*?vy = 0;[\s\S]*?tx = x;[\s\S]*?ty = y;/u, "Non-wandering placement must be a hard stationary state.");
 assert.doesNotMatch(buddy, /function undock\(\)\s*\{\s*dock\(\);\s*\}/u, "Undock must not be a sidebar alias.");
