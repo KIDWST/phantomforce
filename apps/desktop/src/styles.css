@@ -3207,19 +3207,16 @@ html:has([data-hud-shell]) [data-slot='popover-content'] {
 }
 
 /* PhantomBot presence ------------------------------------------------------- */
-/* Keep the native client on the same visual contract as the web command
-   surface: one large, translucent full-body Phantom whose pose reflects the
-   live agent state. The source images have a tall transparent lower half, so
-   the figure is sized by width instead of `object-fit: contain`; otherwise the
-   actual character collapses to a small corner ornament. */
+/* One stable, translucent full-body Phantom. Every pose is pre-normalized to
+   the same square canvas and baseline, so state changes never make it crouch. */
 [data-slot='composer-root'] > .phantom-presence {
   --phantom-presence-color: color-mix(in srgb, var(--ui-accent) 72%, #64ffb7);
   position: absolute;
-  right: clamp(-5.5rem, -5vw, -2.75rem);
-  bottom: -0.75rem;
+  right: clamp(-7rem, -3.75vw, -2.5rem);
+  bottom: clamp(-1.75rem, -1.2vh, -0.65rem);
   z-index: 2;
-  width: clamp(26.875rem, 50vw, 42.5rem);
-  height: clamp(23.75rem, 52vh, 35rem);
+  width: clamp(34rem, 50vw, 120rem);
+  aspect-ratio: 1;
   overflow: visible;
   contain: layout style;
   color: var(--phantom-presence-color);
@@ -3229,10 +3226,10 @@ html:has([data-hud-shell]) [data-slot='popover-content'] {
 
 [data-slot='composer-root'] > .phantom-presence .phantom-presence__glow {
   position: absolute;
-  right: 3%;
-  bottom: 4%;
-  width: 88%;
-  height: 82%;
+  right: 1%;
+  bottom: 1%;
+  width: 96%;
+  height: 94%;
   border-radius: 50%;
   background: radial-gradient(
     ellipse at 58% 66%,
@@ -3240,7 +3237,7 @@ html:has([data-hud-shell]) [data-slot='popover-content'] {
     transparent 70%
   );
   filter: blur(2.5rem);
-  opacity: 0.2;
+  opacity: 0.14;
 }
 
 [data-slot='composer-root'] > .phantom-presence .phantom-presence__stage {
@@ -3249,7 +3246,7 @@ html:has([data-hud-shell]) [data-slot='popover-content'] {
   width: 100%;
   height: 100%;
   overflow: visible;
-  opacity: 0.22;
+  opacity: 0.15;
   mix-blend-mode: screen;
   filter: saturate(0.94) contrast(1.08)
     drop-shadow(0 0 1.8rem color-mix(in srgb, var(--phantom-presence-color) 19%, transparent));
@@ -3263,8 +3260,8 @@ html:has([data-hud-shell]) [data-slot='popover-content'] {
   width: 100%;
   max-width: none;
   height: auto;
-  transform: translate3d(0, 19%, 0) scale(1.02);
-  transform-origin: 58% 38%;
+  transform: translate3d(0, 0, 0) scale(1.01);
+  transform-origin: 62% 88%;
   filter: brightness(1.04) contrast(1.05);
   animation:
     phantom-presence-pose-enter 360ms cubic-bezier(0.16, 1, 0.3, 1) both,
@@ -3274,7 +3271,7 @@ html:has([data-hud-shell]) [data-slot='popover-content'] {
 [data-slot='composer-root'] > .phantom-presence[data-phase='listening'] .phantom-presence__stage,
 [data-slot='composer-root'] > .phantom-presence[data-phase='reasoning'] .phantom-presence__stage,
 [data-slot='composer-root'] > .phantom-presence[data-phase='working'] .phantom-presence__stage {
-  opacity: 0.27;
+  opacity: 0.18;
   filter: saturate(1.04) contrast(1.1)
     drop-shadow(0 0 2.2rem color-mix(in srgb, var(--phantom-presence-color) 25%, transparent));
 }
@@ -3287,7 +3284,7 @@ html:has([data-hud-shell]) [data-slot='popover-content'] {
 
 [data-slot='composer-root'] > .phantom-presence[data-phase='celebrate'] .phantom-presence__stage,
 [data-slot='composer-root'] > .phantom-presence[data-phase='error'] .phantom-presence__stage {
-  opacity: 0.32;
+  opacity: 0.21;
 }
 
 [data-slot='composer-root'] > .phantom-presence[data-phase='celebrate'] .phantom-presence__figure {
@@ -3328,59 +3325,59 @@ html:has([data-hud-shell]) [data-slot='popover-content'] {
 @keyframes phantom-presence-pose-enter {
   from {
     opacity: 0;
-    transform: translate3d(1.5rem, 22%, 0) scale(0.98);
+    transform: translate3d(1.5rem, 0.8%, 0) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 19%, 0) scale(1.02);
+    transform: translate3d(0, 0, 0) scale(1.01);
   }
 }
 
 @keyframes phantom-presence-breathe {
   0%,
   100% {
-    transform: translate3d(0, 19%, 0) scale(1.02) rotate(-0.35deg);
+    transform: translate3d(0, 0, 0) scale(1.01) rotate(-0.25deg);
   }
   50% {
-    transform: translate3d(-0.25rem, 18%, 0) scale(1.04) rotate(0.35deg);
+    transform: translate3d(-0.25rem, -0.45%, 0) scale(1.025) rotate(0.25deg);
   }
 }
 
 @keyframes phantom-presence-work {
   0%,
   100% {
-    transform: translate3d(0, 19%, 0) scale(1.02) rotate(-0.7deg);
+    transform: translate3d(0, 0, 0) scale(1.01) rotate(-0.5deg);
   }
   50% {
-    transform: translate3d(-0.65rem, 18.2%, 0) scale(1.045) rotate(0.8deg);
+    transform: translate3d(-0.65rem, -0.35%, 0) scale(1.03) rotate(0.6deg);
   }
 }
 
 @keyframes phantom-presence-celebrate {
   from {
     opacity: 0;
-    transform: translate3d(0, 25%, 0) scale(0.94);
+    transform: translate3d(0, 1.5%, 0) scale(0.94);
   }
   55% {
     opacity: 1;
-    transform: translate3d(0, 15%, 0) scale(1.08);
+    transform: translate3d(0, -0.8%, 0) scale(1.06);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 19%, 0) scale(1.02);
+    transform: translate3d(0, 0, 0) scale(1.01);
   }
 }
 
 @keyframes phantom-presence-glitch {
   0%,
   100% {
-    transform: translate3d(0, 19%, 0) scale(1.02);
+    transform: translate3d(0, 0, 0) scale(1.01);
   }
   40% {
-    transform: translate3d(-0.7rem, 19%, 0) scale(1.02) skewX(1.5deg);
+    transform: translate3d(-0.7rem, 0, 0) scale(1.01) skewX(1.5deg);
   }
   75% {
-    transform: translate3d(0.55rem, 18.5%, 0) scale(1.02) skewX(-1.5deg);
+    transform: translate3d(0.55rem, -0.2%, 0) scale(1.01) skewX(-1.5deg);
   }
 }
 
@@ -3404,9 +3401,8 @@ html:has([data-hud-shell]) [data-slot='popover-content'] {
 
 @media (max-width: 680px) {
   [data-slot='composer-root'] > .phantom-presence {
-    right: -5.25rem;
-    width: min(32rem, 92vw);
-    height: clamp(23.75rem, 58vh, 32rem);
+    right: -6rem;
+    width: min(38rem, 96vw);
   }
 }
 

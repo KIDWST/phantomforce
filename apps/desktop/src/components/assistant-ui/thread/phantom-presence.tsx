@@ -5,6 +5,8 @@ import { $petState, type PetState } from '@/store/pet'
 
 export type PhantomPresencePhase = 'celebrate' | 'error' | 'idle' | 'listening' | 'reasoning' | 'working'
 
+export const PHANTOM_POSE_CANVAS_SIZE = 1024
+
 export function phantomPresencePhase(state: PetState): PhantomPresencePhase {
   switch (state) {
     case 'failed':
@@ -91,12 +93,21 @@ export const PhantomPresence: FC = () => {
       data-gesture-step={gestureStep}
       data-phase={phase}
       data-pose={pose}
+      data-pose-canvas={PHANTOM_POSE_CANVAS_SIZE}
       data-slot="phantom-presence"
       data-testid="phantom-presence"
     >
       <div className="phantom-presence__glow" />
       <div className="phantom-presence__stage">
-        <img alt="" className="phantom-presence__figure" draggable={false} key={pose} src={phantomAssetPath(pose)} />
+        <img
+          alt=""
+          className="phantom-presence__figure"
+          draggable={false}
+          height={PHANTOM_POSE_CANVAS_SIZE}
+          key={pose}
+          src={phantomAssetPath(pose)}
+          width={PHANTOM_POSE_CANVAS_SIZE}
+        />
       </div>
       <div className="phantom-presence__front-wisp phantom-presence__front-wisp--one" />
       <div className="phantom-presence__front-wisp phantom-presence__front-wisp--two" />
