@@ -157,7 +157,7 @@ TOOLSETS = {
             "extend workflows may appear as separate tools. Configure via "
             "``hermes tools`` → Video Generation."
         ),
-        "tools": ["video_generate", "xai_video_edit", "xai_video_extend"],
+        "tools": ["video_generate", "higgsfield_video_edit", "xai_video_edit", "xai_video_extend"],
         "includes": []
     },
 

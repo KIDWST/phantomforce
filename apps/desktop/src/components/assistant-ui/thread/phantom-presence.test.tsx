@@ -5,12 +5,12 @@ import { $petActivity } from '@/store/pet'
 import { $busy } from '@/store/session'
 
 import {
+  PHANTOM_GESTURES_BY_STATE,
+  PHANTOM_POSE_CANVAS_SIZE,
   phantomAssetPath,
   phantomGesturePose,
   PhantomPresence,
-  phantomPresencePhase,
-  PHANTOM_GESTURES_BY_STATE,
-  PHANTOM_POSE_CANVAS_SIZE
+  phantomPresencePhase
 } from './phantom-presence'
 
 describe('PhantomPresence', () => {

@@ -181,6 +181,10 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     discover: org => ipcRenderer.invoke('hermes:cloud:discover', org),
     agentSignIn: dashboardUrl => ipcRenderer.invoke('hermes:cloud:agent-sign-in', dashboardUrl)
   },
+  chatgptPlus: {
+    health: () => ipcRenderer.invoke('hermes:chatgpt-plus:health'),
+    start: () => ipcRenderer.invoke('hermes:chatgpt-plus:start')
+  },
   profile: {
     get: () => ipcRenderer.invoke('hermes:profile:get'),
     set: name => ipcRenderer.invoke('hermes:profile:set', name)
