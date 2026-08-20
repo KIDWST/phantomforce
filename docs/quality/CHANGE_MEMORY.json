@@ -1375,7 +1375,7 @@
       "id": "database-auth-reboot-recovery",
       "status": "active",
       "title": "Live admin and customer auth depend on a self-recovering database",
-      "ownerDecision": "admin.phantomforce.online uses the database-backed platform super-admin account, while app.phantomforce.online uses tenant-scoped customer accounts. Hermes must revive the approved local PostgreSQL container before booting so a Windows restart cannot silently fall back to incompatible customer-only auth.",
+      "ownerDecision": "admin.phantomforce.online uses the database-backed platform super-admin account, while app.phantomforce.online uses tenant-scoped customer accounts. Hermes must revive the approved local PostgreSQL container before booting so a Windows restart cannot silently fall back to incompatible customer-only auth. Docker engine probes must be time-bounded, a stale Desktop engine must self-restart, and Hermes must not report success until it actually binds.",
       "requiredPatterns": [
         {
           "file": "ops/admin-live/Start-Hermes.ps1",
@@ -1386,6 +1386,16 @@
           "file": "ops/admin-live/Start-Hermes.ps1",
           "pattern": "docker.Source update --restart unless-stopped",
           "description": "The approved database container survives normal host restarts."
+        },
+        {
+          "file": "ops/admin-live/Start-Hermes.ps1",
+          "pattern": "WaitForExit[(]5000[)][\\s\\S]*Restart-StaleDockerDesktop",
+          "description": "A frozen Docker Desktop cannot hang the auth recovery watcher indefinitely and is restarted only after a bounded failed engine probe."
+        },
+        {
+          "file": "ops/admin-live/Start-Hermes.ps1",
+          "pattern": "bindDeadline[\\s\\S]*active -contains [$]proc.Id",
+          "description": "Hermes waits for its real listening socket before the launcher claims the authentication API is ready."
         },
         {
           "file": "server/src/index.ts",

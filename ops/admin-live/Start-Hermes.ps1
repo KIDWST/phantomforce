@@ -55,14 +55,49 @@ function Read-DotEnvFile {
 function Test-DockerEngine {
   param([System.Management.Automation.CommandInfo]$DockerCommand)
 
+  $probe = $null
   try {
-    & $DockerCommand.Source info --format "{{.ServerVersion}}" 2>$null | Out-Null
-    return ($LASTEXITCODE -eq 0)
+    # `docker info` can wait forever when Docker Desktop still has processes
+    # but its engine is wedged. Keep the unattended auth recovery bounded so
+    # the hourly watcher can repair the database instead of hanging with the
+    # sign-in gate stuck on "Connecting".
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $DockerCommand.Source
+    $startInfo.Arguments = 'info --format "{{.ServerVersion}}"'
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $probe = [System.Diagnostics.Process]::Start($startInfo)
+    if (-not $probe.WaitForExit(5000)) {
+      try { $probe.Kill() } catch {}
+      try { $probe.WaitForExit(2000) | Out-Null } catch {}
+      return $false
+    }
+    return ($probe.ExitCode -eq 0)
   } catch {
-    # Docker CLI writes the normal "desktop engine is not ready" condition to
-    # stderr. Under ErrorActionPreference=Stop Windows PowerShell promotes it
-    # to an exception; that is a health result, not a launcher failure.
+    # An unavailable engine is a health result, not a launcher failure.
     return $false
+  } finally {
+    if ($probe) { $probe.Dispose() }
+  }
+}
+
+function Restart-StaleDockerDesktop {
+  param([string]$DesktopPath)
+
+  $installRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $DesktopPath))
+  $allowedNames = @("Docker Desktop.exe", "com.docker.backend.exe", "com.docker.build.exe", "docker.exe")
+  $targets = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.Name -in $allowedNames -and
+    $_.ExecutablePath -and
+    [System.IO.Path]::GetFullPath($_.ExecutablePath).StartsWith($installRoot, [System.StringComparison]::OrdinalIgnoreCase)
+  }
+  foreach ($target in $targets) {
+    Stop-Process -Id $target.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+  if (@($targets).Count -gt 0) {
+    Start-Sleep -Seconds 2
   }
 }
 
@@ -79,9 +114,20 @@ function Ensure-DockerEngine {
   }
 
   $desktopRunning = Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue
-  if (-not $desktopRunning) {
-    Start-Process -FilePath $dockerDesktop -ArgumentList "--minimized" -WindowStyle Hidden | Out-Null
+  if ($desktopRunning) {
+    # Give an ordinary in-progress startup a short grace period. If the engine
+    # remains unavailable, every Docker container is already unreachable, so a
+    # targeted Desktop restart is the recoverable way to restore account auth.
+    $warmupDeadline = (Get-Date).AddSeconds(12)
+    do {
+      Start-Sleep -Seconds 2
+      if (Test-DockerEngine -DockerCommand $DockerCommand) {
+        return
+      }
+    } while ((Get-Date) -lt $warmupDeadline)
+    Restart-StaleDockerDesktop -DesktopPath $dockerDesktop
   }
+  Start-Process -FilePath $dockerDesktop -ArgumentList "--minimized" -WindowStyle Hidden | Out-Null
 
   $deadline = (Get-Date).AddSeconds(150)
   do {
@@ -222,10 +268,16 @@ try {
 }
 Set-Content -LiteralPath (Join-Path $stateDir "hermes.pid") -Value ([string]$proc.Id) -Encoding ascii
 
-# Give Hermes a moment to bind; it fails closed on bad auth config, so a
-# missing bind usually means an env problem (see the err log).
-Start-Sleep -Seconds 3
-$active = @(Get-ListeningPids -LocalPort $Port)
+# Wait for the source-backed TypeScript service to actually bind before
+# reporting success. Cold starts after database recovery can take longer than
+# the old fixed three-second pause.
+$bindDeadline = (Get-Date).AddSeconds(15)
+$active = @()
+do {
+  Start-Sleep -Milliseconds 500
+  $active = @(Get-ListeningPids -LocalPort $Port)
+  if ($active -contains $proc.Id -or $proc.HasExited) { break }
+} while ((Get-Date) -lt $bindDeadline)
 if ($active -notcontains $proc.Id) {
   Write-Warning "Hermes did not bind port $Port yet. It may still be starting, or check $stderr"
 } else {
