@@ -4,7 +4,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { $petActivity } from '@/store/pet'
 import { $busy } from '@/store/session'
 
-import { phantomAssetPath, phantomGesturePose, PhantomPresence, phantomPresencePhase } from './phantom-presence'
+import {
+  phantomAssetPath,
+  phantomGesturePose,
+  PhantomPresence,
+  phantomPresencePhase,
+  PHANTOM_GESTURES_BY_STATE,
+  PHANTOM_POSE_CANVAS_SIZE
+} from './phantom-presence'
 
 describe('PhantomPresence', () => {
   afterEach(() => {
@@ -33,6 +40,7 @@ describe('PhantomPresence', () => {
     expect(phantomGesturePose('idle', 4)).toBe('welcome.webp')
     expect(phantomGesturePose('review', 1)).toBe('conjure.webp')
     expect(phantomGesturePose('run', 2)).toBe('point.webp')
+    expect(new Set(Object.values(PHANTOM_GESTURES_BY_STATE).flat()).size).toBe(8)
   })
 
   it('reacts to the live reasoning signal', () => {
@@ -44,6 +52,9 @@ describe('PhantomPresence', () => {
     expect(presence.getAttribute('data-phase')).toBe('reasoning')
     expect(presence.getAttribute('data-pose')).toBe('chin.webp')
     expect(presence.querySelector('img')?.getAttribute('src')).toContain('chin.webp')
+    expect(presence.querySelector('img')?.getAttribute('height')).toBe(String(PHANTOM_POSE_CANVAS_SIZE))
+    expect(presence.querySelector('img')?.getAttribute('width')).toBe(String(PHANTOM_POSE_CANVAS_SIZE))
+    expect(presence.getAttribute('data-pose-canvas')).toBe(String(PHANTOM_POSE_CANVAS_SIZE))
     expect(presence.getAttribute('data-slot')).toBe('phantom-presence')
     expect(presence.querySelector('.phantom-presence__glow')).not.toBeNull()
     expect(presence.querySelectorAll('.phantom-presence__front-wisp')).toHaveLength(2)

@@ -1,0 +1,114 @@
+[
+  {
+    "file": "welcome.webp",
+    "canvas": [
+      1024,
+      1024
+    ],
+    "visible_box": [
+      40,
+      56,
+      983,
+      1000
+    ],
+    "baseline": 1000
+  },
+  {
+    "file": "present.webp",
+    "canvas": [
+      1024,
+      1024
+    ],
+    "visible_box": [
+      16,
+      56,
+      1007,
+      1000
+    ],
+    "baseline": 1000
+  },
+  {
+    "file": "point.webp",
+    "canvas": [
+      1024,
+      1024
+    ],
+    "visible_box": [
+      22,
+      56,
+      1002,
+      1000
+    ],
+    "baseline": 1000
+  },
+  {
+    "file": "conjure.webp",
+    "canvas": [
+      1024,
+      1024
+    ],
+    "visible_box": [
+      10,
+      56,
+      1014,
+      1000
+    ],
+    "baseline": 1000
+  },
+  {
+    "file": "chin.webp",
+    "canvas": [
+      1024,
+      1024
+    ],
+    "visible_box": [
+      59,
+      56,
+      965,
+      1000
+    ],
+    "baseline": 1000
+  },
+  {
+    "file": "laugh.webp",
+    "canvas": [
+      1024,
+      1024
+    ],
+    "visible_box": [
+      30,
+      56,
+      994,
+      1000
+    ],
+    "baseline": 1000
+  },
+  {
+    "file": "mode-dark-write.webp",
+    "canvas": [
+      1024,
+      1024
+    ],
+    "visible_box": [
+      33,
+      56,
+      991,
+      1000
+    ],
+    "baseline": 1000
+  },
+  {
+    "file": "mode-dark-ask.webp",
+    "canvas": [
+      1024,
+      1024
+    ],
+    "visible_box": [
+      59,
+      56,
+      965,
+      1000
+    ],
+    "baseline": 1000
+  }
+]
