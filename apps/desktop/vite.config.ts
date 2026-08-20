@@ -1,6 +1,10 @@
-import { defineConfig } from 'vite'
 import babel from '@rolldown/plugin-babel'
+import tailwindcss from '@tailwindcss/vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
+import fs from 'fs'
+import { createRequire } from 'module'
+import path from 'path'
+import { defineConfig } from 'vite'
 
 /** React Compiler preset scoped to modules that can actually contain
  *  components/hooks (JSX syntax or a react-ish import). The preset's default
@@ -12,10 +16,6 @@ function compilerPreset() {
   preset.rolldown.filter.code = /\/>|<\/|from\s*['"][^'"]*react/
   return preset
 }
-import tailwindcss from '@tailwindcss/vite'
-import path from 'path'
-import fs from 'fs'
-import { createRequire } from 'module'
 
 const configDir = import.meta.dirname
 
@@ -82,9 +82,10 @@ const emojibaseAssets = () => ({
   }) {
     server.middlewares.use('/emojibase', (req, res, next) => {
       const rel = (req.url ?? '').split('?')[0].replace(/^\/+/, '')
-      if (!emojibaseDir || !EMOJIBASE_PATH.test(rel)) return next()
+
+      if (!emojibaseDir || !EMOJIBASE_PATH.test(rel)) {return next()}
       fs.readFile(path.join(emojibaseDir, rel), (err: unknown, buf: Buffer) => {
-        if (err) return next()
+        if (err) {return next()}
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
         res.end(buf)
@@ -92,7 +93,8 @@ const emojibaseAssets = () => ({
     })
   },
   generateBundle(this: { emitFile: (asset: { type: 'asset'; fileName: string; source: Uint8Array }) => void }) {
-    if (!emojibaseDir) return
+    if (!emojibaseDir) {return}
+
     for (const rel of ['en/data.json', 'en/messages.json', 'en/shortcodes/emojibase.json']) {
       this.emitFile({
         type: 'asset',
