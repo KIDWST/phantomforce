@@ -41,8 +41,8 @@ assert.equal(exhaustedResult.ok, false);
 if (exhaustedResult.ok) throw new Error("Exhausted provider test unexpectedly succeeded");
 assert.equal(exhaustedResult.code, "api_key_invalid");
 assert.match(exhaustedResult.error, /^OpenRouter API key invalid or expired \(HTTP 401\)\./u);
-assert.match(exhaustedResult.error, /Automatic fallbacks also failed:/u);
-assert.equal(exhaustedResult.failures?.length, 4);
+assert.doesNotMatch(exhaustedResult.error, /Automatic fallbacks also failed:/u);
+assert.equal(exhaustedResult.failures?.length, 1);
 
 for (const selected of ["codex", "claude", "openrouter", "local"] as const) {
   const calls: string[] = [];
@@ -90,7 +90,7 @@ const selectedFallback = await requestPhantomPlayAiEdit(
   {
     callProvider: async (provider, _prompt, input) => {
       selectedFallbackCalls.push({ provider, model: input.model });
-      if (provider === "openrouter") throw new Error("HTTP 401");
+      if (provider === "openrouter") throw new Error("HTTP 503");
       return { raw: marked(revised), provider, model: "fallback-model" };
     },
   },

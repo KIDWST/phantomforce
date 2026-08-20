@@ -419,7 +419,12 @@ export async function requestPhantomPlayAiEdit(
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      failures.push(explainPhantomPlayProviderFailure(provider, message));
+      const failure = explainPhantomPlayProviderFailure(provider, message);
+      failures.push(failure);
+      const selectedRouteNeedsConfiguration = selectedProvider !== "auto"
+        && provider === selectedProvider
+        && ["api_key_invalid", "insufficient_credits", "permission_denied"].includes(failure.code);
+      if (selectedRouteNeedsConfiguration) break;
     }
   }
   const primary = failures[0];
