@@ -38,6 +38,8 @@ export interface StopBackendTreesForUpdateDeps {
   forceKillProcessTree: (pid: number) => void
   /** Clears and stops the desktop's pooled backends. */
   stopAllPoolBackends: () => void
+  /** Stops other app-owned services that consume the same Python venv. */
+  stopAuxiliaryServices?: () => void
 }
 
 export interface BackendProcessRoot {
@@ -100,4 +102,5 @@ export function stopBackendTreesForUpdate(
   }
 
   deps.stopAllPoolBackends()
+  deps.stopAuxiliaryServices?.()
 }

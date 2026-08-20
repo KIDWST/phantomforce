@@ -159,10 +159,22 @@ test('Windows update tree-kills captured roots without pre-signalling the primar
       events.push('pool-stop')
       // Production stopAllPoolBackends() already tree-kills every pool root.
       events.push(`tree:${pooled.child.pid}`)
-    }
+    },
+    stopAuxiliaryServices: () => events.push('aux-stop')
   })
 
-  assert.deepEqual(events, ['tree:101', 'pool-stop', 'tree:202'])
+  assert.deepEqual(events, ['tree:101', 'pool-stop', 'tree:202', 'aux-stop'])
   assert.deepEqual(primary.calls, [], 'the primary root must not be signalled before taskkill /T sees it')
   assert.deepEqual(pooled.calls, [])
+})
+
+test('Windows update supports installs without auxiliary venv services', () => {
+  const events: string[] = []
+
+  stopBackendTreesForUpdate(null, {
+    forceKillProcessTree: pid => events.push(`tree:${pid}`),
+    stopAllPoolBackends: () => events.push('pool-stop')
+  })
+
+  assert.deepEqual(events, ['pool-stop'])
 })

@@ -3408,7 +3408,8 @@ async function releaseBackendLock(updateRoot, tag) {
 
   stopBackendTreesForUpdate(hermesProcess, {
     forceKillProcessTree,
-    stopAllPoolBackends
+    stopAllPoolBackends,
+    stopAuxiliaryServices: () => stopChatGptPlusBackend(tag)
   })
 
   const shim = venvHermesShimPath(updateRoot)
@@ -3591,7 +3592,7 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
         '(a second Hermes window or a terminal running hermes?). Close it and retry.'
 
       emitUpdateProgress({ stage: 'error', message, percent: null })
-      startHermes().catch(() => {})
+      restartLocalServicesAfterAbortedUpdate()
 
       return { ok: false, error: message }
     }
@@ -3624,7 +3625,7 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
 
         rememberLog(`[updates] venv-blocked: ${scanOutcome.result.processes.length} process(es) hold the install`)
         emitUpdateProgress({ stage: 'error', message, percent: null })
-        startHermes().catch(() => {})
+        restartLocalServicesAfterAbortedUpdate()
 
         return { ok: false, error: 'venv-blocked', message, blockers: scanOutcome.result.processes }
       }
@@ -3634,7 +3635,7 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
 
         rememberLog(`[updates] venv-blocker probe failed: ${scanOutcome.error}`)
         emitUpdateProgress({ stage: 'error', message, percent: null })
-        startHermes().catch(() => {})
+        restartLocalServicesAfterAbortedUpdate()
 
         return { ok: false, error: 'venv-probe-failed', message }
       }
@@ -3761,7 +3762,7 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
 
       rememberLog(`[updates] hand-off not viable, aborting quit: ${handoffOutcome.message}`)
       emitUpdateProgress({ stage: 'error', message, percent: null })
-      startHermes().catch(() => {})
+      restartLocalServicesAfterAbortedUpdate()
 
       return { ok: false, error: 'updater-spawn-failed', message }
     }
@@ -9731,6 +9732,171 @@ function stopBackendChild(child) {
   stopBackendChildImpl(child, { forceKillProcessTree, isWindows: IS_WINDOWS })
 }
 
+function stopChatGptPlusBackend(reason) {
+  const child = chatGptPlusProcess
+
+  chatGptPlusProcess = null
+  chatGptPlusStartPromise = null
+
+  if (!child) {
+    return
+  }
+
+  rememberLog(`[${reason}] stopping app-owned ChatGPT Plus bridge process tree (${child.pid || 'unknown pid'})`)
+  stopBackendChild(child)
+}
+
+function restartLocalServicesAfterAbortedUpdate() {
+  resetHermesConnection()
+  void startHermes().catch(error => {
+    rememberLog(`[updates] Hermes restart after aborted update failed: ${error.message}`)
+  })
+  void ensureChatGptPlusBackend().catch(error => {
+    rememberLog(`[updates] ChatGPT Plus bridge restart after aborted update failed: ${error.message}`)
+  })
+}
+
+function resolveChatGptPlusBackendScript() {
+  const candidates = [
+    process.env.PHANTOM_CHATGPT_BACKEND_SCRIPT,
+    path.join(SOURCE_REPO_ROOT, 'services', 'chatgpt_plus_backend.py'),
+    process.resourcesPath ? path.join(process.resourcesPath, 'services', 'chatgpt_plus_backend.py') : null,
+    path.join(APP_ROOT, 'services', 'chatgpt_plus_backend.py')
+  ].filter(Boolean)
+
+  return candidates.find(candidate => fs.existsSync(candidate)) || null
+}
+
+function resolveChatGptPlusPython() {
+  const names = IS_WINDOWS ? ['python.exe', 'python'] : ['python3', 'python']
+  const venvBin = path.join(ACTIVE_HERMES_ROOT, 'venv', IS_WINDOWS ? 'Scripts' : 'bin')
+
+  const candidates = [
+    process.env.PHANTOM_CHATGPT_PYTHON,
+    ...names.map(name => path.join(venvBin, name)),
+    ...names
+  ].filter(Boolean)
+
+  return candidates.find(candidate => !candidate.includes(path.sep) || fs.existsSync(candidate)) || names[0]
+}
+
+async function readChatGptPlusHealth({ timeoutMs = 1200 } = {}) {
+  try {
+    const health = (await fetchJson(`${CHATGPT_PLUS_BACKEND_URL}/health`, null, { timeoutMs })) as any
+
+    return {
+      available: Boolean(health?.ok),
+      baseUrl: CHATGPT_PLUS_BACKEND_URL,
+      browserUp: Boolean(health?.browser_up),
+      error: health?.last_error || null,
+      loggedIn: health?.logged_in === true,
+      pid: chatGptPlusProcess?.pid ?? null,
+      running: true,
+      service: health?.service || 'phantom-chatgpt-plus-backend',
+      version: health?.version || null
+    }
+  } catch (error) {
+    return {
+      available: false,
+      baseUrl: CHATGPT_PLUS_BACKEND_URL,
+      browserUp: false,
+      error: error?.message || String(error),
+      loggedIn: false,
+      pid: chatGptPlusProcess?.pid ?? null,
+      running: Boolean(chatGptPlusProcess && chatGptPlusProcess.exitCode === null && !chatGptPlusProcess.killed),
+      service: 'phantom-chatgpt-plus-backend',
+      version: null
+    }
+  }
+}
+
+async function waitForChatGptPlusHealth(timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs
+  let last = await readChatGptPlusHealth()
+
+  while (!last.available && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 750))
+    last = await readChatGptPlusHealth()
+  }
+
+  return last
+}
+
+async function ensureChatGptPlusBackend() {
+  const existing = await readChatGptPlusHealth()
+
+  if (existing.available) {
+    return existing
+  }
+
+  if (chatGptPlusStartPromise) {
+    return chatGptPlusStartPromise
+  }
+
+  chatGptPlusStartPromise = (async () => {
+    const script = resolveChatGptPlusBackendScript()
+
+    if (!script) {
+      throw new Error('ChatGPT Plus backend script was not found.')
+    }
+
+    const python = resolveChatGptPlusPython()
+
+    rememberLog(`Starting ChatGPT Plus bridge via ${python} ${script}`)
+
+    const child = spawn(
+      python,
+      [script],
+      hiddenWindowsChildOptions({
+        cwd: path.dirname(script),
+        env: {
+          ...process.env,
+          HERMES_HOME,
+          PHANTOM_CHATGPT_BACKEND_HOST: CHATGPT_PLUS_BACKEND_HOST,
+          PHANTOM_CHATGPT_BACKEND_PORT: String(CHATGPT_PLUS_BACKEND_PORT),
+          PHANTOM_CHATGPT_HEADLESS: process.env.PHANTOM_CHATGPT_HEADLESS || '0',
+          PHANTOM_CHATGPT_HIDE_WINDOW: process.env.PHANTOM_CHATGPT_HIDE_WINDOW || '1',
+          PYTHONUTF8: process.env.PYTHONUTF8 || '1'
+        },
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+    )
+
+    chatGptPlusProcess = child
+    child.stdout.on('data', rememberLog)
+    child.stderr.on('data', rememberLog)
+    child.once('exit', (code, signal) => {
+      rememberLog(`ChatGPT Plus bridge exited (${signal || code})`)
+
+      if (chatGptPlusProcess === child) {
+        chatGptPlusProcess = null
+      }
+    })
+
+    child.once('error', error => {
+      rememberLog(`ChatGPT Plus bridge failed to start: ${error.message}`)
+
+      if (chatGptPlusProcess === child) {
+        chatGptPlusProcess = null
+      }
+    })
+
+    const health = await waitForChatGptPlusHealth()
+
+    if (!health.available) {
+      throw new Error(`ChatGPT Plus bridge did not become ready: ${health.error || 'timeout'}`)
+    }
+
+    return health
+  })()
+
+  try {
+    return await chatGptPlusStartPromise
+  } finally {
+    chatGptPlusStartPromise = null
+  }
+}
+
 // Soft gateway-mode apply: tear down the primary without resetting boot UI or
 // reloading the renderer. The shell stays up; the renderer wipes session lists
 // (so skeletons retrigger) and re-dials. Distinct from hard re-home (profile
@@ -10773,7 +10939,9 @@ async function startHermes() {
       rememberLog(`Hermes backend exited (${signal || code})`)
       sendBackendExit({ code, signal })
 
-      if (!backendReady) {
+      if (!backendReady && updateInFlight) {
+        rememberLog('[updates] ignoring intentional backend exit during update hand-off')
+      } else if (!backendReady) {
         const message = `Hermes backend exited before it became ready (${signal || code}).`
         updateBootProgress(
           {
@@ -15259,6 +15427,8 @@ app.on('before-quit', event => {
   if (heldQuitForActiveWork(event)) {
     return
   }
+
+  stopChatGptPlusBackend(isQuittingForHandoff ? 'updates' : 'quit')
 
   if (!backendQuitTeardownDone) {
     event.preventDefault()
