@@ -76,6 +76,7 @@ function StatusBadge({ status }: { status: string }) {
     status === 'ready' ||
     status === 'succeeded' ||
     status === 'verified'
+
   const failed = status === 'error' || status === 'failed'
   const Icon = healthy ? CheckCircle2 : failed ? AlertCircle : Clock
 

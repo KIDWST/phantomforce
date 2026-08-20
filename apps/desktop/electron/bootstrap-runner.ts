@@ -256,6 +256,7 @@ function repositoryCacheKey(repository, ref) {
   const source = String(repository || '')
     .trim()
     .replace(/[^0-9A-Za-z._-]/g, '_')
+
   const sourceSuffix = source.length > 72 ? source.slice(-72) : source
 
   return `${sourceSuffix}--${ref}`
@@ -282,6 +283,7 @@ function githubRawScriptUrl(repository, ref, scriptName) {
     .replace(/^\/+|\/+$/g, '')
     .replace(/\.git$/i, '')
     .split('/')
+
   const isUpstreamHermes =
     parts[0]?.toLowerCase() === 'nousresearch' && parts[1]?.toLowerCase() === 'hermes-agent'
 
@@ -423,6 +425,7 @@ async function resolveInstallScript({
   const cacheKey = installStamp?.productRepository
     ? repositoryCacheKey(productRepository, installRef.cacheKey)
     : installRef.cacheKey
+
   const cached = cachedScriptPath(hermesHome, cacheKey)
   const resolvedCommit = installRef.pinned ? installRef.ref : null
 
@@ -1140,17 +1143,17 @@ export {
   buildPinArgs,
   buildPosixPinArgs,
   cachedScriptPath,
-  hasExistingGitCheckout,
   githubRawScriptUrl,
+  hasExistingGitCheckout,
   installedAgentInstallScript,
   installRefForStamp,
   isPinnedCommit,
   // Exposed for testability
   parseStageResult,
+  repositoryCacheKey,
   resolveCheckoutHead,
   resolveInstallScript,
   resolveLocalInstallScript,
   resolveMarkerPinnedCommit,
-  repositoryCacheKey,
   runBootstrap
 }
