@@ -31,6 +31,8 @@ export type PhantomPlayAiEditInput = {
   fileContent: string;
   instruction: string;
   cwd: string;
+  engine?: string;
+  projectFiles?: string[];
   provider?: PhantomPlayAiProvider;
   model?: string;
   timeoutMs?: number;
@@ -38,9 +40,25 @@ export type PhantomPlayAiEditInput = {
 
 export type PhantomPlayAiProvider = "auto" | "codex" | "claude" | "openrouter" | "local";
 
+export type PhantomPlayAiFailureCode =
+  | "api_key_invalid"
+  | "insufficient_credits"
+  | "permission_denied"
+  | "rate_limited"
+  | "provider_timeout"
+  | "provider_unavailable"
+  | "invalid_model_response";
+
+export type PhantomPlayAiProviderFailure = {
+  provider: Exclude<PhantomPlayAiProvider, "auto">;
+  code: PhantomPlayAiFailureCode;
+  summary: string;
+  action: string;
+};
+
 export type PhantomPlayAiEditResult =
   | { ok: true; newContent: string; changed: boolean; provider: Exclude<PhantomPlayAiProvider, "auto">; model: string; raw: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; code?: PhantomPlayAiFailureCode; summary?: string; failures?: PhantomPlayAiProviderFailure[] };
 
 export type PhantomPlayAiEditProviderCall = (
   provider: Exclude<PhantomPlayAiProvider, "auto">,
@@ -104,6 +122,135 @@ function normalizedProvider(value: unknown): PhantomPlayAiProvider {
 
 function normalizedModel(value: unknown) {
   return typeof value === "string" ? value.trim().slice(0, 180) : "";
+}
+
+export function explainPhantomPlayProviderFailure(
+  provider: Exclude<PhantomPlayAiProvider, "auto">,
+  rawMessage: string,
+): PhantomPlayAiProviderFailure {
+  const message = rawMessage.trim();
+  const status = Number(message.match(/(?:HTTP|status(?: code)?)\s*[:=]?\s*(\d{3})/iu)?.[1] || 0);
+
+  if (provider === "openrouter" && (status === 401 || /invalid api key|authentication|unauthorized|revoked/iu.test(message))) {
+    return {
+      provider,
+      code: "api_key_invalid",
+      summary: "OpenRouter API key invalid or expired (HTTP 401).",
+      action: "Replace it in PhantomForce Settings → Bridges & Connectors, then retry.",
+    };
+  }
+  if (provider === "openrouter" && (status === 402 || /insufficient (?:credits|balance)|payment required/iu.test(message))) {
+    return {
+      provider,
+      code: "insufficient_credits",
+      summary: "OpenRouter has insufficient credits (HTTP 402).",
+      action: "Add credits or use another AI route.",
+    };
+  }
+  if (provider === "openrouter" && status === 403) {
+    return {
+      provider,
+      code: "permission_denied",
+      summary: "OpenRouter denied access to this model (HTTP 403).",
+      action: "Check the key permissions or choose a model available to this account.",
+    };
+  }
+  if (status === 429 || /rate limit|too many requests|quota/iu.test(message)) {
+    return {
+      provider,
+      code: "rate_limited",
+      summary: `${provider === "openrouter" ? "OpenRouter" : provider} is rate-limited (HTTP 429).`,
+      action: "Wait briefly or choose another AI route.",
+    };
+  }
+  if (/timed? out|timeout/iu.test(message)) {
+    return {
+      provider,
+      code: "provider_timeout",
+      summary: `${provider === "local" ? "Local model" : provider} timed out before returning a complete file.`,
+      action: "Retry with a faster model or a smaller active file.",
+    };
+  }
+  if (/complete-file markers/iu.test(message)) {
+    return {
+      provider,
+      code: "invalid_model_response",
+      summary: `${provider === "local" ? "Local model" : provider} response was incomplete: required complete-file markers were missing.`,
+      action: "Retry or choose a stronger code model.",
+    };
+  }
+  if (/empty file|invalid json|json is invalid|dropped the document root|invalid model response/iu.test(message)) {
+    return {
+      provider,
+      code: "invalid_model_response",
+      summary: message.replace(/^The model/iu, `${provider === "local" ? "Local model" : provider}`),
+      action: "Nothing was saved. Retry or choose a stronger code model.",
+    };
+  }
+  if (/command failed|exited with|not available|unavailable|enoent|not recognized|not found/iu.test(message)) {
+    const label = provider === "codex" ? "Codex desktop fallback"
+      : provider === "claude" ? "Claude desktop fallback"
+        : provider === "local" ? "Local model fallback"
+          : "OpenRouter";
+    return {
+      provider,
+      code: "provider_unavailable",
+      summary: `${label} could not start or complete the edit.`,
+      action: provider === "codex"
+        ? "Check Codex sign-in and the local Codex bridge."
+        : provider === "local"
+          ? "Check that the local model service is running and has enough context capacity."
+          : `Check the ${provider} bridge configuration.`,
+    };
+  }
+  return {
+    provider,
+    code: "provider_unavailable",
+    summary: `${provider === "local" ? "Local model" : provider} could not complete the edit.`,
+    action: "Check this route in PhantomForce Settings → Bridges & Connectors or choose another route.",
+  };
+}
+
+function projectLanguageGuidance(filePath: string, engine: string) {
+  const extension = filePath.toLowerCase().split(".").pop() || "";
+  if (extension === "gd" || engine.toLowerCase().includes("godot")) {
+    return "This is a Godot project. Preserve valid GDScript/scene conventions and the project's existing node architecture.";
+  }
+  if (extension === "cs" || engine.toLowerCase().includes("unity")) {
+    return "This is a Unity project. Preserve valid C# and the project's existing Unity component and serialization conventions.";
+  }
+  if (["cpp", "cc", "cxx", "h", "hpp"].includes(extension) || engine.toLowerCase().includes("unreal")) {
+    return "This is an Unreal/native C++ project. Preserve valid C++ and the project's existing engine macros, ownership, and build conventions.";
+  }
+  if (extension === "py" || engine.toLowerCase().includes("panda")) {
+    return "This is a Python/Panda3D project. Preserve valid Python and the project's existing scene, task, and asset-loading conventions.";
+  }
+  if (["html", "js", "mjs", "css", "json", "ts", "tsx"].includes(extension)) {
+    return "This is a web game file. Keep it compatible with the project's existing browser runtime and build assumptions.";
+  }
+  return "Preserve the active file's language, engine conventions, and existing project architecture.";
+}
+
+export function validatePhantomPlayAiEdit(input: PhantomPlayAiEditInput, newContent: string): string | null {
+  if (!newContent.trim()) return "The model returned an empty file.";
+  if (newContent.includes("\0")) return "The model returned invalid NUL bytes.";
+  if (newContent.length > MAX_FILE_CHARS) return `The revised file exceeds the ${MAX_FILE_CHARS} character safety limit.`;
+  const extension = input.filePath.toLowerCase().split(".").pop() || "";
+  if (extension === "json") {
+    try {
+      JSON.parse(newContent);
+    } catch (error) {
+      return `The revised JSON is invalid: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  if (
+    extension === "html"
+    && input.fileContent.toLowerCase().includes("<html")
+    && !newContent.toLowerCase().includes("<html")
+  ) {
+    return "The revised HTML dropped the document root.";
+  }
+  return null;
 }
 
 async function callEditProvider(
@@ -211,13 +358,20 @@ export async function requestPhantomPlayAiEdit(
   const timeout = Math.min(Math.max(input.timeoutMs ?? 120000, 10000), 240000);
 
   const prompt = [
-    "You are editing a single file inside a PhantomPlay game, live, while it may be running in a native player window with hot reload.",
+    "You are editing the active source file inside a PhantomPlay game. The accepted file is saved transactionally with undo history and the compatible running preview is reloaded.",
     `Game: ${input.gameId}`,
     `File: ${input.filePath}`,
+    `Engine: ${input.engine?.trim() || "Detected by PhantomPlay"}`,
+    projectLanguageGuidance(input.filePath, input.engine || ""),
+    ...(input.projectFiles?.length
+      ? ["Project file map (for architecture awareness; only the active file may be returned):", ...input.projectFiles.slice(0, 160).map((file) => `- ${file.slice(0, 300)}`)]
+      : []),
     "",
     "Rules:",
     "- Make the minimum change that satisfies the instruction. Preserve everything else exactly, including formatting style.",
     "- Preserve the file's existing language, file type, framework, build/runtime assumptions, and dependency policy. The result must remain valid for that project.",
+    "- Keep the file valid for its detected engine and current project. Do not convert engines, invent dependencies, or claim to edit files you were not given.",
+    "- Implement the requested behavior directly. Do not return a plan, analysis, patch, Markdown fence, or hidden reasoning.",
     "- Do not explain your change in prose. Respond with ONLY the complete new file content, wrapped exactly like this, nothing before or after:",
     BEGIN,
     "...full file content...",
@@ -240,7 +394,7 @@ export async function requestPhantomPlayAiEdit(
   const providers: Array<Exclude<PhantomPlayAiProvider, "auto">> = selectedProvider === "auto"
     ? automaticProviders
     : [selectedProvider, ...automaticProviders.filter((provider) => provider !== selectedProvider)];
-  const failures: string[] = [];
+  const failures: PhantomPlayAiProviderFailure[] = [];
   const providerCall = options.callProvider ?? callEditProvider;
   for (const provider of providers) {
     try {
@@ -253,6 +407,8 @@ export async function requestPhantomPlayAiEdit(
       if (newContent === null) {
         throw new Error("The model response did not include the required complete-file markers.");
       }
+      const validationError = validatePhantomPlayAiEdit(input, newContent);
+      if (validationError) throw new Error(validationError);
       return {
         ok: true,
         newContent,
@@ -263,14 +419,23 @@ export async function requestPhantomPlayAiEdit(
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const notFound = /ENOENT/i.test(message) || /not recognized/i.test(message) || /not found/i.test(message);
-      failures.push(`${provider}: ${notFound ? "provider command is not available" : message}`);
+      failures.push(explainPhantomPlayProviderFailure(provider, message));
     }
   }
+  const primary = failures[0];
+  const fallbackSummary = failures
+    .slice(1)
+    .map((failure) => failure.summary)
+    .join(" ");
   return {
     ok: false,
-    error: selectedProvider === "auto"
-      ? `No selected AI route completed the edit. ${failures.join(" ")}`
-      : `The selected ${selectedProvider} route failed and automatic fallback was exhausted. ${failures.join(" ")}`,
+    code: primary?.code,
+    summary: primary?.summary || "No AI route completed the edit.",
+    failures,
+    error: [
+      primary?.summary || "No AI route completed the edit.",
+      primary?.action,
+      fallbackSummary ? `Automatic fallbacks also failed: ${fallbackSummary}` : "",
+    ].filter(Boolean).join(" "),
   };
 }

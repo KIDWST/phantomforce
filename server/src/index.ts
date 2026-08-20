@@ -7720,6 +7720,37 @@ function openRouterDesktopConfigured() {
     && Boolean(process.env.OPENROUTER_API_KEY?.trim());
 }
 
+async function validateOpenRouterDesktopCredential() {
+  const credential = process.env.OPENROUTER_API_KEY?.trim();
+  if (!credential) {
+    return { valid: false, error: "OpenRouter API key is missing." };
+  }
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/key", {
+      headers: { Authorization: `Bearer ${credential}` },
+      signal: AbortSignal.timeout(6_000),
+    });
+    if (response.status === 401) {
+      return {
+        valid: false,
+        error: "OpenRouter API key invalid or expired (HTTP 401). Replace it in PhantomForce Settings → Bridges & Connectors.",
+      };
+    }
+    if (!response.ok) {
+      return {
+        valid: true,
+        error: `OpenRouter key validation is temporarily unavailable (HTTP ${response.status}).`,
+      };
+    }
+    return { valid: true, error: undefined as string | undefined };
+  } catch {
+    return {
+      valid: true,
+      error: "OpenRouter key validation could not reach OpenRouter. The saved key was not marked invalid.",
+    };
+  }
+}
+
 app.get("/api/phantomplay/ai-models", async (request, reply) => {
   const requestIp = request.ip.replace(/^::ffff:/u, "");
   if (!phantomPlayDesktopLocalAllowed(requestIp)) {
@@ -7753,9 +7784,27 @@ app.get("/api/phantomplay/ai-models", async (request, reply) => {
       error: "Needs OpenRouter API key and live transport enabled.",
     };
   }
+  const credentialStatus = await validateOpenRouterDesktopCredential();
+  if (!credentialStatus.valid) {
+    return {
+      ok: true,
+      provider,
+      configured: false,
+      dynamic: false,
+      models: fallback,
+      error: credentialStatus.error,
+    };
+  }
   try {
     const models = await fetchOpenRouterModels({ credential: process.env.OPENROUTER_API_KEY });
-    return { ok: true, provider, configured: true, dynamic: models.length > 0, models: models.length ? models : fallback };
+    return {
+      ok: true,
+      provider,
+      configured: true,
+      dynamic: models.length > 0,
+      models: models.length ? models : fallback,
+      error: credentialStatus.error,
+    };
   } catch (error) {
     return {
       ok: true,
@@ -7779,13 +7828,25 @@ app.post("/api/phantomplay/ai-edit", { bodyLimit: 4 * 1024 * 1024 }, async (requ
   const fileContent = typeof body.fileContent === "string" ? body.fileContent : "";
   const instruction = typeof body.instruction === "string" ? body.instruction : "";
   const cwd = typeof body.cwd === "string" && body.cwd ? body.cwd : appStaticRoot;
+  const engine = typeof body.engine === "string" ? body.engine.trim().slice(0, 120) : "";
+  const projectFiles = Array.isArray(body.projectFiles)
+    ? body.projectFiles.filter((item): item is string => typeof item === "string").slice(0, 160)
+    : [];
   const provider = body.provider === "codex" || body.provider === "claude" || body.provider === "openrouter" || body.provider === "local"
     ? body.provider
     : "auto";
   const model = typeof body.model === "string" ? body.model.trim().slice(0, 180) : "";
   if (!gameId || !filePath) return reply.code(400).send({ ok: false, error: "gameId and filePath are required." });
-  const result = await requestPhantomPlayAiEdit({ gameId, filePath, fileContent, instruction, cwd, provider, model });
-  if (!result.ok) return reply.code(422).send({ ok: false, error: result.error });
+  const result = await requestPhantomPlayAiEdit({ gameId, filePath, fileContent, instruction, cwd, engine, projectFiles, provider, model });
+  if (!result.ok) {
+    return reply.code(422).send({
+      ok: false,
+      error: result.error,
+      code: result.code,
+      summary: result.summary,
+      failures: result.failures,
+    });
+  }
   return { ok: true, newContent: result.newContent, changed: result.changed, provider: result.provider, model: result.model };
 });
 

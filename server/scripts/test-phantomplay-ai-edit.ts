@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  explainPhantomPlayProviderFailure,
   requestPhantomPlayAiEdit,
   type PhantomPlayAiEditProviderCall,
   type PhantomPlayAiProvider,
@@ -14,11 +15,34 @@ const baseInput = {
   fileContent: original,
   instruction: "Increase the score to two.",
   cwd: process.cwd(),
+  engine: "Canvas2D",
+  projectFiles: ["index.html", "game.ts", "styles.css"],
 };
 
 function marked(content: string) {
   return `<<<PHANTOMPLAY_FILE_BEGIN>>>\n${content}\n<<<PHANTOMPLAY_FILE_END>>>`;
 }
+
+const invalidOpenRouterKey = explainPhantomPlayProviderFailure("openrouter", "HTTP 401");
+assert.equal(invalidOpenRouterKey.code, "api_key_invalid");
+assert.match(invalidOpenRouterKey.summary, /API key invalid or expired \(HTTP 401\)/u);
+
+const exhaustedResult = await requestPhantomPlayAiEdit(
+  { ...baseInput, provider: "openrouter", model: "deepseek/deepseek-v4-flash" },
+  {
+    callProvider: async (provider) => {
+      if (provider === "openrouter") throw new Error("HTTP 401");
+      if (provider === "local") throw new Error("AI edit timed out after 120000ms");
+      throw new Error("Command failed: provider executable failed");
+    },
+  },
+);
+assert.equal(exhaustedResult.ok, false);
+if (exhaustedResult.ok) throw new Error("Exhausted provider test unexpectedly succeeded");
+assert.equal(exhaustedResult.code, "api_key_invalid");
+assert.match(exhaustedResult.error, /^OpenRouter API key invalid or expired \(HTTP 401\)\./u);
+assert.match(exhaustedResult.error, /Automatic fallbacks also failed:/u);
+assert.equal(exhaustedResult.failures?.length, 4);
 
 for (const selected of ["codex", "claude", "openrouter", "local"] as const) {
   const calls: string[] = [];
@@ -28,6 +52,8 @@ for (const selected of ["codex", "claude", "openrouter", "local"] as const) {
     assert.equal(input.model, `${selected}-model`);
     assert.match(prompt, /Increase the score to two/u);
     assert.match(prompt, /export const score = 1/u);
+    assert.match(prompt, /Project file map/u);
+    assert.match(prompt, /Canvas2D/u);
     return { raw: marked(revised), provider, model: `${selected}-model` };
   };
   const result = await requestPhantomPlayAiEdit(
@@ -86,5 +112,13 @@ const malformed = await requestPhantomPlayAiEdit(
 assert.equal(malformed.ok, false);
 if (malformed.ok) throw new Error("Malformed edit unexpectedly succeeded");
 assert.match(malformed.error, /required complete-file markers/u);
+
+const invalidJson = await requestPhantomPlayAiEdit(
+  { ...baseInput, filePath: "manifest.json", fileContent: "{}", provider: "local" },
+  { callProvider: async (provider) => ({ raw: marked("{not-json}"), provider, model: "local-test" }) },
+);
+assert.equal(invalidJson.ok, false);
+if (invalidJson.ok) throw new Error("Invalid JSON edit unexpectedly succeeded");
+assert.match(invalidJson.error, /revised JSON is invalid/u);
 
 console.log("PhantomPlay AI edit provider routing test passed.");

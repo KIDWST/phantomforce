@@ -181,13 +181,17 @@ fn ai_route_status_text(
     error: &Option<String>,
 ) -> String {
     if configured == Some(false) {
-        return "Needs configuration".to_string();
+        return error
+            .clone()
+            .unwrap_or_else(|| "Needs configuration".to_string());
     }
     if loading {
         return "Refreshing model list...".to_string();
     }
     if error.is_some() && provider == "openrouter" {
-        return "Needs configuration".to_string();
+        return error
+            .clone()
+            .unwrap_or_else(|| "Needs configuration".to_string());
     }
     if provider == "auto" {
         return "Automatic route will choose the model".to_string();
@@ -523,6 +527,51 @@ fn project_history_root(game: &GameEntry, file: &Path) -> PathBuf {
         .unwrap_or_else(|| game.path.clone())
 }
 
+fn ai_project_cwd(project_root: &Path) -> PathBuf {
+    if project_root.is_dir() {
+        project_root.to_path_buf()
+    } else {
+        project_root
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(phantomplay_live_root)
+    }
+}
+
+fn validate_ai_edit_candidate(path: &Path, original: &str, revised: &str) -> Result<(), String> {
+    if revised.trim().is_empty() {
+        return Err("Phantom AI returned an empty file, so nothing was saved.".to_string());
+    }
+    if revised.contains('\0') {
+        return Err("Phantom AI returned invalid file content, so nothing was saved.".to_string());
+    }
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if extension == "json" {
+        serde_json::from_str::<serde_json::Value>(revised)
+            .map_err(|error| format!("Phantom AI returned invalid JSON: {error}"))?;
+    }
+    if extension == "html"
+        && original.to_ascii_lowercase().contains("<html")
+        && !revised.to_ascii_lowercase().contains("<html")
+    {
+        return Err("Phantom AI dropped the HTML document root, so nothing was saved.".to_string());
+    }
+    Ok(())
+}
+
+fn ai_failure_activity(error: &str) -> String {
+    error
+        .split(" Automatic fallbacks also failed:")
+        .next()
+        .unwrap_or(error)
+        .trim()
+        .to_string()
+}
+
 fn import_zip_game_project(source: &Path) -> Result<String, String> {
     let base_id = source
         .file_stem()
@@ -575,6 +624,7 @@ pub(crate) fn Studio() -> Element {
 
     let mut ai_instruction = use_signal(String::new);
     let mut ai_busy = use_signal(|| false);
+    let mut ai_activity = use_signal(|| "Ready for direct game edits.".to_string());
     let mut ai_provider = use_signal(move || initial_ai_provider.clone());
     let mut ai_model = use_signal(move || initial_ai_model.clone());
     let mut ai_model_options = use_signal({
@@ -829,10 +879,12 @@ pub(crate) fn Studio() -> Element {
     let ask_ai = move |_| {
         let Some(game) = current_game(games, selected_game) else {
             status.set("Choose a project before asking Phantom AI.".to_string());
+            ai_activity.set("Select a project first.".to_string());
             return;
         };
         let Some(file_index) = selected_file() else {
             status.set("Choose a source file before asking Phantom AI.".to_string());
+            ai_activity.set("Select a source file first.".to_string());
             return;
         };
         let Some((path, file_label)) = files().get(file_index).cloned() else {
@@ -841,51 +893,99 @@ pub(crate) fn Studio() -> Element {
         let instruction = ai_instruction();
         if instruction.trim().is_empty() {
             status.set("Describe the change you want Phantom AI to make.".to_string());
+            ai_activity.set("Add an instruction for the exact change.".to_string());
             return;
         }
 
         let content = editor_content();
         let history_root = project_history_root(&game, &path);
+        let cwd = ai_project_cwd(&history_root).display().to_string();
+        let engine = game.runtime.renderer.clone();
+        let native_runtime = game.runtime.native;
+        let project_files = files()
+            .iter()
+            .map(|(_, label)| label.clone())
+            .take(160)
+            .collect::<Vec<_>>();
+        let disk_content_before = fs::read_to_string(&path).ok();
         let provider = ai_provider();
         let model = ai_model();
         ai_busy.set(true);
+        ai_activity.set(format!("Reviewing {file_label}..."));
         status.set(format!("Phantom AI is reviewing {file_label}."));
         let mut editor_content = editor_content;
         let mut dirty = dirty;
         let mut status = status;
         let mut ai_busy = ai_busy;
+        let mut ai_activity = ai_activity;
+        let mut reload_token = reload_token;
         spawn(async move {
-            match request_ai_edit(
-                game.id,
-                file_label.clone(),
-                content,
+            match request_ai_edit(AiEditRequestBody {
+                game_id: game.id,
+                file_path: file_label.clone(),
+                file_content: content.clone(),
                 instruction,
+                cwd,
+                engine,
+                project_files,
                 provider,
                 model,
-            )
+            })
             .await
             {
-                Ok(result) => match project_history::write_file(
-                    &history_root,
-                    &path,
-                    result.new_content.as_bytes(),
-                    format!("Phantom AI edit {file_label}"),
-                ) {
-                    Ok(summary) => {
-                        editor_content.set(result.new_content);
-                        dirty.set(false);
-                        status.set(format!(
-                            "Phantom AI updated and saved {file_label} through {} / {} with recoverable history ({} changed file). The game hot reloads with its dev save-state.",
-                            result.provider,
-                            result.model,
-                            summary.added + summary.replaced,
-                        ));
+                Ok(result) if !result.changed || result.new_content == content => {
+                    ai_activity.set("No file change returned.".to_string());
+                    status.set(format!(
+                        "Phantom AI reviewed {file_label} but returned no file changes."
+                    ));
+                }
+                Ok(_) if fs::read_to_string(&path).ok() != disk_content_before => {
+                    ai_activity.set("Source changed while AI worked. Nothing saved.".to_string());
+                    status.set(format!(
+                        "{file_label} changed while Phantom AI was working. The AI result was not saved; review the current file and retry."
+                    ));
+                }
+                Ok(result) => {
+                    ai_activity.set("Validating and saving the revision...".to_string());
+                    match validate_ai_edit_candidate(&path, &content, &result.new_content).and_then(
+                        |_| {
+                            project_history::write_file(
+                                &history_root,
+                                &path,
+                                result.new_content.as_bytes(),
+                                format!("Phantom AI edit {file_label}"),
+                            )
+                        },
+                    ) {
+                        Ok(summary) => {
+                            editor_content.set(result.new_content);
+                            dirty.set(false);
+                            reload_token.set(reload_token().wrapping_add(1));
+                            let runtime_receipt = if native_runtime {
+                                ai_activity
+                                    .set("Saved. Native rebuild or relaunch is ready.".to_string());
+                                "The source is saved; rebuild or relaunch the native game to load compiled changes."
+                            } else {
+                                ai_activity.set("Saved and hot reloaded.".to_string());
+                                "The running preview was hot reloaded immediately."
+                            };
+                            status.set(format!(
+                                "Phantom AI updated {file_label} through {} / {} and saved one recoverable revision ({} changed file). {runtime_receipt}",
+                                result.provider,
+                                result.model,
+                                summary.added + summary.replaced,
+                            ));
+                        }
+                        Err(error) => {
+                            ai_activity.set("Edit held. The file was not saved.".to_string());
+                            status.set(format!(
+                                "Phantom AI returned an edit, but saving {file_label} failed: {error}"
+                            ));
+                        }
                     }
-                    Err(error) => status.set(format!(
-                        "Phantom AI returned an edit, but saving {file_label} failed: {error}"
-                    )),
-                },
+                }
                 Err(error) => {
+                    ai_activity.set(ai_failure_activity(&error));
                     status.set(format!("Phantom AI could not edit {file_label}: {error}"))
                 }
             }
@@ -1519,6 +1619,11 @@ pub(crate) fn Studio() -> Element {
                             }
                             small { "Active target: {selected_label}" }
                         }
+                        div {
+                            class: if ai_busy() { "ai-step-state is-working" } else { "ai-step-state" },
+                            Activity { size: 13 }
+                            span { "{ai_activity}" }
+                        }
                         div { class: "ai-route-controls",
                             label { class: "prompt-field",
                                 span { "AI ROUTE" }
@@ -1627,7 +1732,7 @@ pub(crate) fn Studio() -> Element {
                             onclick: ask_ai,
                             WandSparkles { size: 15 }
                             span {
-                                if ai_busy() { "Applying change..." } else { "Apply to active file" }
+                                if ai_busy() { "Applying to game..." } else { "Apply to game" }
                             }
                         }
                         div { class: "target-path",
@@ -2048,6 +2153,9 @@ const STUDIO_STYLE: &str = r#"
     }
     * { box-sizing: border-box; }
     button, input, textarea { font: inherit; letter-spacing: 0; }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
     button:focus-visible,
     input:focus-visible,
     textarea:focus-visible {
@@ -2943,6 +3051,38 @@ const STUDIO_STYLE: &str = r#"
     }
     .agent-state.is-offline { border-color: rgba(255, 112, 130, 0.26); }
     .agent-state.is-offline .state-dot { background: var(--rose); }
+    .ai-step-state {
+        min-width: 0;
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        align-items: center;
+        gap: 7px;
+        min-height: 34px;
+        margin: -7px 0 12px;
+        padding: 8px 10px;
+        border: 1px solid rgba(86, 199, 255, 0.18);
+        border-radius: 6px;
+        background: rgba(86, 199, 255, 0.035);
+        color: #92a1b2;
+        font: 9px/1.35 "Cascadia Code", Consolas, monospace;
+    }
+    .ai-step-state svg {
+        color: var(--cyan);
+    }
+    .ai-step-state span {
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .ai-step-state.is-working {
+        border-color: rgba(89, 242, 170, 0.28);
+        background: rgba(89, 242, 170, 0.045);
+        color: #d0e7dc;
+    }
+    .ai-step-state.is-working svg {
+        color: var(--mint);
+        animation: spin 1.05s linear infinite;
+    }
     .tool-section-label {
         display: flex;
         align-items: center;
@@ -3495,6 +3635,41 @@ const STUDIO_STYLE: &str = r#"
 mod tests {
     use super::*;
 
+    #[test]
+    fn ai_edit_candidate_rejects_empty_and_broken_json() {
+        assert!(validate_ai_edit_candidate(Path::new("game.js"), "const x = 1;", "  ").is_err());
+        assert!(validate_ai_edit_candidate(Path::new("manifest.json"), "{}", "{broken}").is_err());
+        assert!(
+            validate_ai_edit_candidate(Path::new("manifest.json"), "{}", "{\"ok\":true}").is_ok()
+        );
+    }
+
+    #[test]
+    fn ai_edit_candidate_preserves_html_document_boundary() {
+        let original = "<!doctype html><html><body>game</body></html>";
+        assert!(
+            validate_ai_edit_candidate(Path::new("index.html"), original, "<body>partial</body>")
+                .is_err()
+        );
+        assert!(
+            validate_ai_edit_candidate(
+                Path::new("index.html"),
+                original,
+                "<!doctype html><html><body>updated</body></html>"
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn ai_failure_activity_keeps_the_specific_primary_cause() {
+        let message = "OpenRouter API key invalid or expired (HTTP 401). Replace it in PhantomForce Settings → Bridges & Connectors, then retry. Automatic fallbacks also failed: Codex desktop fallback could not start.";
+        assert_eq!(
+            ai_failure_activity(message),
+            "OpenRouter API key invalid or expired (HTTP 401). Replace it in PhantomForce Settings → Bridges & Connectors, then retry."
+        );
+    }
+
     fn temp_import_dir(name: &str) -> PathBuf {
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -3522,6 +3697,24 @@ mod tests {
             ai_route_status_text("openrouter", "model-a", &options, Some(true), false, &None);
 
         assert_eq!(status, "Selected model: Model A");
+    }
+
+    #[test]
+    fn route_status_explains_an_invalid_openrouter_key() {
+        let error = Some(
+            "OpenRouter API key invalid or expired (HTTP 401). Replace it in PhantomForce Settings → Bridges & Connectors."
+                .to_string(),
+        );
+        let status = ai_route_status_text(
+            "openrouter",
+            "deepseek/deepseek-v4-flash",
+            &[],
+            Some(false),
+            false,
+            &error,
+        );
+
+        assert_eq!(status, error.unwrap());
     }
 
     #[test]

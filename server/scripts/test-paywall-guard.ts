@@ -39,6 +39,7 @@ assert(requiresWrite("POST", "/client-access-workflow/snapshot") === true, "snap
 assert(requiresWrite("DELETE", "/anything") === true, "DELETE needs write");
 assert(requiresWrite("POST", "/some/brand-new/write-route") === true, "unknown mutation needs write (fail closed)");
 assert(requiresWrite("POST", "/api/phantomplay/ai-edit/anything") === true, "only the exact PhantomPlay desktop edit route is exempt");
+assert(requiresWrite("POST", "/api/phantomplay/ai-edit-anything") === true, "desktop exemption is exact and fail closed");
 
 // ---- preHandler behaviour ----
 const freeSession = { id: "gateway:member@acme.com" };            // signed in, view only

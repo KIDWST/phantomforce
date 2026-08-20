@@ -1702,6 +1702,9 @@ struct AiEditRequestBody {
     file_content: String,
     instruction: String,
     cwd: String,
+    engine: String,
+    #[serde(rename = "projectFiles")]
+    project_files: Vec<String>,
     provider: String,
     model: String,
 }
@@ -1714,31 +1717,18 @@ struct AiEditResponseBody {
     provider: Option<String>,
     model: Option<String>,
     error: Option<String>,
+    #[serde(default)]
+    changed: bool,
 }
 
 struct AiEditOutput {
     new_content: String,
     provider: String,
     model: String,
+    changed: bool,
 }
 
-async fn request_ai_edit(
-    game_id: String,
-    file_path: String,
-    file_content: String,
-    instruction: String,
-    provider: String,
-    model: String,
-) -> Result<AiEditOutput, String> {
-    let body = AiEditRequestBody {
-        game_id,
-        file_path,
-        file_content,
-        instruction,
-        cwd: phantomplay_live_root().display().to_string(),
-        provider,
-        model,
-    };
+async fn request_ai_edit(body: AiEditRequestBody) -> Result<AiEditOutput, String> {
     let client = reqwest::Client::new();
     let resp = client
         .post(format!(
@@ -1751,10 +1741,17 @@ async fn request_ai_edit(
         .map_err(|e| {
             format!("Couldn't reach the PhantomForce API on :5190 ({e}). Is it running?")
         })?;
-    let parsed: AiEditResponseBody = resp
-        .json()
+    let response_status = resp.status();
+    let response_text = resp
+        .text()
         .await
-        .map_err(|e| format!("Bad response from AI edit endpoint: {e}"))?;
+        .map_err(|e| format!("Could not read the AI edit response: {e}"))?;
+    let parsed: AiEditResponseBody = serde_json::from_str(&response_text).map_err(|e| {
+        format!(
+            "Bad response from AI edit endpoint (HTTP {}): {e}",
+            response_status.as_u16()
+        )
+    })?;
     if parsed.ok {
         let new_content = parsed
             .new_content
@@ -1763,11 +1760,17 @@ async fn request_ai_edit(
             new_content,
             provider: parsed.provider.unwrap_or_else(|| "auto".to_string()),
             model: parsed.model.unwrap_or_else(|| "default".to_string()),
+            changed: parsed.changed,
         })
     } else {
-        Err(parsed
+        let message = parsed
             .error
-            .unwrap_or_else(|| "AI edit failed for an unknown reason.".to_string()))
+            .unwrap_or_else(|| "AI edit failed for an unknown reason.".to_string());
+        Err(if response_status.as_u16() == 401 {
+            "The local PhantomPlay AI bridge rejected the desktop session. Restart the PhantomForce API and PhantomPlay, then retry.".to_string()
+        } else {
+            message
+        })
     }
 }
 
@@ -2635,14 +2638,21 @@ fn App() -> Element {
         let mut ai_busy = ai_busy;
         let mut dirty = dirty;
         spawn(async move {
-            match request_ai_edit(
-                game.id.clone(),
-                file_label.clone(),
-                content,
+            match request_ai_edit(AiEditRequestBody {
+                game_id: game.id.clone(),
+                file_path: file_label.clone(),
+                file_content: content,
                 instruction,
-                "auto".to_string(),
-                String::new(),
-            )
+                cwd: game.path.display().to_string(),
+                engine: game.runtime.renderer.clone(),
+                project_files: files()
+                    .iter()
+                    .map(|(_, label)| label.clone())
+                    .take(160)
+                    .collect(),
+                provider: "auto".to_string(),
+                model: String::new(),
+            })
             .await
             {
                 Ok(result) => {
