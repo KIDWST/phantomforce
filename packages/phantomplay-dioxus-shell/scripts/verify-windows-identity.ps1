@@ -52,46 +52,95 @@ foreach ($field in $expectedFields.GetEnumerator()) {
 
 Add-Type -AssemblyName System.Drawing
 
-function Test-IconsEqual {
+function Get-IcoBitmap {
     param(
-        [Parameter(Mandatory)][System.Drawing.Icon]$Left,
-        [Parameter(Mandatory)][System.Drawing.Icon]$Right
+        [Parameter(Mandatory)][string]$Path,
+        [int]$Width = 32,
+        [int]$Height = 32
     )
 
-    $leftBitmap = $Left.ToBitmap()
-    $rightBitmap = $Right.ToBitmap()
-    try {
-        if ($leftBitmap.Size -ne $rightBitmap.Size) {
-            return $false
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 6 -or [BitConverter]::ToUInt16($bytes, 2) -ne 1) {
+        throw "Invalid ICO file: $Path"
+    }
+
+    $entryCount = [BitConverter]::ToUInt16($bytes, 4)
+    for ($index = 0; $index -lt $entryCount; $index++) {
+        $entryOffset = 6 + ($index * 16)
+        if ($entryOffset + 16 -gt $bytes.Length) {
+            break
         }
-        for ($y = 0; $y -lt $leftBitmap.Height; $y++) {
-            for ($x = 0; $x -lt $leftBitmap.Width; $x++) {
-                if ($leftBitmap.GetPixel($x, $y).ToArgb() -ne $rightBitmap.GetPixel($x, $y).ToArgb()) {
-                    return $false
-                }
+
+        $entryWidth = if ($bytes[$entryOffset] -eq 0) { 256 } else { [int]$bytes[$entryOffset] }
+        $entryHeight = if ($bytes[$entryOffset + 1] -eq 0) { 256 } else { [int]$bytes[$entryOffset + 1] }
+        if ($entryWidth -ne $Width -or $entryHeight -ne $Height) {
+            continue
+        }
+
+        $imageLength = [BitConverter]::ToUInt32($bytes, $entryOffset + 8)
+        $imageOffset = [BitConverter]::ToUInt32($bytes, $entryOffset + 12)
+        if ($imageOffset + $imageLength -gt $bytes.Length) {
+            throw "Invalid ICO image payload: $Path"
+        }
+
+        $imageBytes = [byte[]]::new($imageLength)
+        [Array]::Copy($bytes, [long]$imageOffset, $imageBytes, 0, [long]$imageLength)
+        $stream = [System.IO.MemoryStream]::new($imageBytes, $false)
+        try {
+            $image = [System.Drawing.Image]::FromStream($stream)
+            try {
+                # Image.FromStream keeps a lazy dependency on the stream. Clone
+                # the decoded frame before closing the ICO payload.
+                return [System.Drawing.Bitmap]$image.Clone()
+            }
+            finally {
+                $image.Dispose()
             }
         }
-        return $true
+        finally {
+            $stream.Dispose()
+        }
     }
-    finally {
-        $leftBitmap.Dispose()
-        $rightBitmap.Dispose()
+
+    throw "ICO file has no ${Width}x${Height} image: $Path"
+}
+
+function Test-BitmapsEqual {
+    param(
+        [Parameter(Mandatory)][System.Drawing.Bitmap]$Left,
+        [Parameter(Mandatory)][System.Drawing.Bitmap]$Right
+    )
+
+    if ($Left.Width -ne $Right.Width -or $Left.Height -ne $Right.Height) {
+        return $false
     }
+    for ($y = 0; $y -lt $Left.Height; $y++) {
+        for ($x = 0; $x -lt $Left.Width; $x++) {
+            if ($Left.GetPixel($x, $y).ToArgb() -ne $Right.GetPixel($x, $y).ToArgb()) {
+                return $false
+            }
+        }
+    }
+    return $true
 }
 
 $embeddedIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($Executable)
-$sourceIcon = [System.Drawing.Icon]::new($sourceIconPath, 32, 32)
+$embeddedBitmap = $null
+$sourceBitmap = $null
 try {
     if (-not $embeddedIcon) {
         throw 'The PhantomPlay executable has no embedded Windows icon.'
     }
-    if (-not (Test-IconsEqual -Left $embeddedIcon -Right $sourceIcon)) {
+    $embeddedBitmap = $embeddedIcon.ToBitmap()
+    $sourceBitmap = Get-IcoBitmap -Path $sourceIconPath
+    if (-not (Test-BitmapsEqual -Left $embeddedBitmap -Right $sourceBitmap)) {
         throw 'The PhantomPlay executable icon does not match assets\phantomplay.ico.'
     }
 }
 finally {
+    if ($embeddedBitmap) { $embeddedBitmap.Dispose() }
+    if ($sourceBitmap) { $sourceBitmap.Dispose() }
     if ($embeddedIcon) { $embeddedIcon.Dispose() }
-    $sourceIcon.Dispose()
 }
 
 $nsis = Get-Content -LiteralPath $InstallerScript -Raw

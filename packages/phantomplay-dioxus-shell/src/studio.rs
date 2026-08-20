@@ -3701,10 +3701,8 @@ mod tests {
 
     #[test]
     fn route_status_explains_an_invalid_openrouter_key() {
-        let error = Some(
-            "OpenRouter API key invalid or expired (HTTP 401). Replace it in PhantomForce Settings → Bridges & Connectors."
-                .to_string(),
-        );
+        let expected = "OpenRouter API key invalid or expired (HTTP 401). Replace it in PhantomForce Settings → Bridges & Connectors.";
+        let error = Some(expected.to_string());
         let status = ai_route_status_text(
             "openrouter",
             "deepseek/deepseek-v4-flash",
@@ -3714,7 +3712,7 @@ mod tests {
             &error,
         );
 
-        assert_eq!(status, error.unwrap());
+        assert_eq!(status, expected);
     }
 
     #[test]
