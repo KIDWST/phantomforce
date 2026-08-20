@@ -2,7 +2,7 @@
    Movable, page-aware Phantom system: preference-aware, drag-safe, and
    tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-176";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-177";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -12,7 +12,7 @@ import {
   loadCompanionPrefs,
   saveCompanionPagePlacement,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260819-176";
+} from "./companion-preferences.js?v=phantom-live-20260819-177";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -108,6 +108,8 @@ function createBuddyController() {
   let resizeStart = null;
   let grabDX = 0;
   let grabDY = 0;
+  let dragPointerStartX = 0;
+  let dragPointerStartY = 0;
   let state = "docked";
   let stateUntil = 0;
   let pulse = 0;
@@ -858,6 +860,8 @@ function createBuddyController() {
       }
       grabDX = event.clientX - x;
       grabDY = event.clientY - y;
+      dragPointerStartX = event.clientX;
+      dragPointerStartY = event.clientY;
       canvas.setPointerCapture(event.pointerId);
       layer.classList.add("is-grabbed");
       setState("dragged", 99999);
@@ -869,7 +873,7 @@ function createBuddyController() {
       const ny = event.clientY - grabDY;
       vx = (nx - x) * 0.72;
       vy = (ny - y) * 0.72;
-      if (Math.hypot(nx - x, ny - y) > 2.5) dragged = true;
+      if (Math.hypot(event.clientX - dragPointerStartX, event.clientY - dragPointerStartY) > 2.5) dragged = true;
       x = nx;
       y = ny;
       clampToSafeZone();
@@ -879,10 +883,10 @@ function createBuddyController() {
       dragging = false;
       layer.classList.remove("is-grabbed");
       if (event?.pointerId != null) { try { canvas.releasePointerCapture(event.pointerId); } catch {} }
+      vx = 0;
+      vy = 0;
       if (dragged) {
         docked = false;
-        vx = 0;
-        vy = 0;
         tx = x;
         ty = y;
         saveCurrentPagePlacement();
