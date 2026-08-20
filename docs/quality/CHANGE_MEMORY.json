@@ -2210,6 +2210,46 @@
           "description": "The authenticated catalog cannot resurrect the stale 1.x or 2.x game."
         }
       ]
+    },
+    {
+      "id": "consumer-bridge-and-active-connectors-floor",
+      "status": "active",
+      "title": "Consumers can manage bridges and see active connections first",
+      "ownerDecision": "Settings must keep a dedicated Bridges section beside Connections. ChatGPT Plus and Higgsfield bridges use their real status routes, never claim an active connection before confirmation, and explain what each bridge powers. Connections must lead with the separately labeled PhantomForce brain and PhantomBot brain, followed by configured active services before the available connector catalog. Usage remains truthful: ChatGPT balance is Not reported unless the provider reports it, while Media Lab workspace production credits are explicitly distinct from Higgsfield provider billing. New bridge setup may be guided by PhantomBot or a manual checklist, but browser storage must never hold provider credentials.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/settings.js",
+          "pattern": "id: \"bridge\", label: \"Bridges\", category: \"Connections\"[\\s\\S]*\\/phantom-ai\\/agent-assist\\/status[\\s\\S]*\\/api\\/creative-engine\\/status",
+          "description": "The dedicated Bridges section verifies ChatGPT and Higgsfield through their real health routes."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "PhantomForce brain[\\s\\S]*PhantomBot brain[\\s\\S]*ChatGPT Plus Bridge[\\s\\S]*Usage remaining<\\/dt><dd>Not reported by ChatGPT[\\s\\S]*Higgsfield Bridge[\\s\\S]*Credits remaining",
+          "description": "Bridge cards remain easy to understand, expose the two brain routes separately, and report only supported usage facts."
+        },
+        {
+          "file": "app/js/connection-center.js",
+          "pattern": "Active first[\\s\\S]*Configured connections[\\s\\S]*Available connectors[\\s\\S]*Add a business account",
+          "description": "Configured services stay above the available connector catalog."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "pf\\.phantombot\\.bridgePrompt\\.v1[\\s\\S]*Bridge setup brief is ready",
+          "description": "The guided bridge path hands a reviewable setup brief to PhantomBot without auto-submitting it."
+        },
+        {
+          "file": "scripts/test-bridge-center.mjs",
+          "pattern": "Bridges must be a dedicated Connections tab[\\s\\S]*ChatGPT usage limits must not be invented[\\s\\S]*Active connections must sort before checking or attention states",
+          "description": "The focused regression gate protects active-first ordering and truthful provider usage."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/settings.js",
+          "pattern": "ChatGPT (?:credits|balance) remaining<\\/dt><dd>(?:0|Unlimited)",
+          "description": "The UI cannot invent a ChatGPT credit balance or unlimited entitlement."
+        }
+      ]
     }
   ]
 }

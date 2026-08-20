@@ -1,5 +1,5 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260819-184";
-import { createLatestOperation, normalizeOperationStatus } from "./product-grammar.js?v=phantom-live-20260819-184";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260819-185";
+import { createLatestOperation, normalizeOperationStatus } from "./product-grammar.js?v=phantom-live-20260819-185";
 
 const PULSE_TTL_MS = 45_000;
 const BRAIN_CONTRACT_TTL_MS = 45_000;

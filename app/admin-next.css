@@ -1255,6 +1255,138 @@ html[data-command-os="2040"] .page-worker-output {
 
 .settings-operator .set-connection-center { display: grid; gap: 12px; }
 .settings-operator .set-connect-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.settings-operator .set-connect-overview,
+.settings-operator .set-bridges-center { display: grid; gap: 12px; min-width: 0; }
+.settings-operator .set-connect-brains,
+.settings-operator .set-connect-active {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--pf-line);
+  border-radius: 7px;
+  background: rgba(2, 9, 6, .74);
+}
+.settings-operator .set-connect-active {
+  border-color: rgba(24, 242, 143, .25);
+  background: linear-gradient(135deg, rgba(24, 242, 143, .045), rgba(2, 9, 6, .78) 58%);
+}
+.settings-operator .set-connect-section-head,
+.settings-operator .set-connect-catalog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.settings-operator .set-connect-catalog-head { display: block; padding: 12px 2px 2px; }
+.settings-operator .set-connect-section-head h3,
+.settings-operator .set-connect-catalog-head h3 { margin: 0; color: var(--pf-ink); font-size: 15px; }
+.settings-operator .set-connect-section-head > span {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid rgba(24, 242, 143, .2);
+  border-radius: 999px;
+  color: var(--pf-green);
+  font: 700 8px "Spline Sans Mono", monospace;
+  text-transform: uppercase;
+}
+.settings-operator .set-connect-catalog-head p:last-child { margin: 5px 0 0; color: var(--pf-muted); font-size: 10px; }
+.settings-operator .set-connect-brain-grid,
+.settings-operator .set-connect-active-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.settings-operator .set-connect-brain,
+.settings-operator .set-connect-active-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 6px;
+  background: #020805;
+}
+.settings-operator .set-connect-brain { grid-template-columns: auto minmax(0, 1fr) auto; }
+.settings-operator .set-connect-brain .btn,
+.settings-operator .set-connect-active-card .btn { grid-column: 2 / -1; justify-self: start; }
+.settings-operator .set-connect-brain > div,
+.settings-operator .set-connect-active-card > div { display: grid; gap: 3px; min-width: 0; }
+.settings-operator .set-connect-brain p { margin: 0; color: var(--pf-green); font: 700 8px "Spline Sans Mono", monospace; text-transform: uppercase; }
+.settings-operator .set-connect-brain b,
+.settings-operator .set-connect-active-card b { overflow-wrap: anywhere; color: var(--pf-ink); font-size: 12px; }
+.settings-operator .set-connect-brain i,
+.settings-operator .set-connect-active-card i,
+.settings-operator .set-connect-active-card small { color: var(--pf-muted); font-size: 9px; font-style: normal; line-height: 1.4; }
+.settings-operator .set-connect-live-dot { width: 9px; height: 9px; border-radius: 50%; background: #76877f; box-shadow: 0 0 0 4px rgba(118, 135, 127, .08); }
+.settings-operator :where(.set-connect-brain, .set-connect-active-card).is-connected .set-connect-live-dot,
+.settings-operator .set-connect-brain.is-connected > .set-connect-live-dot { background: var(--pf-green); box-shadow: 0 0 0 4px rgba(24, 242, 143, .09), 0 0 14px rgba(24, 242, 143, .22); }
+.settings-operator .set-connect-active-card.is-connected { border-color: rgba(24, 242, 143, .3); }
+.settings-operator .set-connect-state-pill {
+  align-self: start;
+  padding: 5px 7px;
+  border: 1px solid rgba(24, 242, 143, .2);
+  border-radius: 999px;
+  color: var(--pf-green);
+  font: 700 7px "Spline Sans Mono", monospace;
+  text-transform: uppercase;
+}
+.settings-operator :where(.set-connect-brain, .set-connect-active-card).is-attention .set-connect-state-pill { border-color: rgba(255, 112, 133, .32); color: #ff91a2; }
+
+/* Bridges are distinct from OAuth/business connectors because they power
+   internal AI and creative routes. Both still share the active-first truth. */
+.settings-operator .set-bridges-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.settings-operator .set-bridge-route-map { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.settings-operator .set-bridge-route {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(24, 242, 143, .2);
+  border-radius: 7px;
+  background: linear-gradient(120deg, rgba(24, 242, 143, .045), rgba(2, 9, 6, .78));
+}
+.settings-operator .set-bridge-route h4 { margin: 0; color: var(--pf-ink); font-size: 13px; overflow-wrap: anywhere; }
+.settings-operator .set-bridge-route p:last-child { margin: 4px 0 0; color: var(--pf-muted); font-size: 9px; line-height: 1.4; }
+.settings-operator .set-bridge-route.is-connected .set-connect-live-dot { background: var(--pf-green); box-shadow: 0 0 0 4px rgba(24, 242, 143, .09), 0 0 14px rgba(24, 242, 143, .22); }
+.settings-operator .set-bridge-product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+.settings-operator .set-bridge-product {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--pf-line);
+  border-radius: 9px;
+  background: radial-gradient(circle at 100% 0, rgba(103, 88, 255, .1), transparent 34%), #020805;
+}
+.settings-operator .set-bridge-product.is-active { border-color: rgba(24, 242, 143, .34); box-shadow: inset 3px 0 var(--pf-green); }
+.settings-operator .set-bridge-product.is-attention { border-color: rgba(245, 183, 67, .3); }
+.settings-operator .set-bridge-product > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 11px; align-items: center; min-width: 0; }
+.settings-operator .set-bridge-product h3 { margin: 0; color: var(--pf-ink); font-size: 17px; }
+.settings-operator .set-bridge-product > p { margin: 0; color: var(--pf-muted); font-size: 10.5px; line-height: 1.55; }
+.settings-operator .set-bridge-logo { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid rgba(24, 242, 143, .25); border-radius: 9px; background: rgba(24, 242, 143, .075); color: var(--pf-green); font: 800 12px "Spline Sans Mono", monospace; }
+.settings-operator .set-bridge-logo.is-higgsfield { border-color: rgba(139, 123, 255, .38); background: rgba(139, 123, 255, .1); color: #b9adff; }
+.settings-operator .set-bridge-state { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--pf-line); border-radius: 999px; color: var(--pf-muted); font: 700 7px "Spline Sans Mono", monospace; text-transform: uppercase; }
+.settings-operator .set-bridge-state i { width: 7px; height: 7px; border-radius: 50%; background: #7b8c84; }
+.settings-operator .set-bridge-state.is-active { border-color: rgba(24, 242, 143, .28); color: var(--pf-green); }
+.settings-operator .set-bridge-state.is-active i { background: var(--pf-green); box-shadow: 0 0 10px rgba(24, 242, 143, .45); }
+.settings-operator .set-bridge-state.is-attention { border-color: rgba(245, 183, 67, .3); color: #f5c767; }
+.settings-operator .set-bridge-state.is-attention i { background: #f5b743; }
+.settings-operator .set-bridge-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin: 0; border: 1px solid var(--pf-line); border-radius: 6px; background: var(--pf-line); }
+.settings-operator .set-bridge-metrics > div { min-width: 0; padding: 10px; background: #010604; }
+.settings-operator .set-bridge-metrics dt { color: #71887d; font: 700 7px "Spline Sans Mono", monospace; text-transform: uppercase; }
+.settings-operator .set-bridge-metrics dd { margin: 4px 0 0; color: var(--pf-ink); font-size: 11px; overflow-wrap: anywhere; }
+.settings-operator .set-bridge-credit-note { padding-left: 10px; border-left: 2px solid rgba(139, 123, 255, .46); }
+.settings-operator .set-bridge-builder { display: grid; gap: 14px; }
+.settings-operator .set-bridge-ai-form { display: grid; grid-template-columns: minmax(160px, .7fr) minmax(220px, 1.3fr) auto; gap: 10px; align-items: end; min-width: 0; }
+.settings-operator .set-bridge-manual-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.settings-operator .set-bridge-manual-grid article { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px; border: 1px solid var(--pf-line); border-radius: 6px; background: rgba(255, 255, 255, .014); }
+.settings-operator .set-bridge-manual-grid article > span { color: var(--pf-green); font: 800 9px "Spline Sans Mono", monospace; }
+.settings-operator .set-bridge-manual-grid article > div { display: grid; gap: 3px; min-width: 0; }
+.settings-operator .set-bridge-manual-grid b { color: var(--pf-ink); font-size: 11px; }
+.settings-operator .set-bridge-manual-grid i { color: var(--pf-muted); font-size: 9px; font-style: normal; line-height: 1.4; }
+.settings-operator .set-bridge-manual-grid .btn { grid-column: 1 / -1; justify-self: start; }
 .settings-operator .set-connect-group {
   overflow: hidden;
   border: 1px solid var(--pf-line);
@@ -1334,6 +1466,11 @@ html[data-command-os="2040"] .page-worker-output {
   .settings-operator .cust-ai,
   .settings-operator .cust-hero { grid-template-columns: 1fr; }
   .settings-operator .set-connect-grid { grid-template-columns: 1fr; }
+  .settings-operator .set-connect-brain-grid,
+  .settings-operator .set-connect-active-grid,
+  .settings-operator .set-bridge-route-map,
+  .settings-operator .set-bridge-product-grid { grid-template-columns: 1fr; }
+  .settings-operator .set-bridge-manual-grid { grid-template-columns: 1fr; }
   .settings-operator .org-summary,
   .settings-operator .org-type-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -1364,7 +1501,18 @@ html[data-command-os="2040"] .page-worker-output {
   .settings-operator .org-summary,
   .settings-operator .org-type-picker { grid-template-columns: 1fr; }
   .settings-operator .set-connect-hero,
+  .settings-operator .set-bridges-hero,
   .settings-operator .cust-publish { align-items: stretch; flex-direction: column; }
+  .settings-operator .set-bridge-ai-form { grid-template-columns: 1fr; }
+  .settings-operator .set-bridge-route,
+  .settings-operator .set-bridge-product > header,
+  .settings-operator .set-connect-brain,
+  .settings-operator .set-connect-active-card { grid-template-columns: auto minmax(0, 1fr); }
+  .settings-operator .set-bridge-route .btn,
+  .settings-operator .set-bridge-product > header .set-bridge-state,
+  .settings-operator .set-connect-brain .set-connect-state-pill,
+  .settings-operator .set-connect-active-card .set-connect-state-pill { grid-column: 2; justify-self: start; }
+  .settings-operator .set-bridge-metrics { grid-template-columns: 1fr; }
   .settings-operator .cust-ai form { grid-template-columns: 1fr; }
   .settings-operator .cust-publish-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
 }

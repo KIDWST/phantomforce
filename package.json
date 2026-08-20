@@ -15,6 +15,7 @@
     "test:dashboard-chat": "node scripts/test-dashboard-chat-quality.mjs && npm run test:instant-chat --workspace @phantomforce/server && npm run test:instant-chat:tools --workspace @phantomforce/server",
     "test:ai-runtime": "npm run test:ai-runtime --workspace @phantomforce/server && node scripts/test-ai-runtime-ui.mjs",
     "test:customer-connections": "npm run test:customer-connections --workspace @phantomforce/server && node scripts/test-customer-connections-ui.mjs",
+    "test:bridge-center": "node scripts/test-bridge-center.mjs",
     "test:auth-boundaries": "node scripts/test-auth-boundaries.mjs",
     "test:memory": "node scripts/test-memory-retention.mjs",
     "test:page-worker": "node scripts/test-page-worker.mjs",

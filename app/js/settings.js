@@ -1,13 +1,13 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260819-184";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260819-184";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260819-184";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-184";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260819-184";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-184";
-import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-184";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260819-185";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260819-185";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260819-185";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-185";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260819-185";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-185";
+import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-185";
 import {
   AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
@@ -20,16 +20,18 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260819-184";
+} from "./ai-runtime.js?v=phantom-live-20260819-185";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
+const PHANTOMBOT_BRIDGE_PROMPT_KEY = "pf.phantombot.bridgePrompt.v1";
+const MEDIA_LAB_CONFIG_KEY = "pf.medialab.v1";
+const DEFAULT_MEDIA_CREDITS = 480;
 
 const SETTINGS_TABS = [
   { id: "model", label: "Gateway & brain", category: "AI Brain" },
   { id: "loop", label: "Loop routing", category: "AI Brain" },
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
-  { id: "bridge", label: "ChatGPT Bridge", category: "AI Brain" },
   { id: "clientsetup", label: "Workspace setup", category: "Workspace" },
   { id: "organization", label: "Organization", category: "Workspace" },
   { id: "plan", label: "Plan & access", category: "Workspace" },
@@ -37,6 +39,7 @@ const SETTINGS_TABS = [
   { id: "modules", label: "Workspace Modules", category: "Workspace" },
   { id: "companion", label: "Companion", category: "Workspace" },
   { id: "media", label: "Connections", category: "Connections" },
+  { id: "bridge", label: "Bridges", category: "Connections" },
 ];
 
 const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Connections"];
@@ -44,6 +47,8 @@ const SETTINGS_CONTEXT = {
   clientsetup: { title: "Workspace setup", note: "Configure the organization before lead, content, approval, and reporting work starts." },
   organization: { title: "Organization & access", note: "Manage employees, roles, invitations, and module access for this workspace." },
   plan: { title: "Plan & access", note: "Review workspace entitlement state without mixing it into the client pipeline." },
+  bridge: { title: "Bridges", note: "Manage subscription-backed AI and creative connections without exposing provider credentials." },
+  media: { title: "Connectors", note: "See active brain routes and connected business accounts first, then add anything else your workspace needs." },
 };
 
 function loadSettingsTab() {
@@ -153,7 +158,14 @@ let agentAssistBridgeStatus = {
   error: null,
   status: null,
 };
+let higgsfieldBridgeStatus = {
+  loaded: false,
+  loading: false,
+  error: null,
+  status: null,
+};
 let chatGptAccountMessage = "";
+let bridgeBuilderMessage = "";
 
 async function openChatGptAccountPage(action = "switch") {
   const url = action === "logout" ? "https://chatgpt.com/auth/logout" : "https://chatgpt.com/";
@@ -170,6 +182,21 @@ async function openChatGptAccountPage(action = "switch") {
       : "ChatGPT opened. Use its account menu to switch or add an account, then return and refresh the bridge.";
   } catch (error) {
     chatGptAccountMessage = error instanceof Error ? error.message : "Could not open ChatGPT account controls.";
+  }
+}
+
+async function openExternalAccountPage(url, label) {
+  try {
+    if (window.PhantomBotDesktop?.openExternal) {
+      const result = await window.PhantomBotDesktop.openExternal(url);
+      if (result?.ok === false) throw new Error(result.error || `Could not open ${label}.`);
+    } else {
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) throw new Error(`Your browser blocked the ${label} window.`);
+    }
+    bridgeBuilderMessage = `${label} opened in a secure window.`;
+  } catch (error) {
+    bridgeBuilderMessage = error instanceof Error ? error.message : `Could not open ${label}.`;
   }
 }
 
@@ -446,10 +473,48 @@ async function refreshAgentAssistBridge(el, opts, rerender = true) {
   if (rerender && el?.isConnected) renderOperatorSettings(el, opts);
 }
 
+async function refreshHiggsfieldBridge(el, opts, rerender = true) {
+  if (higgsfieldBridgeStatus.loading) return;
+  higgsfieldBridgeStatus = { ...higgsfieldBridgeStatus, loading: true, error: null };
+  try {
+    const payload = await moduleApi("/api/creative-engine/status");
+    higgsfieldBridgeStatus = {
+      loaded: true,
+      loading: false,
+      error: null,
+      status: payload || null,
+    };
+  } catch (error) {
+    higgsfieldBridgeStatus = {
+      ...higgsfieldBridgeStatus,
+      loaded: true,
+      loading: false,
+      error: error instanceof Error ? error.message : "Could not read the Higgsfield bridge status.",
+    };
+  }
+  if (rerender && el?.isConnected) renderOperatorSettings(el, opts);
+}
+
+async function refreshBridgeStatuses(el, opts) {
+  await Promise.all([
+    refreshAgentAssistBridge(el, opts, false),
+    refreshHiggsfieldBridge(el, opts, false),
+  ]);
+  if (el?.isConnected) renderOperatorSettings(el, opts);
+}
+
 function bridgeStatusLabel(status) {
   if (agentAssistBridgeStatus.loading) return "Checking";
   if (agentAssistBridgeStatus.error) return "Unavailable";
   if (status?.executable) return "Connected";
+  return "Ready to connect";
+}
+
+function higgsfieldStatusLabel(status) {
+  if (higgsfieldBridgeStatus.loading) return "Checking";
+  if (higgsfieldBridgeStatus.error) return "Unavailable";
+  if (status?.status === "connected") return "Connected";
+  if (status?.status === "error") return "Needs attention";
   return "Ready to connect";
 }
 
@@ -1292,49 +1357,190 @@ function renderChatBehaviorTab(settings) {
       </div>`;
 }
 
-function renderChatGptBridgeTab() {
-  const status = agentAssistBridgeStatus.status || {};
-  const error = agentAssistBridgeStatus.error;
-  const setupRequired = status.setup_required !== false;
+function mediaCreditSnapshot() {
+  let saved = {};
+  try { saved = JSON.parse(workspaceStorageGetItem(MEDIA_LAB_CONFIG_KEY) || "{}"); } catch {}
+  const remainingValue = Number(saved.credits);
+  const remaining = Number.isFinite(remainingValue) && remainingValue >= 0 ? remainingValue : DEFAULT_MEDIA_CREDITS;
+  return {
+    remaining,
+    used: Math.max(0, DEFAULT_MEDIA_CREDITS - remaining),
+  };
+}
+
+function routeConnectionSummary(route, title, surface) {
+  const infrastructure = getOperatorInfrastructureStatus(surface);
+  const provider = providerFor(route.provider);
+  const model = route.models?.[provider.id] || provider.models?.[0] || "";
+  const routeLabel = route.providerMode === "smart"
+    ? "Phantom Hybrid · automatic routing"
+    : route.providerMode === "multiple"
+      ? `${route.selectedProviders.length} connected routes`
+      : `${provider.name} · ${provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model)}`;
+  return {
+    id: surface,
+    name: title,
+    state: infrastructure.configured ? "connected" : infrastructure.tone === "error" ? "attention" : "checking",
+    status: infrastructure.configured ? "Active" : infrastructure.tone === "error" ? "Needs attention" : "Checking",
+    detail: routeLabel,
+    message: infrastructure.detail,
+    settingsTab: "model",
+  };
+}
+
+function configuredConnectionOverview(settings) {
+  const runtime = getAiRuntimeState();
+  const connections = CREDENTIAL_PROVIDERS.flatMap((provider) => {
+    const credential = runtime.providerCredentials?.[provider.providerId];
+    if (!credential?.configured) return [];
+    const account = providerAccountFor(runtime, provider.providerId);
+    const state = account?.status === "up" ? "connected" : account?.status === "down" ? "attention" : "checking";
+    return [{
+      id: `provider-${provider.providerId}`,
+      name: `${provider.title} API`,
+      state,
+      status: state === "connected" ? "Active" : state === "attention" ? "Down" : "Configured",
+      detail: account?.detail || "Encrypted organization credential",
+      message: credential.key_hint || "Configured",
+      settingsTab: "model",
+    }];
+  });
+  const chatGpt = agentAssistBridgeStatus.status || {};
+  if (chatGpt.executable) {
+    connections.push({
+      id: "bridge-chatgpt",
+      name: "ChatGPT Plus Bridge",
+      state: "connected",
+      status: "Active",
+      detail: "Subscription-backed reasoning and image lane",
+      message: "Connected without storing your ChatGPT password",
+      settingsTab: "bridge",
+    });
+  }
+  const higgsfield = higgsfieldBridgeStatus.status || {};
+  if (higgsfield.status === "connected") {
+    connections.push({
+      id: "bridge-higgsfield",
+      name: "Higgsfield Bridge",
+      state: "connected",
+      status: "Active",
+      detail: "Media Lab video and creative production lane",
+      message: higgsfield.message || "Connected through the secure creative engine",
+      settingsTab: "bridge",
+    });
+  }
+  return {
+    brainRoutes: [
+      routeConnectionSummary(settings, "PhantomForce brain", "platform"),
+      routeConnectionSummary(settings.phantomBot, "PhantomBot brain", "phantombot"),
+    ],
+    configuredConnections: connections,
+  };
+}
+
+function renderBridgeRouteMap(settings) {
+  const routes = configuredConnectionOverview(settings).brainRoutes;
+  return `<section class="set-bridge-route-map" aria-label="Brain routes">
+    ${routes.map((route) => `<article class="set-bridge-route is-${esc(route.state)}">
+      <span class="set-connect-live-dot" aria-hidden="true"></span>
+      <div><p class="set-eyebrow">${esc(route.name)}</p><h4>${esc(route.detail)}</h4><p>${esc(route.message)}</p></div>
+      <button class="btn btn-quiet" type="button" data-open-settings-tab="model">Change brain</button>
+    </article>`).join("")}
+  </section>`;
+}
+
+function renderBridgesTab(settings) {
+  const runtime = getAiRuntimeState();
+  const chatGpt = agentAssistBridgeStatus.status || {};
+  const chatGptError = agentAssistBridgeStatus.error;
+  const chatGptSetupRequired = chatGpt.setup_required !== false;
+  const chatGptUsage = providerUsageFor(runtime, "chatgpt_bridge") || {};
+  const higgsfield = higgsfieldBridgeStatus.status || {};
+  const higgsfieldError = higgsfieldBridgeStatus.error;
+  const higgsfieldConnected = higgsfield.status === "connected";
+  const mediaCredits = mediaCreditSnapshot();
   return `
-      <div class="set-section">
-        <div class="set-sec-head">
-          <div>
-            <h3>ChatGPT Bridge</h3>
-            <p class="set-note">Universal assist layer for Codex, PhantomBot, Phantom AI, and the agent workforce. Pick ChatGPT in Model settings for direct thinking/no-hands answers; Hermes stays responsible for approved hands-on work.</p>
+    <div class="set-bridges-center">
+      <section class="set-section set-bridges-hero">
+        <div>
+          <p class="set-eyebrow">Bridge control center</p>
+          <h3>Your AI and creative bridges</h3>
+          <p class="set-note">Connect subscription-backed services once, see exactly what they power, and keep usage visible. A bridge is marked active only after its real status route confirms it.</p>
+        </div>
+        <button class="btn btn-quiet" type="button" data-bridge-refresh ${(agentAssistBridgeStatus.loading || higgsfieldBridgeStatus.loading) ? "disabled" : ""}>${(agentAssistBridgeStatus.loading || higgsfieldBridgeStatus.loading) ? "Checking…" : "Refresh all"}</button>
+      </section>
+
+      ${renderBridgeRouteMap(settings)}
+
+      <section class="set-bridge-product-grid">
+        <article class="set-bridge-product ${chatGpt.executable ? "is-active" : "is-attention"}" data-bridge-card="chatgpt">
+          <header>
+            <span class="set-bridge-logo is-chatgpt" aria-hidden="true">CG</span>
+            <div><p class="set-eyebrow">Subscription bridge</p><h3>ChatGPT Plus Bridge</h3></div>
+            <span class="set-bridge-state ${chatGpt.executable ? "is-active" : "is-attention"}"><i></i>${esc(bridgeStatusLabel(chatGpt))}</span>
+          </header>
+          <p>Provides subscription-backed answers, supervision, and the still-image lane without asking customers for a developer API key.</p>
+          <dl class="set-bridge-metrics">
+            <div><dt>Requests tracked</dt><dd>${formatProviderNumber(chatGptUsage.attempts)}</dd></div>
+            <div><dt>Tokens tracked</dt><dd>${formatProviderNumber(chatGptUsage.total_tokens)}</dd></div>
+            <div><dt>Usage remaining</dt><dd>Not reported by ChatGPT</dd></div>
+            <div><dt>Credentials</dt><dd>Managed by ChatGPT</dd></div>
+          </dl>
+          ${chatGptError ? `<p class="set-provider-error">${esc(chatGptError)}</p>` : ""}
+          <div class="set-bridge-note ${chatGptSetupRequired ? "is-warning" : "is-ready"}">
+            <b>${chatGptSetupRequired ? "Connect your ChatGPT account" : "Connected and ready"}</b>
+            <span>${chatGptSetupRequired ? "Open ChatGPT, sign in or switch accounts, then return and refresh this bridge." : "PhantomForce can use this account anywhere the ChatGPT bridge is selected."}</span>
           </div>
-          <button class="btn btn-quiet" type="button" data-agent-assist-refresh>${agentAssistBridgeStatus.loading ? "Checking..." : "Refresh bridge"}</button>
-        </div>
-        ${error ? `<p class="set-status-pill">${esc(error)}</p>` : ""}
-        <div class="set-status-grid">
-          <span><b>Status</b><i>${esc(bridgeStatusLabel(status))}</i></span>
-          <span><b>Effort</b><i>${esc((status.effort_levels || ["instant", "standard", "deep"]).join(" / "))}</i></span>
-          <span><b>Account connection</b><i>${setupRequired ? "Connect" : "Connected"}</i></span>
-          <span><b>Connection privacy</b><i>Credentials stay outside the browser</i></span>
-          <span><b>Credential safety</b><i>No ChatGPT password stored</i></span>
-        </div>
-        <div class="set-bridge-note ${setupRequired ? "is-warning" : "is-ready"}">
-          <b>${setupRequired ? "Connect ChatGPT" : "ChatGPT is connected"}</b>
-          <span>${setupRequired ? "Choose Connect / switch account, sign in with ChatGPT, and return here to refresh the connection." : "PhantomForce can use this account for the ChatGPT model lane you select."}</span>
-        </div>
-        <p class="set-label">ChatGPT subscription account</p>
-        <article class="set-bridge-card is-ready">
-          <b>Change the account used by the bridge</b>
-          <i>ChatGPT-managed sign-in</i>
-          <span>Open ChatGPT’s account menu to switch between signed-in accounts or add another subscription account. Accounts, billing, chats, and usage limits remain separate.</span>
           <div class="record-actions">
-            <button class="btn" type="button" data-chatgpt-account="switch">Connect / switch account</button>
+            <button class="btn btn-primary" type="button" data-chatgpt-account="switch">Connect / switch account</button>
             <button class="btn btn-quiet" type="button" data-chatgpt-account="logout">Log out of ChatGPT</button>
           </div>
           ${chatGptAccountMessage ? `<span class="set-status-pill">${esc(chatGptAccountMessage)}</span>` : ""}
         </article>
-        <div class="set-rule-list">
-          <span>Choose Switch / add account to connect</span>
-          <span>Account credentials remain with ChatGPT</span>
-          <span>Relay packets remain available offline</span>
-          <span>Agents must still obey approval/autopilot rules</span>
+
+        <article class="set-bridge-product ${higgsfieldConnected ? "is-active" : "is-attention"}" data-bridge-card="higgsfield">
+          <header>
+            <span class="set-bridge-logo is-higgsfield" aria-hidden="true">HF</span>
+            <div><p class="set-eyebrow">Creative bridge</p><h3>Higgsfield Bridge</h3></div>
+            <span class="set-bridge-state ${higgsfieldConnected ? "is-active" : "is-attention"}"><i></i>${esc(higgsfieldStatusLabel(higgsfield))}</span>
+          </header>
+          <p>Connects Media Lab to Higgsfield for premium motion and creative production. Draft checks never spend credits; paid renders still require approval.</p>
+          <dl class="set-bridge-metrics">
+            <div><dt>Credits used</dt><dd>${formatProviderNumber(mediaCredits.used)}</dd></div>
+            <div><dt>Credits remaining</dt><dd>${formatProviderNumber(mediaCredits.remaining)}</dd></div>
+            <div><dt>Transport</dt><dd>${esc(higgsfield.transport === "hermes_mcp" ? "Secure bridge" : higgsfield.transport === "cli_fallback" ? "Owner render lane" : "Checking")}</dd></div>
+            <div><dt>Paid renders</dt><dd>Approval required</dd></div>
+          </dl>
+          <p class="set-bridge-credit-note">Workspace production credits are deducted only after Media Lab receives a live provider asset. Higgsfield account billing remains provider-managed.</p>
+          ${higgsfieldError ? `<p class="set-provider-error">${esc(higgsfieldError)}</p>` : ""}
+          <div class="set-bridge-note ${higgsfieldConnected ? "is-ready" : "is-warning"}">
+            <b>${higgsfieldConnected ? "Creative bridge ready" : "Higgsfield needs attention"}</b>
+            <span>${esc(higgsfield.message || "Open Higgsfield to sign in, then return and refresh the creative bridge.")}</span>
+          </div>
+          <div class="record-actions">
+            <button class="btn btn-primary" type="button" data-open-media-lab>Open Media Lab</button>
+            <button class="btn btn-quiet" type="button" data-open-higgsfield>Manage Higgsfield account</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="set-section set-bridge-builder">
+        <div class="set-sec-head">
+          <div><p class="set-eyebrow">New bridge</p><h3>Add another service</h3><p class="set-note">Use PhantomBot for a guided setup or open a manual recipe. New connections stay in setup until a real health check confirms them.</p></div>
         </div>
-      </div>`;
+        <form class="set-bridge-ai-form" data-bridge-ai-form>
+          <label class="set-control"><span>Service</span><input type="text" data-bridge-service placeholder="Example: Notion, Drive, Slack" maxlength="80" required/></label>
+          <label class="set-control"><span>What should it power?</span><input type="text" data-bridge-purpose placeholder="Example: approved publishing and asset sync" maxlength="180"/></label>
+          <button class="btn btn-primary" type="submit">Build with PhantomBot</button>
+        </form>
+        <div class="set-bridge-manual-grid">
+          <article><span>01</span><div><b>ChatGPT Plus</b><i>Sign in, switch accounts, and verify the existing subscription bridge.</i></div><button class="btn btn-quiet" type="button" data-chatgpt-account="switch">Configure</button></article>
+          <article><span>02</span><div><b>Higgsfield</b><i>Open the creative account, then verify the secure Media Lab bridge.</i></div><button class="btn btn-quiet" type="button" data-open-higgsfield>Configure</button></article>
+          <article><span>03</span><div><b>Custom service</b><i>Prepare a secure connector brief without storing credentials in the browser.</i></div><button class="btn btn-quiet" type="button" data-bridge-custom-manual>Manual checklist</button></article>
+        </div>
+        ${bridgeBuilderMessage ? `<p class="set-status-pill" data-bridge-builder-message>${esc(bridgeBuilderMessage)}</p>` : ""}
+      </section>
+    </div>`;
 }
 
 function renderCompanionTab() {
@@ -1723,7 +1929,13 @@ export function renderOperatorSettings(el, opts = {}) {
         title: "PhantomForce Brain & Gateway",
         note: "Connect provider keys, choose the organization-wide Platform brain, choose PhantomBot separately, and control optional loop routing from one place.",
       }
-    : {
+    : activeTab === "bridge" || activeTab === "media"
+      ? {
+          eyebrow: "Connected workspace",
+          title: "Bridges & Connectors",
+          note: "See what is active first, understand which brain each route powers, and connect new services without exposing provider credentials.",
+        }
+      : {
         eyebrow: "Operator brain",
         title: "Phantom Console settings",
         note: "Phantom AI is the chatbot. Phantom Console is the operating layer around it: organization-wide model routing, Phantom Loop, memory depth, Termina hands, and the approval/autopilot boundary. Provider credentials stay encrypted on the server.",
@@ -1734,7 +1946,7 @@ export function renderOperatorSettings(el, opts = {}) {
     model: () => renderModelTab(settings, activeProvider, activeModel),
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
-    bridge: () => renderChatGptBridgeTab(),
+    bridge: () => renderBridgesTab(settings),
     clientsetup: () => `<div id="${clientSetupMountId}" class="set-client-setup-mount"></div>`,
     organization: () => `<div id="${organizationMountId}" class="set-workspace-mount"></div>`,
     plan: () => `<div id="${planMountId}" class="set-workspace-mount"></div>`,
@@ -1905,13 +2117,45 @@ export function renderOperatorSettings(el, opts = {}) {
     };
   });
 
-  const bridgeRefresh = el.querySelector("[data-agent-assist-refresh]");
-  if (bridgeRefresh) bridgeRefresh.onclick = () => refreshAgentAssistBridge(el, opts);
+  const bridgeRefresh = el.querySelector("[data-bridge-refresh]");
+  if (bridgeRefresh) bridgeRefresh.onclick = () => refreshBridgeStatuses(el, opts);
   el.querySelectorAll("[data-chatgpt-account]").forEach((button) => {
     button.onclick = async () => {
       await openChatGptAccountPage(button.dataset.chatgptAccount);
       if (el.isConnected) renderOperatorSettings(el, opts);
     };
+  });
+  el.querySelectorAll("[data-open-settings-tab]").forEach((button) => {
+    button.onclick = () => {
+      saveSettingsTab(button.dataset.openSettingsTab || "model");
+      renderOperatorSettings(el, opts);
+    };
+  });
+  el.querySelectorAll("[data-open-higgsfield]").forEach((button) => {
+    button.onclick = async () => {
+      await openExternalAccountPage("https://higgsfield.ai/", "Higgsfield");
+      if (el.isConnected) renderOperatorSettings(el, opts);
+    };
+  });
+  el.querySelectorAll("[data-open-media-lab]").forEach((button) => {
+    button.onclick = () => {
+      window.location.hash = "#page/media";
+      try { window.dispatchEvent(new HashChangeEvent("hashchange")); } catch {}
+    };
+  });
+  el.querySelector("[data-bridge-custom-manual]")?.addEventListener("click", () => {
+    bridgeBuilderMessage = "Manual checklist: name the service and purpose, confirm its secure sign-in method, define read/write permissions, connect through the server broker, then keep it in setup until a real health check passes.";
+    renderOperatorSettings(el, opts);
+  });
+  el.querySelector("[data-bridge-ai-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const service = String(el.querySelector("[data-bridge-service]")?.value || "").trim();
+    const purpose = String(el.querySelector("[data-bridge-purpose]")?.value || "").trim();
+    if (!service) return;
+    const prompt = `Help me configure a secure PhantomForce bridge for ${service}. ${purpose ? `It should power: ${purpose}. ` : ""}Use the existing connector and server-broker boundaries. Do not place credentials in browser storage. Keep the bridge in setup until a real authenticated health check proves it is active. Show me the simplest consumer-facing steps and implement only actions I approve.`;
+    workspaceStorageSetItem(PHANTOMBOT_BRIDGE_PROMPT_KEY, prompt);
+    window.location.hash = "#page/phantombot";
+    try { window.dispatchEvent(new HashChangeEvent("hashchange")); } catch {}
   });
 
   el.querySelectorAll("[data-ai-field]").forEach((field) => {
@@ -2046,7 +2290,17 @@ export function renderOperatorSettings(el, opts = {}) {
   });
 
   const mediaMount = el.querySelector(`#${mediaMountId}`);
-  if (mediaMount) renderConnectionCenter(mediaMount, opts);
+  if (mediaMount) {
+    const connectionOverview = configuredConnectionOverview(settings);
+    renderConnectionCenter(mediaMount, {
+      ...opts,
+      ...connectionOverview,
+      onOpenSettingsTab: (tab) => {
+        saveSettingsTab(tab);
+        renderOperatorSettings(el, opts);
+      },
+    });
+  }
 
   const clientSetupMount = el.querySelector(`#${clientSetupMountId}`);
   if (clientSetupMount) renderClientSetupConsole(clientSetupMount);
@@ -2093,7 +2347,14 @@ export function renderOperatorSettings(el, opts = {}) {
       .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
       .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
   }
-  if (activeTab === "bridge" && !agentAssistBridgeStatus.loaded && !agentAssistBridgeStatus.loading) {
-    refreshAgentAssistBridge(el, opts);
+  if ((activeTab === "bridge" || activeTab === "media")
+      && ((!agentAssistBridgeStatus.loaded && !agentAssistBridgeStatus.loading)
+        || (!higgsfieldBridgeStatus.loaded && !higgsfieldBridgeStatus.loading))) {
+    void refreshBridgeStatuses(el, opts);
+  }
+  if (activeTab === "media" && !runtime.loaded && !runtime.loading) {
+    void hydrateOperatorRuntimeSettings()
+      .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
+      .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
   }
 }
