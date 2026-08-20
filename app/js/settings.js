@@ -1,13 +1,13 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260819-173";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260819-173";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260819-173";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-173";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260819-173";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-173";
-import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-173";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260819-174";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260819-174";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260819-174";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-174";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260819-174";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-174";
+import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-174";
 import {
   getAiRuntimeState,
   getAiProviderModelCatalog,
@@ -18,7 +18,7 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260819-173";
+} from "./ai-runtime.js?v=phantom-live-20260819-174";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -1196,7 +1196,7 @@ function renderCompanionTab() {
         <div>
           <p class="set-eyebrow">Living Phantom</p>
           <h3>Companion controls</h3>
-          <p class="set-note">The Phantom can float, resize, remember a position for each page, or stay docked when you want a quieter workspace. These settings are local UI preferences.</p>
+          <p class="set-note">The Phantom can be dragged, resized, and remembered independently on each page. Automatic wandering is optional, so it stays easy to grab and control.</p>
         </div>
         <button class="btn btn-quiet" type="button" data-companion-reset>Reset companion</button>
       </div>
@@ -1205,6 +1205,7 @@ function renderCompanionTab() {
         <label class="set-inline"><input type="checkbox" data-companion-toggle="visible" ${companion.visible ? "checked" : ""}/> Visible</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="startDocked" ${companion.startDocked ? "checked" : ""}/> Start docked</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="roamingEnabled" ${companion.roamingEnabled ? "checked" : ""}/> Free movement</label>
+        <label class="set-inline"><input type="checkbox" data-companion-toggle="autoWander" ${companion.autoWander ? "checked" : ""}/> Wander around page</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="rememberPagePositions" ${companion.rememberPagePositions ? "checked" : ""}/> Remember per page</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="speechEnabled" ${companion.speechEnabled ? "checked" : ""}/> Speech bubbles</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="notificationReactions" ${companion.notificationReactions ? "checked" : ""}/> Notification reactions</label>
@@ -1780,7 +1781,14 @@ export function renderOperatorSettings(el, opts = {}) {
   const saveCompanionAndRender = (patch) => {
     const next = { ...DEFAULT_COMPANION_PREFS, ...loadCompanionPrefs(), ...(patch || {}) };
     if (patch?.roamingEnabled) next.startDocked = false;
-    if (patch?.startDocked) next.roamingEnabled = false;
+    if (patch?.autoWander) {
+      next.roamingEnabled = true;
+      next.startDocked = false;
+    }
+    if (patch?.startDocked) {
+      next.roamingEnabled = false;
+      next.autoWander = false;
+    }
     saveCompanionPrefs(next);
     renderOperatorSettings(el, opts);
   };
@@ -1814,6 +1822,7 @@ export function renderOperatorSettings(el, opts = {}) {
     visible: true,
     startDocked: true,
     roamingEnabled: false,
+    autoWander: false,
     dockLocation: "sidebar",
     motionLevel: "reduced",
     personality: "quiet",

@@ -8,11 +8,12 @@ const SESSION_HIDE_KEY = "pf.companion.hidden.session.v1";
 const SESSION_HIDE_MS = 30 * 60 * 1000;
 
 export const DEFAULT_COMPANION_PREFS = {
-  version: 2,
+  version: 3,
   enabled: true,
   visible: true,
   startDocked: false,
   roamingEnabled: true,
+  autoWander: false,
   rememberPagePositions: true,
   motionLevel: "subtle",
   soundEnabled: false,
@@ -39,6 +40,7 @@ export function normalizeCompanionPrefs(value) {
         ...input,
         startDocked: false,
         roamingEnabled: true,
+        autoWander: false,
         rememberPagePositions: true,
         dockLocation: input.dockLocation === "sidebar" ? "bottom-left" : input.dockLocation,
       };
@@ -50,6 +52,7 @@ export function normalizeCompanionPrefs(value) {
     visible: bool(migrated.visible, DEFAULT_COMPANION_PREFS.visible),
     startDocked: bool(migrated.startDocked, DEFAULT_COMPANION_PREFS.startDocked),
     roamingEnabled: bool(migrated.roamingEnabled, DEFAULT_COMPANION_PREFS.roamingEnabled),
+    autoWander: bool(migrated.autoWander, DEFAULT_COMPANION_PREFS.autoWander),
     rememberPagePositions: bool(migrated.rememberPagePositions, DEFAULT_COMPANION_PREFS.rememberPagePositions),
     soundEnabled: bool(migrated.soundEnabled, DEFAULT_COMPANION_PREFS.soundEnabled),
     voiceEnabled: bool(migrated.voiceEnabled, DEFAULT_COMPANION_PREFS.voiceEnabled),

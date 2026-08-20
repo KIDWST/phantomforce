@@ -2,7 +2,7 @@
    Movable, page-aware Phantom system: preference-aware, drag-safe, and
    tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-173";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-174";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -12,7 +12,7 @@ import {
   loadCompanionPrefs,
   saveCompanionPagePlacement,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260819-173";
+} from "./companion-preferences.js?v=phantom-live-20260819-174";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -128,6 +128,7 @@ function createBuddyController() {
   function reduceMotion() { return reduceMotionQuery.matches || prefs.motionLevel === "reduced" || prefs.motionLevel === "none"; }
   function motionAllowed() { return !reduceMotion() && prefs.motionLevel !== "none"; }
   function roamingAllowed() { return prefs.roamingEnabled && !mobile(); }
+  function autoWanderAllowed() { return roamingAllowed() && prefs.autoWander; }
   function sidebarPortraitMode() { return !mobile() && prefs.dockLocation === "sidebar"; }
 
   function clampNumber(value, min, max, fallback) {
@@ -375,6 +376,7 @@ function createBuddyController() {
         <button type="button" data-buddy-action="approvals" role="menuitem">Show approvals</button>
         <hr />
         <button type="button" data-buddy-action="roam" role="menuitem">Free on this page</button>
+        <button type="button" data-buddy-action="wander" role="menuitem">Let Phantom wander</button>
         <button type="button" data-buddy-action="dock" role="menuitem">Return to dock</button>
         <button type="button" data-buddy-action="reset-page" role="menuitem">Reset this page position</button>
         <button type="button" data-buddy-action="quiet" role="menuitem">Quiet mode</button>
@@ -441,6 +443,8 @@ function createBuddyController() {
 
   function syncMenuControls() {
     if (!menu) return;
+    const wanderAction = menu.querySelector('[data-buddy-action="wander"]');
+    if (wanderAction) wanderAction.textContent = prefs.autoWander ? "Keep Phantom here" : "Let Phantom wander";
     menu.querySelectorAll("[data-buddy-pref]").forEach((field) => {
       field.value = prefs[field.dataset.buddyPref] || field.value;
     });
@@ -582,7 +586,7 @@ function createBuddyController() {
     }
     tx = x;
     ty = y;
-    nextWanderAt = performance.now() + 4200;
+    nextWanderAt = autoWanderAllowed() ? performance.now() + 4200 : 0;
     setState("idle", 0);
     try { localStorage.setItem(LEGACY_DOCK_KEY, "0"); } catch {}
     configureCanvas({ preserveTarget: true });
@@ -604,6 +608,12 @@ function createBuddyController() {
     if (!roamingAllowed() || docked) {
       setTargetToDock();
       nextWanderAt = now + 1600;
+      return;
+    }
+    if (!autoWanderAllowed()) {
+      tx = x;
+      ty = y;
+      nextWanderAt = 0;
       return;
     }
     if (!motionAllowed() || userBusy()) {
@@ -734,6 +744,12 @@ function createBuddyController() {
     else if (action === "notifications") document.querySelector("[data-notif-btn]")?.click();
     else if (action === "approvals") openSurface("approvals");
     else if (action === "roam") { prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false }); undock({ keepPosition: true }); }
+    else if (action === "wander") {
+      const autoWander = !prefs.autoWander;
+      prefs = updateCompanionPrefs({ autoWander, roamingEnabled: true, startDocked: false });
+      undock({ keepPosition: true, silent: true });
+      say(autoWander ? "I'll explore this page." : "I'll stay right here.", 1700);
+    }
     else if (action === "dock") { prefs = updateCompanionPrefs({ roamingEnabled: false, startDocked: true }); dock(); say("I'm home.", 1500); }
     else if (action === "reset-page") {
       manualSizePx = null;
@@ -1011,7 +1027,7 @@ function createBuddyController() {
       } else if (!dragging && !resizing) {
         if (docked) pickWanderTarget(now);
         else if (!roamingAllowed()) setTargetToDock();
-        else if (!motionAllowed() || userBusy()) {
+        else if (!autoWanderAllowed() || !motionAllowed() || userBusy()) {
           tx = x;
           ty = y;
         }
@@ -1026,7 +1042,7 @@ function createBuddyController() {
         vx *= docked ? (sidebarAlive ? 0.91 : 0.76) : 0.92;
         vy *= docked ? (sidebarAlive ? 0.91 : 0.76) : 0.92;
         x += vx + (sidebarAlive ? Math.sin(t * 1.7) * 0.18 : 0);
-        y += vy + (reduceMotion() ? 0 : Math.sin(t * 1.25) * (sidebarAlive ? 0.52 : docked ? 0.12 : 0.34));
+        y += vy;
         clampToSafeZone();
       }
 
@@ -1041,7 +1057,8 @@ function createBuddyController() {
         ? Math.sin(t * 8) * (docked && sidebarPortraitMode() ? 1.5 : 8)
         : 0;
       const rotation = docked && sidebarPortraitMode() ? dockTwirl + flourish : tilt + dockTwirl + flourish;
-      layer.style.transform = `translate(${(x - buddyWidth / 2).toFixed(1)}px, ${(y - buddyHeight / 2).toFixed(1)}px)`;
+      const visualBob = reduceMotion() ? 0 : Math.sin(t * 1.25) * (sidebarAlive ? 0.52 : docked ? 0.12 : 0.34);
+      layer.style.transform = `translate(${(x - buddyWidth / 2).toFixed(1)}px, ${(y - buddyHeight / 2 + visualBob).toFixed(1)}px)`;
       canvas.style.transform = `rotate(${rotation.toFixed(1)}deg)`;
 
       const look = STATE_LOOK[state] || STATE_LOOK.idle;

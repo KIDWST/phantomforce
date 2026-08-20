@@ -51,11 +51,14 @@ const petButtonCss = baseCss.match(/\.phantompet-presence\s*\{[\s\S]*?\n\}/u)?.[
 assert.match(petButtonCss, /border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*overflow:\s*visible/u, "PhantomPet must remain a transparent, unclipped character presence.");
 assert.doesNotMatch(petButtonCss, /border-radius:\s*50%/u, "PhantomPet must never return to a circular avatar treatment.");
 assert.match(companionPrefs, /roamingEnabled:\s*true/u, "Companion defaults must keep free movement enabled.");
+assert.match(companionPrefs, /autoWander:\s*false/u, "Companion must stay where the user places it unless wandering is explicitly enabled.");
 assert.match(companionPrefs, /rememberPagePositions:\s*true/u, "Companion defaults must remember positions by page.");
 assert.match(companionPrefs, /saveCompanionPagePlacement/u, "Companion position memory must be persisted.");
 assert.match(buddy, /function roamingAllowed\(\) \{ return prefs\.roamingEnabled && !mobile\(\); \}/u, "Companion controller must honor free movement preferences independently from idle motion.");
 assert.match(buddy, /data-buddy-resize/u, "Companion must expose a visible resize grip.");
 assert.match(buddy, /data-buddy-action="roam"/u, "Right-click menu must include free movement.");
+assert.match(buddy, /data-buddy-action="wander"/u, "Right-click menu must expose optional wandering.");
+assert.match(buddy, /function autoWanderAllowed\(\)/u, "Free placement and autonomous wandering must be independent behaviors.");
 assert.match(buddy, /data-buddy-action="reset-page"/u, "Right-click menu must include per-page position reset.");
 assert.match(buddy, /switchPageContext/u, "Companion must track route changes for page-specific placement.");
 assert.match(buddy, /saveCurrentPagePlacement/u, "Companion drag and resize must save the page placement.");
@@ -63,6 +66,7 @@ assert.doesNotMatch(buddy, /function undock\(\)\s*\{\s*dock\(\);\s*\}/u, "Undock
 assert.doesNotMatch(buddy, /I'll stay in the sidebar/u, "Drag release must not force the companion back to the sidebar.");
 assert.doesNotMatch(baseCss, /body:has\(\.phantom \.app-main > \.console:not\(\.console-workspace\)\) \.buddy/u, "Overview must not hide the movable companion.");
 assert.match(settings, /data-companion-toggle="roamingEnabled"/u, "Settings must expose free movement.");
+assert.match(settings, /data-companion-toggle="autoWander"/u, "Settings must expose autonomous wandering separately.");
 assert.match(settings, /data-companion-toggle="rememberPagePositions"/u, "Settings must expose per-page placement memory.");
 assert.match(settings, /data-companion-reset-placements/u, "Settings must expose placement reset.");
 
