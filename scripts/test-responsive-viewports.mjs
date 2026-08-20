@@ -360,7 +360,7 @@ function auditPage() {
   const dashboardBrief = document.querySelector(".dashboard-brief");
   const decisionDeck = document.querySelector(".decision-deck");
   const dashboardHero = consoleRoot?.querySelector(".hero2");
-  const dashboardComposer = consoleRoot?.querySelector(".phantompet-presence");
+  const dashboardPet = document.querySelector("[data-buddy]");
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
   const featuredProductMedia = document.querySelector(".ps-spotlight-panel");
@@ -693,7 +693,8 @@ function auditPage() {
       visibleDecisionCards: decisionCards.filter(isVisible).length,
       decisionListHorizontalOverflow: decisionList ? decisionList.scrollWidth > decisionList.clientWidth + 2 : false,
       reviewAllVisible: isVisible(decisionReviewAll),
-      composerBottom: dashboardComposer && isVisible(dashboardComposer) ? Math.round(dashboardComposer.getBoundingClientRect().bottom) : null,
+      petBottom: dashboardPet && isVisible(dashboardPet) ? Math.round(dashboardPet.getBoundingClientRect().bottom) : null,
+      petRendererCount: document.querySelectorAll("[data-buddy], .phantompet-presence").length,
     },
     phantomBot: {
       shellVisible: isVisible(phantomBotShell),
@@ -1045,9 +1046,10 @@ function assertCase(result) {
         assert.equal(audit.dashboard.decisionListHorizontalOverflow, false, `${label} ${viewport.width}: decision preview must not create a sideways phone scroller.`);
         assert.equal(audit.dashboard.visibleDecisionCards, 1, `${label} ${viewport.width}: phone home must show one priority decision before Phantom.`);
         assert.ok(
-          audit.dashboard.composerBottom !== null && audit.nav.mobileTop !== null && audit.dashboard.composerBottom <= audit.nav.mobileTop + 2,
-          `${label} ${viewport.width}: PhantomPet must be fully tappable above the fixed mobile dock on initial load.`
+          audit.dashboard.petBottom !== null && audit.nav.mobileTop !== null && audit.dashboard.petBottom <= audit.nav.mobileTop + 2,
+          `${label} ${viewport.width}: the movable PhantomPet must be fully tappable above the fixed mobile dock on initial load.`
         );
+        assert.equal(audit.dashboard.petRendererCount, 1, `${label} ${viewport.width}: exactly one PhantomPet renderer may exist.`);
       }
       assert.ok(
         audit.dashboard.intelTop === null || (audit.dashboard.heroTop !== null && audit.dashboard.intelTop > audit.dashboard.heroTop + 20),

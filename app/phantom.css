@@ -3699,54 +3699,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .hero2-title span[data-hero-name] { background: linear-gradient(180deg, #7dffbd, var(--neon)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero2-sub { margin: 0 0 16px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
 .cmd-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 400px; margin-bottom: 16px; }
-/* PhantomPet is the painted character itself, never an avatar trapped inside
-   a circular badge. The transparent hit target follows the full-body canvas
-   and keeps the same PhantomBot launch hook. */
-.phantompet-presence-wrap {
-  position: relative; display: inline-flex; width: 118px; height: 146px; margin-top: 6px;
-}
-.phantompet-presence {
-  position: relative;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 118px; height: 146px; padding: 0;
-  border: 0; border-radius: 0;
-  background: transparent;
-  cursor: pointer; overflow: visible;
-  animation: phantompet-bob 3.2s ease-in-out infinite;
-  transition: filter 0.18s, transform 0.15s;
-}
-.phantompet-presence:hover, .phantompet-presence:focus-visible {
-  filter: brightness(1.08) saturate(1.08); outline: none;
-  animation-play-state: paused; transform: translateY(-2px) scale(1.04);
-}
-.phantompet-presence:focus-visible::after {
-  position: absolute; inset: 8px 4px; content: "";
-  border: 2px solid var(--neon); border-radius: 16px;
-  box-shadow: 0 0 18px rgba(65, 255, 161, 0.32); pointer-events: none;
-}
-.phantompet-presence-status {
-  position: absolute; right: 5px; bottom: 13px; width: 11px; height: 11px;
-  border-radius: 50%; background: #3ddc84; border: 2px solid var(--bg, #0a0a0f);
-  box-shadow: 0 0 6px rgba(61, 220, 132, 0.7);
-}
-.phantompet-presence-tip {
-  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%) translateY(4px);
-  width: max-content; max-width: 200px; padding: 6px 10px; border-radius: 8px;
-  border: 1px solid var(--line); background: var(--panel, #12121a); color: var(--ink);
-  font: 500 11.5px "Instrument Sans", sans-serif; text-align: center;
-  opacity: 0; pointer-events: none; transition: opacity 0.15s, transform 0.15s;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-}
-.phantompet-presence-wrap:hover .phantompet-presence-tip, .phantompet-presence:focus-visible ~ .phantompet-presence-tip {
-  opacity: 1; transform: translateX(-50%) translateY(0);
-}
-@keyframes phantompet-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .phantompet-presence { animation: none; }
-}
 .cmd-chip {
   display: flex; align-items: center; gap: 8px; padding: 11px 13px; cursor: pointer;
   border: 1px solid var(--line); border-radius: 12px; background: var(--glass); color: var(--ink);
@@ -7643,7 +7595,7 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260819-182") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260819-183") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(65, 255, 161, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -10428,14 +10380,6 @@ body.mission-control-on .sidebar, body.mission-control-on .topbar2, body.mission
 }
 
 @media (max-width: 720px) {
-  .buddy {
-    opacity: 0;
-    pointer-events: none;
-    z-index: 44;
-  }
-  .buddy-canvas {
-    pointer-events: none !important;
-  }
   .buddy-say {
     display: none;
     left: auto;

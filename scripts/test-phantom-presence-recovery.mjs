@@ -29,11 +29,9 @@ for (const name of expectedPoses) {
   assert.ok(statSync(url).size > 20_000, `Recovered pose is unexpectedly empty: ${name}`);
 }
 
-assert.match(index, /data-phantompet-canvas/u, "Overview must mount the animated PhantomPet.");
-assert.match(index, /phantompet-presence-canvas/u, "Overview must render PhantomPet as the full painted presence.");
-assert.doesNotMatch(index, /phantompet-orb/u, "Overview must not regress PhantomPet to a circular orb.");
-assert.match(main, /mountPhantomPresence\(\$\("\[data-phantompet-canvas\]"\)/u, "Overview must start the live character engine.");
-assert.match(main, /mountPhantomPresence\([^\n]*compact: false, small: false/u, "Overview must render the full-quality full-body PhantomPet.");
+assert.doesNotMatch(index, /phantompet-presence|data-phantompet-canvas|phantompet-orb/u, "Overview must not mount a second hard-coded PhantomPet.");
+assert.doesNotMatch(main, /mountPhantomPresence\(\$\("\[data-phantompet-canvas\]"\)/u, "Overview must not start the removed duplicate pet renderer.");
+assert.match(main, /setTimeout\(\(\) => mountBuddy\(\), 1600\)/u, "The one movable PhantomPet must remain the shell-level companion renderer.");
 assert.match(phantomAi, /data-phantombot-presence-canvas/u, "PhantomBot must expose the recovered full character.");
 assert.match(phantomAi, /mountPhantomPresence\(log\.querySelector/u, "PhantomBot must animate the recovered character.");
 assert.match(presence, /createPhantomCharacter/u, "Presence surfaces must use the original character engine.");
@@ -46,10 +44,7 @@ assert.match(css, /\.phantombot-presence-canvas/u, "Recovered PhantomBot charact
 assert.match(css, /\.phantombot-presence\s*\{[\s\S]*?width:\s*clamp\(430px, 46vw, 680px\);[\s\S]*?height:\s*clamp\(380px, 52vh, 560px\);/u, "PhantomBot must render as a large presence on the shared web and desktop surface.");
 assert.match(css, /\.phantombot-presence-canvas\s*\{[\s\S]*?opacity:\s*\.22;[\s\S]*?mix-blend-mode:\s*screen;/u, "PhantomBot must remain visibly translucent instead of becoming an opaque mascot.");
 assert.doesNotMatch(css, /html\[data-command-os="2040"\] \.phantombot-presence\s*\{[\s\S]*?width:\s*190px;/u, "Desktop parity must never shrink PhantomBot back to the old 190px mascot.");
-assert.match(css, /\.phantompet-presence-canvas/u, "Recovered Overview pet needs stable full-body layout styling.");
-const petButtonCss = baseCss.match(/\.phantompet-presence\s*\{[\s\S]*?\n\}/u)?.[0] || "";
-assert.match(petButtonCss, /border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*overflow:\s*visible/u, "PhantomPet must remain a transparent, unclipped character presence.");
-assert.doesNotMatch(petButtonCss, /border-radius:\s*50%/u, "PhantomPet must never return to a circular avatar treatment.");
+assert.doesNotMatch(`${css}\n${baseCss}`, /\.phantompet-presence(?:-wrap|-canvas|-status|-tip)?/u, "Removed Overview-pet styling must not recreate the duplicate renderer.");
 assert.match(companionPrefs, /roamingEnabled:\s*true/u, "Companion defaults must keep free movement enabled.");
 assert.match(companionPrefs, /autoWander:\s*false/u, "Companion must stay where the user places it unless wandering is explicitly enabled.");
 assert.match(companionPrefs, /rememberPagePositions:\s*true/u, "Companion defaults must remember positions by page.");

@@ -5510,44 +5510,6 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
   }
 }
 
-/* The dashboard pet and PhantomBot use the original painted character engine.
-   PhantomPet stays a transparent full-body presence, never a circular avatar. */
-.phantompet-presence-canvas {
-  display: block;
-  width: 118px;
-  height: 146px;
-  pointer-events: none;
-  filter:
-    saturate(1.06)
-    drop-shadow(0 0 10px rgba(0, 255, 148, .42))
-    drop-shadow(0 16px 22px rgba(0, 0, 0, .54));
-}
-
-.phantompet-presence-wrap {
-  z-index: 8;
-}
-
-@media (min-width: 681px) {
-  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 > .phantompet-presence-wrap {
-    position: absolute;
-    top: 228px;
-    left: 24px;
-    width: 122px;
-    height: 150px;
-    margin: 0;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 .phantompet-presence,
-  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 .phantompet-presence-canvas {
-    width: 122px;
-    height: 150px;
-  }
-}
-
-.phantompet-presence:has(.phantompet-presence-canvas[data-phantom-state="thinking"]) {
-  filter: hue-rotate(34deg) saturate(1.12) brightness(1.08);
-}
-
 .phantombot-presence {
   position: relative;
   z-index: 1;
@@ -5680,30 +5642,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
 
 @media (max-width: 680px) {
   html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 {
-    display: flex !important;
-    width: 100% !important;
-    height: 78px !important;
-    min-height: 78px !important;
-    align-items: center !important;
-    justify-content: center !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .hero2 > :not(.phantompet-presence-wrap) {
     display: none !important;
-  }
-
-  .phantompet-presence-wrap,
-  .phantompet-presence {
-    position: relative;
-    inset: auto;
-    width: 64px;
-    height: 72px;
-    margin: 0;
-  }
-
-  .phantompet-presence-canvas {
-    width: 64px;
-    height: 72px;
   }
 
   .phantombot-presence {

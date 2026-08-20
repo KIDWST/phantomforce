@@ -2,7 +2,7 @@
    Movable, page-aware Phantom system: preference-aware, drag-safe, and
    tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-182";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-183";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -12,7 +12,7 @@ import {
   loadCompanionPrefs,
   saveCompanionPagePlacement,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260819-182";
+} from "./companion-preferences.js?v=phantom-live-20260819-183";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";

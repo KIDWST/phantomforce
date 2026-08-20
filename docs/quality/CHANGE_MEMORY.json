@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-08-19",
+  "lastUpdated": "2026-08-20",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
@@ -35,19 +35,9 @@
     {
       "id": "phantompet-full-presence-and-vespergate-current-build",
       "status": "active",
-      "title": "PhantomPet stays full-body, wheel-sized, and Vespergate keeps its restored living-world build",
-      "ownerDecision": "PhantomPet must appear as the transparent painted full-body character, never clipped inside a circular orb. Scrolling directly over PhantomPet makes it larger or smaller and saves that size for the page; a visible resize dot, corner grip, or drag-to-resize control must never replace that interaction. Vespergate must launch the same current 3.1.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app. Its illustrated pointed-hood bearer, readable villagers, living-world detail, richer rooms, checkpoints, encounter objectives, mastery, map, touch controls, and save migration must remain together; an old catalog response, cached desktop shell, or smaller legacy source must not replace them.",
+      "title": "PhantomPet stays single, full-body, wheel-sized, and Vespergate keeps its restored living-world build",
+      "ownerDecision": "PhantomPet has exactly one renderer on desktop and mobile: the movable shell-level painted full-body companion. The Overview must not mount a second hard-coded pet, and compact layouts must not hide the remaining real companion after that duplicate is removed. Scrolling directly over PhantomPet makes it larger or smaller and saves that size for the page; a visible resize dot, corner grip, or drag-to-resize control must never replace that interaction. Vespergate must launch the same current 3.1.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app. Its illustrated pointed-hood bearer, readable villagers, living-world detail, richer rooms, checkpoints, encounter objectives, mastery, map, touch controls, and save migration must remain together; an old catalog response, cached desktop shell, or smaller legacy source must not replace them.",
       "requiredPatterns": [
-        {
-          "file": "app/index.html",
-          "pattern": "phantompet-presence[\\s\\S]*phantompet-presence-canvas",
-          "description": "The Overview mounts the full painted PhantomPet presence rather than an orb avatar."
-        },
-        {
-          "file": "app/phantom.css",
-          "pattern": "\\.phantompet-presence\\s*\\{[\\s\\S]{0,500}border:\\s*0;[\\s\\S]{0,300}background:\\s*transparent;[\\s\\S]{0,300}overflow:\\s*visible",
-          "description": "The PhantomPet hit target remains transparent and unclipped."
-        },
         {
           "file": "app/js/buddy.js",
           "pattern": "scroll to resize[\\s\\S]*canvas\\.addEventListener\\(\\\"wheel\\\",[\\s\\S]*manualSizePx = clampNumber[\\s\\S]*saveCurrentPagePlacement\\(\\)[\\s\\S]*\\{ passive: false, signal \\}",
@@ -92,13 +82,28 @@
       "forbiddenPatterns": [
         {
           "file": "app/index.html",
-          "pattern": "phantompet-orb",
-          "description": "The circular PhantomPet orb markup cannot return."
+          "pattern": "phantompet-presence|data-phantompet-canvas|phantompet-orb",
+          "description": "The removed Overview pet, including its old circular form, cannot return beside the movable companion."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "mountPhantomPresence\\(\\$\\(\\\"\\[data-phantompet-canvas\\]\\\"\\)",
+          "description": "The dashboard cannot start the removed second PhantomPet renderer."
         },
         {
           "file": "app/phantom.css",
-          "pattern": "\\.phantompet-(?:presence|orb)\\s*\\{[\\s\\S]{0,500}border-radius:\\s*50%",
-          "description": "The PhantomPet container cannot be styled as a circle."
+          "pattern": "\\.phantompet-presence(?:-wrap|-canvas|-status|-tip)?",
+          "description": "Base styles cannot repaint the removed Overview PhantomPet."
+        },
+        {
+          "file": "app/command-os.css",
+          "pattern": "\\.phantompet-presence(?:-wrap|-canvas|-status|-tip)?",
+          "description": "Command OS styles cannot repaint the removed Overview PhantomPet."
+        },
+        {
+          "file": "app/phantom.css",
+          "pattern": "@media \\(max-width:\\s*720px\\)\\s*\\{[\\s\\S]{0,300}\\.buddy\\s*\\{[\\s\\S]{0,120}opacity:\\s*0",
+          "description": "Compact layouts cannot hide the one remaining movable PhantomPet."
         },
         {
           "file": "app/js/buddy.js",
