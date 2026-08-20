@@ -2,7 +2,7 @@
    Movable, page-aware Phantom system: preference-aware, drag-safe, and
    tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-174";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-175";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -12,7 +12,7 @@ import {
   loadCompanionPrefs,
   saveCompanionPagePlacement,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260819-174";
+} from "./companion-preferences.js?v=phantom-live-20260819-175";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -881,6 +881,8 @@ function createBuddyController() {
       if (event?.pointerId != null) { try { canvas.releasePointerCapture(event.pointerId); } catch {} }
       if (dragged) {
         docked = false;
+        vx = 0;
+        vy = 0;
         tx = x;
         ty = y;
         saveCurrentPagePlacement();
@@ -972,6 +974,8 @@ function createBuddyController() {
       resizeStart = null;
       if (event?.pointerId != null) { try { resizeHandle.releasePointerCapture(event.pointerId); } catch {} }
       prefs = updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
+      vx = 0;
+      vy = 0;
       tx = x;
       ty = y;
       saveCurrentPagePlacement();
