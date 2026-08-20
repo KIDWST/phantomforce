@@ -21,14 +21,14 @@ import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./comma
 import { esc } from "./workspaces.js?v=phantom-live-20260819-179";
 import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260819-179";
 import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260819-179";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260819-179";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260819-180";
 import { setCompanionState } from "./companion.js?v=phantom-live-20260819-179";
 import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260819-179";
 import {
   getOperatorBrainChoices,
   getOperatorInfrastructureStatus,
   setOperatorBrainChoice,
-} from "./settings.js?v=phantom-live-20260819-179";
+} from "./settings.js?v=phantom-live-20260819-180";
 import {
   buildPromptIntegrityEnvelope,
   MAX_PROMPT_CHARS,

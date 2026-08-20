@@ -64,7 +64,8 @@ t("stringified payload contains none of the forbidden substrings", () => {
 t("provider readiness stays internal while the customer receives Connect", () => {
   assert.equal(byId.tiktok.connectionStatus, "PLATFORM_UNCONFIGURED");
   assert.equal(byId.tiktok.action, "Connect account");
-  assert.match(byId.tiktok.customerMessage, /nothing else is needed from you/iu);
+  assert.match(byId.tiktok.customerMessage, /one-time provider setup/iu);
+  assert.doesNotMatch(byId.tiktok.customerMessage, /nothing else is needed from you/iu);
   assert.equal(byId.tiktok.globallyAvailable, false);
 });
 

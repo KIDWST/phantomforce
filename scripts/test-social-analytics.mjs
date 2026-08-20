@@ -45,22 +45,14 @@ assert.ok(
 assert.match(contentHubSource, /officialchicagoshots/, "Social handles should default to Jordan's ChicagoShots handle.");
 assert.match(contentHubSource, /LIVE_ANALYTICS_PLATFORMS = new Set\(PLATFORMS\.map/, "Analytics should show every social channel, not only the original four.");
 assert.match(contentHubSource, /data-an-oauth/, "Analytics rows should start official account authorization when OAuth is ready.");
-assert.match(contentHubSource, /ANALYTICS_MONITOR_KEY/, "Analytics monitor visibility must persist per workspace.");
-assert.match(contentHubSource, /data-an-monitor/, "Analytics must let users toggle visible monitors.");
-assert.match(contentHubSource, /Product analytics monitor/, "Analytics must include a PhantomStore product analytics monitor.");
-assert.match(contentHubSource, /Social media monitor/, "Analytics must include a social media monitor.");
-assert.match(contentHubSource, /renderProductAnalyticsMonitor/, "Product analytics monitor must render from a dedicated function.");
-assert.match(contentHubSource, /renderSocialMediaMonitor/, "Social analytics monitor must render from a dedicated function.");
 assert.match(contentHubSource, /PRODUCT_ANALYTICS_SEED/, "Analytics must have useful PhantomStore product signals before checkout telemetry is fully live.");
 assert.match(contentHubSource, /data-open-ws="settings" data-settings-target="media"/, "Provider app setup belongs in Settings, not duplicated on Analytics.");
 assert.doesNotMatch(contentHubSource, /data-an-show-oauth-setup/, "Analytics must not expose inline provider app setup controls.");
 assert.doesNotMatch(contentHubSource, /data-an-oauth-setup/, "Analytics must not render the owner-only provider credentials form.");
 assert.doesNotMatch(contentHubSource, /data-an-oauth-launchpad/, "Analytics must not show a bulky OAuth launchpad.");
 assert.match(mainSource, /pf\.settings\.tab\.v1/, "Settings shortcuts must be able to open the Media & social tab directly.");
-assert.ok(
-  mainSource.indexOf("data-social-analytics-report") < mainSource.indexOf("data-managed-growth-report"),
-  "Analytics page must show social stats before Managed Growth Ops.",
-);
+assert.match(mainSource, /analytics:\s*\{[\s\S]{0,260}renderUnifiedAnalytics\(body\)/u,
+  "Analytics must use the unified reporting workspace.");
 assert.match(contentHubSource, /phantomforce\.social-oauth\.v1/, "Analytics must listen for OAuth callback completion.");
 assert.match(contentHubSource, /pf\.social\.oauth\.last/, "Analytics must support the isolated popup storage completion path.");
 assert.doesNotMatch(contentHubSource, /Workspace analytics are live\. Platform APIs are optional/, "Analytics must not present local workspace activity as social analytics.");
@@ -72,20 +64,20 @@ assert.match(socialSettingsSource, /Editable handle or profile URL/, "Media sett
 assert.match(socialSettingsSource, /handle saved as a public reference/, "Profile handles must not imply cross-posting is authorized.");
 assert.match(socialSettingsSource, /refreshSocialOAuthStatus/, "Media settings must preload backend OAuth readiness instead of discovering it only after clicks.");
 assert.match(socialSettingsSource, /OAuth app ready\. Click connect and approve once\./, "Social settings should show when a provider app is ready for real OAuth.");
-assert.doesNotMatch(socialSettingsSource, /Developer provider setup|data-oauth-setup-form|data-oauth-client-id|data-oauth-client-secret|Callback URL for provider consoles/u, "Customer social settings must never expose provider app credential setup.");
+assert.match(socialSettingsSource, /data-social-provider-form/u, "Owner social settings must provide one-time provider configuration.");
+assert.match(socialSettingsSource, /type="password" autocomplete="new-password"/u, "Provider secrets must use a protected password field.");
+assert.match(socialSettingsSource, /Secrets stay on the server and are never returned/u, "Provider setup must explain server-side secret handling.");
 assert.match(socialSettingsSource, /requestSocialOAuthStart/, "Social connection buttons must use the backend OAuth-start route.");
 assert.match(socialSettingsSource, /\/phantom-ai\/ops\/social-oauth\/start/, "OAuth login should not be a hard-coded provider guess in the browser.");
 assert.match(socialSettingsSource, /phantomforce\.social-oauth\.v1/, "Media settings must refresh when OAuth callback completes.");
 assert.match(socialSettingsSource, /pf\.social\.oauth\.last/, "Media settings must support the isolated popup storage completion path.");
 assert.doesNotMatch(socialSettingsSource, /Opened normal login only/, "Failed OAuth start must not fall back to a normal browser login.");
 assert.match(serverSource, /social-oauth\/setup/, "Server must expose an owner-gated OAuth app setup route.");
-assert.match(serverSource, /connect_request/, "Unavailable OAuth infrastructure must create a customer-safe connection request.");
-assert.match(serverSource, /requestCustomerConnection/, "OAuth start must persist an organization-scoped request instead of demanding setup from the user.");
+assert.match(serverSource, /state: "setup_required"/, "Unavailable OAuth infrastructure must return a truthful setup-required state.");
+assert.match(serverSource, /reply\.code\(409\)/, "Unavailable OAuth infrastructure must not report a successful connection request.");
 assert.match(serverSource, /saveSocialOAuthSetup/, "Server must write OAuth app setup through the connector boundary.");
 assert.match(serverSource, /window\.opener.*postMessage/, "OAuth callback should notify the opener when available.");
 assert.match(serverSource, /pf\.social\.oauth\.last/, "OAuth callback should write a same-origin completion marker for noopener popups.");
 assert.match(phantomCss, /Mobile shell cleanup: bottom dock only\./, "Old horizontal mobile sidebar rules must stay disabled.");
-assert.match(phantomCss, /\.an-monitor-config/u, "Analytics monitor controls must be styled.");
-assert.match(phantomCss, /\.an-product-monitor/u, "Product analytics monitor must be styled.");
-assert.match(phantomCss, /\.an-social-monitor/u, "Social analytics monitor must be styled.");
+assert.match(contentHubSource, /data-an-provider-setup/u, "Analytics must route missing provider setup to Connection Settings.");
 console.log("Social analytics live OAuth checks passed.");

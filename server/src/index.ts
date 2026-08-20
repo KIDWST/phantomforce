@@ -234,7 +234,7 @@ import {
 } from "./phantom-ai/agent-actions.js";
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
-import { CUSTOMER_CONNECTOR_IDS, requestCustomerConnection, type CustomerConnectorId } from "./connectors/connection-request-store.js";
+import { CUSTOMER_CONNECTOR_IDS, type CustomerConnectorId } from "./connectors/connection-request-store.js";
 import { customerConnectionCatalog, startCustomerConnection } from "./connectors/customer-connection-catalog.js";
 import { parseExpenseText, parseReceiptImage } from "./connectors/finance-smart-entry.js";
 import { getReceiptAssetStorageProvider } from "./connectors/receipt-asset-storage.js";
@@ -5628,8 +5628,23 @@ app.post("/api/connections/start", async (request, reply) => {
   if (!canManageWorkspaceModules(session, tenantId)) {
     return reply.status(403).send({ ok: false, error: "Owner or admin access is required to connect organization accounts." });
   }
-  const result = startCustomerConnection({ tenantId, connectorId: parsed.data.connector_id, actor: session.id });
-  return reply.status(202).send({ ok: true, tenant_id: tenantId, ...result, ...workspaceRecordSafety });
+  try {
+    const result = startCustomerConnection({ tenantId, connectorId: parsed.data.connector_id, actor: session.id });
+    return reply.status(202).send({ ok: true, tenant_id: tenantId, ...result, ...workspaceRecordSafety });
+  } catch (error) {
+    const candidateStatus = Number((error as { statusCode?: unknown })?.statusCode);
+    const statusCode = Number.isInteger(candidateStatus) && candidateStatus >= 400 && candidateStatus <= 599
+      ? candidateStatus
+      : 500;
+    return reply.status(statusCode).send({
+      ok: false,
+      tenant_id: tenantId,
+      state: statusCode === 503 ? "configuration_required" : "error",
+      code: String((error as { code?: unknown })?.code || "connection_start_failed"),
+      error: error instanceof Error ? error.message : "The secure connection could not start.",
+      ...workspaceRecordSafety,
+    });
+  }
 });
 
 app.put("/phantom-ai/runtime/config", async (request, reply) => {
@@ -10033,23 +10048,16 @@ app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
   } catch (error) {
     const socialAnalytics = getSocialAnalyticsConnectorStatus(tenantId);
     const connector = socialAnalytics.connectors.find((item) => item.id === body.platform);
-    const connectRequest = requestCustomerConnection({
-      tenantId,
-      connectorId: `social-${body.platform}` as CustomerConnectorId,
-      actor: session.id,
-    });
-    return reply.code(202).send({
-      ok: true,
+    return reply.code(409).send({
+      ok: false,
       tenant_id: tenantId,
-      state: "requested",
+      state: "setup_required",
       oauth: null,
-      connect_request: {
-        id: connectRequest.id,
-        connectorId: connectRequest.connectorId,
-        requestedAt: connectRequest.requestedAt,
-        attempts: connectRequest.attempts,
-      },
-      customer_message: `${connector?.name || "That account"} connection requested. Nothing else is needed from you; PhantomForce will present secure sign-in here when the provider lane is available.`,
+      error: error instanceof Error
+        ? error.message.slice(0, 400)
+        : `${connector?.name || "That account"} needs one-time provider setup before authorization can open.`,
+      connector,
+      setup_required: true,
       external_send: false,
       approval_executed: false,
       secrets_exposed: false,
@@ -10273,24 +10281,23 @@ app.post("/phantom-ai/phantom-hunter/web/connect", async (request, reply) => {
   }
   const tenantId = customizationTenantForSession(session, body.tenant_id);
   const connectorId = `code-${body.provider}` as CustomerConnectorId;
-  const connectRequest = requestCustomerConnection({
-    tenantId,
-    connectorId,
-    actor: session.userId || session.id,
-  });
-  return reply.code(202).send({
-    ok: true,
-    organization_id: tenantId,
-    state: "requested",
-    connect_request: {
-      id: connectRequest.id,
-      provider: body.provider,
-      requested_at: connectRequest.requestedAt,
-      attempts: connectRequest.attempts,
-    },
-    customer_message: `${body.provider[0].toUpperCase()}${body.provider.slice(1)} connection requested. Nothing else is needed from you. Your workspace owner can finish the secure provider connection without asking you for a repository path.`,
-    secrets_exposed: false,
-  });
+  try {
+    const result = startCustomerConnection({ tenantId, connectorId, actor: session.userId || session.id });
+    return reply.code(202).send({ ok: true, organization_id: tenantId, ...result });
+  } catch (error) {
+    const candidateStatus = Number((error as { statusCode?: unknown })?.statusCode);
+    const statusCode = Number.isInteger(candidateStatus) && candidateStatus >= 400 && candidateStatus <= 599
+      ? candidateStatus
+      : 500;
+    return reply.code(statusCode).send({
+      ok: false,
+      organization_id: tenantId,
+      state: statusCode === 503 ? "configuration_required" : "error",
+      code: String((error as { code?: unknown })?.code || "repository_connection_failed"),
+      error: error instanceof Error ? error.message : "The repository connection could not start.",
+      secrets_exposed: false,
+    });
+  }
 });
 
 app.get("/phantom-ai/phantom-hunter/scans/:scanId", async (request, reply) => {

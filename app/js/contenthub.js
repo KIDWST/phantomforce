@@ -3916,19 +3916,23 @@ function accountAnalyticsRow(row, esc) {
   const syncFailed = syncOutcome?.state === "error";
   const sourceState = canSync
     ? (syncFailed ? "Live sync failed" : "Ready to sync")
-    : "Connect account";
+    : oauthReady ? "Connect account" : "Provider setup required";
   const sourceCopy = canSync
     ? (syncFailed ? syncOutcome.error : "Official read-only analytics are ready.")
     : oauthReady
       ? "The connection is ready. Sign in once to start reporting."
-      : connector?.reason || "Choose Connect account. PhantomForce handles secure sign-in.";
+      : canManageSocialOAuthApps()
+        ? `${connector?.name || account.name} needs its provider app configured once before account sign-in can open.`
+        : `${connector?.name || account.name} needs one-time provider setup by a workspace owner.`;
   const safetyCopy = connector?.targetSafetyCopy || account.targetSafetyCopy || "";
   const targetKind = String(connector?.publishTargetKind || account.publishTargetKind || "").replaceAll("_", " ");
   const targetLabel = connector?.targetLabel || account.publishTargetLabel || "";
   const targetCopy = targetLabel ? `${targetKind || "target"}: ${targetLabel}` : safetyCopy;
   const primaryAction = canSync
     ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>`
-    : `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect account</button>`;
+    : oauthReady
+      ? `<button class="btn btn-primary" type="button" data-an-oauth="${account.id}">Connect account</button>`
+      : `<button class="btn btn-primary" type="button" data-an-provider-setup="${account.id}">${canManageSocialOAuthApps() ? "Configure provider" : "Open connection settings"}</button>`;
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "handle saved — not connected")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
@@ -3973,10 +3977,12 @@ function analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCou
     };
   }
   return {
-    tone: "ready",
-    title: "Connect your social accounts.",
-    body: "Choose a platform below, sign in with your own account, and approve the connection. Saved public handles never count as authorization.",
-    action: `<button class="btn btn-primary" type="button" data-an-scroll-sources>Choose account</button>`,
+    tone: "setup",
+    title: "Social providers need one-time setup.",
+    body: canManageSocialOAuthApps()
+      ? "Configure each provider app once in Connection Settings. Account sign-in will open here as soon as that setup is saved."
+      : "A workspace owner must configure the provider apps before account sign-in can open.",
+    action: `<button class="btn btn-primary" type="button" data-an-provider-setup>${canManageSocialOAuthApps() ? "Configure providers" : "Open connection settings"}</button>`,
   };
 }
 
@@ -3999,6 +4005,10 @@ function wireAnalyticsActions(el, accounts, opts) {
     analyticsNotice = `Syncing ${button.dataset.anSync}…`;
     await refreshLiveAnalytics(el, accounts, opts, { force: true, platform: button.dataset.anSync });
   });
+  el.querySelectorAll("[data-an-provider-setup]").forEach((button) => button.onclick = () => {
+    localStorage.setItem("pf.settings.tab.v1", "media");
+    opts.openWorkspace?.("settings");
+  });
   el.querySelectorAll("[data-an-oauth]").forEach((button) => button.onclick = async () => {
     const platform = button.dataset.anOauth;
     button.disabled = true;
@@ -4013,8 +4023,6 @@ function wireAnalyticsActions(el, accounts, opts) {
         window.open(authUrl, "_blank", "noopener,noreferrer");
         analyticsNotice = `${connectorStatus(platform)?.name || platform} sign-in opened. Approve it once; PhantomForce will refresh this page when the callback returns.`;
         startAnalyticsOAuthPolling(platform);
-      } else if (response?.connect_request) {
-        analyticsNotice = response.customer_message || "Secure provider sign-in opened. Finish approval, then refresh connection status.";
       } else {
         analyticsNotice = "The secure account connection could not start.";
       }
@@ -4022,13 +4030,13 @@ function wireAnalyticsActions(el, accounts, opts) {
       const connector = connectorStatus(platform);
       analyticsNotice = connector?.oauthConfigured
         ? (error?.message || "The account connection could not start.")
-        : `${connector?.name || platform} sign-in is temporarily unavailable in this deployment.`;
+        : (error?.message || `${connector?.name || platform} needs one-time provider setup before sign-in can open.`);
     } finally {
       renderAnalytics(el, opts);
     }
   });
   el.querySelectorAll("[data-an-connect-all]").forEach((button) => button.onclick = async () => {
-    const targets = analyticsConnectorState.connectors.filter((connector) => !connector.configured);
+    const targets = analyticsConnectorState.connectors.filter((connector) => connector.oauthConfigured && !connector.configured);
     if (!targets.length) {
       analyticsNotice = "No unconnected channels are waiting.";
       renderAnalytics(el, opts, { skipAutoRefresh: true });
@@ -4040,7 +4048,6 @@ function wireAnalyticsActions(el, accounts, opts) {
       try { return window.open("about:blank", "_blank"); } catch { return null; }
     });
     let opened = 0;
-    let requested = 0;
     for (const [index, connector] of targets.entries()) {
       try {
         const response = await analyticsApi("/phantom-ai/ops/social-oauth/start", {
@@ -4052,9 +4059,6 @@ function wireAnalyticsActions(el, accounts, opts) {
           if (placeholders[index]) placeholders[index].location.href = authUrl;
           else window.open(authUrl, "_blank", "noopener,noreferrer");
           opened += 1;
-        } else if (response?.connect_request) {
-          requested += 1;
-          if (placeholders[index]) placeholders[index].close();
         } else if (placeholders[index]) {
           placeholders[index].close();
         }
@@ -4064,10 +4068,8 @@ function wireAnalyticsActions(el, accounts, opts) {
       }
     }
     analyticsNotice = opened
-      ? `${opened} secure sign-in flow${opened === 1 ? "" : "s"} opened.${requested ? ` ${requested} additional connection ${requested === 1 ? "request is" : "requests are"} saved.` : ""}`
-      : requested
-        ? `${requested} connection ${requested === 1 ? "request is" : "requests are"} saved. Nothing else is needed from you.`
-        : "The secure social sign-in windows could not be opened.";
+      ? `${opened} secure sign-in flow${opened === 1 ? "" : "s"} opened.`
+      : "The secure social sign-in windows could not be opened.";
     if (opened) startAnalyticsOAuthPolling(targets[0]?.id);
     renderAnalytics(el, opts, { skipAutoRefresh: true });
   });

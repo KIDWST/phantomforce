@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260819-179";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260819-180";
 
 const states = new WeakMap();
 const terminal = new Set(["completed", "partial", "failed", "cancelled"]);
@@ -260,11 +260,15 @@ async function requestConnection(root, provider) {
       method: "POST",
       body: JSON.stringify({ provider }),
     }, state.organizationId || tenantId());
-    state.noticeTitle = "Connection requested";
-    state.notice = result.customer_message;
+    const authorizationUrl = result.authorizationUrl || result.authorization_url || "";
+    const opened = authorizationUrl ? Boolean(window.open(authorizationUrl, "_blank", "noopener,noreferrer")) : false;
+    state.noticeTitle = opened ? "Repository sign-in opened" : "Repository sign-in ready";
+    state.notice = opened
+      ? (result.customerMessage || result.customer_message || "Finish authorization in the provider window, then return here.")
+      : "The provider authorization is ready, but the browser blocked the sign-in window. Allow popups and try again.";
     render(root);
   } catch (error) {
-    state.error = error instanceof Error ? error.message : "The repository connection could not be requested.";
+    state.error = error instanceof Error ? error.message : "The repository connection could not start.";
     render(root);
   }
 }

@@ -28,6 +28,8 @@ process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 process.env.PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER = "false";
 process.env.PHANTOM_HUNTER_DATA_DIR = join(fixtureRoot, "state");
 process.env.PHANTOMFORCE_CONNECTION_REQUESTS_PATH = join(fixtureRoot, "connection-requests.json");
+process.env.PHANTOMFORCE_CONNECTION_BROKER_URL = "https://connect.example.invalid/authorize";
+process.env.PHANTOMFORCE_CONNECTION_BROKER_SECRET = "phantomhunter-test-broker-secret";
 process.env.PHANTOM_HUNTER_WEB_REPOSITORIES_JSON = JSON.stringify({
   "hunter-org-a": { target: repositoryRoot, label: "Authorized workspace repository", kind: "local_path" },
 });
@@ -106,8 +108,9 @@ try {
     payload: JSON.stringify({ provider: "github", tenant_id: "hunter-org-unbound" }),
   });
   const connectRequestBody = parse<any>(connectRequest.payload);
-  assert(connectRequest.statusCode === 202 && connectRequestBody.state === "requested", "An unbound workspace must be able to request a provider connection without supplying a path.");
-  assert(connectRequestBody.secrets_exposed === false && !connectRequest.payload.toLowerCase().includes("token"), "Connection requests must remain credential-free.");
+  assert(connectRequest.statusCode === 202 && connectRequestBody.state === "requested", "An unbound workspace must be able to open a broker-backed provider connection without supplying a path.");
+  assert(String(connectRequestBody.authorizationUrl || "").startsWith("https://connect.example.invalid/authorize"), "Repository connection must return a real broker authorization URL.");
+  assert(connectRequestBody.secretsExposed === false && !connectRequest.payload.toLowerCase().includes("token"), "Connection handoffs must remain credential-free.");
 
   const blockedIntake = await app.inject({
     method: "POST",

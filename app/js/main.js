@@ -15,16 +15,16 @@ import {
 } from "./securitystatus.js?v=phantom-live-20260819-179";
 import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260819-179";
 import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260819-179";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260819-179";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-179";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-179";
 import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260819-179";
 import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260819-179";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260819-179";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260819-180";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260819-179";
 import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260819-179";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260819-179";
 import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260819-179";
-import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260819-179";
+import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260819-180";
 import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260819-179";
 import { renderPlanner } from "./planner.js?v=phantom-live-20260819-179";
 import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260819-179";
@@ -32,12 +32,12 @@ import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260819-179";
 import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260819-179";
 import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260819-179";
 import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260819-179";
-import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260819-179";
+import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260819-180";
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260819-179";
 import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260819-179";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260819-179";
 import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260819-179";
-import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260819-179";
+import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260819-180";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
@@ -66,17 +66,17 @@ const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 const WORKSPACE_STYLE_BUNDLES = Object.freeze({
   phantomplay: [
-    "/app/phantomplay.css?v=phantom-live-20260819-179",
-    "/app/phantomplay-v2.css?v=phantom-live-20260819-179",
+    "/app/phantomplay.css?v=phantom-live-20260819-180",
+    "/app/phantomplay-v2.css?v=phantom-live-20260819-180",
   ],
-  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260819-179"],
-  phantomai: ["/app/creator-studio.css?v=phantom-live-20260819-179"],
+  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260819-180"],
+  phantomai: ["/app/creator-studio.css?v=phantom-live-20260819-180"],
   phantomhunter: [
-    "/app/phantomhunter.css?v=phantom-live-20260819-179",
-    "/app/phantomhunter-connect.css?v=phantom-live-20260819-179",
+    "/app/phantomhunter.css?v=phantom-live-20260819-180",
+    "/app/phantomhunter-connect.css?v=phantom-live-20260819-180",
   ],
-  media: ["/app/creator-studio.css?v=phantom-live-20260819-179"],
-  content: ["/app/creator-studio.css?v=phantom-live-20260819-179"],
+  media: ["/app/creator-studio.css?v=phantom-live-20260819-180"],
+  content: ["/app/creator-studio.css?v=phantom-live-20260819-180"],
 });
 
 const workspaceStylePromises = new Map();
@@ -4119,16 +4119,49 @@ const CUSTOM = {
     wide: true,
     adminOnly: true,
     render: (body) => {
-      try { localStorage.setItem("pf.settings.tab.v1", "organization"); } catch {}
       body.innerHTML = `
-        <section class="admin-production-core" aria-label="Production Core mission control">
-          <div data-production-core-panel></div>
-        </section>
-        <section data-admin-organization-settings></section>`;
-      const corePanel = body.querySelector("[data-production-core-panel]");
-      const settingsPanel = body.querySelector("[data-admin-organization-settings]");
-      void mountProductionCorePanel(corePanel);
-      renderOperatorSettings(settingsPanel, { ...mediaOpts(), onWorkspaceApplied: () => { refreshCustomizedNavigation(); void refreshNavEntitlements(); renderMobileBottomNav(); } });
+        <div class="admin-command-center">
+          <section class="admin-command-hero">
+            <div class="admin-command-copy">
+              <p class="set-eyebrow">Organization command</p>
+              <h2>Run the team without the clutter.</h2>
+              <p>People, permissions, invitations, and workspace access stay in one focused control room. System diagnostics remain in Developer, where they belong.</p>
+            </div>
+            <div class="admin-command-state" aria-label="Admin status">
+              <span class="admin-command-signal" aria-hidden="true"></span>
+              <div>
+                <b>Owner controls ready</b>
+                <span>Changes stay reviewable and organization-scoped.</span>
+              </div>
+            </div>
+          </section>
+          <nav class="admin-command-actions" aria-label="Admin shortcuts">
+            <button class="admin-command-action is-active" type="button">
+              <span>01</span><b>People &amp; access</b><i>Roles, invitations, and module permissions</i>
+            </button>
+            <button class="admin-command-action" type="button" data-admin-jump="connections">
+              <span>02</span><b>Connections</b><i>Social providers and authorized accounts</i>
+            </button>
+            <button class="admin-command-action" type="button" data-admin-jump="settings">
+              <span>03</span><b>Workspace settings</b><i>Models, memory, routing, and safety</i>
+            </button>
+          </nav>
+          <section class="admin-organization-stage" data-admin-organization></section>
+        </div>`;
+      const organizationPanel = body.querySelector("[data-admin-organization]");
+      renderOrganizationPanel(organizationPanel, {
+        ...mediaOpts(),
+        onWorkspaceApplied: () => {
+          refreshCustomizedNavigation();
+          void refreshNavEntitlements();
+          renderMobileBottomNav();
+        },
+      });
+      body.querySelector('[data-admin-jump="connections"]')?.addEventListener("click", () => {
+        try { localStorage.setItem("pf.settings.tab.v1", "media"); } catch {}
+        routeWorkspace("settings");
+      });
+      body.querySelector('[data-admin-jump="settings"]')?.addEventListener("click", () => routeWorkspace("settings"));
     },
   },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },

@@ -5,7 +5,7 @@ import {
   store, isAdmin, isOwnerOperator, session, currentTenantId, moneyView, fmtMoney,
   workspaceStorageGetItem, workspaceStorageSetItem,
 } from "./store.js?v=phantom-live-20260819-179";
-import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260819-179";
+import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260819-180";
 import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260819-179";
 import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260819-179";
 

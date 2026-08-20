@@ -124,9 +124,9 @@ function actionFor(status: CustomerConnectionStatus): CustomerProviderView["acti
 function messageFor(status: CustomerConnectionStatus, name: string): string {
   switch (status) {
     case "PLATFORM_UNCONFIGURED":
-      return `Choose Connect for ${name}. PhantomForce handles secure sign-in and account protection; nothing else is needed from you.`;
+      return `${name} needs one-time provider setup before secure account authorization can open.`;
     case "PROVIDER_REVIEW_PENDING":
-      return `Choose Connect for ${name}. PhantomForce will keep the request ready while provider access is completed.`;
+      return `${name} is waiting for provider review. No account connection is claimed yet.`;
     case "CONNECTED":
       return `${name} is connected.`;
     case "LIMITED_PERMISSIONS":

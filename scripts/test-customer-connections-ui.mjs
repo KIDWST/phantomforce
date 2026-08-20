@@ -23,7 +23,8 @@ assert.match(social, /Connect \$\{account\.name\}/u);
 assert.match(accounting, /data-act="connector"[\s\S]{0,180}>\$\{connector\.status === "connected" \? "Manage" : "Connect"\}/u);
 assert.match(accounting, /const currentFinance = financeNow\(\)[\s\S]*currentConnector\.status = payload\.state[\s\S]*store\.save\(\)/u,
   "Accounting must persist the request on the post-render finance document.");
-assert.match(customerView, /nothing else is needed from you/u);
+assert.match(customerView, /one-time provider setup/u);
+assert.doesNotMatch(customerView, /nothing else is needed from you/iu);
 assert.match(planner, /data-settings-target="media">Connect</u);
 assert.match(account, /data-settings-target="media">Connect payments</u);
 assert.doesNotMatch(customerSurface, /Connection requested\. Nothing else is needed|Set up now|Open setup guide|Client secret|App secret|No live payment connector|Not wired here/iu);

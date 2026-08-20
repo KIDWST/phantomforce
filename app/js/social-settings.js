@@ -8,7 +8,7 @@
  */
 
 import { session as accessSession, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-179";
-import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260819-179";
+import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20260819-180";
 import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260819-179";
 
 const SOCIAL_LOGIN_URLS = {
@@ -36,6 +36,47 @@ let socialOAuthState = {
   connectors: [],
   preflight: null,
 };
+let socialOAuthSetupState = { loaded: false, loading: false, error: "", setup: null };
+
+function canManageSocialProviderApps() {
+  const active = typeof accessSession?.get === "function" ? accessSession.get() : null;
+  return Boolean(active?.canManageAccess || active?.isSuperAdmin);
+}
+
+async function refreshSocialOAuthSetup({ force = false } = {}) {
+  if (!canManageSocialProviderApps()) return null;
+  if (socialOAuthSetupState.loading || (socialOAuthSetupState.loaded && !force)) return socialOAuthSetupState.setup;
+  socialOAuthSetupState = { ...socialOAuthSetupState, loading: true, error: "" };
+  try {
+    const response = await fetch("/phantom-ai/ops/social-oauth/setup", { headers: socialAuthHeaders() });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(typeof json?.error === "string" ? json.error : `Provider setup check failed (${response.status}).`);
+    socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
+  } catch (error) {
+    socialOAuthSetupState = { ...socialOAuthSetupState, loaded: true, loading: false, error: error?.message || "Provider setup could not be checked." };
+  }
+  rerenderSocialSettings();
+  return socialOAuthSetupState.setup;
+}
+
+async function saveSocialOAuthSetup(form) {
+  const data = new FormData(form);
+  const response = await fetch("/phantom-ai/ops/social-oauth/setup", {
+    method: "POST",
+    headers: socialAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      platform: data.get("platform"),
+      clientId: data.get("clientId"),
+      clientSecret: data.get("clientSecret"),
+      redirectUri: data.get("redirectUri"),
+    }),
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof json?.error === "string" ? json.error : "Provider setup could not be saved.");
+  socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
+  await refreshSocialOAuthStatus({ force: true });
+  return json.setup;
+}
 
 function cleanSocialHandle(value = "") {
   return String(value || "")
@@ -85,8 +126,7 @@ async function requestSocialOAuthStart(platform) {
   const json = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(String(json?.error || `Account connection failed (${response.status}).`));
   if (json?.oauth?.authorizationUrl) return { mode: "oauth", oauth: json.oauth, message: "" };
-  if (json?.connect_request) return { mode: "requested", request: json.connect_request, message: json.customer_message || "Secure provider sign-in is ready. Finish approval with the provider, then refresh connection status." };
-  throw new Error("The secure account connection could not start.");
+  throw new Error("This provider needs its app ID and secret configured before account authorization can start.");
 }
 function openSocialAuthWindow(accountName = "account") {
   const safeName = String(accountName || "account").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "account";
@@ -124,10 +164,7 @@ async function beginSocialAccountConnection(account, popup = null) {
     return { mode: "oauth", opened };
   }
   try { popup?.close(); } catch {}
-  account.connectMode = "connection-requested";
-  account.lastConnectAt = new Date().toISOString();
-  socialNotice = start.message;
-  return { mode: "requested", opened: false };
+  throw new Error("The secure account connection could not start.");
 }
 async function refreshSocialOAuthStatus({ force = false } = {}) {
   if (socialOAuthState.loading || (socialOAuthState.loaded && !force)) return socialOAuthState;
@@ -242,7 +279,6 @@ function ensureSocialOAuthCompletionListener() {
 function socialStatusLabel(account) {
   const connector = socialConnectorFor(account.id);
   if (connector?.configured) return "live authorized";
-  if (account.connectMode === "connection-requested") return "connection requested";
   if (socialOAuthState.loading) return "checking connection";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live OAuth";
@@ -254,7 +290,6 @@ function socialStatusLabel(account) {
 function socialPostingState(account) {
   const connector = socialConnectorFor(account.id);
   if (connector?.configured) return "live feed + posting gated";
-  if (account.connectMode === "connection-requested") return "connection requested";
   if (socialOAuthState.loading) return "checking connection";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live data";
@@ -269,6 +304,7 @@ function socialActionLabel(account) {
   if (account.connectMode === "live-api" && account.analytics?.live) return `Sync ${account.name}`;
   if (connector?.configured) return `Reconnect ${account.name}`;
   if (socialOAuthState.loading) return "Checking…";
+  if (!connector?.oauthConfigured) return canManageSocialProviderApps() ? `Set up ${account.name}` : "Owner setup required";
   return `Connect ${account.name}`;
 }
 function clampHermesText(value = "", limit = 180) {
@@ -435,12 +471,39 @@ function startSocialBridgePolling(targetPlatform = "") {
   socialBridgePollTimer = setInterval(tick, 2500);
 }
 
+function socialProviderSetupPanel(esc) {
+  if (!canManageSocialProviderApps()) return "";
+  if (socialOAuthSetupState.loading && !socialOAuthSetupState.setup) {
+    return `<section class="set-social-provider-setup"><div><span>Provider apps</span><h4>Checking secure sign-in setup…</h4></div></section>`;
+  }
+  const providers = (socialOAuthSetupState.setup?.providers || []).filter((provider) => !provider.oauthConfigured);
+  if (!providers.length) return "";
+  return `<section class="set-social-provider-setup" data-social-provider-setup>
+    <header>
+      <div><span>One-time owner setup</span><h4>Enable secure social sign-in</h4><p>Add each provider app once. Secrets stay on the server and are never returned to this page.</p></div>
+      <b>${providers.length} provider${providers.length === 1 ? "" : "s"} to configure</b>
+    </header>
+    ${socialOAuthSetupState.error ? `<div class="set-social-notice">${esc(socialOAuthSetupState.error)}</div>` : ""}
+    <div class="set-social-provider-grid">
+      ${providers.map((provider) => `<form class="set-social-provider-card" data-social-provider-form>
+        <input type="hidden" name="platform" value="${esc(provider.id)}" />
+        <div class="set-social-provider-head"><span>${esc(provider.name)}</span><a href="${esc(provider.consoleUrl)}" target="_blank" rel="noopener noreferrer">Open provider console ↗</a></div>
+        <label><span>${esc(provider.idLabel)}</span><input name="clientId" type="text" autocomplete="off" placeholder="Paste ${esc(provider.idLabel)}" /></label>
+        <label><span>${esc(provider.secretLabel)}</span><input name="clientSecret" type="password" autocomplete="new-password" placeholder="Paste ${esc(provider.secretLabel)}" /></label>
+        <label><span>Authorized callback URL</span><input name="redirectUri" type="url" value="${esc(provider.callbackUrl || socialOAuthSetupState.setup?.recommendedRedirectUri || "")}" readonly /></label>
+        <button class="btn btn-primary" type="submit">Save &amp; enable ${esc(provider.name)}</button>
+      </form>`).join("")}
+    </div>
+  </section>`;
+}
+
 export function renderSocialSettings(el, opts = {}) {
   socialSettingsMount = el;
   socialSettingsOpts = opts;
   ensureHermesExtensionListener();
   ensureSocialOAuthCompletionListener();
   if (!socialOAuthState.loaded && !socialOAuthState.loading) void refreshSocialOAuthStatus();
+  if (canManageSocialProviderApps() && !socialOAuthSetupState.loaded && !socialOAuthSetupState.loading) void refreshSocialOAuthSetup();
   const esc = opts.esc || ((s) => String(s));
   const socialAccounts = loadSocialAccounts();
   const oauthReadyCount = socialOAuthState.connectors.filter((connector) => connector.oauthConfigured).length;
@@ -458,21 +521,43 @@ export function renderSocialSettings(el, opts = {}) {
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
         ${socialOAuthState.error ? `<div class="set-social-notice">Connection check: ${esc(socialOAuthState.error)}</div>` : ""}
         ${socialOAuthManagedPanel(esc)}
+        ${socialProviderSetupPanel(esc)}
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>
       </div>
     </div>`;
+  el.querySelectorAll("[data-social-provider-form]").forEach((form) => form.onsubmit = async (event) => {
+    event.preventDefault();
+    const button = form.querySelector("button[type='submit']");
+    if (button) button.disabled = true;
+    try {
+      await saveSocialOAuthSetup(form);
+      socialNotice = `${socialAccountName(new FormData(form).get("platform"))} provider app enabled. You can now connect the account.`;
+    } catch (error) {
+      socialNotice = error?.message || "Provider setup could not be saved.";
+    }
+    renderSocialSettings(el, opts);
+  });
   const quickConnect = el.querySelector("[data-social-quick-connect]");
   if (quickConnect) quickConnect.onclick = async () => {
     quickConnect.disabled = true;
-    let readyAccounts = socialAccounts.filter((account) => !socialConnectorFor(account.id)?.configured);
+    let readyAccounts = socialAccounts.filter((account) => {
+      const connector = socialConnectorFor(account.id);
+      return connector?.oauthConfigured && !connector.configured;
+    });
     if (!readyAccounts.length && !socialOAuthState.loading) {
       await refreshSocialOAuthStatus({ force: true });
-      readyAccounts = socialAccounts.filter((account) => !socialConnectorFor(account.id)?.configured);
+      readyAccounts = socialAccounts.filter((account) => {
+        const connector = socialConnectorFor(account.id);
+        return connector?.oauthConfigured && !connector.configured;
+      });
     }
     if (!readyAccounts.length) {
-      socialNotice = "Every listed account is already connected.";
+      const missingSetup = socialAccounts.some((account) => !socialConnectorFor(account.id)?.oauthConfigured);
+      socialNotice = missingSetup
+        ? (canManageSocialProviderApps() ? "Set up a provider app below before connecting its account." : "An owner must enable a provider app before this account can connect.")
+        : "Every listed account is already connected.";
       renderSocialSettings(el, opts);
       return;
     }
@@ -488,10 +573,9 @@ export function renderSocialSettings(el, opts = {}) {
       }
     }
     saveSocialAccounts(socialAccounts);
-    const requested = readyAccounts.length - opened;
     socialNotice = opened
-      ? `Quick connect opened ${opened} secure sign-in ${opened === 1 ? "window" : "windows"}.${requested ? ` ${requested} connection ${requested === 1 ? "request is" : "requests are"} saved and need nothing else from you.` : ""}${blocked ? ` ${blocked} popup ${blocked === 1 ? "was" : "were"} blocked by the browser.` : ""}`
-      : `${requested} connection ${requested === 1 ? "request is" : "requests are"} saved. Nothing else is needed from you.`;
+      ? `Quick connect opened ${opened} secure sign-in ${opened === 1 ? "window" : "windows"}.${blocked ? ` ${blocked} popup ${blocked === 1 ? "was" : "were"} blocked by the browser.` : ""}`
+      : "No secure sign-in window opened. Allow popups and try again.";
     renderSocialSettings(el, opts);
   };
 
@@ -521,9 +605,18 @@ export function renderSocialSettings(el, opts = {}) {
       } catch (error) {
         try { popup?.close(); } catch {}
         account.connectMode = account.handle ? "manual-confirmed" : "manual";
-        socialNotice = `${account.name} sign-in is temporarily unavailable. No connection was claimed and your saved public handle was left unchanged.`;
+        socialNotice = error?.message || `${account.name} sign-in could not start. No connection was claimed.`;
       }
       saveAndRender();
+    };
+    const setup = card.querySelector("[data-social-setup]");
+    if (setup) setup.onclick = () => {
+      if (!canManageSocialProviderApps()) {
+        socialNotice = "An organization owner must enable this provider app before account authorization can start.";
+        renderSocialSettings(el, opts);
+        return;
+      }
+      el.querySelector("[data-social-provider-setup]")?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
     const confirmForm = card.querySelector("[data-social-confirm-form]");
     if (confirmForm) confirmForm.onsubmit = (event) => {
@@ -555,7 +648,9 @@ function socialOAuthManagedPanel(esc) {
     ? "Authorized accounts can now pull official metrics."
     : readyCount || preflight.nextGlobalAction === "connect_signed_in_account"
       ? "Use the browser account you are already signed into; PhantomForce stores the resulting token server-side."
-      : "Choose Connect. PhantomForce handles secure sign-in and account protection; nothing else is needed from you.";
+      : canManageSocialProviderApps()
+        ? "Enable each provider app below, then connect the signed-in account."
+        : "An organization owner must enable the provider app before account authorization can start.";
   return `<div class="set-social-command">
     <div>
       <span>Account sign-in</span>
@@ -577,16 +672,14 @@ function socialCard(account, esc) {
     ? `Authorized account: ${connector.savedConnection?.accountHandle || connector.savedConnection?.accountName || connector.handle || account.name}`
     : connector?.oauthConfigured
       ? "OAuth app ready. Click connect and approve once."
-      : account.connectMode === "connection-requested"
-        ? "Connection request saved"
-        : status === "linked"
+      : status === "linked"
     ? (profile ? `Public handle saved: ${profile}` : "Public handle saved")
   : status === "pending"
       ? "Sign-in page opened. Save the visible handle below."
       : account.handle
         ? `Public handle ready: ${account.handle}`
         : "Choose Connect to continue";
-  const providerUnavailableCopy = "Ready for Connect";
+  const providerUnavailableCopy = canManageSocialProviderApps() ? "Provider setup required" : "Owner setup required";
   const oauthDetail = connector
     ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Connected" : connector.oauthConfigured ? "Ready to connect" : providerUnavailableCopy)}</div>`
     : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking…</div>` : "";
@@ -612,7 +705,9 @@ function socialCard(account, esc) {
     ${targetHint}
     ${hermesProof}
     <div class="set-social-actions">
-      <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>
+      ${connector?.oauthConfigured
+        ? `<button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>`
+        : `<button class="set-social-open set-social-action set-social-signin" data-social-setup type="button">${esc(socialActionLabel(account))}</button>`}
       <span>${esc(lastConnect)}</span>
     </div>
     <form class="set-social-confirm" data-social-confirm-form>

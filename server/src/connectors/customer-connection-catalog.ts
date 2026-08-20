@@ -18,6 +18,9 @@ const CATALOG = [
   { id: "email-proton", group: "Email", name: "Proton Mail", detail: "Approved sends and replies" },
   { id: "email-other", group: "Email", name: "Other email", detail: "Secure mail connection" },
   { id: "crm-hubspot", group: "CRM", name: "HubSpot", detail: "Contacts, lifecycle, and activity" },
+  { id: "code-github", group: "Developer", name: "GitHub", detail: "Authorized repository access" },
+  { id: "code-gitlab", group: "Developer", name: "GitLab", detail: "Authorized repository access" },
+  { id: "code-bitbucket", group: "Developer", name: "Bitbucket", detail: "Authorized repository access" },
 ] as const satisfies ReadonlyArray<{ id: CustomerConnectorId; group: string; name: string; detail: string }>;
 
 function brokerBaseUrl() {

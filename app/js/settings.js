@@ -1,7 +1,7 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260819-179";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260819-180";
 import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260819-179";
 import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260819-179";
 import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-179";

@@ -11,7 +11,7 @@ import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260819-179";
+} from "./contenthub.js?v=phantom-live-20260819-180";
 import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260819-179";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
@@ -262,6 +262,10 @@ function socialAuthHeaders(extra = {}) {
   const sessionId = typeof accessSession?.get === "function" ? accessSession.get()?.sessionId : "";
   return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(sessionId ? { "x-phantomforce-session": sessionId } : {}) };
 }
+function canManageSocialProviderApps() {
+  const active = typeof accessSession?.get === "function" ? accessSession.get() : null;
+  return Boolean(active?.canManageAccess || active?.isSuperAdmin);
+}
 async function requestSocialOAuthStart(platform) {
   const response = await fetch("/phantom-ai/ops/social-oauth/start", {
     method: "POST",
@@ -271,7 +275,6 @@ async function requestSocialOAuthStart(platform) {
   const json = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(String(json?.error || `Account connection failed (${response.status}).`));
   if (json?.oauth?.authorizationUrl) return { mode: "oauth", oauth: json.oauth, message: "" };
-  if (json?.connect_request) return { mode: "requested", request: json.connect_request, message: json.customer_message || "Connection requested. Nothing else is needed from you." };
   throw new Error("The secure account connection could not start.");
 }
 function openSocialAuthWindow(accountName = "account") {
@@ -310,10 +313,7 @@ async function beginSocialAccountConnection(account, popup = null) {
     return { mode: "oauth", opened };
   }
   try { popup?.close(); } catch {}
-  account.connectMode = "connection-requested";
-  account.lastConnectAt = new Date().toISOString();
-  socialNotice = start.message;
-  return { mode: "requested", opened: false };
+  throw new Error("The secure account connection could not start.");
 }
 async function refreshSocialOAuthStatus({ force = false } = {}) {
   if (socialOAuthState.loading || (socialOAuthState.loaded && !force)) return socialOAuthState;
@@ -427,7 +427,6 @@ function ensureSocialOAuthCompletionListener() {
 function socialStatusLabel(account) {
   const connector = socialConnectorFor(account.id);
   if (connector?.configured) return "live authorized";
-  if (account.connectMode === "connection-requested") return "connection requested";
   if (socialOAuthState.loading) return "checking connection";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live OAuth";
@@ -439,7 +438,6 @@ function socialStatusLabel(account) {
 function socialPostingState(account) {
   const connector = socialConnectorFor(account.id);
   if (connector?.configured) return "live feed + posting gated";
-  if (account.connectMode === "connection-requested") return "connection requested";
   if (socialOAuthState.loading) return "checking connection";
   const st = socialStatus(account);
   if (account.connectMode === "live-api" && account.analytics?.live) return "live data";
@@ -454,6 +452,7 @@ function socialActionLabel(account) {
   if (account.connectMode === "live-api" && account.analytics?.live) return `Sync ${account.name}`;
   if (connector?.configured) return `Reconnect ${account.name}`;
   if (socialOAuthState.loading) return "Checking…";
+  if (!connector?.oauthConfigured) return canManageSocialProviderApps() ? `Set up ${account.name}` : "Owner setup required";
   return `Connect ${account.name}`;
 }
 function clampHermesText(value = "", limit = 180) {
@@ -5208,13 +5207,22 @@ export function renderMediaSettings(el, opts = {}) {
   const quickConnect = el.querySelector("[data-social-quick-connect]");
   if (quickConnect) quickConnect.onclick = async () => {
     quickConnect.disabled = true;
-    let readyAccounts = socialAccounts.filter((account) => !socialConnectorFor(account.id)?.configured);
+    let readyAccounts = socialAccounts.filter((account) => {
+      const connector = socialConnectorFor(account.id);
+      return connector?.oauthConfigured && !connector.configured;
+    });
     if (!readyAccounts.length && !socialOAuthState.loading) {
       await refreshSocialOAuthStatus({ force: true });
-      readyAccounts = socialAccounts.filter((account) => !socialConnectorFor(account.id)?.configured);
+      readyAccounts = socialAccounts.filter((account) => {
+        const connector = socialConnectorFor(account.id);
+        return connector?.oauthConfigured && !connector.configured;
+      });
     }
     if (!readyAccounts.length) {
-      socialNotice = "Every listed account is already connected.";
+      const missingSetup = socialAccounts.some((account) => !socialConnectorFor(account.id)?.oauthConfigured);
+      socialNotice = missingSetup
+        ? (canManageSocialProviderApps() ? "Set up the provider apps in Connection Settings before connecting their accounts." : "An organization owner must enable the provider apps before these accounts can connect.")
+        : "Every listed account is already connected.";
       renderMediaSettings(el, opts);
       return;
     }
@@ -5230,10 +5238,9 @@ export function renderMediaSettings(el, opts = {}) {
       }
     }
     saveSocialAccounts(socialAccounts);
-    const requested = readyAccounts.length - opened;
     socialNotice = opened
-      ? `Quick connect opened ${opened} secure sign-in ${opened === 1 ? "window" : "windows"}.${requested ? ` ${requested} connection ${requested === 1 ? "request is" : "requests are"} saved and need nothing else from you.` : ""}${blocked ? ` ${blocked} popup ${blocked === 1 ? "was" : "were"} blocked by the browser.` : ""}`
-      : `${requested} connection ${requested === 1 ? "request is" : "requests are"} saved. Nothing else is needed from you.`;
+      ? `Quick connect opened ${opened} secure sign-in ${opened === 1 ? "window" : "windows"}.${blocked ? ` ${blocked} popup ${blocked === 1 ? "was" : "were"} blocked by the browser.` : ""}`
+      : "The secure sign-in windows could not be opened.";
     renderMediaSettings(el, opts);
   };
 
@@ -5263,9 +5270,14 @@ export function renderMediaSettings(el, opts = {}) {
       } catch (error) {
         try { popup?.close(); } catch {}
         account.connectMode = account.handle ? "manual-confirmed" : "manual";
-        socialNotice = `${account.name} connection is temporarily unavailable. Nothing else is needed from you; try Connect again later.`;
+        socialNotice = error?.message || `${account.name} connection could not start.`;
       }
       saveAndRender();
+    };
+    const setup = card.querySelector("[data-social-setup]");
+    if (setup) setup.onclick = () => {
+      try { localStorage.setItem("pf.settings.tab.v1", "media"); } catch {}
+      opts.openWorkspace?.("settings");
     };
     const confirmForm = card.querySelector("[data-social-confirm-form]");
     if (confirmForm) confirmForm.onsubmit = (event) => {
@@ -5295,16 +5307,14 @@ function socialCard(account, esc) {
     ? `Authorized account: ${connector.savedConnection?.accountHandle || connector.savedConnection?.accountName || connector.handle || account.name}`
     : connector?.oauthConfigured
       ? "OAuth app ready. Click connect and approve once."
-      : account.connectMode === "connection-requested"
-        ? "Connection request saved"
-        : status === "linked"
+      : status === "linked"
     ? (profile ? `Public handle saved: ${profile}` : "Public handle saved")
   : status === "pending"
       ? "Sign-in page opened. Save the visible handle below."
       : account.handle
         ? `Public handle ready: ${account.handle}`
         : "Choose Connect to continue";
-  const providerUnavailableCopy = "Ready for Connect";
+  const providerUnavailableCopy = canManageSocialProviderApps() ? "Provider setup required" : "Owner setup required";
   const oauthDetail = connector
     ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Connected" : connector.oauthConfigured ? "Ready to connect" : providerUnavailableCopy)}</div>`
     : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking…</div>` : "";
@@ -5330,7 +5340,9 @@ function socialCard(account, esc) {
     ${targetHint}
     ${hermesProof}
     <div class="set-social-actions">
-      <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>
+      ${connector?.oauthConfigured
+        ? `<button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>`
+        : `<button class="set-social-open set-social-action set-social-signin" data-social-setup type="button">${esc(socialActionLabel(account))}</button>`}
       <span>${esc(lastConnect)}</span>
     </div>
     <form class="set-social-confirm" data-social-confirm-form>
