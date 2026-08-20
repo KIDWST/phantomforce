@@ -14,26 +14,26 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260819-177";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260819-177";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260819-177";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260819-177";
-import { esc } from "./workspaces.js?v=phantom-live-20260819-177";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260819-177";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260819-177";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260819-177";
-import { setCompanionState } from "./companion.js?v=phantom-live-20260819-177";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260819-177";
+} from "./store.js?v=phantom-live-20260819-178";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260819-178";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260819-178";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260819-178";
+import { esc } from "./workspaces.js?v=phantom-live-20260819-178";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260819-178";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260819-178";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260819-178";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260819-178";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260819-178";
 import {
   getOperatorBrainChoices,
   getOperatorInfrastructureStatus,
   setOperatorBrainChoice,
-} from "./settings.js?v=phantom-live-20260819-177";
+} from "./settings.js?v=phantom-live-20260819-178";
 import {
   buildPromptIntegrityEnvelope,
   MAX_PROMPT_CHARS,
   promptSizeError,
-} from "./prompt-integrity.js?v=phantom-live-20260819-177";
+} from "./prompt-integrity.js?v=phantom-live-20260819-178";
 
 const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -1712,7 +1712,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260819-177")
+  import("./brain.js?v=phantom-live-20260819-178")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }

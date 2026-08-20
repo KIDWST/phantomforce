@@ -65,6 +65,7 @@ assert.match(buddy, /saveCurrentPagePlacement/u, "Companion drag and resize must
 assert.match(buddy, /Math\.hypot\(event\.clientX - dragPointerStartX, event\.clientY - dragPointerStartY\)/u, "Drag detection must use total gesture distance rather than tiny pointer-event steps.");
 assert.match(buddy, /layer\.classList\.remove\("is-grabbed"\);[\s\S]*?vx = 0;[\s\S]*?vy = 0;[\s\S]*?if \(dragged\)/u, "Every drag release must stop retained pointer velocity.");
 assert.match(buddy, /undock\(\{ keepPosition: !!x && !!y, silent: true \}\)/u, "Preference refresh must preserve a live free placement when browser storage is unavailable.");
+assert.match(buddy, /!autoWanderAllowed\(\)[\s\S]*?vx = 0;[\s\S]*?vy = 0;[\s\S]*?tx = x;[\s\S]*?ty = y;/u, "Non-wandering placement must be a hard stationary state.");
 assert.doesNotMatch(buddy, /function undock\(\)\s*\{\s*dock\(\);\s*\}/u, "Undock must not be a sidebar alias.");
 assert.doesNotMatch(buddy, /I'll stay in the sidebar/u, "Drag release must not force the companion back to the sidebar.");
 assert.doesNotMatch(baseCss, /body:has\(\.phantom \.app-main > \.console:not\(\.console-workspace\)\) \.buddy/u, "Overview must not hide the movable companion.");
