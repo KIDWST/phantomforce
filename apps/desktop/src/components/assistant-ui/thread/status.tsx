@@ -17,7 +17,6 @@ import { $backgroundResume } from '@/store/background-delegation'
 import { sessionCompacting } from '@/store/compaction'
 import { sessionAwaitingInput } from '@/store/prompts'
 import { sessionProviderWait } from '@/store/provider-wait'
-import { $phantomRoute, $thinkingStatus, type PhantomRoute } from '@/store/session'
 import { type DraftingTool, sessionDraftingTool } from '@/store/tool-drafting'
 
 // A status line is scaffolding like any other — "Editing" while the model
@@ -134,16 +133,7 @@ function useStatusHint(compacting: boolean, drafting: DraftingTool | null, provi
 }
 
 function usePhantomThinkingQuip(active: boolean): string {
-  const backendStatus = useStore($thinkingStatus)
   const [index, setIndex] = useState(0)
-
-  const phrases = useMemo(
-    () =>
-      backendStatus
-        ? [backendStatus, ...PHANTOM_THINKING_QUIPS.filter(quip => quip !== backendStatus)]
-        : PHANTOM_THINKING_QUIPS,
-    [backendStatus]
-  )
 
   useEffect(() => {
     setIndex(0)
@@ -155,40 +145,14 @@ function usePhantomThinkingQuip(active: boolean): string {
     const timer = window.setInterval(() => setIndex(current => current + 1), 3200)
 
     return () => window.clearInterval(timer)
-  }, [active, backendStatus])
+  }, [active])
 
-  return phrases[index % phrases.length] ?? PHANTOM_THINKING_QUIPS[0]
+  return PHANTOM_THINKING_QUIPS[index % PHANTOM_THINKING_QUIPS.length] ?? PHANTOM_THINKING_QUIPS[0]
 }
 
 const ThinkingQuip: FC<{ children: string }> = ({ children }) => (
   <span className="shimmer min-w-0 truncate text-muted-foreground/60">{children}</span>
 )
-
-const ROUTE_LABELS: Record<PhantomRoute, string> = {
-  deep: 'Deep',
-  direct: 'Direct',
-  focus: 'Focus',
-  instant: 'Instant'
-}
-
-const PhantomRouteBadge: FC = () => {
-  const route = useStore($phantomRoute)
-
-  if (!route) {
-    return null
-  }
-
-  return (
-    <span
-      className="phantom-route-badge shrink-0"
-      data-route={route}
-      title={`Phantom adaptive lane: ${ROUTE_LABELS[route]}`}
-    >
-      <span aria-hidden="true" className="phantom-route-badge__pulse" />
-      {ROUTE_LABELS[route]}
-    </span>
-  )
-}
 
 export const CenteredThreadSpinner: FC = () => {
   const { t } = useI18n()
@@ -225,7 +189,6 @@ export const ResponseLoadingIndicator: FC = () => {
         className="dither inline-block size-3 rounded-[2px] text-midground/80"
         kind="opacity"
       />
-      <PhantomRouteBadge />
       {hint ? <HintText>{hint}</HintText> : <ThinkingQuip>{quip}</ThinkingQuip>}
       <ActivityTimerText seconds={elapsed} />
     </StatusRow>
@@ -335,7 +298,6 @@ export const TurnActivityIndicator: FC = () => {
         className="dither inline-block size-3 rounded-[2px] text-midground/80"
         kind="opacity"
       />
-      <PhantomRouteBadge />
       {hint ? <HintText>{hint}</HintText> : <ThinkingQuip>{quip}</ThinkingQuip>}
       <ActivityTimerText seconds={elapsed} />
     </StatusRow>

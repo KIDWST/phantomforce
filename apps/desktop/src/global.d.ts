@@ -177,6 +177,10 @@ declare global {
         discover: (org?: string) => Promise<DesktopCloudDiscoverResult>
         agentSignIn: (dashboardUrl: string) => Promise<DesktopCloudAgentSignInResult>
       }
+      chatgptPlus?: {
+        health: () => Promise<ChatGptPlusBridgeStatus>
+        start: () => Promise<ChatGptPlusBridgeStatus>
+      }
       profile: {
         get: () => Promise<DesktopActiveProfile>
         // Persists the desktop's profile choice and relaunches the local
@@ -712,6 +716,18 @@ export interface HermesWindowState {
   isVisible?: boolean
   nativeOverlayWidth: number
   windowButtonPosition: { x: number; y: number } | null
+}
+
+export interface ChatGptPlusBridgeStatus {
+  available: boolean
+  baseUrl: string
+  browserUp: boolean
+  error: string | null
+  loggedIn: boolean
+  pid: number | null
+  running: boolean
+  service: string
+  version: string | null
 }
 
 export interface DesktopActiveProfile {

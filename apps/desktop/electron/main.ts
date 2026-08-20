@@ -223,13 +223,13 @@ import { createPoolStopper } from './pool-stop'
 import { poolTouchKeys } from './pool-touch-scope'
 import { createKeepAwake } from './power-save'
 import { PreviewReachRegistry } from './preview-reach'
-import { PRODUCT_IDENTITY } from './product-identity'
 import {
   createPrimaryRemoteConnection,
   FirstRunSetupResetError,
   runPrimaryBackendStartup
 } from './primary-backend-startup'
 import { rehomePrimaryConnection } from './primary-connection-rehome'
+import { PRODUCT_IDENTITY } from './product-identity'
 import {
   assertLocalProfileCanStart,
   decideProfileDeleteAction,
@@ -252,13 +252,6 @@ import { createQuickEntryShortcut, quickEntryWindowBounds, sanitizeQuickEntrySet
 import { type ActiveWork, mergeActiveWork, normalizeActiveWork, quitPromptFor } from './quit-guard'
 import * as remoteLifecycle from './remote-lifecycle'
 import {
-  createPackagedSourceIdentity,
-  createRuntimeIdentity,
-  parseAheadBehind,
-  parseRuntimeUrl,
-  resolveRuntimeMode
-} from './runtime-identity'
-import {
   RemoteLivenessTracker,
   RemoteRevalidationCoordinator,
   revalidatePooledRemoteBackends,
@@ -266,6 +259,13 @@ import {
 } from './remote-liveness'
 import { missingRendererAssets } from './renderer-bundle'
 import { attachRendererConsoleCapture, formatRendererBoundaryReport } from './renderer-log'
+import {
+  createPackagedSourceIdentity,
+  createRuntimeIdentity,
+  parseAheadBehind,
+  parseRuntimeUrl,
+  resolveRuntimeMode
+} from './runtime-identity'
 import {
   buildInstanceWindowUrl,
   buildSessionWindowUrl,
@@ -587,6 +587,12 @@ ipcMain.handle('hermes:get-remote-display-reason', () => REMOTE_DISPLAY_REASON)
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 
 const SOURCE_REPO_ROOT = path.resolve(APP_ROOT, '../..')
+
+const CHATGPT_PLUS_BACKEND_HOST = process.env.PHANTOM_CHATGPT_BACKEND_HOST || '127.0.0.1'
+const CHATGPT_PLUS_BACKEND_PORT = Number.parseInt(process.env.PHANTOM_CHATGPT_BACKEND_PORT || '8792', 10) || 8792
+const CHATGPT_PLUS_BACKEND_URL = `http://${CHATGPT_PLUS_BACKEND_HOST}:${CHATGPT_PLUS_BACKEND_PORT}`
+let chatGptPlusProcess = null
+let chatGptPlusStartPromise = null
 
 // Build-time install stamp -- the git ref this .exe was built against.
 //
@@ -12444,6 +12450,8 @@ function revalidatePool() {
   })
 }
 
+ipcMain.handle('hermes:chatgpt-plus:health', async () => readChatGptPlusHealth())
+ipcMain.handle('hermes:chatgpt-plus:start', async () => ensureChatGptPlusBackend())
 ipcMain.handle('hermes:backend:touch', async (_event, profile) => {
   touchPoolBackend(profile)
 
@@ -14774,6 +14782,7 @@ async function gitRuntimeValue(root, args) {
 
 async function collectRuntimeIdentity() {
   const repositoryRoot = APP_ROOT
+
   const [worktree, remote, branch, commit, status, upstream, counts] = await Promise.all([
     gitRuntimeValue(repositoryRoot, ['rev-parse', '--show-toplevel']),
     gitRuntimeValue(repositoryRoot, ['remote', 'get-url', 'origin']),
@@ -14808,18 +14817,22 @@ async function collectRuntimeIdentity() {
   const kernelRoot = resolvedBackend?.root || ACTIVE_HERMES_ROOT
   const kernelCommit = await gitRuntimeValue(kernelRoot, ['rev-parse', 'HEAD'])
   const explicitMode = process.env.PHANTOMBOT_RUNTIME_MODE || process.env.HERMES_DESKTOP_RUNTIME_MODE
+
   const mode = resolveRuntimeMode({
     explicitMode,
     isPackaged: IS_PACKAGED,
     sourceIsGitWorktree: Boolean(worktree)
   })
+
   const deploymentPath = mode === 'packaged' ? path.dirname(process.execPath) : null
   const backendMode = connection?.mode === 'local' || connection?.mode === 'remote' ? connection.mode : 'unknown'
+
   const command = processHandle?.spawnargs?.length
     ? processHandle.spawnargs.map(value => String(value)).join(' ')
     : resolvedBackend?.command
       ? [resolvedBackend.command, ...(resolvedBackend.args || [])].join(' ')
       : null
+
   const sourceIdentity = deploymentPath
     ? createPackagedSourceIdentity(deploymentPath, INSTALL_STAMP)
     : {
@@ -15134,10 +15147,12 @@ ipcMain.handle('hermes:vscode-theme:search', async (_event, query) => searchMark
 // Win/Linux running-app 'second-instance' (argv), Win/Linux cold-start argv.
 // ---------------------------------------------------------------------------
 const HERMES_PROTOCOL = DEV_SERVER ? 'phantombot-dev' : 'phantombot'
+
 /** Schemes accepted when parsing inbound URLs (dev accepts both). */
 const DEEPLINK_SCHEMES = DEV_SERVER
   ? ['phantombot-dev', 'phantombot', 'hermes-dev', 'hermes']
   : ['phantombot', 'hermes']
+
 let _pendingDeepLink = null
 let _rendererReadyForDeepLink = false
 

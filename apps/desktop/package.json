@@ -212,6 +212,10 @@
     "afterPack": "scripts/after-pack.mjs",
     "extraResources": [
       {
+        "from": "../../services/chatgpt_plus_backend.py",
+        "to": "services/chatgpt_plus_backend.py"
+      },
+      {
         "from": "build/install-stamp.json",
         "to": "install-stamp.json"
       },

@@ -12,6 +12,7 @@ import {
   Archive,
   BarChart3,
   Bell,
+  Brain,
   Download,
   Globe,
   Info,
@@ -21,6 +22,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  SlidersHorizontal,
   Upload,
   Wrench,
   Zap
@@ -42,6 +44,7 @@ import { SKILLS_ROUTE } from '../routes'
 import { AboutSettings } from './about-settings'
 import { AppearanceSettings } from './appearance-settings'
 import { BillingSettings } from './billing'
+import { ChatGptPlusSettings } from './chatgpt-plus-settings'
 import { ConfigSettings } from './config-settings'
 import { SECTIONS } from './constants'
 import { GatewaySettings } from './gateway-settings'
@@ -64,6 +67,7 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   'keys',
   'notifications',
   'billing',
+  'chatgpt-plus',
   'plugins',
   'sessions',
   'about'

@@ -5727,8 +5727,8 @@ def _session_info(agent, session: dict | None = None) -> dict:
     info: dict = {
         # Legacy fields remain the route that is actually active. Explicit
         # pending fields let clients render a queued transition truthfully.
-        "model": active_model,
-        "provider": active_provider,
+        "model": pending_model or active_model,
+        "provider": pending_provider or active_provider,
         "active_model": active_model,
         "active_provider": active_provider,
         "pending_model": pending_model,
@@ -11009,6 +11009,52 @@ def _run_prompt_submit(
             _usage_stop, _usage_thread = _start_usage_ticker(sid, agent)
             try:
                 result = agent.run_conversation(run_message, **run_kwargs)
+
+                # A successful transport result without assistant prose is not
+                # a successful desktop turn.  Give the same agent one bounded
+                # synthesis pass over the completed tool history so the user
+                # always receives an answer, while explicitly preventing a
+                # replay of side effects from the original attempt.
+                _raw_result = (
+                    result.get("final_response") if isinstance(result, dict) else result
+                )
+                _blank_success = (
+                    isinstance(result, dict)
+                    and result.get("completed") is True
+                    and not result.get("error")
+                    and not result.get("interrupted")
+                    and (
+                        _raw_result is None
+                        or not str(_raw_result).strip()
+                        or str(_raw_result).strip() == "(empty)"
+                    )
+                )
+                if _blank_success:
+                    _delivery_prompt = (
+                        "The previous attempt completed without delivering a final answer. "
+                        "Use the existing conversation and tool results to answer the user's "
+                        "request now. Do not repeat any external, destructive, billable, or "
+                        "side-effecting action that may already have completed. State what was "
+                        "completed, what remains, and any concrete verification result. Return "
+                        "a direct user-facing answer; never return empty."
+                    )
+                    _delivery_kwargs = dict(run_kwargs)
+                    _delivery_kwargs["conversation_history"] = list(
+                        result.get("messages") or history
+                    )
+                    _delivery_kwargs["persist_user_message"] = _delivery_prompt
+                    if "persist_user_display_kind" in _run_params:
+                        _delivery_kwargs["persist_user_display_kind"] = "hidden"
+                        _delivery_kwargs["persist_user_display_metadata"] = {
+                            "reason": "blank_final_response_recovery"
+                        }
+                    logger.warning(
+                        "tui prompt completed blank; running bounded final-answer recovery: "
+                        "ui_session=%s session_key=%s",
+                        sid,
+                        session.get("session_key") or "",
+                    )
+                    result = agent.run_conversation(_delivery_prompt, **_delivery_kwargs)
             finally:
                 # Stop AND join before anything below emits: an in-flight tick
                 # surviving past message.complete would roll the client's final
@@ -11174,9 +11220,6 @@ def _run_prompt_submit(
                 # that error as the visible text instead of shipping an empty
                 # turn to Ink. Mirrors classic CLI behavior at cli.py where
                 # (failed|partial) + no final_response → "Error: <detail>".
-                # Leaves the None-with-no-error path untouched: an empty
-                # successful turn still renders as empty, and the existing
-                # "(empty)" sentinel handling stays in its own lane.
                 if (not raw) and result.get("error") and (
                     result.get("failed") or result.get("partial")
                 ):
@@ -11190,6 +11233,19 @@ def _run_prompt_submit(
                     INTERRUPT_WAITING_FOR_MODEL_PREFIX
                 ):
                     raw = ""
+                if status == "complete" and (
+                    raw is None
+                    or not str(raw).strip()
+                    or str(raw).strip() == "(empty)"
+                ):
+                    raw = (
+                        "PhantomBot completed the work but could not produce the final answer. "
+                        "The task state is preserved and can be resumed without repeating "
+                        "completed actions."
+                    )
+                    result["error"] = "blank final response after recovery"
+                    result["failed"] = True
+                    status = "error"
                 lr = result.get("last_reasoning")
                 if isinstance(lr, str) and lr.strip():
                     last_reasoning = lr.strip()
@@ -12176,7 +12232,10 @@ def _(rid, params: dict) -> dict:
                         or ""
                     ).strip()
                     session["pending_model_switch"] = {
+                        "raw": str(value),
                         "raw_input": str(value),
+                        "display_model": pending_model,
+                        "display_provider": pending_provider or None,
                         "model": pending_model,
                         "provider": pending_provider or None,
                         "confirm_expensive_model": bool(

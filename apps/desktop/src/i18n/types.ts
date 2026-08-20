@@ -317,6 +317,7 @@ export interface Translations {
       archivedChats: string
       about: string
       billing: string
+      chatgptPlus: string
       notifications: string
       plugins: string
     }
@@ -1297,8 +1298,8 @@ export interface Translations {
     settingsFields: string
     mcpServers: string
     archivedChats: string
-    sections: Record<'maintenance' | 'sessions' | 'system' | 'usage', string>
-    sectionDescriptions: Record<'maintenance' | 'sessions' | 'system' | 'usage', string>
+    sections: Record<'maintenance' | 'runs' | 'sessions' | 'system' | 'usage', string>
+    sectionDescriptions: Record<'maintenance' | 'runs' | 'sessions' | 'system' | 'usage', string>
     nav: Record<'newChat' | 'settings' | 'skills' | 'messaging' | 'artifacts', { title: string; detail: string }>
     sectionEntries: Record<'sessions' | 'system' | 'usage', { title: string; detail: string }>
     providerNavigate: string

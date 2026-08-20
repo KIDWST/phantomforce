@@ -40,6 +40,7 @@ export interface ChatBarProps {
   gateway?: HermesGateway | null
   queueSessionKey?: string | null
   sessionId?: string | null
+  showPhantomPresence?: boolean
   cwd?: string | null
   onCancel: () => Promise<void> | void
   onAddContextRef?: (refText: string, label?: string, detail?: string) => void

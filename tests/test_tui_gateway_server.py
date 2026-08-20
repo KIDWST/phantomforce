@@ -14393,21 +14393,33 @@ def test_prompt_submit_surfaces_backend_error_as_visible_text(monkeypatch):
     assert "kimi-k2.6" in payload.get("text", "")
 
 
-def test_prompt_submit_preserves_empty_response_without_error(monkeypatch):
-    """An empty final_response with NO backend error must stay empty — do not
-    synthesize an error string. Preserves the existing None/empty-sentinel
-    semantics owned by downstream handlers."""
+def test_prompt_submit_recovers_empty_success_with_final_answer(monkeypatch):
+    """A successful turn may never disappear as a blank desktop response."""
 
     class _Agent:
+        calls = 0
+
         def run_conversation(self, prompt, conversation_history=None, stream_callback=None, **_kwargs):
+            self.calls += 1
+            if self.calls == 2:
+                return {
+                    "final_response": "The work completed and all checks passed.",
+                    "messages": [
+                        {"role": "user", "content": "hello"},
+                        {"role": "assistant", "content": "The work completed and all checks passed."},
+                    ],
+                    "api_calls": 2,
+                    "completed": True,
+                }
             return {
                 "final_response": None,
-                "messages": [],
+                "messages": [{"role": "user", "content": "hello"}],
                 "api_calls": 1,
                 "completed": True,
             }
 
-    server._sessions["sid"] = _session(agent=_Agent())
+    agent = _Agent()
+    server._sessions["sid"] = _session(agent=agent)
     monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
 
     emitted: list[tuple[str, str, dict]] = []
@@ -14431,11 +14443,53 @@ def test_prompt_submit_preserves_empty_response_without_error(monkeypatch):
     complete_events = [e for e in emitted if e[0] == "message.complete"]
     assert complete_events, "expected message.complete to be emitted"
     payload = complete_events[-1][2]
-    # Status stays "complete" because no error flag was set
     assert payload.get("status") == "complete"
-    # Text stays empty — we did NOT fabricate an "Error:" string
-    text = payload.get("text", "")
-    assert text in {"", None}, f"expected empty text, got {text!r}"
+    assert payload.get("text") == "The work completed and all checks passed."
+    assert agent.calls == 2
+
+
+def test_prompt_submit_closes_blank_recovery_as_visible_error(monkeypatch):
+    """Two blank completions close visibly instead of leaving the task busy."""
+
+    class _Agent:
+        calls = 0
+
+        def run_conversation(self, prompt, conversation_history=None, stream_callback=None, **_kwargs):
+            self.calls += 1
+            return {
+                "final_response": "(empty)",
+                "messages": [{"role": "user", "content": str(prompt)}],
+                "api_calls": self.calls,
+                "completed": True,
+            }
+
+    agent = _Agent()
+    server._sessions["sid"] = _session(agent=agent)
+    monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
+
+    emitted: list[tuple[str, str, dict]] = []
+    monkeypatch.setattr(
+        server,
+        "_emit",
+        lambda event, sid, payload=None: emitted.append((event, sid, payload or {})),
+    )
+    monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
+    monkeypatch.setattr(server, "render_message", lambda raw, cols: None)
+    monkeypatch.setattr(server, "_get_db", lambda: None)
+
+    server.handle_request(
+        {
+            "id": "1",
+            "method": "prompt.submit",
+            "params": {"session_id": "sid", "text": "hello"},
+        }
+    )
+
+    payload = [e for e in emitted if e[0] == "message.complete"][-1][2]
+    assert payload.get("status") == "error"
+    assert "could not produce the final answer" in payload.get("text", "")
+    assert payload.get("recoverable") is True
+    assert agent.calls == 2
 
 
 # ── active live TUI sessions ─────────────────────────────────────────

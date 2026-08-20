@@ -101,6 +101,16 @@ export function OpenRouterProviderRow({ onClick }: { onClick: () => void }) {
   return <KeyProviderRow onClick={onClick} pitch={t.onboarding.openRouterPitch} title="OpenRouter" />
 }
 
+export function ChatGptSubscriptionRow({ onClick }: { onClick: () => void }) {
+  return (
+    <KeyProviderRow
+      onClick={onClick}
+      pitch="Use your signed-in ChatGPT Plus session through PhantomBot's private local bridge."
+      title="ChatGPT Plus"
+    />
+  )
+}
+
 export function ProviderRow({
   onSelect,
   provider

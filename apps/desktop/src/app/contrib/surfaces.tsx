@@ -16,7 +16,7 @@ import { useContributions } from '@/contrib/react/use-contributions'
 import { $activeConnectionId } from '@/store/connections'
 import { $gateway } from '@/store/gateway'
 import { $activeGatewayProfile } from '@/store/profile'
-import { $freshDraftReady, $gatewayState } from '@/store/session'
+import { $currentProvider, $freshDraftReady, $gatewayState } from '@/store/session'
 
 import { ChatView } from '../chat'
 import { ChatSidebar } from '../chat/sidebar'
@@ -81,6 +81,7 @@ export const StatusbarSurface = memo(function StatusbarSurface({
   const activeConnectionId = useStore($activeConnectionId)
   const activeGatewayProfile = useStore($activeGatewayProfile)
   const gatewayState = useStore($gatewayState)
+  const currentProvider = useStore($currentProvider)
   const freshDraftReady = useStore($freshDraftReady)
   const gatewayScope = `${activeConnectionId ?? ''}\0${activeGatewayProfile}`
 

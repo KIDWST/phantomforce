@@ -92,6 +92,7 @@ export function ChatBar({
   maxRecordingSeconds = 120,
   queueSessionKey,
   sessionId,
+  showPhantomPresence = true,
   state,
   onCancel,
   onAddUrl,

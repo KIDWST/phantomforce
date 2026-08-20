@@ -369,6 +369,7 @@ export const en: Translations = {
       archivedChats: 'Archived Chats',
       about: 'About',
       billing: 'Billing',
+      chatgptPlus: 'ChatGPT Plus',
       notifications: 'Notifications',
       plugins: 'Plugins'
     },

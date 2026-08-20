@@ -33,6 +33,7 @@ import type {
 } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { AlertTriangle, Cpu, Loader2 } from '@/lib/icons'
+import { displayModelName } from '@/lib/model-status-label'
 import { DEFAULT_REASONING_EFFORT, REASONING_EFFORT_VALUES } from '@/lib/reasoning-effort'
 import { cn } from '@/lib/utils'
 import { setMainModelAssignment } from '@/store/cron-model-impact'
@@ -925,7 +926,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile = null }: Model
                 <SelectContent>
                   {withActive(selectedProviderModels, selectedModel).map(model => (
                     <SelectItem key={model} value={model}>
-                      {modelSelectLabel(model)}
+                      {selectedProviderRow?.is_user_defined ? model : displayModelName(model)}
                     </SelectItem>
                   ))}
                 </SelectContent>
