@@ -217,7 +217,7 @@ export async function requestPhantomPlayAiEdit(
     "",
     "Rules:",
     "- Make the minimum change that satisfies the instruction. Preserve everything else exactly, including formatting style.",
-    "- The file must remain valid and runnable on its own (plain browser JS/HTML/CSS, no build step, no new dependencies).",
+    "- Preserve the file's existing language, file type, framework, build/runtime assumptions, and dependency policy. The result must remain valid for that project.",
     "- Do not explain your change in prose. Respond with ONLY the complete new file content, wrapped exactly like this, nothing before or after:",
     BEGIN,
     "...full file content...",
@@ -232,14 +232,23 @@ export async function requestPhantomPlayAiEdit(
   ].join("\n");
 
   const selectedProvider = normalizedProvider(input.provider);
+  const automaticProviders: Array<Exclude<PhantomPlayAiProvider, "auto">> = ["codex", "local", "claude", "openrouter"];
+  // A manual choice is a priority, not a single point of failure. PhantomPlay
+  // tries the selected route/model first, then recovers through the remaining
+  // desktop-capable routes. A provider-specific model id is intentionally not
+  // forwarded to fallback providers.
   const providers: Array<Exclude<PhantomPlayAiProvider, "auto">> = selectedProvider === "auto"
-    ? ["codex", "claude", "local", "openrouter"]
-    : [selectedProvider];
+    ? automaticProviders
+    : [selectedProvider, ...automaticProviders.filter((provider) => provider !== selectedProvider)];
   const failures: string[] = [];
   const providerCall = options.callProvider ?? callEditProvider;
   for (const provider of providers) {
     try {
-      const result = await providerCall(provider, prompt, { ...input, cwd }, timeout);
+      const result = await providerCall(provider, prompt, {
+        ...input,
+        cwd,
+        model: selectedProvider === "auto" || provider === selectedProvider ? input.model : "",
+      }, timeout);
       const newContent = extractFile(result.raw);
       if (newContent === null) {
         throw new Error("The model response did not include the required complete-file markers.");
@@ -262,6 +271,6 @@ export async function requestPhantomPlayAiEdit(
     ok: false,
     error: selectedProvider === "auto"
       ? `No selected AI route completed the edit. ${failures.join(" ")}`
-      : `${selectedProvider} could not complete the edit. ${failures.join(" ")}`,
+      : `The selected ${selectedProvider} route failed and automatic fallback was exhausted. ${failures.join(" ")}`,
   };
 }

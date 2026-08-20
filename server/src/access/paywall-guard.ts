@@ -34,6 +34,11 @@ export function requiresWrite(method: string, url: string): boolean {
   if (path === "/billing/webhook") return false; // authenticated by its own signing secret, not a session
   if (/(^|-)(preview|dry-run|preflight|contract|validate)$/.test(seg)) return false; // read-only computes
   if (path === "/phantom-ai/chat") return false; // conversational; its side effects are separately gated
+  // The native PhantomPlay editor deliberately has no browser/account session.
+  // Its route performs its own strict loopback-only check before it can invoke
+  // a provider, so the subscription/session paywall must not reject the local
+  // desktop bridge first. Remote callers still fail at the route boundary.
+  if (path === "/api/phantomplay/ai-edit") return false;
 
   return true; // fail closed: everything else that mutates needs write access
 }

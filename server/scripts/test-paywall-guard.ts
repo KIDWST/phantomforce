@@ -25,6 +25,8 @@ assert(requiresWrite("POST", "/client-provisioning/dry-run") === false, "dry-run
 assert(requiresWrite("POST", "/actions/validate") === false, "validate is free");
 assert(requiresWrite("POST", "/falcon/jobs/validate") === false, "falcon validate is free");
 assert(requiresWrite("POST", "/phantom-ai/chat") === false, "chat view is free");
+assert(requiresWrite("POST", "/api/phantomplay/ai-edit") === false, "loopback-gated PhantomPlay desktop edit bypasses account paywall");
+assert(requiresWrite("POST", "/api/phantomplay/ai-edit?provider=codex") === false, "PhantomPlay desktop edit query variants bypass account paywall");
 
 // ---- classifier: real mutations require write ----
 assert(requiresWrite("POST", "/client-access/abc/status/propose") === true, "propose needs write");
@@ -36,6 +38,7 @@ assert(requiresWrite("POST", "/phantom-ai/agents/actions/run") === true, "action
 assert(requiresWrite("POST", "/client-access-workflow/snapshot") === true, "snapshot needs write");
 assert(requiresWrite("DELETE", "/anything") === true, "DELETE needs write");
 assert(requiresWrite("POST", "/some/brand-new/write-route") === true, "unknown mutation needs write (fail closed)");
+assert(requiresWrite("POST", "/api/phantomplay/ai-edit/anything") === true, "only the exact PhantomPlay desktop edit route is exempt");
 
 // ---- preHandler behaviour ----
 const freeSession = { id: "gateway:member@acme.com" };            // signed in, view only
@@ -70,6 +73,12 @@ r = fakeReply();
 await asFree({ method: "POST", url: "/phantom-ai/security/scan/preview", headers: {} } as never, r as never);
 assert(r.statusCode === 0, "free member is NOT blocked from a read-only preview");
 
+// Native PhantomPlay has no account bearer token. The route itself applies a
+// loopback-only gate, so this global paywall must allow the request to reach it.
+r = fakeReply();
+await asAnon({ method: "POST", url: "/api/phantomplay/ai-edit", headers: {} } as never, r as never);
+assert(r.statusCode === 0, "anonymous local desktop edit is NOT rejected before its route-level loopback gate");
+
 // owner may write
 r = fakeReply();
 await asOwner({ method: "POST", url: "/client-access/abc/status/propose", headers: {} } as never, r as never);
@@ -90,6 +99,7 @@ console.log(
       ownerCanWrite: true,
       anonWriteBlocked: true,
       anonWriteStatus: 401,
+      phantomPlayDesktopBridgeReachesRouteGate: true,
       directApiBypassBlocked: true,
     },
     null,

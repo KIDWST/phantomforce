@@ -55,8 +55,27 @@ const autoResult = await requestPhantomPlayAiEdit(
 );
 assert.equal(autoResult.ok, true);
 if (!autoResult.ok) throw new Error(autoResult.error);
-assert.equal(autoResult.provider, "claude");
-assert.deepEqual(autoCalls, ["codex", "claude"]);
+assert.equal(autoResult.provider, "local");
+assert.deepEqual(autoCalls, ["codex", "local"]);
+
+const selectedFallbackCalls: Array<{ provider: string; model: string | undefined }> = [];
+const selectedFallback = await requestPhantomPlayAiEdit(
+  { ...baseInput, provider: "openrouter", model: "deepseek/deepseek-v4-flash" },
+  {
+    callProvider: async (provider, _prompt, input) => {
+      selectedFallbackCalls.push({ provider, model: input.model });
+      if (provider === "openrouter") throw new Error("HTTP 401");
+      return { raw: marked(revised), provider, model: "fallback-model" };
+    },
+  },
+);
+assert.equal(selectedFallback.ok, true);
+if (!selectedFallback.ok) throw new Error(selectedFallback.error);
+assert.equal(selectedFallback.provider, "codex");
+assert.deepEqual(selectedFallbackCalls, [
+  { provider: "openrouter", model: "deepseek/deepseek-v4-flash" },
+  { provider: "codex", model: "" },
+]);
 
 const malformed = await requestPhantomPlayAiEdit(
   { ...baseInput, provider: "local" },
