@@ -86,6 +86,29 @@ function exists(target) {
   return fs.existsSync(target)
 }
 
+function readWindowsVersionInfo(exe) {
+  const escaped = exe.replaceAll("'", "''")
+  const result = spawnSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `(Get-Item -LiteralPath '${escaped}').VersionInfo | ` +
+        'Select-Object ProductName,FileDescription,FileVersion,ProductVersion | ConvertTo-Json -Compress'
+    ],
+    { encoding: 'utf8', windowsHide: true }
+  )
+  if (result.status !== 0) {
+    die(`Could not read packaged executable identity: ${String(result.stderr || '').trim()}`)
+  }
+  try {
+    return JSON.parse(result.stdout)
+  } catch (err) {
+    die(`Packaged executable identity is not valid JSON: ${err.message}`)
+  }
+}
+
 // Match node-pty native binding location to what the bundled electron-main.cjs
 // resolves at runtime. stage-native-deps.mjs stages node-pty into
 // dist/node_modules/node-pty, and dist/** is asarUnpacked (see package.json
@@ -296,6 +319,16 @@ function launchFresh() {
 function validateBundle() {
   if (!exists(APP.binary)) {
     die(`Missing packaged app binary: ${APP.binary}`)
+  }
+
+  if (PLATFORM === 'win32') {
+    const versionInfo = readWindowsVersionInfo(APP.binary)
+    if (versionInfo.ProductName !== PRODUCT_NAME || versionInfo.FileDescription !== PRODUCT_NAME) {
+      die(
+        `Packaged executable identity mismatch: expected ${PRODUCT_NAME}, got ` +
+          `${versionInfo.ProductName || 'unknown'} / ${versionInfo.FileDescription || 'unknown'}`
+      )
+    }
   }
 
   // Negative assertion: the OLD fat-installer factory payload must NOT be
