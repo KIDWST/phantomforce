@@ -1392,7 +1392,7 @@ let bootProgressState = {
   error: null,
   fakeMode: BOOT_FAKE_MODE,
   isCloudBackendDown: false,
-  message: 'Waiting to start Hermes backend',
+  message: 'Waiting to start PhantomBot engine',
   phase: 'idle',
   progress: 0,
   retryable: false,
@@ -2089,7 +2089,7 @@ async function waitForUpdateToFinish() {
       rememberLog(`[updates] detached update finished with manual action (branch ${result.branch}): ${result.message}`)
       dialog.showMessageBox({
         type: 'warning',
-        title: 'Hermes update',
+        title: 'PhantomBot update',
         message: 'The update finished, but needs one more step',
         detail: result.message
       })
@@ -2098,7 +2098,7 @@ async function waitForUpdateToFinish() {
     } else if (result) {
       rememberLog(`[updates] detached update FAILED (exit ${result.exitCode}): ${result.message}`)
       dialog.showErrorBox(
-        'Hermes update did not finish',
+        'PhantomBot update did not finish',
         `${result.message}\n\nDetails: ${path.join(HERMES_HOME, 'logs', 'desktop-update-handoff.log')}`
       )
     }
@@ -10772,7 +10772,7 @@ async function startHermes() {
   // E2E: simulate a boot failure without breaking the real backend. The boot
   // progresses a few steps, then fails with the given error message.
   if (BOOT_FAKE_ERROR) {
-    await advanceBootProgress('backend.resolve', 'Resolving Hermes backend', 8)
+    await advanceBootProgress('backend.resolve', 'Resolving PhantomBot engine', 8)
     const error = new Error(BOOT_FAKE_ERROR) as any
     error.isBootstrapFailure = true
     bootstrapFailure = error
@@ -10806,7 +10806,7 @@ async function startHermes() {
         throw new Error('Hermes backend start was superseded by a newer connection attempt.')
       }
 
-      await advanceBootProgress('backend.remote', `Connecting to remote Hermes backend at ${remote.baseUrl}`, 24)
+      await advanceBootProgress('backend.remote', `Connecting to remote PhantomBot engine at ${remote.baseUrl}`, 24)
       await waitForHermes(remote.baseUrl, remote.token, undefined, remote.authMode, remote.headers)
 
       // Second async boundary: the health probe itself can outlive the
@@ -10817,7 +10817,7 @@ async function startHermes() {
 
       updateBootProgress({
         phase: 'backend.ready',
-        message: 'Remote Hermes backend is ready',
+        message: 'Remote PhantomBot engine is ready',
         progress: 94,
         running: true,
         error: null
@@ -10826,7 +10826,7 @@ async function startHermes() {
       return createPrimaryRemoteConnection(remote, hermesLog.slice(-80), getWindowState())
     }
 
-    await advanceBootProgress('backend.resolve', 'Resolving Hermes backend', 8)
+    await advanceBootProgress('backend.resolve', 'Resolving PhantomBot engine', 8)
     // Resolve for the desktop's primary profile so a per-profile remote
     // override on the active profile is honored (falls back to env / global).
 
@@ -10900,7 +10900,7 @@ async function startHermes() {
     const webDist = resolveWebDist()
     const readyFile = backend.readyFile ? makeDashboardReadyFile() : null
 
-    await advanceBootProgress('backend.spawn', `Starting Hermes backend via ${backend.label}`, 84)
+    await advanceBootProgress('backend.spawn', `Starting PhantomBot engine via ${backend.label}`, 84)
     rememberLog(`Starting Hermes backend via ${backend.label}`)
 
     const profile = primaryProfileKey()
@@ -11021,7 +11021,7 @@ async function startHermes() {
       }
     })
 
-    await advanceBootProgress('backend.port', 'Waiting for Hermes backend to launch', 86)
+    await advanceBootProgress('backend.port', 'Waiting for PhantomBot engine to launch', 86)
 
     // Discover the ephemeral port the child bound to
     const port = await Promise.race([
@@ -11034,7 +11034,7 @@ async function startHermes() {
     }
 
     const baseUrl = `http://127.0.0.1:${port}`
-    await advanceBootProgress('backend.wait', 'Waiting for Hermes backend to become ready', 90)
+    await advanceBootProgress('backend.wait', 'Waiting for PhantomBot engine to become ready', 90)
     await Promise.race([waitForHermes(baseUrl, token), backendStartFailed])
     backendReady = true
     backendStartFailure = null
@@ -11056,7 +11056,7 @@ async function startHermes() {
 
     updateBootProgress({
       phase: 'backend.ready',
-      message: 'Hermes backend is ready. Finalizing desktop startup',
+      message: 'PhantomBot engine is ready. Finalizing desktop startup',
       progress: 94,
       running: true,
       error: null
