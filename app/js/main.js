@@ -24,17 +24,17 @@ import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260819-17
 import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260819-179";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260819-179";
 import { mountPhantomAI } from "./phantomai.js?v=phantom-live-20260819-179";
-import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260819-180";
+import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260819-181";
 import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260819-179";
 import { renderPlanner } from "./planner.js?v=phantom-live-20260819-179";
 import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260819-179";
 import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260819-179";
 import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260819-179";
-import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260819-179";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260819-181";
 import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260819-179";
 import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260819-180";
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260819-179";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260819-179";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260819-181";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260819-179";
 import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260819-179";
 import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260819-180";
@@ -66,17 +66,17 @@ const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 const WORKSPACE_STYLE_BUNDLES = Object.freeze({
   phantomplay: [
-    "/app/phantomplay.css?v=phantom-live-20260819-180",
-    "/app/phantomplay-v2.css?v=phantom-live-20260819-180",
+    "/app/phantomplay.css?v=phantom-live-20260819-181",
+    "/app/phantomplay-v2.css?v=phantom-live-20260819-181",
   ],
-  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260819-180"],
-  phantomai: ["/app/creator-studio.css?v=phantom-live-20260819-180"],
+  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260819-181"],
+  phantomai: ["/app/creator-studio.css?v=phantom-live-20260819-181"],
   phantomhunter: [
-    "/app/phantomhunter.css?v=phantom-live-20260819-180",
-    "/app/phantomhunter-connect.css?v=phantom-live-20260819-180",
+    "/app/phantomhunter.css?v=phantom-live-20260819-181",
+    "/app/phantomhunter-connect.css?v=phantom-live-20260819-181",
   ],
-  media: ["/app/creator-studio.css?v=phantom-live-20260819-180"],
-  content: ["/app/creator-studio.css?v=phantom-live-20260819-180"],
+  media: ["/app/creator-studio.css?v=phantom-live-20260819-181"],
+  content: ["/app/creator-studio.css?v=phantom-live-20260819-181"],
 });
 
 const workspaceStylePromises = new Map();

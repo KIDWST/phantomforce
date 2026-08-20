@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-179";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-181";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -40,6 +40,21 @@ let canUseLoop = () => true;
 let onLoopUnavailable = null;
 let renderSettingsPanel = null;
 let renderCorePanel = null;
+let popCleanupTimer = 0;
+
+function clearAvatarPop() {
+  clearTimeout(popCleanupTimer);
+  el?.canvas?.classList.remove("pc-pop");
+}
+
+function triggerAvatarPop() {
+  if (reduceMotion || !el?.canvas) return;
+  el.canvas.classList.remove("pc-pop");
+  void el.canvas.offsetWidth;
+  el.canvas.classList.add("pc-pop");
+  clearTimeout(popCleanupTimer);
+  popCleanupTimer = setTimeout(clearAvatarPop, 520);
+}
 
 export function setCompanionState(state, caption) {
   const def = PRESENCE_STATES[state] || PRESENCE_STATES.idle;
@@ -47,12 +62,8 @@ export function setCompanionState(state, caption) {
   if (nextKey !== current) {
     prevDef = PRESENCE_STATES[current] || PRESENCE_STATES.idle;
     stateChangedAt = performance.now();
-    // squash-and-stretch: a small anticipatory pop on every mood change
-    if (!reduceMotion && el?.canvas) {
-      el.canvas.classList.remove("pc-pop");
-      void el.canvas.offsetWidth;
-      el.canvas.classList.add("pc-pop");
-    }
+    // Squash-and-stretch: a small anticipatory pop on every mood change.
+    triggerAvatarPop();
   }
   current = nextKey;
   window.dispatchEvent(new CustomEvent("phantom:presence-state", {
@@ -256,13 +267,21 @@ export function mountCompanion(headEl, opts = {}) {
   el.canvas.style.width = `${SIZE}px`;
   el.canvas.style.height = `${SIZE}px`;
   ctx2 = el.canvas.getContext("2d");
-  character = createPhantomCharacter({ small: true });
+  character = createPhantomCharacter({ small: true, settled: true });
 
   window.addEventListener("pointermove", (e) => { pointer = { x: e.clientX, y: e.clientY }; }, { passive: true });
   el.modeChip.addEventListener("click", () => requestLoopMode(mode === "loop" ? "chat" : "loop"));
   el.settingsBtn.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleSettings();
+  });
+  el.canvas.addEventListener("animationend", (event) => {
+    if (event.animationName === "pcPop") clearAvatarPop();
+  });
+  el.canvas.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    pulse = Math.max(pulse, 0.18);
   });
   el.menuLoop?.addEventListener("click", () => {
     requestLoopMode(mode === "loop" ? "chat" : "loop");
@@ -276,6 +295,7 @@ export function mountCompanion(headEl, opts = {}) {
   });
 
   setCompanionMode(mode);
+  setCompanionState(mode === "loop" ? "building" : "idle");
   if (reduceMotion) paintOnce();
   else loop();
 }

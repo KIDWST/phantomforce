@@ -9950,12 +9950,24 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
 .buddy.is-booting .buddy-canvas {
   pointer-events: none;
 }
+.buddy.is-scroll-vanishing {
+  pointer-events: none;
+}
+.buddy.is-scroll-vanishing .buddy-canvas {
+  pointer-events: none !important;
+  animation: buddyVanish 0.9s ease both;
+}
 .buddy.is-scroll-hidden {
   opacity: 0;
   pointer-events: none;
 }
 .buddy.is-scroll-hidden .buddy-canvas {
   pointer-events: none !important;
+}
+@keyframes buddyVanish {
+  0% { opacity: 1; filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.46)) drop-shadow(0 0 22px rgba(65, 255, 161, 0.16)); }
+  60% { opacity: 0.68; filter: blur(0.8px) drop-shadow(0 8px 18px rgba(0, 0, 0, 0.32)) drop-shadow(0 0 18px rgba(65, 255, 161, 0.14)); }
+  100% { opacity: 0.06; filter: blur(4px) drop-shadow(0 0 14px rgba(65, 255, 161, 0.06)); }
 }
 .buddy-canvas {
   display: block; pointer-events: auto; cursor: grab; touch-action: none;
@@ -10440,6 +10452,7 @@ body.mission-control-on .sidebar, body.mission-control-on .topbar2, body.mission
 @media (prefers-reduced-motion: reduce) {
   .bg-glow { animation: none; }
   .buddy-say.pop { animation: none; }
+  .buddy.is-scroll-vanishing .buddy-canvas { animation: none; }
   .buddy, .buddy-canvas { transition: none !important; }
   .workspace-page.page-enter, .workspace-page.page-enter .workspace-page-head, .workspace-page.page-enter .workspace-page-body, .console.console-enter, .console.console-enter .hero2, .console.console-enter .console-rail { animation: none !important; }
   .nav-item:hover, .nav-item:active, .nav-item:hover .ic, .plan-card:hover, .queue-card:hover, .quick-card:hover, .desktop-context-card:hover, .set-model-card:hover, .ml-tab:active, .cmd-chip:active, .chat-start-btn:active { transform: none; }

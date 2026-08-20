@@ -2,7 +2,7 @@
    Movable, page-aware Phantom system: preference-aware, drag-safe, and
    tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-179";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260819-181";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -19,6 +19,7 @@ const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
 const GREETED_SESSION_KEY = "pf.companion.greeted.session.v1";
 const LAST_GREETING_KEY = "pf.companion.lastGreeting.v1";
 const LAST_QUIP_KEY = "pf.companion.lastQuip.v1";
+const LAST_SCROLL_QUIP_KEY = "pf.companion.lastScrollQuip.v1";
 const MIN_FREE_SIZE = 58;
 const MAX_FREE_SIZE = 220;
 
@@ -46,6 +47,13 @@ const QUIPS = {
   playful: ["I fit better over here.", "Small Phantom, serious job.", "I promise not to hover over the buttons.", "Haunting the sidebar. Professionally.", ...BASE_QUIPS],
   quiet: ["Here.", "Ready.", "Docked.", "Approvals first."],
 };
+
+const SCROLL_AWAY_QUIPS = [
+  "Wait, where are you going?",
+  "Wait for me.",
+  "I thought we were friends.",
+  "Don't forget me!",
+];
 
 const STATE_LOOK = {
   docked: { mood: "idle", emotion: "calm", pulse: 0 },
@@ -121,6 +129,10 @@ function createBuddyController() {
   let nextWanderAt = 0;
   let lastPaintAt = 0;
   let scrollHideTimer = 0;
+  let scrollHidden = false;
+  let scrollVanishing = false;
+  let lastScrollAwayAt = 0;
+  const scrollPositions = new WeakMap();
   let revealAt = 0;
   let revealed = false;
   let pageKey = currentPageKey();
@@ -170,9 +182,10 @@ function createBuddyController() {
   function sidebarDockZone() {
     const side = sidebarRect();
     const sidebar = document.querySelector(".sidebar");
-    const nav = sidebar?.querySelector(".side-nav-main");
-    const bottomNav = sidebar?.querySelector(".side-nav-bottom");
-    const navItems = nav ? [...nav.querySelectorAll(".nav-item")].map((item) => item.getBoundingClientRect()).filter((rect) => (
+    const mainNav = sidebar?.querySelector(".side-nav-main");
+    const utilityNav = sidebar?.querySelector(".side-nav-utility") || sidebar?.querySelector(".side-nav-bottom");
+    const navRoot = mainNav || sidebar?.querySelector(".side-nav");
+    const navItems = navRoot ? [...navRoot.querySelectorAll(".nav-item")].map((item) => item.getBoundingClientRect()).filter((rect) => (
       rect.width > 0 &&
       rect.height > 0 &&
       rect.bottom > 0 &&
@@ -180,15 +193,13 @@ function createBuddyController() {
     )) : [];
     const sideTop = Math.max(0, side.top || 0);
     const sideBottom = Math.min(window.innerHeight, side.bottom || window.innerHeight);
-    const bottomNavRect = bottomNav?.getBoundingClientRect();
-    const bottomNavVisible = !!bottomNavRect && bottomNavRect.width > 0 && bottomNavRect.height > 0 && bottomNavRect.top < sideBottom && bottomNavRect.bottom > sideTop;
     const lastNavBottom = navItems.length ? Math.max(...navItems.map((rect) => rect.bottom)) : (sideTop + 420);
-    const hardBottom = bottomNavVisible
-      ? Math.max(sideTop + 126, Math.min(sideBottom - 12, bottomNavRect.top - 12))
-      : sideBottom - 12;
-    const bottom = Math.max(sideTop + 126, hardBottom);
-    const preferredTop = Math.max(lastNavBottom + 14, sideTop + 250);
-    const top = Math.min(preferredTop, Math.max(sideTop + 106, bottom - 78));
+    const utilityRect = utilityNav?.getBoundingClientRect();
+    const utilityTop = utilityRect && utilityRect.width > 0 && utilityRect.height > 0
+      ? Math.max(sideTop + 160, Math.min(sideBottom - 16, utilityRect.top))
+      : sideBottom;
+    const bottom = Math.max(sideTop + 150, utilityTop - 12);
+    const top = Math.min(Math.max(lastNavBottom + 18, sideTop + 250), Math.max(sideTop + 120, bottom - 100));
     const height = Math.max(0, bottom - top);
     return {
       left: side.left,
@@ -213,9 +224,9 @@ function createBuddyController() {
 
   function sizeForPrefs() {
     const map = {
-      compact: mobile() ? 60 : 58,
-      standard: mobile() ? 68 : 64,
-      large: mobile() ? 78 : 74,
+      compact: mobile() ? 68 : 88,
+      standard: mobile() ? 78 : 112,
+      large: mobile() ? 92 : 132,
     };
     return map[prefs.size] || map.standard;
   }
@@ -227,9 +238,9 @@ function createBuddyController() {
       return { width: freeSize, height: freeSize };
     }
     const zone = sidebarDockZone();
-    const width = Math.round(Math.min(Math.max(base, 64), Math.max(58, Math.min(96, zone.width - 34))));
-    const idealHeight = zone.cramped ? Math.max(base + 24, 92) : Math.max(base + 46, 118);
-    const height = Math.round(Math.min(idealHeight, Math.max(76, Math.min(168, zone.height - 8))));
+    const width = Math.round(Math.min(Math.max(base, 82), Math.max(82, Math.min(136, zone.width - 26))));
+    const idealHeight = zone.cramped ? Math.max(base + 42, 124) : Math.max(base + 72, 162);
+    const height = Math.round(Math.min(idealHeight, Math.max(112, Math.min(224, zone.height - 8))));
     return {
       width,
       height,
@@ -430,6 +441,8 @@ function createBuddyController() {
   function removeLayer() {
     clearTimeout(sayTimer);
     clearTimeout(scrollHideTimer);
+    scrollHidden = false;
+    scrollVanishing = false;
     running = false;
     loopToken += 1;
     if (eventAbort) {
@@ -457,6 +470,8 @@ function createBuddyController() {
     layer.classList.toggle("is-docked", docked);
     layer.classList.toggle("is-roaming", !docked && roamingAllowed());
     layer.classList.toggle("is-resizing", resizing);
+    layer.classList.toggle("is-scroll-hidden", scrollHidden);
+    layer.classList.toggle("is-scroll-vanishing", scrollVanishing);
     layer.dataset.motion = prefs.motionLevel;
     layer.dataset.personality = prefs.personality;
     layer.dataset.dock = prefs.dockLocation;
@@ -522,6 +537,16 @@ function createBuddyController() {
     return next;
   }
 
+  function scrollAwayText() {
+    let last = "";
+    try { last = localStorage.getItem(LAST_SCROLL_QUIP_KEY) || ""; } catch {}
+    const options = SCROLL_AWAY_QUIPS.filter((item) => item !== last);
+    const pool = options.length ? options : SCROLL_AWAY_QUIPS;
+    const next = pool[Math.floor(Math.random() * pool.length)];
+    try { localStorage.setItem(LAST_SCROLL_QUIP_KEY, next); } catch {}
+    return next;
+  }
+
   function maybeGreet() {
     if (!layer || !canGreetNow()) return;
     markGreeted();
@@ -549,6 +574,54 @@ function createBuddyController() {
     stateUntil = ms ? performance.now() + ms : 0;
     pulse = Math.max(pulse, STATE_LOOK[next].pulse || 0);
     if (layer) layer.dataset.state = state;
+  }
+
+  function revealFromScroll() {
+    if (!layer || (!scrollHidden && !scrollVanishing)) return;
+    clearTimeout(scrollHideTimer);
+    scrollHidden = false;
+    scrollVanishing = false;
+    layer.classList.remove("is-scroll-hidden", "is-scroll-vanishing");
+    configureCanvas({ snap: false, preserveTarget: !docked });
+    if (docked || mobile() || !roamingAllowed()) dock();
+    else {
+      clampToSafeZone();
+      tx = x;
+      ty = y;
+      saveCurrentPagePlacement();
+    }
+    updatePointerHitState(true);
+  }
+
+  function vanishForScroll() {
+    if (!layer || scrollHidden || scrollVanishing || !sidebarPortraitMode() || dragging || resizing || userBusy()) return;
+    const now = performance.now();
+    if (now - lastScrollAwayAt < 14000) {
+      scrollVanishing = true;
+      scrollHidden = false;
+      applyPreferenceClasses();
+      clearTimeout(scrollHideTimer);
+      scrollHideTimer = setTimeout(() => {
+        scrollVanishing = false;
+        scrollHidden = true;
+        applyPreferenceClasses();
+        updatePointerHitState(true);
+      }, 920);
+      return;
+    }
+    lastScrollAwayAt = now;
+    scrollVanishing = true;
+    closeMenu();
+    setState("concerned", 1200);
+    say(scrollAwayText(), 1450);
+    applyPreferenceClasses();
+    clearTimeout(scrollHideTimer);
+    scrollHideTimer = setTimeout(() => {
+      scrollVanishing = false;
+      scrollHidden = true;
+      applyPreferenceClasses();
+      updatePointerHitState(true);
+    }, 1500);
   }
 
   function react(kind, ms = 1600) {
@@ -716,6 +789,7 @@ function createBuddyController() {
 
   function buddyRectHit(clientX, clientY) {
     if (!canvas || !layer) return false;
+    if (scrollHidden || scrollVanishing) return false;
     if (document.body.classList.contains("overlay-open")) return false;
     if (getComputedStyle(layer).opacity === "0") return false;
     const rect = canvas.getBoundingClientRect();
@@ -797,24 +871,29 @@ function createBuddyController() {
   function bindEvents() {
     eventAbort = new AbortController();
     const signal = eventAbort.signal;
-    const hideDuringScroll = () => {
-      if (!layer || dragging || resizing || (menu && !menu.hidden)) return;
-      layer.classList.add("is-scroll-hidden");
-      if (canvas) canvas.style.pointerEvents = "none";
-      clearTimeout(scrollHideTimer);
-      scrollHideTimer = setTimeout(() => {
-        if (!layer) return;
-        configureCanvas({ snap: false, preserveTarget: !docked });
-        if (docked || mobile() || !roamingAllowed()) dock();
-        else {
-          clampToSafeZone();
-          tx = x;
-          ty = y;
-          saveCurrentPagePlacement();
-        }
-        layer.classList.remove("is-scroll-hidden");
-        updatePointerHitState(true);
-      }, 260);
+    const scrollKey = (target) => (target === document || target === window || target === document.body || target === document.documentElement)
+      ? document.documentElement
+      : target;
+    const scrollTopFor = (target) => {
+      const key = scrollKey(target);
+      if (!(key instanceof Element)) return null;
+      if (key.closest?.(".sidebar, .buddy-menu")) return null;
+      if (key === document.documentElement || key === document.body) {
+        return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      }
+      if (key.scrollHeight <= key.clientHeight + 4) return null;
+      return key.scrollTop;
+    };
+    const handleScroll = (event) => {
+      if (!docked || !sidebarPortraitMode()) return;
+      const key = scrollKey(event.target);
+      const current = scrollTopFor(event.target);
+      if (current == null || !(key instanceof Element)) return;
+      const previous = scrollPositions.has(key) ? scrollPositions.get(key) : current;
+      scrollPositions.set(key, current);
+      const delta = current - previous;
+      if (delta > 18 && current > 20) vanishForScroll();
+      else if (delta < -36 || current < 8) revealFromScroll();
     };
     const queuePageSwitch = () => setTimeout(() => switchPageContext(), 80);
     window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; updatePointerHitState(); }, { passive: true, signal });
@@ -830,7 +909,7 @@ function createBuddyController() {
     }, { passive: true, signal });
     window.addEventListener("hashchange", queuePageSwitch, { passive: true, signal });
     window.addEventListener("popstate", queuePageSwitch, { passive: true, signal });
-    document.addEventListener("scroll", hideDuringScroll, { passive: true, capture: true, signal });
+    document.addEventListener("scroll", handleScroll, { passive: true, capture: true, signal });
     document.addEventListener("pointerdown", (event) => {
       openMenuFromPointerEvent(event);
     }, { capture: true, signal });
