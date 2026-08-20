@@ -1,24 +1,26 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260819-183";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260819-183";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260819-183";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-183";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260819-183";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-183";
-import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-183";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260819-184";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260819-184";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260819-184";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260819-184";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260819-184";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260819-184";
+import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260819-184";
 import {
+  AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
   getAiProviderModelCatalog,
   loadAiRuntimeConfig,
+  loadAiRuntimeUsage,
   loadAiProviderModels,
   persistAiRuntimeConfig,
   removeAiProviderCredential,
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260819-183";
+} from "./ai-runtime.js?v=phantom-live-20260819-184";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -108,6 +110,25 @@ const PROVIDERS = [
     role: "Installed Ollama models on this machine",
     models: ["local-auto"],
     allowCustomModel: true,
+  },
+];
+
+const CREDENTIAL_PROVIDERS = [
+  {
+    providerId: "deepseek_api",
+    publicId: "deepseek",
+    mark: "DS",
+    title: "DeepSeek",
+    placeholder: "DeepSeek API key",
+    note: "Direct DeepSeek models and provider-reported credit balance.",
+  },
+  {
+    providerId: "openrouter_glm",
+    publicId: "openrouter",
+    mark: "OR",
+    title: "OpenRouter",
+    placeholder: "OpenRouter API key",
+    note: "OpenRouter model catalogue, spend, and limit reporting.",
   },
 ];
 
@@ -953,6 +974,52 @@ function renderAiRouteCard(routeId, route, title, note) {
     </section>`;
 }
 
+function formatProviderNumber(value) {
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value))
+    ? new Intl.NumberFormat().format(Number(value))
+    : "Not reported";
+}
+
+function formatProviderMoney(value, currency = "USD") {
+  if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) return "Not reported";
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "USD" }).format(Number(value));
+  } catch {
+    return `${currency || "USD"} ${Number(value).toFixed(2)}`;
+  }
+}
+
+function providerAccountFor(runtime, providerId) {
+  return runtime.usage?.data?.accounts?.find((account) => account.provider_id === providerId) || null;
+}
+
+function providerUsageFor(runtime, providerId) {
+  return runtime.usage?.data?.usage?.providers?.find((usage) => usage.provider_id === providerId) || null;
+}
+
+function providerFinancialFacts(account, { loading = false } = {}) {
+  if (!account) return [
+    { label: "Money spent", value: loading ? "Checking" : "Not reported" },
+    { label: "Money / credits left", value: loading ? "Checking" : "Not reported" },
+  ];
+  if (account.provider_id === "deepseek_api") {
+    const balances = account.account?.balances || [];
+    return [
+      { label: "Money spent", value: "Not reported" },
+      {
+        label: "Credits left",
+        value: balances.length
+          ? balances.map((balance) => `${esc(balance.currency)} ${formatProviderNumber(balance.total)}`).join(" · ")
+          : "Not reported",
+      },
+    ];
+  }
+  return [
+    { label: "Money spent", value: formatProviderMoney(account.account?.spent_amount, account.account?.currency) },
+    { label: "Money left", value: formatProviderMoney(account.account?.remaining_amount, account.account?.currency) },
+  ];
+}
+
 function renderProviderCredentialSetup({ providerId, publicId, mark, title, placeholder, status, note }) {
   const configured = Boolean(status?.configured);
   return `
@@ -971,6 +1038,108 @@ function renderProviderCredentialSetup({ providerId, publicId, mark, title, plac
         <button class="btn btn-quiet" type="button" data-provider-platform="${esc(publicId)}">Set as platform brain</button>
       </div>
       <p class="set-credential-message" data-provider-message="${esc(providerId)}"></p>
+    </section>`;
+}
+
+function renderConfiguredProviderRow(runtime, provider) {
+  const status = runtime.providerCredentials?.[provider.providerId] || {};
+  const account = providerAccountFor(runtime, provider.providerId);
+  const usage = providerUsageFor(runtime, provider.providerId);
+  const health = account?.status || (runtime.usage?.loading ? "checking" : "unknown");
+  const financialFacts = providerFinancialFacts(account, { loading: Boolean(runtime.usage?.loading) });
+  return `
+    <article class="set-configured-provider-row" data-configured-provider="${esc(provider.providerId)}">
+      <div class="set-provider-identity">
+        <span class="set-provider-mark">${esc(provider.mark)}</span>
+        <span><b>${esc(provider.title)}</b><i>${esc(status.key_hint || "Configured")} · ${esc(status.source === "server_environment" ? "Server environment" : "Encrypted vault")}</i></span>
+      </div>
+      <span class="set-provider-health is-${esc(health)}"><i></i>${health === "up" ? "Up" : health === "down" ? "Down" : health === "checking" ? "Checking" : "Not checked"}</span>
+      <dl class="set-provider-facts">
+        <div><dt>Latency</dt><dd>${account ? `${formatProviderNumber(account.latency_ms)} ms` : "Not checked"}</dd></div>
+        <div><dt>Last checked</dt><dd>${account?.last_checked_at ? esc(new Date(account.last_checked_at).toLocaleString()) : "Not checked"}</dd></div>
+        <div><dt>Tokens</dt><dd>${formatProviderNumber(usage?.total_tokens)}</dd></div>
+        ${financialFacts.map((fact) => `<div><dt>${esc(fact.label)}</dt><dd>${fact.value}</dd></div>`).join("")}
+      </dl>
+      <p class="set-provider-detail">${esc(account?.detail || "Run a provider check to verify this key and load account reporting.")}</p>
+      <details class="set-provider-manage">
+        <summary>Manage key</summary>
+        <div class="set-provider-setup-actions">
+          <input type="password" data-provider-api-key="${esc(provider.providerId)}" placeholder="${esc(provider.placeholder)}" autocomplete="new-password" spellcheck="false" aria-label="${esc(provider.title)} API key"/>
+          <button class="btn btn-primary" type="button" data-provider-save="${esc(provider.providerId)}">Replace key</button>
+          ${status.removable ? `<button class="btn btn-quiet" type="button" data-provider-remove="${esc(provider.providerId)}">Remove</button>` : ""}
+          <button class="btn btn-quiet" type="button" data-provider-platform="${esc(provider.publicId)}">Set as platform brain</button>
+        </div>
+        <p class="set-credential-message" data-provider-message="${esc(provider.providerId)}"></p>
+      </details>
+    </article>`;
+}
+
+function renderConfiguredProviders(runtime) {
+  const configured = CREDENTIAL_PROVIDERS.filter((provider) => runtime.providerCredentials?.[provider.providerId]?.configured);
+  return `
+    <section class="set-provider-dashboard">
+      <header class="set-subsection-head">
+        <div><p class="set-eyebrow">Active credentials</p><h4>Configured API keys</h4><p>Only keys currently configured for this organization appear here.</p></div>
+        <span>${configured.length} active</span>
+      </header>
+      <div class="set-configured-provider-list">
+        ${configured.length
+          ? configured.map((provider) => renderConfiguredProviderRow(runtime, provider)).join("")
+          : `<p class="set-empty-state">No API keys are configured. Local and subscription-backed routes remain separate.</p>`}
+      </div>
+    </section>`;
+}
+
+function renderProviderManager(runtime) {
+  const available = CREDENTIAL_PROVIDERS.filter((provider) => !runtime.providerCredentials?.[provider.providerId]?.configured);
+  return `
+    <details class="set-provider-manager">
+      <summary><span><b>Add or manage API keys</b><i>${available.length ? `${available.length} provider${available.length === 1 ? "" : "s"} available to connect` : "All supported API providers are configured"}</i></span></summary>
+      <div class="set-provider-manager-grid">
+        ${available.length ? available.map((provider) => renderProviderCredentialSetup({
+          ...provider,
+          status: runtime.providerCredentials?.[provider.providerId] || {},
+        })).join("") : `<p class="set-empty-state">Use Manage key on a configured provider to replace or remove it.</p>`}
+      </div>
+    </details>`;
+}
+
+function renderUsageAnalytics(runtime) {
+  const analytics = runtime.usage?.data;
+  const usage = analytics?.usage;
+  const totals = usage?.totals || {};
+  const rows = usage?.providers || [];
+  const range = runtime.usage?.range || "30d";
+  return `
+    <section class="set-usage-panel">
+      <header class="set-usage-toolbar">
+        <div><p class="set-eyebrow">Provider analytics</p><h4>Tokens, requests, and provider balance</h4><p>Token counts come from model responses. Money and credit values appear only when the provider reports them.</p></div>
+        <div class="set-usage-range" aria-label="Usage range">
+          ${["7d", "30d", "90d"].map((id) => `<button type="button" class="${range === id ? "is-active" : ""}" data-ai-usage-range="${id}">${id}</button>`).join("")}
+        </div>
+      </header>
+      ${runtime.usage?.error ? `<p class="set-provider-error">${esc(runtime.usage.error)}</p>` : ""}
+      <div class="set-usage-grid">
+        <div class="set-usage-metric"><span>Requests</span><b>${runtime.usage?.loading && !analytics ? "Checking" : formatProviderNumber(totals.attempts)}</b></div>
+        <div class="set-usage-metric"><span>Successful</span><b>${runtime.usage?.loading && !analytics ? "Checking" : formatProviderNumber(totals.successful_requests)}</b></div>
+        <div class="set-usage-metric"><span>Input tokens</span><b>${runtime.usage?.loading && !analytics ? "Checking" : formatProviderNumber(totals.prompt_tokens)}</b></div>
+        <div class="set-usage-metric"><span>Output tokens</span><b>${runtime.usage?.loading && !analytics ? "Checking" : formatProviderNumber(totals.completion_tokens)}</b></div>
+        <div class="set-usage-metric"><span>Total tokens</span><b>${runtime.usage?.loading && !analytics ? "Checking" : formatProviderNumber(totals.total_tokens)}</b></div>
+      </div>
+      <div class="set-usage-table-wrap">
+        <table class="set-usage-table">
+          <thead><tr><th>Provider</th><th>Requests</th><th>Input</th><th>Output</th><th>Total</th><th>Spent</th><th>Money / credits left</th></tr></thead>
+          <tbody>
+            ${rows.length ? rows.map((row) => {
+              const meta = CREDENTIAL_PROVIDERS.find((provider) => provider.providerId === row.provider_id);
+              const account = providerAccountFor(runtime, row.provider_id);
+              const facts = providerFinancialFacts(account, { loading: Boolean(runtime.usage?.loading) });
+              return `<tr><td>${esc(meta?.title || providerFor(AI_BACKEND_TO_PUBLIC[row.provider_id] || "local").name)}</td><td>${formatProviderNumber(row.attempts)}</td><td>${formatProviderNumber(row.prompt_tokens)}</td><td>${formatProviderNumber(row.completion_tokens)}</td><td>${formatProviderNumber(row.total_tokens)}</td><td>${facts[0].value}</td><td>${facts[1].value}</td></tr>`;
+            }).join("") : `<tr><td colspan="7">No provider calls have been recorded in this period.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <p class="set-footnote">No prompts, responses, or raw keys are stored in usage analytics. “Not reported” means the provider does not expose that value through the connected account endpoint.</p>
     </section>`;
 }
 
@@ -1008,7 +1177,6 @@ function renderGatewayLoopControls() {
 
 function renderModelTab(settings) {
   const runtime = getAiRuntimeState();
-  const deepSeekCredential = runtime.providerCredentials?.deepseek_api || {};
   const openRouterCredential = runtime.providerCredentials?.openrouter_glm || {};
   const openRouterCatalogue = getAiProviderModelCatalog("openrouter_glm");
   const persistenceLabel = runtime.saving
@@ -1034,32 +1202,13 @@ function renderModelTab(settings) {
           <span><b>Runtime truth</b><i>${esc(persistenceLabel)}</i></span>
           <button class="btn btn-quiet" type="button" data-ai-runtime-refresh ${runtime.refreshing ? "disabled" : ""}>${runtime.refreshing ? "Checking…" : "Check providers now"}</button>
         </div>
-        <div class="set-provider-setup-grid">
-          ${renderProviderCredentialSetup({
-            providerId: "deepseek_api",
-            publicId: "deepseek",
-            mark: "DS",
-            title: "DeepSeek",
-            placeholder: "DeepSeek API key",
-            status: deepSeekCredential,
-            note: "Use any supported DeepSeek model in the route below.",
-          })}
-          ${renderProviderCredentialSetup({
-            providerId: "openrouter_glm",
-            publicId: "openrouter",
-            mark: "OR",
-            title: "OpenRouter",
-            placeholder: "OpenRouter API key",
-            status: openRouterCredential,
-            note: openRouterCatalogue.models.length
-              ? `${openRouterCatalogue.models.length} live models are ready in the dropdowns.`
-              : "Connect, then load the live model catalogue.",
-          })}
-        </div>
-        <div class="set-model-catalogue-bar">
+        ${renderConfiguredProviders(runtime)}
+        ${renderUsageAnalytics(runtime)}
+        ${renderProviderManager(runtime)}
+        ${openRouterCredential.configured ? `<div class="set-model-catalogue-bar">
           <span><b>OpenRouter model catalogue</b><i>${esc(openRouterModelStatusText())}</i></span>
           <button class="btn btn-quiet" type="button" data-openrouter-model-refresh ${openRouterCatalogue.loading ? "disabled" : ""}>${openRouterCatalogue.loading ? "Loading models..." : "Refresh model list"}</button>
-        </div>
+        </div>` : ""}
         <div class="set-route-grid">
           ${renderAiRouteCard("platform", settings, "Platform brain", "Controls every AI-assisted page, planning flow, automation draft, workspace decision, and Prompt the Outcome request.")}
           ${renderAiRouteCard("phantombot", settings.phantomBot, "PhantomBot", "Controls PhantomBot conversations only. It can use a faster, local, subscription, or API model without changing the platform brain.")}
@@ -1746,6 +1895,16 @@ export function renderOperatorSettings(el, opts = {}) {
     renderOperatorSettings(el, opts);
   };
 
+  el.querySelectorAll("[data-ai-usage-range]").forEach((button) => {
+    button.onclick = () => {
+      const range = button.dataset.aiUsageRange || "30d";
+      void loadAiRuntimeUsage({ range, force: true })
+        .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
+        .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
+      renderOperatorSettings(el, opts);
+    };
+  });
+
   const bridgeRefresh = el.querySelector("[data-agent-assist-refresh]");
   if (bridgeRefresh) bridgeRefresh.onclick = () => refreshAgentAssistBridge(el, opts);
   el.querySelectorAll("[data-chatgpt-account]").forEach((button) => {
@@ -1922,8 +2081,14 @@ export function renderOperatorSettings(el, opts = {}) {
       .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
       .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
   }
+  if (activeTab === "model" && runtime.loaded && !runtime.usage.loaded && !runtime.usage.loading) {
+    void loadAiRuntimeUsage()
+      .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
+      .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
+  }
   const openRouterCatalogue = getAiProviderModelCatalog("openrouter_glm");
-  if (activeTab === "model" && !openRouterCatalogue.loaded && !openRouterCatalogue.loading) {
+  const openRouterConfigured = Boolean(runtime.providerCredentials?.openrouter_glm?.configured);
+  if (activeTab === "model" && openRouterConfigured && !openRouterCatalogue.loaded && !openRouterCatalogue.loading) {
     void loadAiProviderModels("openrouter_glm")
       .then(() => { if (el.isConnected) renderOperatorSettings(el, opts); })
       .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });

@@ -1945,7 +1945,7 @@
       "id": "platform-and-phantombot-independent-ai-control-floor",
       "status": "active",
       "title": "Platform AI and PhantomBot have independent, truthful model control",
-      "ownerDecision": "Owners can select one organization-wide AI brain for PhantomForce and a separate model route for PhantomBot. DeepSeek V4 Flash is the recommended platform brain, provider credentials are encrypted server-side and are never returned to the browser, and customer connection screens must report missing broker configuration honestly instead of pretending a request was completed.",
+      "ownerDecision": "Owners can select one organization-wide AI brain for PhantomForce and a separate model route for PhantomBot. Configured providers are presented without promoting an unconfigured vendor, provider credentials are encrypted server-side and are never returned to the browser, and customer connection screens must report missing broker configuration honestly instead of pretending a request was completed.",
       "requiredPatterns": [
         {
           "file": "server/src/phantom-ai/ai-runtime-config.ts",
@@ -1959,8 +1959,8 @@
         },
         {
           "file": "app/js/settings.js",
-          "pattern": "Gateway control center[\\s\\S]*title: \\\"DeepSeek\\\"[\\s\\S]*title: \\\"OpenRouter\\\"[\\s\\S]*OpenRouter model catalogue[\\s\\S]*renderAiRouteCard\\(\\\"platform\\\"[\\s\\S]*renderAiRouteCard\\(\\\"phantombot\\\"[\\s\\S]*renderGatewayLoopControls",
-          "description": "Gateway Settings visibly separates the platform brain from PhantomBot, provides encrypted DeepSeek and OpenRouter setup, exposes the live OpenRouter catalogue, and keeps loop routing optional."
+          "pattern": "Gateway control center[\\s\\S]*renderConfiguredProviders\\(runtime\\)[\\s\\S]*renderProviderManager\\(runtime\\)[\\s\\S]*renderAiRouteCard\\(\\\"platform\\\"[\\s\\S]*renderAiRouteCard\\(\\\"phantombot\\\"[\\s\\S]*renderGatewayLoopControls",
+          "description": "Gateway Settings presents only configured providers first, keeps encrypted provider setup available on demand, separates the platform brain from PhantomBot, and keeps loop routing optional."
         },
         {
           "file": "server/src/connectors/customer-connection-catalog.ts",
@@ -2088,6 +2088,56 @@
           "file": "app/command-os.css",
           "pattern": "html\\[data-command-os=\"2040\"\\] \\.phantombot-presence\\s*\\{[\\s\\S]{0,240}width: 190px",
           "description": "Desktop parity cannot reintroduce the shrunken PhantomBot mascot."
+        }
+      ]
+    },
+    {
+      "id": "configured-provider-truth-and-usage-analytics-floor",
+      "status": "active",
+      "title": "Gateway settings show configured providers and truthful usage only",
+      "ownerDecision": "The Gateway control center must lead with API providers that are actually configured for the active organization. Unconfigured DeepSeek, OpenRouter, or future vendors belong behind Add or manage API keys and cannot occupy permanent promotional cards. Configured providers must show live up/down state and last-check latency. Token totals come from provider response receipts; spend, balance, limits, and credits appear only when the provider reports them, with Not reported used instead of invented zeroes or estimates. Usage storage remains tenant-scoped and metrics-only, with no prompts, responses, raw keys, or conversation content.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/settings.js",
+          "pattern": "CREDENTIAL_PROVIDERS\\.filter\\(\\(provider\\) => runtime\\.providerCredentials\\?\\.\\[provider\\.providerId\\]\\?\\.configured\\)[\\s\\S]*Configured API keys[\\s\\S]*Add or manage API keys",
+          "description": "The top provider area is derived from real configured credential status while setup remains available on demand."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "Tokens, requests, and provider balance[\\s\\S]*Money and credit values appear only when the provider reports them[\\s\\S]*Not reported",
+          "description": "The UI explains the source and limits of token and financial analytics."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "openRouterCredential\\.configured \\? `\\<div class=\\\"set-model-catalogue-bar",
+          "description": "The OpenRouter catalogue is visible only after OpenRouter is configured."
+        },
+        {
+          "file": "app/js/ai-runtime.js",
+          "pattern": "AI_USAGE_REQUEST_TIMEOUT_MS[\\s\\S]*loadAiRuntimeUsage[\\s\\S]*\\/phantom-ai\\/runtime\\/usage",
+          "description": "The browser loads tenant-scoped provider analytics from the authenticated gateway and leaves the checking state if that request stalls."
+        },
+        {
+          "file": "server/src/phantom-ai/ai-provider-analytics.ts",
+          "pattern": "api\\.deepseek\\.com/user/balance[\\s\\S]*openrouter\\.ai/api/v1/key[\\s\\S]*estimates_used:\\s*false[\\s\\S]*prompts_stored:\\s*false",
+          "description": "Account figures use official provider endpoints and the backend declares its no-content, no-estimate policy."
+        },
+        {
+          "file": "app/admin-next.css",
+          "pattern": "set-ai-control-center\\s*\\{[\\s\\S]*grid-template-columns:\\s*minmax\\(0,\\s*1fr\\)[\\s\\S]*set-usage-table-wrap\\s*\\{[^}]*overflow-x:\\s*auto",
+          "description": "Usage tables scroll within the gateway panel without widening or clipping the Settings page on narrow screens."
+        },
+        {
+          "file": "scripts/test-ai-runtime-ui.mjs",
+          "pattern": "configured credentials rather than permanent provider advertisements[\\s\\S]*analytics ledger must not accept request or response content",
+          "description": "The focused gateway regression test protects configured-only presentation and metrics-only storage."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/settings.js",
+          "pattern": "renderProviderCredentialSetup\\(\\{\\s*providerId:\\s*\\\"(?:deepseek_api|openrouter_glm)\\\"",
+          "description": "Fixed vendor setup cards cannot return to the top of Gateway settings."
         }
       ]
     },

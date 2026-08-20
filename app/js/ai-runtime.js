@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260819-183";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260819-184";
 
 export const AI_PUBLIC_TO_BACKEND = Object.freeze({
   deepseek: "deepseek_api",
@@ -35,6 +35,13 @@ const runtimeState = {
   providerManager: null,
   providerCredentials: null,
   audit: [],
+  usage: {
+    loaded: false,
+    loading: false,
+    error: null,
+    range: "30d",
+    data: null,
+  },
 };
 
 const providerModelCatalogs = {
@@ -50,6 +57,8 @@ const providerModelCatalogs = {
 
 let pendingSave = Promise.resolve(null);
 let pendingLoad = null;
+let pendingUsageLoad = null;
+const AI_USAGE_REQUEST_TIMEOUT_MS = 10_000;
 
 function headers(json = false) {
   const token = typeof session?.token === "function" ? session.token() : "";
@@ -158,17 +167,32 @@ function applyPayload(payload) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: { ...headers(Boolean(options.body)), ...(options.headers || {}) },
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(typeof payload?.error === "string" ? payload.error : `AI brain request failed (${response.status}).`);
-    error.status = response.status;
+  const { timeoutMs = 0, ...fetchOptions } = options;
+  const timeoutController = timeoutMs > 0 ? new AbortController() : null;
+  const timeoutId = timeoutController
+    ? setTimeout(() => timeoutController.abort(), timeoutMs)
+    : null;
+  try {
+    const response = await fetch(path, {
+      ...fetchOptions,
+      signal: fetchOptions.signal || timeoutController?.signal,
+      headers: { ...headers(Boolean(fetchOptions.body)), ...(fetchOptions.headers || {}) },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(typeof payload?.error === "string" ? payload.error : `AI brain request failed (${response.status}).`);
+      error.status = response.status;
+      throw error;
+    }
+    return payload;
+  } catch (error) {
+    if (error?.name === "AbortError" && timeoutController?.signal.aborted) {
+      throw new Error("Provider analytics did not respond in time. Try checking providers again.");
+    }
     throw error;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
-  return payload;
 }
 
 export function loadAiRuntimeConfig({ force = false } = {}) {
@@ -230,10 +254,12 @@ export async function refreshAiRuntimeProviders() {
   runtimeState.refreshing = true;
   runtimeState.error = null;
   try {
-    return applyPayload(await request("/phantom-ai/runtime/providers/refresh", {
+    const payload = applyPayload(await request("/phantom-ai/runtime/providers/refresh", {
       method: "POST",
       body: JSON.stringify({ tenant_id: currentTenantId() }),
     }));
+    await loadAiRuntimeUsage({ range: runtimeState.usage.range, force: true }).catch(() => null);
+    return payload;
   } catch (error) {
     runtimeState.refreshing = false;
     runtimeState.error = error instanceof Error ? error.message : "Provider health checks could not run.";
@@ -247,6 +273,7 @@ export async function saveAiProviderCredential(providerId, apiKey) {
     body: JSON.stringify({ tenant_id: currentTenantId(), provider_id: providerId, api_key: apiKey }),
   });
   await loadAiRuntimeConfig({ force: true });
+  await loadAiRuntimeUsage({ range: runtimeState.usage.range, force: true }).catch(() => null);
   return payload;
 }
 
@@ -256,7 +283,40 @@ export async function removeAiProviderCredential(providerId) {
     body: JSON.stringify({ tenant_id: currentTenantId(), provider_id: providerId }),
   });
   await loadAiRuntimeConfig({ force: true });
+  await loadAiRuntimeUsage({ range: runtimeState.usage.range, force: true }).catch(() => null);
   return payload;
+}
+
+export function loadAiRuntimeUsage({ range = "30d", force = false } = {}) {
+  const normalizedRange = ["7d", "30d", "90d"].includes(range) ? range : "30d";
+  const tenantId = currentTenantId();
+  if (!force && runtimeState.usage.loaded && runtimeState.tenantId === tenantId && runtimeState.usage.range === normalizedRange && !runtimeState.usage.error) {
+    return Promise.resolve(runtimeState.usage.data);
+  }
+  if (runtimeState.usage.loading && pendingUsageLoad) return pendingUsageLoad;
+  runtimeState.usage.loading = true;
+  runtimeState.usage.error = null;
+  runtimeState.usage.range = normalizedRange;
+  const query = new URLSearchParams({ tenant_id: tenantId, range: normalizedRange, refresh: force ? "true" : "false" });
+  const operation = request(`/phantom-ai/runtime/usage?${query.toString()}`, { timeoutMs: AI_USAGE_REQUEST_TIMEOUT_MS })
+    .then((payload) => {
+      runtimeState.usage.loaded = true;
+      runtimeState.usage.loading = false;
+      runtimeState.usage.error = null;
+      runtimeState.usage.data = payload;
+      return payload;
+    })
+    .catch((error) => {
+      runtimeState.usage.loaded = true;
+      runtimeState.usage.loading = false;
+      runtimeState.usage.error = error instanceof Error ? error.message : "AI usage analytics could not be read.";
+      throw error;
+    });
+  pendingUsageLoad = operation;
+  void operation.finally(() => {
+    if (pendingUsageLoad === operation) pendingUsageLoad = null;
+  }).catch(() => null);
+  return operation;
 }
 
 export function getAiProviderModelCatalog(providerId) {
@@ -304,6 +364,10 @@ export function getAiRuntimeState() {
     providerManager: runtimeState.providerManager ? { ...runtimeState.providerManager, providers: [...(runtimeState.providerManager.providers || [])] } : null,
     providerCredentials: runtimeState.providerCredentials ? { ...runtimeState.providerCredentials } : null,
     audit: [...runtimeState.audit],
+    usage: {
+      ...runtimeState.usage,
+      data: runtimeState.usage.data ? structuredClone(runtimeState.usage.data) : null,
+    },
   };
 }
 

@@ -21,6 +21,7 @@ const openRouter = read("../server/src/phantom-ai/providers/openrouter-live-tran
 const providerManager = read("../server/src/phantom-ai/admin-provider-manager.ts");
 const deepSeek = read("../server/src/phantom-ai/providers/deepseek-v4-transport.ts");
 const credentials = read("../server/src/phantom-ai/ai-provider-credentials.ts");
+const analytics = read("../server/src/phantom-ai/ai-provider-analytics.ts");
 const settingsSkin = read("../app/admin-next.css");
 
 for (const id of ["deepseek_api", "local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"]) {
@@ -47,6 +48,17 @@ assert.match(settings, /OpenRouter model catalogue/u, "The gateway must expose t
 assert.match(settings, /Phantom Loop/u, "The gateway must expose optional loop controls alongside the two independent brains.");
 assert.match(settings, /Real means a provider health check or model request passed/u, "Settings must explain truthful provider state.");
 assert.match(settings, /Saved for this organization/u, "Settings must disclose organization-level persistence.");
+assert.match(settings, /Configured API keys/u, "Settings must lead with configured credentials rather than permanent provider advertisements.");
+assert.match(settings, /Only keys currently configured/u, "Settings must explain why unconfigured providers are absent from the active list.");
+assert.match(settings, /CREDENTIAL_PROVIDERS\.filter\(\(provider\) => runtime\.providerCredentials\?\.\[provider\.providerId\]\?\.configured\)/u, "The active provider list must filter on real credential status.");
+assert.match(settings, /Add or manage API keys/u, "Unconfigured providers must remain available through a compact management control.");
+assert.match(settings, /Tokens, requests, and provider balance/u, "The gateway must expose real provider usage analytics.");
+assert.match(settings, /Money and credit values appear only when the provider reports them/u, "The UI must disclose the source of financial figures.");
+assert.match(settings, /data-ai-usage-range/u, "Usage analytics must support explicit time ranges.");
+assert.match(settingsSkin, /\.set-ai-control-center\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/u, "Gateway settings must constrain wide analytics content to the viewport.");
+assert.match(runtime, /\/phantom-ai\/runtime\/usage/u, "The browser runtime must load tenant-scoped provider analytics.");
+assert.match(runtime, /AI_USAGE_REQUEST_TIMEOUT_MS/u, "Provider analytics must leave the checking state when the gateway stalls.");
+assert.match(settings, /loading \? "Checking" : "Not reported"/u, "Unavailable provider account figures must settle on an honest not-reported state.");
 assert.doesNotMatch(settings, /Kimi K3 direct is available/u, "Settings must not claim an unverified direct Kimi transport.");
 assert.match(runtime, /\/phantom-ai\/runtime\/models/u, "The browser runtime must load provider model catalogues through the organization gateway.");
 assert.match(commandOs, /localStorage\.setItem\("pf\.settings\.tab\.v1", "model"\)/u, "The footer gateway must open the dedicated brain page.");
@@ -79,6 +91,7 @@ assert.match(server, /app\.put\("\/phantom-ai\/runtime\/credentials"/u, "Server 
 assert.match(server, /app\.delete\("\/phantom-ai\/runtime\/credentials"/u, "Server must let an owner remove an organization AI credential.");
 assert.match(server, /app\.get\("\/phantom-ai\/runtime\/models"/u, "Server must expose authenticated provider model discovery.");
 assert.match(server, /app\.post\("\/phantom-ai\/runtime\/providers\/refresh"/u, "Server must support explicit provider health refresh.");
+assert.match(server, /app\.get\("\/phantom-ai\/runtime\/usage"/u, "Server must expose authenticated provider usage analytics.");
 assert.match(server, /aiRuntimeRouteForSurface\(runtimeConfig, runtimeSurface\)/u, "The server must resolve platform and PhantomBot requests independently.");
 assert.match(server, /runtimeConfigState\?\.source === "saved"/u, "Chat must use server-persisted runtime state when it exists.");
 assert.match(server, /ai_runtime:\s*runtimeConfig/u, "Chat responses must include a runtime receipt.");
@@ -95,6 +108,10 @@ assert.match(deepSeek, /model:\s*modelId/u, "The selected DeepSeek model must re
 assert.match(credentials, /aes-256-gcm/u, "Provider API keys must be encrypted at rest.");
 assert.match(credentials, /secret_returned:\s*false/u, "Credential status must never return the raw key.");
 assert.match(credentials, /"deepseek_api", "openrouter_glm"/u, "The encrypted vault must support both DeepSeek and OpenRouter keys.");
+assert.match(analytics, /https:\/\/api\.deepseek\.com\/user\/balance/u, "DeepSeek balance must come from its official account endpoint.");
+assert.match(analytics, /https:\/\/openrouter\.ai\/api\/v1\/key/u, "OpenRouter spend and limits must come from its official current-key endpoint.");
+assert.match(analytics, /prompts_stored:\s*false/u, "Provider analytics must explicitly exclude prompt content.");
+assert.doesNotMatch(analytics, /userMessage|output_text|compactContext/u, "The analytics ledger must not accept request or response content.");
 assert.match(providerManager, /PHANTOM_LIVE_PROVIDERS_ENABLED === "true"[\s\S]{0,160}PHANTOM_OPENROUTER_TRANSPORT_ENABLED === "true"/u, "OpenRouter health must use the same enable flags as its live transport.");
 assert.match(providerManager, /DEFAULT_CLAUDE_PS1[\s\S]{0,180}"auth",[\s\S]{0,40}"status"/u, "Claude health must verify authentication, not merely the presence of a script.");
 assert.match(settingsSkin, /Settings control center/u, "The final app skin must own the settings visual system.");

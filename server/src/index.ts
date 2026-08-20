@@ -541,6 +541,10 @@ import {
   saveAiProviderCredential,
 } from "./phantom-ai/ai-provider-credentials.js";
 import {
+  getAiProviderAnalytics,
+  recordAiProviderUsage,
+} from "./phantom-ai/ai-provider-analytics.js";
+import {
   adminProviderAttemptOrder,
   getAdminProviderManagerStatus,
   getPublicAdminProviderManagerStatus,
@@ -785,6 +789,10 @@ const CustomerConnectionStartSchema = z.object({
 const AiRuntimeProviderIdSchema = z.enum(AI_RUNTIME_PROVIDER_IDS);
 const AiRuntimeModelIdSchema = z.string().trim().min(1).max(100).regex(/^[\w./:@+~-]+$/);
 const AiRuntimeQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
+const AiRuntimeUsageQuerySchema = AiRuntimeQuerySchema.extend({
+  range: z.enum(["7d", "30d", "90d"]).optional().default("30d"),
+  refresh: z.enum(["true", "false"]).optional().default("false"),
+});
 const AiRuntimeRouteUpdateSchema = z.object({
   mode: z.enum(["single", "multiple", "smart"]),
   primary_provider_id: AiRuntimeProviderIdSchema,
@@ -4916,6 +4924,15 @@ async function runAdminPhantomAiChatWithFallback(
     });
     const usable = isAdminPhantomAiResultUsable(result as { status: string });
     const latencyMs = Date.now() - startedAt;
+    void recordAiProviderUsage({
+      tenantId: ctx.tenantId,
+      requestId: ctx.requestId,
+      surface: ctx.taskType,
+      providerId,
+      modelId: typeof result?.model_id === "string" ? result.model_id : providerModelId,
+      status: typeof result?.status === "string" ? result.status : "unknown",
+      usage: result?.usage,
+    }).catch(() => undefined);
     if (usable) recordAdminProviderSuccess(providerId, latencyMs);
     else recordAdminProviderFailure(providerId, adminPhantomAiResultErrorMessage(result as Record<string, unknown>), latencyMs);
     attempts.push({
@@ -5509,6 +5526,32 @@ app.get("/phantom-ai/runtime/config", async (request, reply) => {
       ? Number((error as { statusCode: number }).statusCode)
       : 500;
     return reply.status(statusCode).send({ ok: false, error: error instanceof Error ? error.message : "AI runtime configuration could not be read." });
+  }
+});
+
+app.get("/phantom-ai/runtime/usage", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = AiRuntimeUsageQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  try {
+    const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+    const analytics = await getAiProviderAnalytics({
+      tenantId,
+      rangeDays: Number.parseInt(parsed.data.range, 10),
+      force: parsed.data.refresh === "true",
+    });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      ...analytics,
+      secrets_returned: false,
+    };
+  } catch (error) {
+    const statusCode = typeof (error as { statusCode?: unknown }).statusCode === "number"
+      ? Number((error as { statusCode: number }).statusCode)
+      : 500;
+    return reply.status(statusCode).send({ ok: false, error: error instanceof Error ? error.message : "AI usage analytics could not be read." });
   }
 });
 
