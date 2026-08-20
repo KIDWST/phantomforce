@@ -7643,7 +7643,7 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260819-179") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260819-182") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(65, 255, 161, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -9987,37 +9987,6 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
   filter: drop-shadow(0 14px 28px rgba(12, 24, 18, 0.16)) drop-shadow(0 0 22px rgba(65, 255, 161, 0.16));
 }
 .buddy.is-grabbed .buddy-canvas { cursor: grabbing; }
-.buddy-resize {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  z-index: 2;
-  width: 18px;
-  height: 18px;
-  border: 1px solid rgba(65, 255, 161, 0.75);
-  border-radius: 999px;
-  background: radial-gradient(circle at 45% 45%, rgba(208, 255, 230, 0.95), rgba(65, 255, 161, 0.78) 54%, rgba(10, 22, 16, 0.92) 56%);
-  box-shadow: 0 0 18px rgba(65, 255, 161, 0.28);
-  cursor: nwse-resize;
-  pointer-events: auto;
-  opacity: 0.72;
-  transition: opacity 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
-}
-.buddy:hover .buddy-resize,
-.buddy:focus-within .buddy-resize,
-.buddy.is-grabbed .buddy-resize,
-.buddy.is-resizing .buddy-resize {
-  opacity: 1;
-  transform: scale(1.08);
-  box-shadow: 0 0 24px rgba(65, 255, 161, 0.38);
-}
-.buddy.is-docked[data-dock="sidebar"] .buddy-resize,
-.buddy.is-scroll-hidden .buddy-resize,
-.buddy.is-booting .buddy-resize {
-  opacity: 0;
-  pointer-events: none;
-}
-.buddy.is-resizing .buddy-canvas { cursor: nwse-resize; }
 .buddy-say {
   position: absolute; left: 50%; bottom: calc(100% - 26px); transform: translateX(-50%);
   width: max-content; max-width: min(230px, calc(100vw - 28px)); padding: 8px 12px;

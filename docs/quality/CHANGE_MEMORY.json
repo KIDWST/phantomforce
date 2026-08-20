@@ -35,8 +35,8 @@
     {
       "id": "phantompet-full-presence-and-vespergate-current-build",
       "status": "active",
-      "title": "PhantomPet stays full-body and Vespergate keeps its restored living-world build",
-      "ownerDecision": "PhantomPet must appear as the transparent painted full-body character, never clipped inside a circular orb. Vespergate must launch the same current 3.1.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app. Its illustrated pointed-hood bearer, readable villagers, living-world detail, richer rooms, checkpoints, encounter objectives, mastery, map, touch controls, and save migration must remain together; an old catalog response, cached desktop shell, or smaller legacy source must not replace them.",
+      "title": "PhantomPet stays full-body, wheel-sized, and Vespergate keeps its restored living-world build",
+      "ownerDecision": "PhantomPet must appear as the transparent painted full-body character, never clipped inside a circular orb. Scrolling directly over PhantomPet makes it larger or smaller and saves that size for the page; a visible resize dot, corner grip, or drag-to-resize control must never replace that interaction. Vespergate must launch the same current 3.1.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app. Its illustrated pointed-hood bearer, readable villagers, living-world detail, richer rooms, checkpoints, encounter objectives, mastery, map, touch controls, and save migration must remain together; an old catalog response, cached desktop shell, or smaller legacy source must not replace them.",
       "requiredPatterns": [
         {
           "file": "app/index.html",
@@ -47,6 +47,11 @@
           "file": "app/phantom.css",
           "pattern": "\\.phantompet-presence\\s*\\{[\\s\\S]{0,500}border:\\s*0;[\\s\\S]{0,300}background:\\s*transparent;[\\s\\S]{0,300}overflow:\\s*visible",
           "description": "The PhantomPet hit target remains transparent and unclipped."
+        },
+        {
+          "file": "app/js/buddy.js",
+          "pattern": "scroll to resize[\\s\\S]*canvas\\.addEventListener\\(\\\"wheel\\\",[\\s\\S]*manualSizePx = clampNumber[\\s\\S]*saveCurrentPagePlacement\\(\\)[\\s\\S]*\\{ passive: false, signal \\}",
+          "description": "Scrolling over PhantomPet remains the direct, page-persistent size control."
         },
         {
           "file": "app/js/phantomplay.js",
@@ -94,6 +99,16 @@
           "file": "app/phantom.css",
           "pattern": "\\.phantompet-(?:presence|orb)\\s*\\{[\\s\\S]{0,500}border-radius:\\s*50%",
           "description": "The PhantomPet container cannot be styled as a circle."
+        },
+        {
+          "file": "app/js/buddy.js",
+          "pattern": "data-buddy-resize|resizeHandle|corner grip",
+          "description": "A visible drag-to-resize dot or grip cannot replace scroll-wheel resizing."
+        },
+        {
+          "file": "app/phantom.css",
+          "pattern": "\\.buddy-resize|\\.buddy\\.is-resizing",
+          "description": "The removed PhantomPet resize dot cannot be painted by CSS."
         },
         {
           "file": "server/src/phantom-ai/phantomplay.ts",
