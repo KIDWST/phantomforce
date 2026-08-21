@@ -33,5 +33,7 @@ assert(ship.includes("git([\"commit\""), "ship script must commit.");
 assert(ship.includes("git([\"push\", \"origin\", \"main\"]"), "ship script must push origin/main.");
 assert(liveSourceDoctor.includes("Wait-Job -Job $processInspectionJob -Timeout 15"), "live-source doctor must time-box Windows process inventory.");
 assert(liveSourceDoctor.includes("Windows process inventory did not answer within 15 seconds"), "live-source doctor must report an honest process-inventory timeout.");
+assert(liveSourceDoctor.includes("schtasks.exe /Query /TN $TaskName /XML"), "live-source doctor must avoid the blocking ScheduledTasks CIM provider.");
+assert(!liveSourceDoctor.includes("Get-ScheduledTask"), "live-source doctor must not use the blocking ScheduledTasks CIM provider.");
 
 console.log("Claude live ship guard OK");

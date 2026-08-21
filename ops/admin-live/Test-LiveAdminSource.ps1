@@ -46,6 +46,17 @@ function FirstBuildId {
   return $null
 }
 
+function ScheduledTaskXmlText {
+  param([string]$TaskName)
+  try {
+    $taskXml = & schtasks.exe /Query /TN $TaskName /XML 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $taskXml) { return "" }
+    return ($taskXml -join "`n")
+  } catch {
+    return ""
+  }
+}
+
 $states = New-Object System.Collections.Generic.List[string]
 
 Section "Canonical checkout"
@@ -137,14 +148,13 @@ $overrideOk = [string]::IsNullOrWhiteSpace($repoOverride) -or ((Resolve-Path -Li
 $states.Add((Result ($(if ($overrideOk) { "OK" } else { "FAIL" })) ($(if ($overrideOk) { "Dashboard repository environment override is empty or canonical." } else { "PHANTOMFORCE_DASHBOARD_REPO points at $repoOverride" }))))
 
 $combinedLauncher = Join-Path $RepoRoot "ops\admin-live\Run-AdminMainSyncHidden.vbs"
-$combinedTaskOk = $false
-try {
-  $combinedTask = Get-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -ErrorAction Stop
-  $combinedAction = (($combinedTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " ")
-  $combinedHasLogon = @($combinedTask.Triggers | Where-Object { $_.CimClass.CimClassName -eq "MSFT_TaskLogonTrigger" -and $_.Enabled }).Count -gt 0
-  $combinedHasHourly = @($combinedTask.Triggers | Where-Object { $_.Repetition.Interval -eq "PT1H" -and $_.Enabled }).Count -gt 0
-  $combinedTaskOk = $combinedTask.Settings.Hidden -and $combinedAction.Contains($combinedLauncher) -and $combinedHasLogon -and $combinedHasHourly
-} catch {}
+$combinedTaskXml = ScheduledTaskXmlText -TaskName "PhantomForce Admin Main Sync"
+$combinedTaskEnabled = $combinedTaskXml -and $combinedTaskXml -notmatch '<Enabled>\s*false\s*</Enabled>'
+$combinedTaskOk = $combinedTaskEnabled -and
+  $combinedTaskXml.Contains($combinedLauncher) -and
+  $combinedTaskXml -match '<LogonTrigger>' -and
+  $combinedTaskXml -match '<Interval>PT1H</Interval>' -and
+  $combinedTaskXml -match '<Hidden>true</Hidden>'
 
 $fallbackPath = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\start-admin-live-watch.vbs"
 $fallbackWatch = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "PhantomForceAdminLiveSync" -ErrorAction SilentlyContinue).PhantomForceAdminLiveSync
@@ -159,14 +169,12 @@ $startupTaskSpecs = @(
   @{ Name = "PhantomForce Hermes API"; Launcher = (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\run-hermes-start.vbs") }
 )
 foreach ($taskSpec in $startupTaskSpecs) {
-  $taskOk = $false
-  $hasLogon = $false
-  try {
-    $scheduledTask = Get-ScheduledTask -TaskName $taskSpec.Name -ErrorAction Stop
-    $actionText = (($scheduledTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " ")
-    $hasLogon = @($scheduledTask.Triggers | Where-Object { $_.CimClass.CimClassName -eq "MSFT_TaskLogonTrigger" -and $_.Enabled }).Count -gt 0
-    $taskOk = $scheduledTask.Settings.Hidden -and $actionText.Contains($taskSpec.Launcher) -and $hasLogon
-  } catch {}
+  $taskXml = ScheduledTaskXmlText -TaskName $taskSpec.Name
+  $taskEnabled = $taskXml -and $taskXml -notmatch '<Enabled>\s*false\s*</Enabled>'
+  $taskOk = $taskEnabled -and
+    $taskXml.Contains($taskSpec.Launcher) -and
+    $taskXml -match '<LogonTrigger>' -and
+    $taskXml -match '<Hidden>true</Hidden>'
   $covered = $taskOk -or $combinedCoverage
   $states.Add((Result ($(if ($covered) { "OK" } else { "FAIL" })) ($(if ($taskOk) { "$($taskSpec.Name) is hidden, canonical, and starts at login." } elseif ($combinedTaskOk) { "$($taskSpec.Name) is covered by the hidden login + hourly self-repair task." } elseif ($fallbackOk) { "$($taskSpec.Name) is covered by the hidden login + hourly watcher." } else { "$($taskSpec.Name) has no valid startup repair path." }))))
 }
