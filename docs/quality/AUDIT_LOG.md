@@ -2295,3 +2295,35 @@ Cycle 31.
 - PASS: authenticated PhantomPlay developer-mode persistence test, including
   byte-for-byte HTML/CSS/JavaScript project round-trip.
 - PASS: server typecheck and Git whitespace validation.
+
+# 2026-08-21 - Admin Master Audit + Phantom Empires: Sovereign
+
+## Release Scope
+
+- Converted the supplied 2,186-case admin audit corpus into 14 executable
+  release gates spanning authentication, tenant isolation, Approvals, Risk
+  Watch, Audit Log truth states, freshness, redacted export, billing,
+  idempotency, and accessibility. The source count is evidence of audit scope,
+  not a claim that 2,186 independent automated journeys passed.
+- Added first-class Risk Watch and admin-only Audit Log navigation. The Audit
+  Log reads the protected organization endpoint and keeps loading, error,
+  verified-empty, filtered-empty, and populated results distinct.
+- Added Phantom Empires: Sovereign to the client fallback and server-owned
+  PhantomPlay catalogs with one shared hosted route for desktop and web.
+- Shipped a playable RTS with three modes, four Ages, four-resource economy,
+  workers, construction, training, land/naval/siege forces, enemy waves,
+  bridges, weather, day/night, minimap, sound, save/resume, keyboard, and touch
+  controls. It truthfully identifies the browser-native PhantomPlay Strategy
+  Engine instead of claiming Unreal.
+
+## Verification Before Ship
+
+- PASS: live browser journey from Sovereign Campaign through Villager training
+  and Age II Iron Crown progression; the rendered economy and population
+  updated and the browser reported no console errors.
+- PASS: `npm run build`, `npm run test:admin-master-audit`,
+  `npm run test:admin-ui`, `npm run test:auth-boundaries`,
+  `npm run test:phantom-empires`, and `npm run test:change-memory`.
+- Pending in this entry: final release-critical rerun, public cache stamp,
+  origin synchronization, canonical deployment sync, and strict live-source
+  verification.

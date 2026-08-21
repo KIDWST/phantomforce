@@ -2274,7 +2274,7 @@
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
-          "pattern": "SpawnEjectedCasing[\\s\\S]*RightTacticalForearm[\\s\\S]*Helix operator is the authoritative modern-military squad silhouette[\\s\\S]*V26 sight picture[\\s\\S]*BuildV26BlackridgeAtmosphere",
+          "pattern": "SpawnEjectedCasing[\\s\\S]*TEXT\\(\"RightTacticalForearm\"\\)[\\s\\S]*Helix operator is the authoritative modern-military squad silhouette[\\s\\S]*V26 sight picture[\\s\\S]*BuildV27BlackridgeRealism",
           "description": "The V26 military operators, first-person weapon presentation, restrained HUD, and Blackridge atmosphere remain in runtime source."
         },
         {
@@ -2412,6 +2412,66 @@
           "file": "app/js/planner.js",
           "pattern": "Today needs attention here",
           "description": "Planner cannot regress to a passive attention list without operator actions."
+        }
+      ]
+    },
+    {
+      "id": "admin-master-audit-and-phantom-empires-floor",
+      "status": "active",
+      "title": "The admin audit is executable and Phantom Empires is a shared playable release",
+      "ownerDecision": "The 2,186-case PhantomForce admin audit is source coverage, not permission to claim unverified passes. Its release floor requires real authentication and tenant gates, first-class Approvals and Risk Watch, an admin-only organization Audit Log with distinct loading, error, verified-empty, filtered-empty, and populated states, freshness, retry, and a redacted allowlist export. Phantom Empires: Sovereign is a real built-in PhantomPlay strategy game shared by web and the desktop shell, with three modes, four Ages, a four-resource economy, construction, training, land and naval forces, siege combat, enemy pressure, day/night weather, minimap, save/resume, sound, keyboard, and touch controls. The shipped browser game identifies its real PhantomPlay Strategy Engine and must not pretend to be a native Unreal executable.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "id: \"protect\"[\\s\\S]*label: \"Risk Watch\"[\\s\\S]*id: \"auditlog\"[\\s\\S]*label: \"Audit Log\"[\\s\\S]*adminOnly: true",
+          "description": "Risk Watch and Audit Log remain first-class navigation destinations, with audit access restricted to admins."
+        },
+        {
+          "file": "app/js/orgs.js",
+          "pattern": "export async function fetchOrgAuditEvents[\\s\\S]*const \\{ ok, status, json \\}[\\s\\S]*events: \\[\\]",
+          "description": "Audit loading retains an explicit success/error contract instead of turning failures into a false empty history."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "function renderAuditLog[\\s\\S]*VERIFIED ORGANIZATION EVIDENCE[\\s\\S]*Sensitive payload fields are never displayed or exported[\\s\\S]*Export redacted log",
+          "description": "The Audit Log keeps its truth states, organization context, and redacted export boundary."
+        },
+        {
+          "file": "scripts/test-admin-master-audit.mjs",
+          "pattern": "sourceCases[\\s\\S]*AUTH-01[\\s\\S]*TENANT-01[\\s\\S]*APPROVAL-01[\\s\\S]*RISK-01[\\s\\S]*AUDIT-01[\\s\\S]*EXPORT-01[\\s\\S]*IDEMPOTENCY-01",
+          "description": "The audit source count and normalized release gates remain executable."
+        },
+        {
+          "file": "app/games/phantom-empires/game.js",
+          "pattern": "Phantom Empires: Sovereign[\\s\\S]*const UNIT[\\s\\S]*const BUILDING[\\s\\S]*const AGE[\\s\\S]*window.__PhantomEmpiresTest",
+          "description": "The playable RTS simulation and deterministic test seam remain in the shipped game."
+        },
+        {
+          "file": "app/js/phantomplay.js",
+          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=1.0.0\"[\\s\\S]*PhantomPlay Strategy Engine 1.0",
+          "description": "The shared PhantomPlay client catalog retains the playable Phantom Empires release and truthful engine label."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomplay-flagship.ts",
+          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=1.0.0\"[\\s\\S]*PhantomPlay Strategy Engine 1.0",
+          "description": "The server-owned catalog retains the same game route used by web and desktop."
+        },
+        {
+          "file": "scripts/test-phantom-empires.mjs",
+          "pattern": "Phantom Empires game runtime must parse[\\s\\S]*desktopWebParity[\\s\\S]*true",
+          "description": "The focused game release gate keeps mechanics, catalog parity, security, and responsive contracts protected."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "const safe = events\\.map\\([\\s\\S]{0,420}payload",
+          "description": "Sensitive audit payloads cannot enter the downloadable export."
+        },
+        {
+          "file": "server/src/phantom-ai/phantomplay-flagship.ts",
+          "pattern": "id: \"phantom-empires\"[\\s\\S]{0,1400}tier: \"Unreal Engine",
+          "description": "The browser release cannot be mislabeled as a native Unreal build."
         }
       ]
     },

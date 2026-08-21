@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+  <title>Phantom Empires: Sovereign</title>
+  <link rel="stylesheet" href="style.css?v=1.0.0">
+  <link rel="stylesheet" href="../shared/phantomGameKernel.css?v=2.0.0">
+</head>
+<body>
+  <canvas id="empire" aria-label="Phantom Empires real-time strategy battlefield"></canvas>
+
+  <header class="hud" data-hud hidden>
+    <div class="crest"><i>PE</i><span><b>PHANTOM EMPIRES</b><small data-age-label>AGE I · FOUNDING</small></span></div>
+    <div class="resources" aria-label="Empire resources">
+      <span title="Food"><i>◆</i><b data-resource="food">0</b><small>FOOD</small></span>
+      <span title="Wood"><i>♜</i><b data-resource="wood">0</b><small>WOOD</small></span>
+      <span title="Gold"><i>●</i><b data-resource="gold">0</b><small>GOLD</small></span>
+      <span title="Stone"><i>⬟</i><b data-resource="stone">0</b><small>STONE</small></span>
+      <span title="Population"><i>♟</i><b data-population>0 / 0</b><small>POP</small></span>
+    </div>
+    <div class="world-state"><span data-clock>DAWN</span><b data-weather>CLEAR</b><button type="button" data-pause aria-label="Pause game">Ⅱ</button></div>
+  </header>
+
+  <aside class="mission" data-mission hidden>
+    <p>WAR COUNCIL</p><h2 data-objective-title>Secure the frontier</h2><span data-objective-copy></span>
+    <div><i data-objective-progress></i></div><small data-threat>THREAT: WATCHFUL</small>
+  </aside>
+
+  <aside class="event-feed" data-event-feed aria-live="polite"></aside>
+
+  <section class="command-deck" data-command-deck hidden>
+    <div class="selection-panel">
+      <p>SELECTION</p><h3 data-selection-title>No units selected</h3><span data-selection-copy>Drag over units or tap one on the field.</span>
+      <div class="selection-icons" data-selection-icons></div>
+    </div>
+    <div class="orders" aria-label="Empire commands">
+      <div class="order-tabs" role="tablist">
+        <button type="button" class="is-active" data-command-tab="build">BUILD</button>
+        <button type="button" data-command-tab="train">TRAIN</button>
+        <button type="button" data-command-tab="realm">REALM</button>
+      </div>
+      <div class="order-grid" data-command-grid></div>
+    </div>
+    <div class="minimap-wrap"><canvas id="minimap" width="220" height="126" aria-label="Battlefield minimap"></canvas><span>FRONTIER MAP</span></div>
+  </section>
+
+  <div class="marquee" data-marquee hidden></div>
+  <div class="order-cursor" data-order-cursor hidden></div>
+  <div class="announcer" data-announcer aria-live="assertive"></div>
+
+  <section class="screen title-screen" data-title-screen>
+    <div class="title-vista" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="title-card">
+      <p>PHANTOMPLAY STRATEGY ENGINE · SOVEREIGN BUILD</p>
+      <h1>PHANTOM<br><em>EMPIRES</em></h1>
+      <span>Raise a civilization. Command the land and sea. Break the rival crown.</span>
+      <div class="mode-grid">
+        <button type="button" data-start="campaign"><b>SOVEREIGN CAMPAIGN</b><small>Guided conquest · escalating rival</small></button>
+        <button type="button" data-start="skirmish"><b>FRONTIER SKIRMISH</b><small>Immediate war · faster economy</small></button>
+        <button type="button" data-start="sandbox"><b>ARCHITECT MODE</b><small>Abundant resources · build freely</small></button>
+      </div>
+      <button type="button" class="continue" data-continue hidden>Continue saved empire</button>
+      <div class="feature-line"><span>REAL-TIME ECONOMY</span><span>LAND + NAVAL WAR</span><span>4 AGES</span><span>SIEGE PHYSICS</span></div>
+    </div>
+  </section>
+
+  <section class="screen modal-screen" data-tutorial hidden>
+    <div class="modal-card tutorial-card">
+      <p data-tutorial-step>WAR COUNCIL · 1 / 4</p><h2 data-tutorial-title>Command the frontier</h2><div class="tutorial-visual" data-tutorial-visual></div><span data-tutorial-copy></span>
+      <div><button type="button" class="ghost" data-tutorial-skip>Skip</button><button type="button" data-tutorial-next>Next</button></div>
+    </div>
+  </section>
+
+  <section class="screen modal-screen" data-pause-screen hidden>
+    <div class="modal-card"><p>WAR TABLE</p><h2>Campaign paused</h2><button type="button" data-resume>Return to battle</button><button type="button" class="ghost" data-save>Save empire</button><button type="button" class="ghost" data-menu>Leave to title</button></div>
+  </section>
+
+  <section class="screen modal-screen" data-result-screen hidden>
+    <div class="modal-card result-card"><p data-result-kicker>THE FRONTIER REMEMBERS</p><h2 data-result-title>Victory</h2><span data-result-copy></span><div data-result-stats></div><button type="button" data-restart>Fight another war</button><button type="button" class="ghost" data-menu>Return to title</button></div>
+  </section>
+
+  <div class="touch-bar" data-touch-bar hidden><button type="button" data-touch="army">ARMY</button><button type="button" data-touch="home">HOME</button><button type="button" data-touch="attack">ATTACK</button><button type="button" data-touch="build">BUILD</button></div>
+
+  <script src="../shared/phantomGameKernel.js?v=2.0.0"></script>
+  <script src="game.js?v=1.0.0"></script>
+</body>
+</html>

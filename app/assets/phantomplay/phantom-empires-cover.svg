@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Phantom Empires: Sovereign</title>
+  <desc id="desc">A custom painted strategy-game cover showing a luminous mountain city, a river fleet, siege battle, and two opposing empires.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#8cb7c5"/><stop offset=".42" stop-color="#d2b875"/><stop offset="1" stop-color="#263b33"/></linearGradient>
+    <linearGradient id="land" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#668356"/><stop offset="1" stop-color="#1b3328"/></linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#173c52"/><stop offset=".5" stop-color="#3b8490"/><stop offset="1" stop-color="#183b4c"/></linearGradient>
+    <radialGradient id="sun"><stop stop-color="#fff3b0"/><stop offset="1" stop-color="#f0a638" stop-opacity="0"/></radialGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="shadow"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-opacity=".65"/></filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="1180" cy="160" r="220" fill="url(#sun)"/>
+  <path d="M0 410 190 150l90 145 170-235 175 285 165-225 190 260 130-190 220 245 160-145 130 160v235H0Z" fill="#263b39"/>
+  <path d="M0 455 200 250l90 130L455 145l180 250 150-185 180 230 130-155 190 190 145-110 170 130v170H0Z" fill="#526557"/>
+  <path d="m403 205 52-60 47 65-31-17-19 22-20-24Z" fill="#dce6df" opacity=".8"/>
+  <path d="m752 250 34-40 44 55-29-18-17 18Z" fill="#e4ece6" opacity=".66"/>
+  <path d="M0 470q370-80 705 10t895-15v435H0Z" fill="url(#land)"/>
+  <path d="M675 440q125 65 181 145t54 315H552q88-171 45-270T500 475Z" fill="url(#water)"/>
+  <path d="M590 635q150 18 307-5" fill="none" stroke="#d9b36b" stroke-width="24"/>
+  <path d="M590 635q150 18 307-5" fill="none" stroke="#6b5239" stroke-width="15" stroke-dasharray="28 8"/>
+  <g filter="url(#shadow)">
+    <path d="M430 490V275h50V220h42v55h55v-86h48v86h70v-55h46v55h58v215Z" fill="#d9c79a" stroke="#31281d" stroke-width="9"/>
+    <path d="M412 305h410l-43-60-53 37-71-92-62 84-72-64-47 72Z" fill="#315a7a" stroke="#24333a" stroke-width="8"/>
+    <path d="M550 490V360h118v130" fill="#6d5840"/><path d="M586 490V394h48v96" fill="#14191a"/>
+    <g fill="#ffd86e" filter="url(#glow)"><rect x="462" y="330" width="18" height="34"/><rect x="744" y="330" width="18" height="34"/><rect x="602" y="300" width="18" height="34"/></g>
+    <path d="M535 220h112l-56-88Z" fill="#d2ae54"/><path d="M591 132V72" stroke="#332816" stroke-width="8"/><path d="m594 76 79 28-79 26Z" fill="#5fbfff"/>
+  </g>
+  <g fill="#263930" stroke="#111b17" stroke-width="5">
+    <path d="m95 610 35-90 40 90Z"/><path d="m154 620 40-110 42 110Z"/><path d="m236 595 30-82 36 82Z"/><path d="m1240 575 38-102 42 102Z"/><path d="m1322 610 45-125 46 125Z"/><path d="m1430 590 32-88 38 88Z"/>
+  </g>
+  <g transform="translate(694 660)" filter="url(#shadow)">
+    <path d="m-52 16 52-30 52 30-18 28h-68Z" fill="#784b2d" stroke="#261c17" stroke-width="6"/>
+    <path d="M0-16v-76" stroke="#30251e" stroke-width="8"/><path d="M4-89 65-45H4Z" fill="#e1cf9a" stroke="#6e5d3d" stroke-width="4"/>
+  </g>
+  <g transform="translate(793 726) scale(.8)" filter="url(#shadow)"><path d="m-52 16 52-30 52 30-18 28h-68Z" fill="#5a3828" stroke="#261c17" stroke-width="6"/><path d="M0-16v-76" stroke="#30251e" stroke-width="8"/><path d="M4-89 65-45H4Z" fill="#b8dff0" stroke="#406d79" stroke-width="4"/></g>
+  <g transform="translate(1120 655)" filter="url(#shadow)">
+    <g fill="#a5332f" stroke="#311411" stroke-width="5"><path d="m0 60 32-94 36 94Z"/><path d="m80 60 32-116 38 116Z"/><path d="m162 60 34-87 34 87Z"/></g>
+    <g stroke="#39261f" stroke-width="12"><path d="m35 35 70-85"/><path d="m122 38 74-102"/></g>
+    <circle cx="105" cy="-50" r="18" fill="#df9f48" filter="url(#glow)"/>
+  </g>
+  <g fill="#e5d6a2" stroke="#1b201d" stroke-width="4" filter="url(#shadow)">
+    <circle cx="360" cy="668" r="18"/><path d="m342 691 18-22 19 22 11 73h-60Z" fill="#447aad"/><circle cx="420" cy="698" r="18"/><path d="m402 721 18-22 19 22 11 73h-60Z" fill="#447aad"/>
+    <circle cx="1060" cy="710" r="18"/><path d="m1042 733 18-22 19 22 11 73h-60Z" fill="#ad443f"/><circle cx="1120" cy="748" r="18"/><path d="m1102 771 18-22 19 22 11 73h-60Z" fill="#ad443f"/>
+  </g>
+  <path d="M0 648q300-70 525 5t475 10 600-35v272H0Z" fill="#07100e" opacity=".55"/>
+  <rect x="34" y="35" width="1532" height="830" fill="none" stroke="#e7b85a" stroke-width="3" opacity=".72"/>
+  <path d="M58 70h420M1122 70h420M58 830h330M1210 830h332" stroke="#e7b85a" stroke-width="5"/>
+  <g transform="translate(70 650)" filter="url(#shadow)">
+    <text fill="#fff7df" font-family="Georgia,serif" font-size="67" font-weight="900" letter-spacing="5">PHANTOM</text>
+    <text y="82" fill="#f2c766" font-family="Georgia,serif" font-size="104" font-weight="900" letter-spacing="-2">EMPIRES</text>
+    <text y="126" fill="#d6cab0" font-family="monospace" font-size="19" font-weight="700" letter-spacing="8">SOVEREIGN</text>
+  </g>
+  <g transform="translate(1250 725)"><circle r="72" fill="#0c1512cc" stroke="#e7b85a" stroke-width="4"/><path d="M-34 31V-12l34-38 34 38v43l-34 22Z" fill="none" stroke="#f2c766" stroke-width="7"/><path d="M-21 20h42M0-45v95" stroke="#f2c766" stroke-width="5"/></g>
+</svg>

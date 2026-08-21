@@ -1,11 +1,11 @@
 import {
   store, uid, visible, moneyView, todaysPlan, currentWs, wsName, pushActivity,
   workspaceStorageGetItem, workspaceStorageSetItem, session,
-} from "./store.js?v=phantom-live-20260820-187";
+} from "./store.js?v=phantom-live-20260820-188";
 import {
   brainContractAttentionItems, cachedBrainContract, cachedOrganizationPulse,
   loadBrainContract, loadOrganizationPulse, organizationPulseState,
-} from "./organizationpulse.js?v=phantom-live-20260820-187";
+} from "./organizationpulse.js?v=phantom-live-20260820-188";
 
 const PLANNER_ITEMS_KEY = "pf.aiPlanner.items.v1";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -357,7 +357,7 @@ export function renderPlanner(el, opts = {}) {
             <div><p>AI operating queue</p><h3>Needs attention—already triaged</h3></div>
             <span class="planner-live-state"><i></i>${session.token() ? "Live organization brain" : "Local workspace monitor"}</span>
           </div>
-          <div class="planner-attention-list">
+          <div class="planner-brief-list planner-attention-list">
             ${attention.length ? attention.map(attentionCard).join("") : `<div class="planner-clear"><b>No work needs you right now.</b><span>Phantom will continue monitoring connections, failed runs, approvals, clients, finance, security, and scheduled work.</span></div>`}
           </div>
         </section>

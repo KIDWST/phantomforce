@@ -12,6 +12,7 @@ const checks = [
   "test:automation-workspace",
   "test:autopilot-attention",
   "test:auth-boundaries",
+  "test:admin-master-audit",
   "test:customer-plan-switching",
   "test:competitor-intelligence",
   "test:client-setup-audit",

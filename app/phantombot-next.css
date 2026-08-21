@@ -1327,6 +1327,25 @@ html[data-command-os="2040"] .phantombot-os select:focus-visible {
   }
 }
 
+/* The global compact shell swaps to its fixed bottom dock at 900px. Keep the
+   PhantomBot internal viewport inside the remaining height at that same
+   breakpoint; otherwise 681–900px tablet layouts place the composer below the
+   initial viewport until a control receives focus. */
+@media (max-width: 900px) {
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"]) .phantom.command-os-enabled .app-main {
+    display: block !important;
+    height: calc(100svh - 72px) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"]) .phantom.command-os-enabled .app-main > .console.console-workspace {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+}
+
 @media (max-width: 760px) {
   html[data-command-os="2040"] .phantombot-titlebar {
     flex-basis: 42px;

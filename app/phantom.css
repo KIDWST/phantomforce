@@ -4037,6 +4037,45 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .plan-copy i { font-size: 12px; font-style: normal; color: var(--dim); }
 .plan-arrow { flex: 0 0 auto; color: var(--neon); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(65, 255, 161, 0.08); }
 .queue-count { font: 600 11px "Spline Sans Mono", monospace; color: var(--neon); background: rgba(65, 255, 161, 0.1); border-radius: 999px; padding: 2px 9px; }
+
+/* Organization evidence: truthful states and a readable receipt stream. */
+.audit-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: center; padding: clamp(18px, 3vw, 30px); border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(135deg, rgba(65, 255, 161, 0.08), rgba(2, 7, 5, 0.76)); }
+.audit-hero h3 { margin: 3px 0 8px; font-size: clamp(24px, 4vw, 40px); }
+.audit-hero p { margin: 0; color: var(--dim); max-width: 66ch; }
+.audit-eyebrow { color: var(--neon) !important; font: 700 10px "Spline Sans Mono", monospace; letter-spacing: 0.18em; }
+.audit-proof { min-width: 164px; min-height: 134px; display: grid; place-content: center; text-align: center; border: 1px solid rgba(65, 255, 161, 0.28); border-radius: 18px; background: rgba(65, 255, 161, 0.05); }
+.audit-proof b { color: var(--neon); font: 700 38px "Spline Sans Mono", monospace; }
+.audit-proof span, .audit-proof small { display: block; color: var(--dim); }
+.audit-proof small { margin-top: 8px; font-size: 10px; }
+.audit-toolbar { display: flex; gap: 14px; align-items: end; justify-content: space-between; margin: 16px 0; }
+.audit-toolbar label { flex: 1; max-width: 520px; }
+.audit-toolbar label span { display: block; margin-bottom: 6px; color: var(--dim); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.audit-toolbar input { width: 100%; min-height: 44px; }
+.audit-toolbar > div { display: flex; gap: 8px; }
+.audit-list { display: grid; gap: 10px; }
+.audit-event { position: relative; display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 14px; padding: 17px; border: 1px solid var(--line); border-radius: 16px; background: rgba(2, 7, 5, 0.48); }
+.audit-event > i { width: 9px; height: 9px; margin-top: 6px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 16px rgba(65, 255, 161, 0.6); }
+.audit-event-top { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.audit-event h4, .audit-event p { margin: 0; }
+.audit-event p { margin-top: 5px; color: var(--dim); }
+.audit-event p b { color: var(--ink); }
+.audit-event time, .audit-event small { color: var(--dim); font: 500 10px "Spline Sans Mono", monospace; }
+.audit-event code { color: var(--neon); overflow-wrap: anywhere; }
+.audit-state { padding: clamp(22px, 5vw, 52px); text-align: center; border: 1px solid var(--line); border-radius: 20px; background: rgba(2, 7, 5, 0.48); }
+.audit-state b { display: block; margin-bottom: 7px; font-size: 20px; }
+.audit-state p { max-width: 62ch; margin: 0 auto 14px; color: var(--dim); }
+.audit-state.is-loading { border-style: dashed; }
+.audit-state.is-error { border-color: rgba(255, 96, 119, 0.48); }
+.audit-state.is-restricted { border-color: rgba(255, 196, 92, 0.42); }
+@media (max-width: 720px) {
+  .audit-hero { grid-template-columns: 1fr; }
+  .audit-proof { width: 100%; min-height: 104px; }
+  .audit-toolbar { align-items: stretch; flex-direction: column; }
+  .audit-toolbar label { max-width: none; }
+  .audit-toolbar > div, .audit-toolbar .btn { width: 100%; }
+  .audit-toolbar .btn { justify-content: center; }
+  .audit-event-top { align-items: flex-start; flex-direction: column; gap: 4px; }
+}
 .queue-list { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
 .queue-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; cursor: pointer; text-align: left; border: 1px solid var(--line); border-radius: 12px; background: rgba(65, 255, 161, 0.03); transition: border-color 0.2s, background 0.2s; }
 .queue-item:hover { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.07); }
@@ -7595,7 +7634,7 @@ body.phantomplay-playing .buddy, body.phantomplay-playing .buddy-menu, body.phan
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260820-187") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260820-188") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(65, 255, 161, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;

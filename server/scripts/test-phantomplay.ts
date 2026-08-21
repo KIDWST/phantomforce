@@ -41,9 +41,12 @@ try {
   assert(initial.engine?.distributedRuntime?.cloudStreamingFromJordan === false, "Distributed runtime must not imply Jordan-hosted cloud game streaming.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
   assert(builtInIds.size === initial.catalog.length, "Built-in game IDs should not duplicate after catalog registration.");
-  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "phantom-rumble", "sudoku-signal", "cubetown", "phantom-ages", "phantom-legends", "phantom-strike", "skyguard-arena", "crown-circuit", "phantom-dash", "phantom-cube", "tidefront-tactics", "kingdom-breakers", "cipher-keep"]) {
+  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge", "color-rush", "tile-flow", "tower-tactics", "breath-pacer", "court-vision", "pixel-bloom", "circuit-serpent", "echo-sequence", "signal-sweeper", "neon-breaker", "type-storm", "logic-lights", "phantom-rumble", "sudoku-signal", "cubetown", "phantom-ages", "phantom-legends", "phantom-strike", "skyguard-arena", "crown-circuit", "phantom-dash", "phantom-cube", "tidefront-tactics", "kingdom-breakers", "cipher-keep", "phantom-empires"]) {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
+  const phantomEmpires = initial.catalog.find((game) => game.id === "phantom-empires");
+  assert(phantomEmpires?.launchUrl === "/app/games/phantom-empires/index.html?v=1.0.0", "Phantom Empires must launch the shared hosted desktop/web build.");
+  assert(phantomEmpires?.engine?.tier === "PhantomPlay Strategy Engine 1.0", "Phantom Empires must advertise its real shipped engine without pretending the browser build is Unreal.");
   for (const unrealId of ["cubetown", "phantom-ages", "phantom-legends", "phantom-strike"]) {
     const game = initial.catalog.find((item) => item.id === unrealId);
     assert(game, `${unrealId} should be available in PhantomPlay.`);

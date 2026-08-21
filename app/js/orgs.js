@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260820-187";
+import { ctx, session } from "./store.js?v=phantom-live-20260820-188";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -309,6 +309,18 @@ export async function fetchServerApprovals() {
   if (!orgId) return [];
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/runs?state=awaiting_approval`);
   return ok ? json.runs || [] : [];
+}
+
+/* Organization audit receipts are owner/admin evidence, not dashboard
+   decoration. Return an explicit result instead of collapsing an outage or
+   permission failure into an empty array (which would look like a false zero). */
+export async function fetchOrgAuditEvents() {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, status: 400, error: "no_active_org", events: [] };
+  const { ok, status, json } = await api(`/orgs/${encodeURIComponent(orgId)}/audit`);
+  return ok
+    ? { ok: true, status, events: Array.isArray(json?.events) ? json.events : [] }
+    : { ok: false, status, error: json?.error || "audit_history_unavailable", events: [] };
 }
 
 export async function fetchOrgRuns(limit = 10) {

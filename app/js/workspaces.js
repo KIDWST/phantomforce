@@ -9,24 +9,25 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260820-187";
+} from "./store.js?v=phantom-live-20260820-188";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
   activeOrgId,
+  fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260820-187";
+} from "./orgs.js?v=phantom-live-20260820-188";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260820-187";
+} from "./proposalpipeline.js?v=phantom-live-20260820-188";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260820-187";
+} from "./approvalpipeline.js?v=phantom-live-20260820-188";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -34,9 +35,9 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260820-187";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260820-187";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260820-187";
+} from "./financeledger.js?v=phantom-live-20260820-188";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260820-188";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260820-188";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -50,6 +51,7 @@ const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "al
 const crmSelection = createScopedSelection("");
 const proposalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
 const approvalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
+const auditUi = { orgId: "", state: "idle", events: [], error: "", refreshedAt: "", query: "" };
 const financeUi = { loadedTenant: "", loadingTenant: "", notice: "", serverSummary: null };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
@@ -1207,6 +1209,122 @@ function renderProtect(el, rerender) {
   });
 }
 
+/* ============================= AUDIT LOG ============================= */
+function auditOrganizationName(orgId) {
+  const membership = (session?.get?.()?.memberships || []).find((item) => item.orgId === orgId || item.id === orgId);
+  return membership?.orgName || membership?.name || "Active organization";
+}
+
+function auditActionLabel(value) {
+  return String(value || "Activity recorded")
+    .replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+async function loadAuditEvents(rerender, force = false) {
+  const orgId = activeOrgId();
+  if (!orgId || auditUi.state === "loading") return;
+  if (!force && auditUi.orgId === orgId && ["ready", "empty"].includes(auditUi.state)) return;
+  auditUi.orgId = orgId;
+  auditUi.state = "loading";
+  auditUi.error = "";
+  rerender();
+  const result = await fetchOrgAuditEvents();
+  if (auditUi.orgId !== orgId) return;
+  if (!result.ok) {
+    auditUi.state = result.status === 401 || result.status === 403 ? "restricted" : "error";
+    auditUi.error = result.error || "Audit history is unavailable.";
+    auditUi.events = [];
+  } else {
+    auditUi.events = result.events;
+    auditUi.state = result.events.length ? "ready" : "empty";
+    auditUi.refreshedAt = new Date().toISOString();
+  }
+  rerender();
+}
+
+function downloadRedactedAudit(events, orgId) {
+  const safe = events.map((event) => ({
+    receiptId: event.id,
+    action: event.eventType,
+    actor: event.actor,
+    targetType: event.targetType,
+    targetId: event.targetId,
+    occurredAt: event.createdAt,
+  }));
+  const blob = new Blob([JSON.stringify({ organizationId: orgId, exportedAt: new Date().toISOString(), receipts: safe }, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `phantomforce-audit-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function renderAuditLog(el, rerender) {
+  const orgId = activeOrgId();
+  if (!isDatabaseSession()) {
+    el.innerHTML = `<div class="audit-state" role="status"><b>Secure account required</b><p>Organization audit receipts are available after you sign in to an organization account. No activity total is shown while that evidence source is unavailable.</p></div>`;
+    return;
+  }
+  if (!orgId) {
+    el.innerHTML = `<div class="audit-state" role="status"><b>No organization selected</b><p>Choose an organization to load its isolated receipt history.</p></div>`;
+    return;
+  }
+  if (!canManageActiveOrg()) {
+    el.innerHTML = `<div class="audit-state is-restricted" role="status"><b>Owner or admin access required</b><p>This receipt history is protected by the organization role boundary.</p></div>`;
+    return;
+  }
+  if (auditUi.orgId !== orgId) {
+    auditUi.orgId = orgId;
+    auditUi.state = "idle";
+    auditUi.events = [];
+    auditUi.error = "";
+  }
+  if (auditUi.state === "idle") {
+    el.innerHTML = `<div class="audit-state is-loading" role="status" aria-live="polite"><b>Loading verified receipts…</b><p>Checking ${esc(auditOrganizationName(orgId))}. No result count will appear until the server answers.</p></div>`;
+    void loadAuditEvents(rerender);
+    return;
+  }
+  if (auditUi.state === "loading") {
+    el.innerHTML = `<div class="audit-state is-loading" role="status" aria-live="polite"><b>Loading verified receipts…</b><p>Checking ${esc(auditOrganizationName(orgId))}. No result count will appear until the server answers.</p></div>`;
+    return;
+  }
+  if (auditUi.state === "restricted") {
+    el.innerHTML = `<div class="audit-state is-restricted" role="alert"><b>Receipt history is restricted</b><p>Your current server session cannot read this organization's audit history.</p><button class="btn" type="button" data-act="audit-refresh">Try again</button></div>`;
+    bindActions(el, { "audit-refresh": () => void loadAuditEvents(rerender, true) });
+    return;
+  }
+  if (auditUi.state === "error") {
+    el.innerHTML = `<div class="audit-state is-error" role="alert"><b>Receipt history could not be verified</b><p>${esc(auditUi.error)}</p><button class="btn" type="button" data-act="audit-refresh">Retry</button></div>`;
+    bindActions(el, { "audit-refresh": () => void loadAuditEvents(rerender, true) });
+    return;
+  }
+  const query = auditUi.query.trim().toLowerCase();
+  const shown = auditUi.events.filter((event) => !query || [event.eventType, event.actor, event.targetType, event.targetId]
+    .some((value) => String(value || "").toLowerCase().includes(query)));
+  el.innerHTML = `
+    <div class="audit-hero">
+      <div><p class="audit-eyebrow">VERIFIED ORGANIZATION EVIDENCE</p><h3>${esc(auditOrganizationName(orgId))}</h3><p>Server-owned, organization-scoped receipts. Sensitive payload fields are never displayed or exported here.</p></div>
+      <div class="audit-proof"><b>${auditUi.events.length}</b><span>verified receipt${auditUi.events.length === 1 ? "" : "s"}</span><small>${auditUi.refreshedAt ? `Refreshed ${esc(ago(auditUi.refreshedAt))}` : "Freshness unavailable"}</small></div>
+    </div>
+    <div class="audit-toolbar">
+      <label><span>Find a receipt</span><input type="search" value="${esc(auditUi.query)}" placeholder="Action, actor, or target" data-audit-query /></label>
+      <div><button class="btn btn-quiet" type="button" data-act="audit-refresh">Refresh</button><button class="btn" type="button" data-act="audit-export" ${auditUi.events.length ? "" : "disabled"}>Export redacted log</button></div>
+    </div>
+    ${auditUi.state === "empty"
+      ? `<div class="audit-state" role="status"><b>No receipts recorded yet</b><p>The server is available and returned a verified empty history for this organization.</p></div>`
+      : shown.length
+        ? `<div class="audit-list" role="list">${shown.map((event) => `<article class="audit-event" role="listitem"><i aria-hidden="true"></i><div><div class="audit-event-top"><h4>${esc(auditActionLabel(event.eventType))}</h4><time datetime="${esc(event.createdAt)}">${esc(fmtDateTime(event.createdAt))}</time></div><p><b>${esc(event.actor || "System")}</b> acted on ${esc(event.targetType || "record")} <code>${esc(event.targetId || "—")}</code>.</p><small>Receipt ${esc(event.id)}</small></div></article>`).join("")}</div>`
+        : `<div class="audit-state" role="status"><b>No matching receipts</b><p>Clear the search to return to the verified organization history.</p></div>`}`;
+  const queryInput = el.querySelector("[data-audit-query]");
+  queryInput?.addEventListener("input", () => { auditUi.query = queryInput.value; rerender(); });
+  bindActions(el, {
+    "audit-refresh": () => void loadAuditEvents(rerender, true),
+    "audit-export": () => downloadRedactedAudit(auditUi.events, orgId),
+  });
+}
+
 /* =============================== MONEY =============================== */
 const moneySigned = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmtMoney(value);
 const financeCategoryOptions = (selected = "Uncategorized") =>
@@ -1864,7 +1982,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260820-187")
+      import("./brain.js?v=phantom-live-20260820-188")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -3634,6 +3752,7 @@ export const WORKSPACE_DEFS = {
   reviews: { title: "Offers to review", kicker: "Review requests and proof", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
+  auditlog: { title: "Audit Log", kicker: "Verified organization receipts", render: renderAuditLog, adminOnly: true },
   money: { title: "Accounting", kicker: "Cash, offers, and review", render: renderAccounting },
   memory: { title: "Memory", kicker: "Context intelligence database", render: renderMemory },
   workforce: { title: "Workforce", kicker: "Business ops network", render: renderWorkforce },

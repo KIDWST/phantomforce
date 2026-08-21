@@ -138,6 +138,7 @@ const GAME_ART_BY_SLUG: Record<string, string> = {
   "crown-circuit": artUrl("crown-circuit-cover.svg"),
   "kingdom-breakers": artUrl("kingdom-breakers-cover.svg"),
   "phantom-ages": artUrl("phantom-ages-cover.svg"),
+  "phantom-empires": artUrl("phantom-empires-cover.svg"),
   "tidefront-tactics": artUrl("tidefront-tactics-cover.svg"),
   "skyguard-arena": artUrl("skyguard-arena-cover.svg"),
   "im-baked": artUrl("im-baked-cover.svg"),
