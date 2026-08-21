@@ -20,6 +20,7 @@ const cubeTownIndex = read("../app/games/cubetown/index.html");
 const phantomAges = read("../packages/phantom-games-unreal/Source/PhantomGames/Private/Ages/PhantomAgesDirector.cpp");
 const phantomStrike = read("../packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp");
 const phantomStrikeV12Prompt = read("../packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md");
+const phantomStrikeV12VisualPrompts = read("../packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V12_VISUAL_TARGET_PROMPTS.md");
 const flagshipCatalog = read("../server/src/phantom-ai/phantomplay-flagship.ts");
 const serverCatalog = read("../server/src/phantom-ai/phantomplay.ts");
 const serverV2Catalog = read("../server/src/phantom-ai/phantomplay-v2.ts");
@@ -394,6 +395,7 @@ for (const target of [
 assert.match(phantomStrikeV12Prompt, /Treat V11R6 as the minimum acceptable gameplay floor/u, "The V12 prompt must prohibit gameplay regressions.");
 assert.match(phantomStrikeV12Prompt, /Do not copy any existing franchise/u, "The V12 prompt must keep PhantomStrike original rather than cloning another shooter.");
 assert.match(phantomStrikeV12Prompt, /clean compile and cook[\s\S]*visual proof[\s\S]*performance evidence/u, "The V12 prompt must require real release proof rather than source-only completion.");
+assert.match(phantomStrikeV12VisualPrompts, /Exterior gameplay target[\s\S]*Interior breach target[\s\S]*HUD and weapon target/u, "The exact V12 visual-target prompt set must remain reproducible.");
 assert.doesNotThrow(() => new Function(vespergateGame), "Vespergate game script must parse.");
 assert.doesNotThrow(() => new Function(vespergateRooms), "Vespergate room script must parse.");
 assert.doesNotThrow(() => new Function(vespergateEngine), "Vespergate engine script must parse.");

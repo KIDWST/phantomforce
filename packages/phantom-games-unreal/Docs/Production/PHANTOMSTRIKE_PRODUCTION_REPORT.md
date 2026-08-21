@@ -13,6 +13,7 @@
 V11R6 remains the newest verified gameplay floor. The next implementation pass is defined by:
 
 - `PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md`
+- `PHANTOMSTRIKE_V12_VISUAL_TARGET_PROMPTS.md`
 - `SourceArt/VisualTargets/phantom-strike-v12-exterior-gameplay-target.png`
 - `SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png`
 - `SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png`

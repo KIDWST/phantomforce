@@ -18,6 +18,7 @@
         "SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png",
         "SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png"
       ],
+      "visual_target_prompts": "Docs/Production/PHANTOMSTRIKE_V12_VISUAL_TARGET_PROMPTS.md",
       "execution_prompt": "Docs/Production/PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md",
       "save_namespace": "phantomstrike.",
       "identity_invariants": [

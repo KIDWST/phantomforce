@@ -17,6 +17,7 @@
     "packages/phantom-games-unreal/SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png",
     "packages/phantom-games-unreal/SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png"
   ],
+  "visual_target_prompts": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V12_VISUAL_TARGET_PROMPTS.md",
   "execution_prompt": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md",
   "forbidden_crossovers": [
     "Phantom Ages fixed-lane controller",
