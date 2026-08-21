@@ -27,11 +27,21 @@ const chromeCandidates = [
 const pages = [
   { id: "dashboard", label: "dashboard" },
   { id: "phantomai", label: "phantombot" },
-  { id: "leads", label: "clients" },
+  { id: "leads", label: "leads" },
+  { id: "followup", label: "follow-up" },
+  { id: "comms", label: "comms" },
+  { id: "bookings", label: "bookings" },
+  { id: "clients", label: "clients" },
+  { id: "money", label: "quotes-money" },
+  { id: "approvals", label: "approvals" },
+  { id: "riskwatch", label: "risk-watch" },
   { id: "media", label: "media-lab" },
   { id: "content", label: "content-hub" },
   { id: "analytics", label: "analytics" },
   { id: "sites", label: "websites" },
+  { id: "notifications", label: "notifications" },
+  { id: "audit", label: "audit-log" },
+  { id: "runtime", label: "runtime-devices" },
   { id: "phantomplay", label: "phantomplay" },
   { id: "phantomstore", label: "phantomstore" },
   { id: "settings", label: "settings" },
@@ -703,6 +713,36 @@ function auditPage() {
       taskCount: phantomBotTaskList?.querySelectorAll("[data-phantombot-task]").length || 0,
       composerVisible: isVisible(phantomBotComposer),
       composerTag: phantomBotComposer?.tagName || "",
+      composerRect: phantomBotComposer ? (() => {
+        const rect = phantomBotComposer.getBoundingClientRect();
+        return {
+          top: Math.round(rect.top),
+          right: Math.round(rect.right),
+          bottom: Math.round(rect.bottom),
+          left: Math.round(rect.left),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          display: getComputedStyle(phantomBotComposer).display,
+          visibility: getComputedStyle(phantomBotComposer).visibility,
+          ariaHiddenAncestor: phantomBotComposer.closest('[aria-hidden="true"]')?.className || "",
+        };
+      })() : null,
+      composerAncestors: phantomBotComposer ? (() => {
+        const rows = [];
+        let node = phantomBotComposer.parentElement;
+        while (node && rows.length < 9) {
+          const rect = node.getBoundingClientRect();
+          rows.push({
+            selector: selectorName(node),
+            top: Math.round(rect.top),
+            bottom: Math.round(rect.bottom),
+            height: Math.round(rect.height),
+            overflow: `${getComputedStyle(node).overflowX}/${getComputedStyle(node).overflowY}`,
+          });
+          node = node.parentElement;
+        }
+        return rows;
+      })() : [],
       railToggleVisible: phantomBotRailToggles.some(isVisible),
       pageWorkerVisible: isVisible(pageWorker),
       topSearchVisible: isVisible(commandRailSearch),
@@ -1101,7 +1141,7 @@ function assertCase(result) {
     assert.equal(audit.phantomBot.shellVisible, true, `${label} ${viewport.width}: dedicated PhantomBot OS shell must be visible.`);
     assert.equal(audit.phantomBot.taskListPresent, true, `${label} ${viewport.width}: task history rail must remain mounted.`);
     assert.ok(audit.phantomBot.taskCount >= 1, `${label} ${viewport.width}: PhantomBot must start with a usable active task.`);
-    assert.equal(audit.phantomBot.composerVisible, true, `${label} ${viewport.width}: message composer must be visible on initial load.`);
+    assert.equal(audit.phantomBot.composerVisible, true, `${label} ${viewport.width}: message composer must be visible on initial load. ${JSON.stringify({ rect: audit.phantomBot.composerRect, ancestors: audit.phantomBot.composerAncestors })}`);
     assert.equal(audit.phantomBot.composerTag, "TEXTAREA", `${label} ${viewport.width}: composer must be multiline.`);
     assert.equal(audit.phantomBot.pageWorkerVisible, false, `${label} ${viewport.width}: generic page-intelligence prompt must not duplicate PhantomBot chat.`);
     assert.equal(audit.phantomBot.topSearchVisible, false, `${label} ${viewport.width}: global top Search control must stay out of the dedicated PhantomBot OS.`);

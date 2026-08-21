@@ -1535,6 +1535,49 @@ html[data-command-os="2040"] .phantombot-os select:focus-visible {
   }
 }
 
+/* Narrow tablets use the compact shell, but PhantomBot still owns a fixed
+   conversation viewport. Keep its composer above the mobile navigation while
+   leaving every other workspace on the shared scrolling-page contract. */
+@media (min-width: 681px) and (max-width: 900px) {
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"])
+    .phantom.command-os-enabled .app-main {
+    display: block !important;
+    height: calc(100svh - 72px) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"])
+    .phantom.command-os-enabled .app-main > .console.console-workspace {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"])
+    .workspace-page[data-workspace-page="phantomai"],
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"])
+    .workspace-page[data-workspace-page="phantomai"] .workspace-page-body {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"])
+    .phantombot-os,
+  html[data-command-os="2040"] body:has(.workspace-page[data-workspace-page="phantomai"])
+    .phantombot-stage {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html[data-command-os="2040"] .phantombot-mission-identity > span[data-state="working"] i {
     animation: none;

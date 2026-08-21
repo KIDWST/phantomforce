@@ -5,6 +5,8 @@ const checks = [
   "build",
   "typecheck",
   "test:change-memory",
+  "test:admin-master-audit",
+  "test:admin-ui",
   "test:dashboard-chat",
   "test:command-surface",
   "test:phantombot-interstellar",

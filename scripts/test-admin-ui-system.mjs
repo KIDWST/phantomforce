@@ -79,7 +79,7 @@ for (const className of [
   "planner-metrics",
   "planner-grid",
   "planner-card",
-  "planner-brief-list",
+  "planner-attention-list",
   "planner-days",
   "planner-auto-grid",
   "planner-prep-list",

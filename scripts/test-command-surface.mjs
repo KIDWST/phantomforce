@@ -36,9 +36,10 @@ assert.match(main, /renderMediaStudio\(target, opts\)/u, "Media Lab must mount t
 assert.match(main, /renderContentHub\(body, mediaOpts\(\)\)/u, "Content Hub must mount the complete publishing workspace.");
 assert.doesNotMatch(main, /Creator workbench is mounted/u, "Media Lab must not regress to the stripped provider summary.");
 assert.match(index, /data-nav-id="media"[^>]*>Media Lab</u, "Media Lab must remain directly reachable from the global command rail.");
-assert.match(index, /data-nav-id="phantomplay"[^>]*>PhantomPlay</u, "PhantomPlay must remain directly reachable from the global command rail.");
-assert.doesNotMatch(index, /data-nav-id="automation"[^>]*>Automations</u, "Automations must live inside PhantomBot instead of duplicating the global command rail.");
-assert.match(index, /data-nav-id="planner"[^>]*>Planner</u, "Planner must remain directly reachable from the global command rail.");
+assert.match(main, /id: "phantomplay", label: "PhantomPlay"[\s\S]*navZone: "bottom"[\s\S]*quiet: true/u, "PhantomPlay must remain directly reachable from the quiet utility navigation.");
+assert.match(main, /id: "automation", label: "Automations"[\s\S]*navZone: "bottom"/u, "Automations must remain directly reachable from the quiet utility navigation.");
+assert.doesNotMatch(index.match(/<nav class="os-primary-nav"[\s\S]*?<\/nav>/u)?.[0] || "", /data-nav-id="(?:phantomplay|automation)"/u, "PhantomPlay and Automations must not displace daily owner jobs in the primary rail.");
+assert.match(main, /id: "planner",\s+label: "Planner"[\s\S]*navZone: "bottom"/u, "Planner must remain directly reachable from the quiet utility navigation.");
 assert.match(mediaLab, /\["generate", "Create"\][\s\S]*\["pending", "Pending"\][\s\S]*\["library", "Media Pool"\][\s\S]*\["edit", "Edit"\]/u, "Media Lab must retain Create, Pending, Media Pool, and Edit.");
 assert.match(mediaLab, /mountVideoEditor/u, "Media Lab Edit must retain the PhantomCut video editor.");
 assert.match(mediaLab, /\["image", "video"\]\.includes\(intent\.type\)/u, "PhantomCut handoff must accept generated images and videos.");
@@ -63,7 +64,7 @@ assert.match(phantomAi, /event\.key\.toLowerCase\(\) === "n"/u, "PhantomBot must
 assert.match(main, /data-phantomai-tab="automations"[\s\S]*data-phantombot-automations-mount/u, "PhantomBot must own the Automations control-plane tab.");
 assert.match(phantomAi, /const TABS = \["chat", "automations", "media", "memory", "activity"\]/u, "PhantomBot tab routing must include Automations.");
 assert.match(phantomAi, /renderAutomation\(mount\)/u, "PhantomBot must mount the real automation workspace rather than a duplicate mock.");
-assert.doesNotMatch(main, /\{ id: "automation",\s+label: "Automations"/u, "Automations must not regress into a separate top-level app.");
+assert.match(main, /\{ id: "automation",\s+label: "Automations"[\s\S]*navZone: "bottom"/u, "Automations must remain a quiet system destination while PhantomBot keeps its embedded control-plane tab.");
 assert.match(phantomAi, /usage limit\|quota\|rate limit\|too many requests\|429\|subscription limit[\s\S]*data-phantombot-chatgpt-account/u, "PhantomBot usage-limit errors must offer a ChatGPT account-switch action.");
 assert.match(phantomAi, /data-phantombot-chatgpt-account[\s\S]*pf\.settings\.tab\.v1[\s\S]*bridge/u, "The PhantomBot account-switch action must open ChatGPT Bridge settings.");
 assert.match(pageWorker, /const SKIP_PAGES = new Set\(\[[\s\S]*"phantomai"[\s\S]*\]\);/u, "PhantomBot must skip the generic page-intelligence prompt because chat is the native primary surface.");
@@ -96,7 +97,7 @@ assert.match(main, /renderDashboardBrief\(\);/u, "Console render must refresh th
 // nothing.
 assert.doesNotMatch(main, /bindChatboxMobility/u, "Dead chatbox drag/hotkey subsystem must not come back once its target element is gone.");
 assert.match(main, /const bottomItems = items;/u, "The dedicated utility zone must remain the full navigation launcher while the main sidebar shows open tabs.");
-assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "crm", "phantomai", "sites", "money"\]/u, "Phone dock must keep the five core destinations stable.");
+assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "leads", "followup", "approvals", "phantomai"\]/u, "Phone dock must keep the five audited owner-job destinations stable.");
 assert.doesNotMatch(main, /renderAssetCloud|\.\/assetcloud\.js|id:\s*"assets"/u, "Removed Asset Cloud must not blank the shell through stale imports or navigation.");
 assert.doesNotMatch(index, /data-nav-id="assets"/u, "Removed Asset Cloud must not remain in the command rail.");
 assert.doesNotMatch(flowMap, /ws:\s*"assets"/u, "Flow-map delivery must not route into the removed Asset Cloud workspace.");

@@ -10,8 +10,8 @@
     "Standalone resizable native-window play"
   ],
   "camera_contract": "First-person only during gameplay.",
-  "current_floor": "V26R1 Blackridge verified installed PhantomStrike release inside the mixed V25R3+CUBETOWN-V19R1+PHANTOMSTRIKE-V26R1 PhantomPlay set",
-  "next_target": "Post-promotion rendered-frame, real-input, and performance review plus V27 polish; V26R1 is the no-regression floor",
+  "current_floor": "V28R7 first-person natural-environment release verified installed inside the V25R12+PHANTOMSTRIKE-V28R7 PhantomPlay set",
+  "next_target": "Post-promotion rendered-frame, real-input, and performance review plus V29 polish; V28R7 is the no-regression floor",
   "visual_targets": [
     "packages/phantom-games-unreal/SourceArt/VisualTargets/phantom-strike-v12-exterior-gameplay-target.png",
     "packages/phantom-games-unreal/SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png",
@@ -25,5 +25,5 @@
     "Phantom Ages fixed-lane controller",
     "Phantom Legends RTS selection camera"
   ],
-  "production_status": "V26R1 Blackridge is the verified installed PhantomStrike floor. It removes the shared fantasy-character regression, makes the generated military operator family authoritative, adds first-person tactical arms, weapon inertia, physical warm muzzle presentation and casing ejection, procedural operator combat motion and collapse, restrained photographic HUD, cool-storm/warm-practical lighting, and an additive relay/breach dressing layer. Routine local successors promote automatically only after compile, package, focused regression, identity/hash, and rollback-readiness gates pass."
+  "production_status": "V28R7 is the verified installed PhantomStrike floor. It preserves the modern-military operator and combat systems while enforcing a true possessed first-person camera, direct keyboard/controller movement fallback, hidden owner mannequin, natural eye line, collision-safe insertion, and the authored Blackridge coastal route with restrained daylight, tiled PBR road, 1,400 production ArchVis trees, 700 matching saplings, rolling PBR landforms, boulders, and legacy-render cleanup. Routine local successors promote automatically only after compile, package, focused regression, identity/hash, gameplay-proof, and rollback-readiness gates pass."
 }

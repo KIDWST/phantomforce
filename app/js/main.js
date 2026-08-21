@@ -733,28 +733,35 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
 
 /* ============================ sidebar nav ============================ */
 const BASE_NAV = [
-  { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
-  { id: "phantomai",  label: "PhantomBot",   icon: "chat",  ws: "phantomai" },
-  { id: "phantomhunter", label: "PhantomHunter", icon: "shield", ws: "phantomhunter" },
-  { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
-  { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
+  { id: "dashboard",  label: "Overview",     icon: "grid",  view: "main" },
+  { id: "leads",      label: "Leads",        icon: "users", ws: "leads" },
+  { id: "followup",   label: "Follow-up",    icon: "clock", ws: "followup" },
+  { id: "comms",      label: "Comms",        icon: "chat",  ws: "comms" },
+  { id: "bookings",   label: "Bookings",     icon: "clock", ws: "bookings" },
+  { id: "clients",    label: "Clients",      icon: "users", ws: "clients" },
+  { id: "money",      label: "Quotes & Money", icon: "dollar", ws: "money" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "content",    label: "Content Hub",  icon: "spark", ws: "content" },
-  { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
-  { id: "planner",    label: "Planner",      icon: "clock", ws: "planner" },
-  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true, dashboardWidget: true },
-  { id: "protect",    label: "Risk Watch",   icon: "shield", ws: "protect" },
-  { id: "auditlog",   label: "Audit Log",    icon: "clock", ws: "auditlog", adminOnly: true },
-  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", dashboardWidget: true },
-  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence", dashboardWidget: true },
+  { id: "sites",      label: "Sites & Stores", icon: "site", ws: "sites" },
+  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
+  { id: "riskwatch",  label: "Risk Watch",   icon: "shield", ws: "riskwatch" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
+  { id: "phantomai",  label: "PhantomBot",   icon: "chat",  ws: "phantomai", navZone: "bottom" },
+  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", navZone: "bottom" },
+  { id: "intelligence", label: "Intel", icon: "chart", ws: "intelligence", navZone: "bottom" },
+  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce", dashboardWidget: true },
+  { id: "runtime",    label: "Runtime & Devices", icon: "dev", ws: "runtime", navZone: "bottom" },
+  { id: "phantomhunter", label: "Integrations", icon: "shield", ws: "phantomhunter", navZone: "bottom" },
+  { id: "audit",      label: "Audit Log",    icon: "grid", ws: "audit", navZone: "bottom" },
+  { id: "notifications", label: "Notifications", icon: "chat", ws: "notifications", navZone: "bottom" },
+  { id: "planner",    label: "Planner",      icon: "clock", ws: "planner", navZone: "bottom" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory", navZone: "bottom", quiet: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
   { id: "adminos",    label: "Admin",        icon: "users", ws: "adminos", adminOnly: true, navZone: "bottom" },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
-  { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true },
+  { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
   { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true, optionalModule: true },
-  { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore" },
+  { id: "phantomstore", label: "PhantomStore", icon: "spark", ws: "phantomstore", navZone: "bottom", quiet: true },
 ];
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 let navEntitlements = { loaded: false, features: null, limits: null, entitlements: null };
@@ -797,13 +804,13 @@ function planAllowsNavItem(item) {
   return !allowed || allowed.has(item.id);
 }
 const PROFILE_NAV_WORKFLOWS = {
-  business: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "money", "automation", "approvals", "protect", "auditlog", "workers", "intelligence", "analytics", "memory", "settings", "adminos", "vacation", "phantomplay", "phantomstore"]),
-  athlete: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
-  developer: new Set(["dashboard", "phantomai", "sites", "media", "content", "automation", "workers", "intelligence", "analytics", "memory", "settings", "adminos", "developer", "phantomplay", "phantomstore"]),
-  coach: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
-  sports_management: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "money", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
-  agency: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "money", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
-  education: new Set(["dashboard", "phantomai", "crm", "sites", "media", "content", "automation", "approvals", "workers", "intelligence", "analytics", "memory", "settings", "vacation", "phantomplay", "phantomstore"]),
+  business: new Set(BASE_NAV.map((item) => item.id)),
+  athlete: new Set(BASE_NAV.map((item) => item.id)),
+  developer: new Set(BASE_NAV.map((item) => item.id)),
+  coach: new Set(BASE_NAV.map((item) => item.id)),
+  sports_management: new Set(BASE_NAV.map((item) => item.id)),
+  agency: new Set(BASE_NAV.map((item) => item.id)),
+  education: new Set(BASE_NAV.map((item) => item.id)),
 };
 function profileAllowsNavItem(item) {
   return true;
@@ -816,7 +823,8 @@ function canUseNavItem(item) {
    only the frequent destinations; More summons the complete vertical list. */
 const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
-  crm: "Clients",
+  leads: "Leads",
+  followup: "Follow-up",
   money: "Money",
   sites: "Sites",
   phantomplay: "Play",
@@ -831,7 +839,7 @@ const MOBILE_LABEL_OVERRIDES = {
   vacation: "Away",
   developer: "Developer",
 };
-const MOBILE_DOCK_IDS = ["dashboard", "crm", "phantomai", "sites", "money"];
+const MOBILE_DOCK_IDS = ["dashboard", "leads", "followup", "approvals", "phantomai"];
 let MOBILE_NAV = NAV.map((n) => ({
   id: n.id,
   label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
@@ -884,7 +892,7 @@ function mobileItemsFromNav(items = orderedNavItems()) {
 function refreshCustomizedNavigation() {
   const profile = activeWorkspaceProfileId();
   NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client").map((item) => {
-    if (profile === "athlete" && item.id === "crm") return { ...item, label: "Athletes" };
+    if (profile === "athlete" && item.id === "leads") return { ...item, label: "Athletes" };
     if (profile === "athlete" && item.id === "content") return { ...item, label: "Highlights" };
     if (profile === "developer" && item.id === "sites") return { ...item, label: "Projects" };
     return item;
@@ -919,7 +927,7 @@ let activeNav = "dashboard";
 let activePageId = null;
 /* The right-hand deck is the launcher. The left-hand rail is a working set:
    destinations only become tabs after somebody opens them. */
-const openNavTabs = new Set(["dashboard", "phantomai", "media", "sites", "analytics", "automation", "planner", "phantomplay", "phantomstore"]);
+const openNavTabs = new Set(["dashboard", "leads", "followup", "bookings", "money", "media", "sites", "approvals", "riskwatch", "analytics"]);
 function markNavTabOpen(id) {
   if (NAV.some((item) => item.id === id && canUseNavItem(item))) openNavTabs.add(id);
 }
@@ -940,6 +948,8 @@ const MOBILE_NAV_FOCUSABLE = [
 
 const WORKSPACE_ALIASES = {
   brain: "workforce",
+  crm: "leads",
+  protect: "riskwatch",
   memory: "memory",
   analytics: "analytics",
 };
@@ -952,11 +962,10 @@ const ROUTE_REGISTRY = createRouteRegistry([
    browser history instead of only following direct nav clicks. */
 const NAV_PARENT_BY_WORKSPACE = {
   phantom: "dashboard",
-  proposals: "crm",
-  reviews: "crm",
-  bookings: "crm",
+  proposals: "money",
+  reviews: "money",
   clientsetup: "settings",
-  protect: "settings",
+  protect: "riskwatch",
   account: "settings",
   promptlibrary: "phantomai",
   activity: "workers",
@@ -1027,9 +1036,9 @@ function renderMobileBottomNav() {
     .filter(Boolean);
   const hiddenRouteActive = MOBILE_NAV.some(mobileNavActive) && !dockItems.some(mobileNavActive);
   nav.innerHTML = dockItems.map((item) => `
-    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""} ${item.navDisabled ? "is-disabled" : ""}" data-mobile-nav="${esc(item.id)}" type="button" ${mobileNavActive(item) ? 'aria-current="page"' : ""} ${item.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
+    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""} ${item.navDisabled ? "is-disabled" : ""}" data-mobile-nav="${esc(item.id)}" type="button" aria-label="${esc(item.label)}" ${mobileNavActive(item) ? 'aria-current="page"' : ""} ${item.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
       ${svg(item.icon)}
-      <span>${esc(item.id === "phantomai" ? "Bot" : item.label)}</span>
+      <span>${esc(item.id === "phantomai" ? "Bot" : item.id === "approvals" ? "Approve" : item.label)}</span>
       ${item.badge && pending ? `<em class="mobile-bottom-badge">${pending}</em>` : ""}
     </button>`).join("") + `
     <button class="mobile-bottom-item mobile-bottom-more ${mobileNavOpen || hiddenRouteActive ? "is-active" : ""}" data-mobile-more type="button" aria-haspopup="true" aria-expanded="${mobileNavOpen}" aria-label="${mobileNavOpen ? "Close all sections" : "Open all sections"}">
@@ -1413,7 +1422,7 @@ function renderOsMenu() {
   }
   menu.hidden = !osMenuOpen;
   if (!osMenuOpen) return;
-  const primaryIds = ["dashboard", "crm", "sites", "phantomplay", "phantomstore", "analytics", "money", "approvals", "intelligence", "settings", "adminos", "developer"];
+  const primaryIds = ["dashboard", "leads", "followup", "comms", "bookings", "clients", "money", "media", "content", "sites", "approvals", "riskwatch", "analytics", "phantomai", "automation", "intelligence", "runtime", "phantomhunter", "audit", "notifications", "planner", "vacation", "memory", "settings", "adminos", "developer", "phantomplay", "phantomstore"];
   const items = orderedNavItems()
     .filter((item) => primaryIds.includes(item.id))
     .sort((a, b) => primaryIds.indexOf(a.id) - primaryIds.indexOf(b.id));
@@ -2650,7 +2659,7 @@ function attentionItems() {
   visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
     .forEach((a) => items.push({ icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
   visible(store.state.security).filter((s) => s.posture && s.posture !== "clean")
-    .forEach(() => items.push({ icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", open: "protect" }));
+    .forEach(() => items.push({ icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Risk Watch flagged attention", open: "riskwatch" }));
   visible(store.state.leads).filter((l) => l.due && new Date(l.due).getTime() < Date.now() + 864e5 && l.status !== "won" && l.status !== "lost").slice(0, 2)
     .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
   visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
@@ -4474,7 +4483,7 @@ async function renderWorkspacePage(id, pushHash = true) {
     return false;
   }
   if (activeWorkspaceTransition !== transition || transition.version !== workspaceTransitionVersion) return false;
-  const wsMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
+  const wsMood = key === "approvals" || key === "riskwatch" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
   setGhostMood(wsMood.mood, { emotion: wsMood.emotion, ms: 1400 });
   stageReact(key === "media" ? "video" : key === "sites" ? "website" : "workspace", 720);
   const root = $("[data-console]");
@@ -4566,7 +4575,7 @@ async function openWorkspace(id, pushHash = true) {
     return false;
   }
   if (activeWorkspaceTransition !== transition || transition.version !== workspaceTransitionVersion) return false;
-  const overlayMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
+  const overlayMood = key === "approvals" || key === "riskwatch" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
   setGhostMood(overlayMood.mood, { emotion: overlayMood.emotion, ms: 1400 });
   stageReact("workspace", 720);
   clearOverlayOnly();

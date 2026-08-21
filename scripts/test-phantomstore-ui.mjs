@@ -17,7 +17,7 @@ const stripeProductCheckoutSource = readFileSync(new URL("../server/src/commerce
 assert.doesNotMatch(appHtml, /<link rel="stylesheet"[^>]*phantomstore\.css/u, "PhantomStore styles must not inflate every initial page load.");
 assert.match(mainSource, /phantomstore:\s*\["\/app\/phantomstore\.css\?v=phantom-live-[^"]+"\]/u, "Opening PhantomStore must load its workspace styles automatically.");
 assert.match(mainSource, /renderPhantomStore/u, "Main app must import PhantomStore renderer.");
-assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"PhantomStore",\s*icon:\s*"spark",\s*ws:\s*"phantomstore"\s*\}/u, "Sidebar must expose PhantomStore as its own workspace.");
+assert.match(mainSource, /\{\s*id:\s*"phantomstore",\s*label:\s*"PhantomStore",\s*icon:\s*"spark",\s*ws:\s*"phantomstore",\s*navZone:\s*"bottom",\s*quiet:\s*true\s*\}/u, "Utility navigation must expose PhantomStore as its own quiet workspace.");
 assert.match(mainSource, /phantomstore:\s*\{\s*title:\s*"PhantomStore"[\s\S]*render:\s*\(body\)\s*=>\s*renderPhantomStore\(body/u, "Workspace registry must render the PhantomStore screen.");
 
 assert.match(storeSource, /\/api\/phantomstore\?tenant_id=/u, "PhantomStore UI must load the PhantomStore marketplace API.");

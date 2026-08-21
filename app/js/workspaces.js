@@ -11,7 +11,7 @@ import {
   session, currentTenantId,
 } from "./store.js?v=phantom-live-20260820-188";
 import {
-  isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
+  isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
@@ -50,9 +50,10 @@ const memoryUi = { query: "", category: "all", brainOpen: false };
 const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", loadedOrg: "", loadingOrg: "" };
 const crmSelection = createScopedSelection("");
 const proposalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
-const approvalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
+const approvalUi = { loadedTenant: "", loadingTenant: "", runLoadedTenant: "", runLoadingTenant: "", notice: "", serverAudit: [], serverRuns: [] };
 const auditUi = { orgId: "", state: "idle", events: [], error: "", refreshedAt: "", query: "" };
 const financeUi = { loadedTenant: "", loadingTenant: "", notice: "", serverSummary: null };
+const operatorUi = { followQuery: "", followFilter: "action", clientId: "", auditQuery: "", notice: "" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -280,6 +281,21 @@ function leadDraftText(lead) {
   ].filter(Boolean).join("\n");
 }
 
+function leadConsentStatus(lead) {
+  const tag = (lead?.tags || []).find((item) => /^consent:/i.test(String(item)));
+  return tag ? String(tag).split(":").slice(1).join(":").toLowerCase() : "unknown";
+}
+
+function setLeadConsentStatus(lead, status) {
+  if (!lead) return;
+  lead.tags = (lead.tags || []).filter((item) => !/^consent:/i.test(String(item)));
+  lead.tags.push(`consent:${status}`);
+}
+
+function persistOperationalLead(lead) {
+  if (lead && isDatabaseSession()) updateOrgCrmContact(lead.id, crmPayload(lead)).catch(() => {});
+}
+
 function filteredCrmContacts() {
   const ws = leadWorkspaceId();
   let leads = store.state.leads.filter((lead) => lead.ws === ws);
@@ -426,7 +442,7 @@ function renderLeads(el, rerender) {
       const instagram = normalizeSocialHandle(prompt("Instagram handle (optional):") || "");
       const website = prompt("Website (optional):") || "";
       const avatarUrl = prompt("Profile image URL (optional — paste from their public profile):") || "";
-      const lead = { id: uid("lead"), ws, name: name.trim(), company: company.trim(), source: "Manual CRM", status: "new", value: 750, next: "Qualify need, budget, and best contact path", due: new Date(Date.now() + 86400000).toISOString(), owner: "CRM", notes: "", proposalId: null, type: "prospect", socials: { instagram }, website, avatarUrl, email: "", phone: "", tags: [], qualification: [], outreach: "", crmStage: "Prospect" };
+      const lead = { id: uid("lead"), ws, name: name.trim(), company: company.trim(), source: "Manual CRM", status: "new", value: 750, next: "Qualify need, budget, and best contact path", due: new Date(Date.now() + 86400000).toISOString(), owner: "CRM", notes: "", proposalId: null, type: "prospect", socials: { instagram }, website, avatarUrl, email: "", phone: "", tags: ["consent:unknown"], qualification: [], outreach: "", crmStage: "Prospect" };
       store.state.leads.unshift(lead);
       setCrmSelection(lead.id);
       pushActivity("Easy CRM", `captured CRM contact: ${name.trim()}.`, ws);
@@ -453,6 +469,8 @@ function renderLeads(el, rerender) {
       l.socials.linkedin = prompt("LinkedIn handle or URL:", l.socials.linkedin || "") || l.socials.linkedin || "";
       l.avatarUrl = prompt("Public profile image URL:", l.avatarUrl || "") || l.avatarUrl || "";
       l.notes = prompt("Notes:", l.notes || "") || l.notes || "";
+      const consent = String(prompt("Outreach permission (unknown, opt-in, or opt-out):", leadConsentStatus(l)) || leadConsentStatus(l)).toLowerCase();
+      if (["unknown", "opt-in", "opt-out"].includes(consent)) setLeadConsentStatus(l, consent);
       pushActivity("Easy CRM", `updated CRM profile: ${l.name || l.company}.`, l.ws);
       if (isDatabaseSession()) updateOrgCrmContact(l.id, crmPayload(l)).catch(() => {});
       store.save(); rerender();
@@ -703,6 +721,216 @@ function renderBookings(el, rerender) {
     },
     confirm: (id) => { const b = find(id); b.status = "confirmed"; pushActivity("Booking Coordinator", `confirmed ${b.type.toLowerCase()} with ${b.client}.`, b.ws); store.save(); rerender(); },
   });
+}
+
+/* ======================= OPERATOR WORKFLOWS ======================= */
+function leadDueTime(lead) {
+  const value = new Date(lead?.due || 0).getTime();
+  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+}
+
+function dueLabel(lead) {
+  if (!lead?.due) return "No due date";
+  const days = daysUntil(lead.due);
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return "Due today";
+  if (days === 1) return "Due tomorrow";
+  return `Due in ${days}d`;
+}
+
+function followUpLeads() {
+  const query = operatorUi.followQuery.trim().toLowerCase();
+  let records = visible(store.state.leads)
+    .filter((lead) => ["new", "follow-up"].includes(lead.status))
+    .sort((left, right) => leadDueTime(left) - leadDueTime(right));
+  if (operatorUi.followFilter === "overdue") records = records.filter((lead) => lead.due && daysUntil(lead.due) < 0);
+  if (operatorUi.followFilter === "today") records = records.filter((lead) => lead.due && daysUntil(lead.due) === 0);
+  if (operatorUi.followFilter === "permission") records = records.filter((lead) => leadConsentStatus(lead) === "unknown");
+  if (query) records = records.filter((lead) => `${lead.name || ""} ${lead.company || ""} ${lead.next || ""} ${lead.email || ""} ${lead.phone || ""}`.toLowerCase().includes(query));
+  return records;
+}
+
+function communicationTarget(lead, channel) {
+  if (!lead) return "";
+  if (channel === "email") return lead.email || "";
+  if (channel === "sms") return lead.phone || "";
+  return lead.socials?.instagram || lead.socials?.linkedin || lead.socials?.x || "";
+}
+
+function renderFollowUp(el, rerender) {
+  const all = visible(store.state.leads).filter((lead) => ["new", "follow-up"].includes(lead.status));
+  const records = followUpLeads();
+  const overdue = all.filter((lead) => lead.due && daysUntil(lead.due) < 0).length;
+  const today = all.filter((lead) => lead.due && daysUntil(lead.due) === 0).length;
+  const unknown = all.filter((lead) => leadConsentStatus(lead) === "unknown").length;
+  el.innerHTML = `
+    <section class="ops-summary" aria-label="Follow-up status">
+      <article><span>Due now</span><b>${(overdue + today).toLocaleString()}</b><i>${overdue} overdue · ${today} today</i></article>
+      <article><span>Open follow-ups</span><b>${all.length.toLocaleString()}</b><i>sorted by deadline</i></article>
+      <article><span>Permission unknown</span><b>${unknown.toLocaleString()}</b><i>drafting allowed · sending blocked</i></article>
+    </section>
+    <div class="ws-toolbar ops-toolbar">
+      <p class="ws-note">Prepare the next touch here. Drafts are safe; outreach can only enter Approvals after a real destination and permission are recorded.</p>
+      <input class="crm-search" data-follow-query value="${esc(operatorUi.followQuery)}" placeholder="Search follow-ups..." />
+      <select class="crm-filter" data-follow-filter>
+        ${[["action", "All open"], ["overdue", "Overdue"], ["today", "Due today"], ["permission", "Permission unknown"]].map(([value, label]) => `<option value="${value}" ${operatorUi.followFilter === value ? "selected" : ""}>${label}</option>`).join("")}
+      </select>
+    </div>
+    ${operatorUi.notice ? `<div class="ops-notice">${esc(operatorUi.notice)}</div>` : ""}
+    <div class="stack ops-stack">
+      ${records.map((lead) => {
+        const consent = leadConsentStatus(lead);
+        const destination = lead.email || lead.phone || lead.socials?.instagram || "";
+        return `<article class="record record-wide ops-record ${lead.due && daysUntil(lead.due) < 0 ? "is-critical" : ""}">
+          <div class="record-top">${wsTag(lead.ws)}<h4>${esc(lead.name || lead.company)}</h4><b class="ops-due">${esc(dueLabel(lead))}</b></div>
+          <p class="record-sub">${esc(lead.company || "Independent contact")} · last touch ${lead.lastTouch ? ago(lead.lastTouch) : "not recorded"} · permission ${esc(consent)}</p>
+          <p class="record-notes"><b>Next:</b> ${esc(lead.next || "Set the next step before outreach.")}</p>
+          <p class="record-sub">${destination ? `Destination on file: ${esc(destination)}` : "No email, phone, or social destination on file."}</p>
+          <div class="record-actions">
+            <button class="btn btn-primary" data-act="draft-followup" data-id="${esc(lead.id)}">Prepare draft</button>
+            <button class="btn" data-act="done-followup" data-id="${esc(lead.id)}">Touch completed</button>
+            <button class="btn btn-quiet" data-act="snooze-followup" data-id="${esc(lead.id)}">Snooze 3 days</button>
+            <select class="ops-consent" data-follow-consent="${esc(lead.id)}" aria-label="Outreach permission for ${esc(lead.name || lead.company)}">
+              ${[["unknown", "Permission unknown"], ["opt-in", "Permission confirmed"], ["opt-out", "Do not contact"]].map(([value, label]) => `<option value="${value}" ${consent === value ? "selected" : ""}>${label}</option>`).join("")}
+            </select>
+          </div>
+        </article>`;
+      }).join("") || productStateHtml("empty", { title: "No follow-ups in this view", detail: "Change the filter or add a lead with a next step and due date." })}
+    </div>`;
+  const find = (id) => store.state.leads.find((lead) => lead.id === id);
+  el.querySelector("[data-follow-query]")?.addEventListener("input", (event) => { operatorUi.followQuery = event.currentTarget.value; rerender(); });
+  el.querySelector("[data-follow-filter]")?.addEventListener("change", (event) => { operatorUi.followFilter = event.currentTarget.value; rerender(); });
+  el.querySelectorAll("[data-follow-consent]").forEach((select) => {
+    select.onchange = () => {
+      const lead = find(select.dataset.followConsent);
+      setLeadConsentStatus(lead, select.value);
+      persistOperationalLead(lead);
+      pushActivity("Follow-up Desk", `set outreach permission for ${lead?.name || lead?.company} to ${select.value}.`, lead?.ws);
+      store.save();
+    };
+  });
+  bindActions(el, {
+    "draft-followup": (id) => {
+      const lead = find(id); if (!lead) return;
+      const existing = store.state.communications.find((item) => item.leadId === id && item.status === "draft");
+      const channel = lead.email ? "email" : lead.phone ? "sms" : "social";
+      const draft = existing || { id: uid("comm"), ws: lead.ws, leadId: lead.id, channel, status: "draft", createdAt: new Date().toISOString() };
+      draft.body = lead.outreach || `${String(lead.name || "there").split(" ")[0]} - following up on ${lead.next || "our last conversation"}. What is the best next step from your side?`;
+      draft.updatedAt = new Date().toISOString();
+      if (!existing) store.state.communications.unshift(draft);
+      operatorUi.notice = `Draft prepared for ${lead.name || lead.company}. Nothing was sent.`;
+      pushActivity("Follow-up Desk", `prepared a ${channel} draft for ${lead.name || lead.company}. Nothing was sent.`, lead.ws);
+      store.save(); rerender();
+    },
+    "done-followup": (id) => {
+      const lead = find(id); if (!lead) return;
+      lead.lastTouch = new Date().toISOString();
+      lead.due = new Date(Date.now() + 7 * 86400000).toISOString();
+      lead.status = "follow-up";
+      lead.next = "Check response and choose the next safe step";
+      persistOperationalLead(lead);
+      pushActivity("Follow-up Desk", `recorded a completed touch for ${lead.name || lead.company}.`, lead.ws);
+      store.save(); rerender();
+    },
+    "snooze-followup": (id) => {
+      const lead = find(id); if (!lead) return;
+      lead.due = new Date(Date.now() + 3 * 86400000).toISOString();
+      persistOperationalLead(lead);
+      pushActivity("Follow-up Desk", `snoozed ${lead.name || lead.company} for three days.`, lead.ws);
+      store.save(); rerender();
+    },
+  });
+}
+
+function renderComms(el, rerender) {
+  const drafts = visible(store.state.communications).slice().sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+  const pending = visible(store.state.approvals).filter((approval) => approval.type === "send-message" && approval.status === "pending");
+  el.innerHTML = `
+    <section class="ops-summary" aria-label="Communication status">
+      <article><span>Drafts</span><b>${drafts.filter((item) => item.status === "draft").length}</b><i>private working copy</i></article>
+      <article><span>Waiting approval</span><b>${pending.length}</b><i>no send before decision</i></article>
+      <article><span>Send-ready</span><b>${drafts.filter((item) => item.status === "send-ready").length}</b><i>connector still required</i></article>
+    </section>
+    <div class="ws-toolbar"><p class="ws-note">One place for outbound drafts and consent. Approval changes a draft to send-ready; it does not invent a provider delivery receipt.</p></div>
+    <div class="stack ops-stack">
+      ${drafts.map((draft) => {
+        const lead = store.state.leads.find((item) => item.id === draft.leadId);
+        const consent = leadConsentStatus(lead);
+        const target = communicationTarget(lead, draft.channel);
+        const canQueue = draft.status === "draft" && consent === "opt-in" && Boolean(target);
+        return `<article class="record record-wide ops-record">
+          <div class="record-top">${wsTag(draft.ws)}<h4>${esc(lead?.name || lead?.company || "Contact unavailable")}</h4>${chip(draft.status)}</div>
+          <p class="record-sub">${esc(draft.channel)} · ${target ? esc(target) : "destination missing"} · permission ${esc(consent)} · updated ${ago(draft.updatedAt || draft.createdAt)}</p>
+          <p class="record-notes ops-message">${esc(draft.body)}</p>
+          <div class="record-actions">
+            ${draft.status === "draft" ? `<button class="btn" data-act="edit-comm" data-id="${esc(draft.id)}">Edit draft</button>` : ""}
+            ${canQueue ? `<button class="btn btn-good" data-act="queue-comm" data-id="${esc(draft.id)}">Queue approval</button>` : ""}
+            ${draft.status === "draft" && !canQueue ? `<span class="hint-inline">${consent !== "opt-in" ? "Record permission in Follow-up before approval." : "Add a real destination in Leads."}</span>` : ""}
+            <button class="btn btn-quiet" data-act="remove-comm" data-id="${esc(draft.id)}">Remove draft</button>
+          </div>
+        </article>`;
+      }).join("") || productStateHtml("empty", { title: "No communication drafts", detail: "Prepare one from Follow-up. Drafting stays private and does not require approval." })}
+    </div>`;
+  const find = (id) => store.state.communications.find((item) => item.id === id);
+  bindActions(el, {
+    "edit-comm": (id) => {
+      const draft = find(id); if (!draft) return;
+      const body = prompt("Edit this draft:", draft.body || "");
+      if (!body) return;
+      draft.body = body.trim(); draft.updatedAt = new Date().toISOString();
+      store.save(); rerender();
+    },
+    "queue-comm": (id) => {
+      const draft = find(id); if (!draft) return;
+      const lead = store.state.leads.find((item) => item.id === draft.leadId);
+      const target = communicationTarget(lead, draft.channel);
+      if (leadConsentStatus(lead) !== "opt-in" || !target) return;
+      const approval = { id: uid("app"), ws: draft.ws, type: "send-message", title: `Send ${draft.channel} follow-up to ${lead.name || lead.company}`, detail: `Target: ${target}. Exact draft: ${draft.body}`, ref: draft.id, communicationId: draft.id, status: "pending", requestedBy: "Comms", at: new Date().toISOString() };
+      queueWorkspaceApproval(approval);
+      draft.status = "pending"; draft.updatedAt = new Date().toISOString();
+      pushActivity("Comms", `queued a ${draft.channel} draft for owner approval. Nothing was sent.`, draft.ws);
+      store.save(); rerender();
+    },
+    "remove-comm": (id) => {
+      const draft = find(id);
+      store.state.communications = store.state.communications.filter((item) => item.id !== id);
+      if (draft) pushActivity("Comms", "removed a local communication draft.", draft.ws);
+      store.save(); rerender();
+    },
+  });
+}
+
+function renderClients(el, rerender) {
+  const clients = visible(store.state.leads).slice().sort((a, b) => String(a.company || a.name).localeCompare(String(b.company || b.name)));
+  const selected = clients.find((lead) => lead.id === operatorUi.clientId) || clients[0] || null;
+  if (selected && !operatorUi.clientId) operatorUi.clientId = selected.id;
+  const proposals = selected ? visible(store.state.proposals).filter((item) => [item.client, item.contact].some((value) => String(value || "").toLowerCase() === String(selected.company || selected.name || "").toLowerCase())) : [];
+  const bookings = selected ? visible(store.state.bookings).filter((item) => String(item.client || "").toLowerCase().includes(String(selected.name || selected.company || "").toLowerCase())) : [];
+  const activity = selected ? visible(store.state.activity).filter((item) => String(item.text || "").toLowerCase().includes(String(selected.name || selected.company || "").toLowerCase())).slice(0, 8) : [];
+  el.innerHTML = `
+    <div class="ws-toolbar"><p class="ws-note">A single organization-scoped client view: contact, permission, value, next step, offers, bookings, and recent evidence.</p></div>
+    <div class="ops-client-layout">
+      <div class="ops-client-list">
+        ${clients.map((lead) => `<button class="ops-client-row ${selected?.id === lead.id ? "is-active" : ""}" data-act="select-client" data-id="${esc(lead.id)}"><span>${esc(lead.name || lead.company)}</span><b>${esc(lead.company || statusLabel(lead.status))}</b><i>${fmtMoney(lead.value || 0)}</i></button>`).join("") || empty("No clients or prospects recorded yet.")}
+      </div>
+      <section class="ops-client-360">
+        ${selected ? `
+          <header><div class="crm-avatar is-large">${crmAvatar(selected)}</div><div><p>CLIENT 360 · ${esc(statusLabel(selected.status))}</p><h3>${esc(selected.name || selected.company)}</h3><span>${esc(selected.company || "Independent contact")}</span></div></header>
+          <div class="ops-summary ops-summary-compact">
+            <article><span>Relationship value</span><b>${fmtMoney(selected.value || 0)}</b><i>${proposals.length} offer${proposals.length === 1 ? "" : "s"}</i></article>
+            <article><span>Bookings</span><b>${bookings.length}</b><i>${bookings.filter((item) => item.status !== "confirmed").length} open</i></article>
+            <article><span>Permission</span><b>${esc(leadConsentStatus(selected))}</b><i>${selected.lastTouch ? `last touch ${ago(selected.lastTouch)}` : "no touch recorded"}</i></article>
+          </div>
+          <div class="crm-detail-grid">
+            <span><b>Email</b><i>${esc(selected.email || "Missing")}</i></span><span><b>Phone</b><i>${esc(selected.phone || "Missing")}</i></span>
+            <span><b>Next step</b><i>${esc(selected.next || "Not set")}</i></span><span><b>Due</b><i>${esc(dueLabel(selected))}</i></span>
+          </div>
+          <h3 class="ws-subhead">Recent evidence</h3>
+          <div class="ops-timeline">${activity.map((item) => `<article><span>${esc(item.who)}</span><b>${esc(item.text)}</b><i>${fmtDateTime(item.at)}</i></article>`).join("") || empty("No activity mentions this client yet.")}</div>
+        ` : productStateHtml("empty", { title: "No client selected", detail: "Add a CRM contact to create a client 360 record." })}
+      </section>
+    </div>`;
+  bindActions(el, { "select-client": (id) => { operatorUi.clientId = id; rerender(); } });
 }
 
 
@@ -1209,7 +1437,6 @@ function renderProtect(el, rerender) {
   });
 }
 
-/* ============================= AUDIT LOG ============================= */
 function auditOrganizationName(orgId) {
   const membership = (session?.get?.()?.memberships || []).find((item) => item.orgId === orgId || item.id === orgId);
   return membership?.orgName || membership?.name || "Active organization";
@@ -1261,7 +1488,7 @@ function downloadRedactedAudit(events, orgId) {
   URL.revokeObjectURL(url);
 }
 
-function renderAuditLog(el, rerender) {
+function renderOrganizationAuditLog(el, rerender) {
   const orgId = activeOrgId();
   if (!isDatabaseSession()) {
     el.innerHTML = `<div class="audit-state" role="status"><b>Secure account required</b><p>Organization audit receipts are available after you sign in to an organization account. No activity total is shown while that evidence source is unavailable.</p></div>`;
@@ -1323,6 +1550,144 @@ function renderAuditLog(el, rerender) {
     "audit-refresh": () => void loadAuditEvents(rerender, true),
     "audit-export": () => downloadRedactedAudit(auditUi.events, orgId),
   });
+}
+
+function riskAcknowledged(id) {
+  return visible(store.state.riskAcknowledgements).some((item) => item.id === id);
+}
+
+function buildRiskRecords() {
+  const records = [];
+  visible(store.state.security).forEach((security) => {
+    (security.findings || []).filter((finding) => finding.level === "warn").forEach((finding, index) => records.push({
+      id: `security:${security.id}:${index}`, ws: security.ws, severity: "high", category: "Security", title: finding.text,
+      detail: `Posture ${security.posture || "unknown"}; next verified scan ${security.nextScan ? fmtDate(security.nextScan) : "not scheduled"}.`, owner: "Security Watch", open: "riskwatch",
+    }));
+    if (security.rotationDue && daysUntil(security.rotationDue) <= 30) records.push({
+      id: `rotation:${security.id}`, ws: security.ws, severity: daysUntil(security.rotationDue) < 0 ? "critical" : "high", category: "Security", title: "Credential rotation window needs attention",
+      detail: `Window ${daysUntil(security.rotationDue) < 0 ? "closed" : `closes in ${daysUntil(security.rotationDue)} days`}. Credentials are never displayed here.`, owner: "Account owner", open: "riskwatch",
+    });
+  });
+  visible(store.state.approvals).filter((approval) => approval.status === "pending").forEach((approval) => {
+    const ageHours = Math.max(0, (Date.now() - new Date(approval.at || approval.createdAt || Date.now()).getTime()) / 3600000);
+    records.push({ id: `approval:${approval.id}`, ws: approval.ws, severity: ageHours >= 24 ? "high" : "medium", category: "Approval", title: approval.title, detail: `${Math.floor(ageHours)}h waiting. ${approval.detail || "Owner decision required."}`, owner: "Business owner", open: "approvals" });
+  });
+  visible(store.state.leads).filter((lead) => ["new", "follow-up"].includes(lead.status) && lead.due && daysUntil(lead.due) < -2).forEach((lead) => records.push({
+    id: `followup:${lead.id}`, ws: lead.ws, severity: "medium", category: "Pipeline", title: `Follow-up overdue: ${lead.name || lead.company}`, detail: `${dueLabel(lead)}. ${lead.next || "No next step recorded."}`, owner: lead.owner || "Follow-up Desk", open: "followup",
+  }));
+  visible(store.state.bookings).filter((booking) => booking.status !== "confirmed" && new Date(booking.when).getTime() < Date.now()).forEach((booking) => records.push({
+    id: `booking:${booking.id}`, ws: booking.ws, severity: "high", category: "Bookings", title: `Unconfirmed booking is in the past: ${booking.client}`, detail: `${fmtDateTime(booking.when)} · ${booking.location || "location missing"}`, owner: "Booking Coordinator", open: "bookings",
+  }));
+  visible(store.state.agents).filter((agent) => ["failed", "blocked", "offline"].includes(agent.status)).forEach((agent) => records.push({
+    id: `agent:${agent.id}`, ws: agent.ws || currentWs(), severity: agent.status === "failed" ? "high" : "medium", category: "Runtime", title: `${agent.name || "Worker"} is ${agent.status}`, detail: agent.error || agent.note || "Inspect the run before retrying.", owner: "Workforce", open: "runtime",
+  }));
+  const rank = { critical: 0, high: 1, medium: 2, low: 3 };
+  return records.sort((left, right) => rank[left.severity] - rank[right.severity]);
+}
+
+function renderRiskWatch(el, rerender) {
+  const all = buildRiskRecords();
+  const active = all.filter((record) => !riskAcknowledged(record.id));
+  const acknowledged = all.filter((record) => riskAcknowledged(record.id));
+  el.innerHTML = `
+    <section class="ops-summary" aria-label="Risk status">
+      <article class="is-critical"><span>Critical</span><b>${active.filter((item) => item.severity === "critical").length}</b><i>immediate owner attention</i></article>
+      <article><span>High</span><b>${active.filter((item) => item.severity === "high").length}</b><i>action before routine work</i></article>
+      <article><span>Open signals</span><b>${active.length}</b><i>${acknowledged.length} acknowledged</i></article>
+    </section>
+    <div class="ws-toolbar"><p class="ws-note">Risk Watch aggregates real recorded exceptions across approvals, pipeline, bookings, security, and runtime. Acknowledging keeps the evidence and records who handled it.</p></div>
+    <div class="ops-risk-list">
+      ${active.map((record) => `<article class="ops-risk ops-risk-${record.severity}">
+        <div><span>${esc(record.severity)} · ${esc(record.category)}</span><h4>${esc(record.title)}</h4><p>${esc(record.detail)}</p><i>Owner: ${esc(record.owner)} · workspace ${esc(record.ws)}</i></div>
+        <div class="record-actions"><button class="btn btn-primary" data-act="remediate-risk" data-id="${esc(record.id)}">Create remediation</button><button class="btn" data-act="ack-risk" data-id="${esc(record.id)}">Acknowledge</button></div>
+      </article>`).join("") || productStateHtml("empty", { title: "No open risk signals", detail: "Risk Watch found no recorded exceptions in this workspace." })}
+    </div>
+    ${acknowledged.length ? `<h3 class="ws-subhead">Acknowledged signals</h3><div class="ops-timeline">${acknowledged.map((record) => `<article><span>${esc(record.category)}</span><b>${esc(record.title)}</b><i>acknowledged</i></article>`).join("")}</div>` : ""}`;
+  const find = (id) => all.find((record) => record.id === id);
+  bindActions(el, {
+    "ack-risk": (id) => {
+      const record = find(id); if (!record || riskAcknowledged(id)) return;
+      store.state.riskAcknowledgements.unshift({ id, ws: record.ws, title: record.title, at: new Date().toISOString(), actor: session.get()?.name || "Operator" });
+      pushActivity("Risk Watch", `acknowledged ${record.severity} signal: ${record.title}.`, record.ws);
+      store.save(); rerender();
+    },
+    "remediate-risk": (id) => {
+      const record = find(id); if (!record) return;
+      const existing = visible(store.state.tasks).some((task) => task.riskId === id && task.status !== "done");
+      if (!existing) store.state.tasks.unshift({ id: uid("task"), ws: record.ws, riskId: id, title: `Remediate: ${record.title}`, detail: record.detail, status: "new", priority: ["critical", "high"].includes(record.severity) ? "high" : "normal", source: "Risk Watch", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      pushActivity("Risk Watch", `created remediation work for ${record.title}.`, record.ws);
+      store.save(); rerender();
+    },
+  });
+}
+
+function notificationRecords() {
+  const records = [];
+  visible(store.state.approvals).filter((item) => item.status === "pending").forEach((item) => records.push({ id: `approval:${item.id}`, ws: item.ws, tone: "approval", title: item.title, detail: item.detail || "Owner decision required.", at: item.at, open: "approvals" }));
+  buildRiskRecords().filter((item) => !riskAcknowledged(item.id)).forEach((item) => records.push({ id: `risk:${item.id}`, ws: item.ws, tone: item.severity, title: item.title, detail: item.detail, at: new Date().toISOString(), open: "riskwatch" }));
+  visible(store.state.leads).filter((item) => ["new", "follow-up"].includes(item.status) && item.due && daysUntil(item.due) <= 0).forEach((item) => records.push({ id: `lead:${item.id}:${String(item.due).slice(0, 10)}`, ws: item.ws, tone: "follow-up", title: `${item.name || item.company} needs follow-up`, detail: `${dueLabel(item)} · ${item.next || "Next step not set"}`, at: item.due, open: "followup" }));
+  visible(store.state.bookings).filter((item) => item.status !== "confirmed" && new Date(item.when).getTime() >= Date.now() && new Date(item.when).getTime() <= Date.now() + 2 * 86400000).forEach((item) => records.push({ id: `booking:${item.id}`, ws: item.ws, tone: "booking", title: `Upcoming booking draft: ${item.client}`, detail: fmtDateTime(item.when), at: item.when, open: "bookings" }));
+  return records.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
+}
+
+function notificationRead(id) {
+  return visible(store.state.notificationReads).some((item) => item.id === id);
+}
+
+function renderNotifications(el, rerender) {
+  const records = notificationRecords();
+  const unread = records.filter((item) => !notificationRead(item.id));
+  el.innerHTML = `
+    <div class="ws-toolbar"><p class="ws-note">Durable operator inbox for decisions and exceptions. Marking an item read never changes the underlying business record.</p>${unread.length ? `<button class="btn" data-act="read-all">Mark all read</button>` : ""}</div>
+    <section class="ops-summary ops-summary-compact"><article><span>Unread</span><b>${unread.length}</b><i>needs review</i></article><article><span>Total active</span><b>${records.length}</b><i>derived from live records</i></article></section>
+    <div class="ops-timeline ops-notifications">
+      ${records.map((item) => `<article class="${notificationRead(item.id) ? "is-read" : ""}"><span>${esc(item.tone)}</span><b>${esc(item.title)}</b><p>${esc(item.detail)}</p><i>${item.at ? fmtDateTime(item.at) : "now"}</i>${notificationRead(item.id) ? "" : `<button class="btn btn-quiet" data-act="read-notification" data-id="${esc(item.id)}">Mark read</button>`}</article>`).join("") || productStateHtml("empty", { title: "Inbox is clear", detail: "New approvals, risks, due follow-ups, and booking exceptions will appear here." })}
+    </div>`;
+  const markRead = (item) => {
+    if (!item || notificationRead(item.id)) return;
+    store.state.notificationReads.unshift({ id: item.id, ws: item.ws, readAt: new Date().toISOString(), actor: session.get()?.name || "Operator" });
+  };
+  bindActions(el, {
+    "read-notification": (id) => { markRead(records.find((item) => item.id === id)); store.save(); rerender(); },
+    "read-all": () => { unread.forEach(markRead); store.save(); rerender(); },
+  });
+}
+
+function renderAuditLog(el, rerender) {
+  hydrateWorkspaceApprovalRecords(rerender);
+  hydrateServerRunRecords(rerender);
+  const q = operatorUi.auditQuery.trim().toLowerCase();
+  const localEvents = visible(store.state.activity).map((item) => ({ id: item.id, source: "Operator activity", actor: item.who, summary: item.text, at: item.at, ws: item.ws }));
+  const serverEvents = (approvalUi.serverAudit || []).map((item) => ({ id: item.id, source: "Protected approval audit", actor: item.actor, summary: item.summary, at: item.createdAt, ws: item.tenantId }));
+  const runEvents = (approvalUi.serverRuns || []).map((run) => ({ id: `run:${run.id}`, source: "Agent execution", actor: run.requested_by, summary: `${run.title}: ${run.state}${run.receipt?.actual_effect ? ` · ${run.receipt.actual_effect}` : run.error ? ` · ${run.error}` : ""}`, at: run.updated_at, ws: run.organization_id }));
+  let events = [...serverEvents, ...runEvents, ...localEvents].sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
+  if (q) events = events.filter((item) => `${item.source} ${item.actor} ${item.summary} ${item.ws}`.toLowerCase().includes(q));
+  el.innerHTML = `
+    <div class="ws-toolbar"><p class="ws-note">Server-backed approval entries carry the tenant document checksum and cannot be rewritten through this screen. Local activity is clearly labeled as browser evidence.</p><input class="crm-search" data-audit-query value="${esc(operatorUi.auditQuery)}" placeholder="Search actor, action, workspace..." /></div>
+    <div class="ops-timeline ops-audit">
+      ${events.map((item) => `<article><span>${esc(item.source)}</span><b>${esc(item.summary)}</b><p>Actor: ${esc(item.actor || "System")} · workspace ${esc(item.ws || "unknown")}</p><i>${item.at ? fmtDateTime(item.at) : "time unavailable"} · ${esc(item.id)}</i></article>`).join("") || productStateHtml("empty", { title: "No audit events in this view", detail: "Events appear after the first recorded operator or approval action." })}
+    </div>`;
+  el.querySelector("[data-audit-query]")?.addEventListener("input", (event) => { operatorUi.auditQuery = event.currentTarget.value; rerender(); });
+}
+
+function renderRuntime(el, rerender) {
+  const status = workerRuntime.state;
+  const workforce = workerRuntime.workforce;
+  const tools = store.state.toolSpine || [];
+  const lastEvent = visible(store.state.activity).find((item) => item.toolId) || visible(store.state.activity)[0];
+  el.innerHTML = `
+    <section class="ops-summary" aria-label="Runtime health">
+      <article><span>Gateway</span><b>${status === "ready" ? "Online" : status === "error" ? "Degraded" : "Checking"}</b><i>${status === "error" ? esc(workerRuntime.error) : "live organization probe"}</i></article>
+      <article><span>Workers</span><b>${workforce?.summary?.total ?? workforce?.workers?.length ?? "-"}</b><i>${workforce ? "server reported" : "waiting for server"}</i></article>
+      <article><span>Last evidence</span><b>${lastEvent ? ago(lastEvent.at) : "None"}</b><i>${lastEvent ? esc(lastEvent.who) : "no runtime activity"}</i></article>
+    </section>
+    <div class="ws-toolbar"><p class="ws-note">Business health and system health stay separate. This view reports runtime evidence, device context, connector readiness, and degraded states without exposing secrets.</p><button class="btn" data-act="refresh-runtime">Refresh status</button></div>
+    <div class="card-grid ops-runtime-grid">
+      <article class="record"><div class="record-top"><h4>This device</h4>${chip("active")}</div>${kv("Browser", esc(navigator.userAgentData?.brands?.map((item) => item.brand).join(", ") || navigator.userAgent.split(" ").at(-1) || "Browser"))}${kv("Platform", esc(navigator.userAgentData?.platform || navigator.platform || "Unknown"))}${kv("Online", navigator.onLine ? "Yes" : "No")}</article>
+      ${tools.map((tool) => `<article class="record"><div class="record-top"><h4>${esc(tool.name)}</h4>${chip(tool.mode)}</div><p class="record-notes">${esc(tool.role)}</p><p class="record-sub">${esc(tool.path || "Protected system")} · ${tool.visibleToClients ? "customer-visible" : "admin-only"}</p></article>`).join("")}
+    </div>`;
+  bindActions(el, { "refresh-runtime": () => { workerRuntime.state = "idle"; loadWorkerRuntime().finally(() => rerender()); rerender(); } });
+  if (workerRuntime.state === "idle") loadWorkerRuntime().finally(() => rerender());
 }
 
 /* =============================== MONEY =============================== */
@@ -3536,6 +3901,7 @@ function hydrateWorkspaceApprovalRecords(rerender) {
   loadWorkspaceApprovals().then((payload) => {
     if (!payload?.ok) return;
     const serverApprovals = payload.document?.approvals || [];
+    approvalUi.serverAudit = payload.document?.audit || [];
     const retainedLocal = store.state.approvals.filter((approval) => approval.ws !== tenant || !approval.serverBacked);
     store.state.approvals = [...serverApprovals, ...retainedLocal];
     approvalUi.loadedTenant = tenant;
@@ -3546,6 +3912,21 @@ function hydrateWorkspaceApprovalRecords(rerender) {
     approvalUi.notice = error?.message || "Server approvals are unavailable; local requests remain visible.";
   }).finally(() => {
     if (approvalUi.loadingTenant === tenant) approvalUi.loadingTenant = "";
+  });
+}
+
+function hydrateServerRunRecords(rerender) {
+  const tenant = activeOrgId() || "";
+  if (!isDatabaseSession() || !tenant || approvalUi.runLoadedTenant === tenant || approvalUi.runLoadingTenant === tenant) return;
+  approvalUi.runLoadingTenant = tenant;
+  fetchOrgRuns(50).then((runs) => {
+    approvalUi.serverRuns = runs;
+    approvalUi.runLoadedTenant = tenant;
+    rerender();
+  }).catch(() => {
+    approvalUi.notice = "Recent server execution evidence is temporarily unavailable.";
+  }).finally(() => {
+    if (approvalUi.runLoadingTenant === tenant) approvalUi.runLoadingTenant = "";
   });
 }
 
@@ -3572,25 +3953,38 @@ function decideWorkspaceApprovalRecord(id, approved, options = {}) {
 async function hydrateServerApprovals(el, rerender) {
   const mount = el.querySelector("[data-server-approvals]");
   if (!mount) return;
-  const runs = await fetchServerApprovals().catch(() => []);
+  const [runs, recentRuns] = await Promise.all([
+    fetchServerApprovals().catch(() => []),
+    fetchOrgRuns(12).catch(() => []),
+  ]);
   if (!document.body.contains(mount)) return;
-  if (!runs.length) { mount.innerHTML = ""; return; }
+  approvalUi.serverRuns = recentRuns;
   const manager = canManageActiveOrg();
   mount.innerHTML = `
-    <h3 class="ws-subhead">Server actions waiting for approval</h3>
-    <div class="stack">
+    <h3 class="ws-subhead">Verified server actions</h3>
+    ${runs.length ? `<div class="stack">
       ${runs.map((run) => `
         <article class="record record-wide approval-card">
           <div class="record-top"><h4>${esc(run.title)}</h4><i class="record-time">${ago(run.created_at)}</i></div>
           <p class="record-notes">${esc(run.expected_effect || run.request)}</p>
-          <p class="record-sub">Requested by ${esc(run.requested_by)} · scope: ${esc(run.scope)} · deadline: ${run.approval_deadline ? esc(new Date(run.approval_deadline).toLocaleString()) : "—"}</p>
+          <p class="record-sub">Requested by ${esc(run.requested_by)} · target: ${esc(run.workspace || run.module || "organization")} · scope: ${esc(run.scope)} · estimated cost: ${run.cost_estimate_usd == null ? "not supplied" : `$${Number(run.cost_estimate_usd).toFixed(4)}`} · deadline: ${run.approval_deadline ? esc(new Date(run.approval_deadline).toLocaleString()) : "none"}</p>
           ${manager ? `
           <div class="record-actions">
             <button class="btn btn-good" data-server-run-approve="${esc(run.id)}">Approve &amp; execute</button>
             <button class="btn btn-quiet" data-server-run-reject="${esc(run.id)}">Reject</button>
           </div>` : `<p class="record-sub">Waiting for a business owner or admin to decide.</p>`}
         </article>`).join("")}
-    </div>`;
+    </div>` : `<p class="ops-inline-state">No verified external action is waiting. The execution queue is clear.</p>`}
+    ${recentRuns.length ? `<h3 class="ws-subhead">Recent execution evidence</h3><div class="stack">
+      ${recentRuns.slice(0, 6).map((run) => {
+        const effect = run.receipt?.actual_effect || run.error || run.events?.at(-1)?.detail || "No execution receipt recorded yet.";
+        return `<article class="record record-wide ops-record">
+          <div class="record-top"><h4>${esc(run.title || run.operation)}</h4>${chip(run.state)}<i class="record-time">${ago(run.updated_at || run.created_at)}</i></div>
+          <p class="record-notes">${esc(effect)}</p>
+          <p class="record-sub">run ${esc(run.id)} · requested by ${esc(run.requested_by || "system")} · target ${esc(run.workspace || run.module || "organization")} · receipt ${run.receipt?.receipt_id ? esc(run.receipt.receipt_id) : "not issued"}</p>
+        </article>`;
+      }).join("")}
+    </div>` : ""}`;
   mount.querySelectorAll("[data-server-run-approve]").forEach((btn) => {
     btn.onclick = async () => {
       btn.disabled = true;
@@ -3747,16 +4141,23 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
-  leads: { title: "Client CRM", kicker: "Org-scoped client database and follow-up memory", render: renderLeads },
+  leads: { title: "Leads", kicker: "Tenant-scoped pipeline and contact intelligence", render: renderLeads },
+  followup: { title: "Follow-up", kicker: "Deadline-first outreach desk", render: renderFollowUp },
+  comms: { title: "Comms", kicker: "Permission-aware drafts and send readiness", render: renderComms },
+  clients: { title: "Clients", kicker: "Client 360, relationship value, and activity", render: renderClients },
   proposals: { title: "Offers", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Offers to review", kicker: "Review requests and proof", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
-  protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
-  auditlog: { title: "Audit Log", kicker: "Verified organization receipts", render: renderAuditLog, adminOnly: true },
-  money: { title: "Accounting", kicker: "Cash, offers, and review", render: renderAccounting },
+  protect: { title: "Risk Watch", kicker: "Legacy security route", render: renderRiskWatch },
+  riskwatch: { title: "Risk Watch", kicker: "Prioritized business, approval, and runtime risk", render: renderRiskWatch },
+  money: { title: "Quotes & Money", kicker: "Cash, offers, and review", render: renderAccounting },
   memory: { title: "Memory", kicker: "Context intelligence database", render: renderMemory },
   workforce: { title: "Workforce", kicker: "Business ops network", render: renderWorkforce },
-  approvals: { title: "Approvals", kicker: "Waiting on your call", render: renderApprovals },
+  runtime: { title: "Runtime & Devices", kicker: "Live workers, devices, and connectors", render: renderRuntime },
+  audit: { title: "Audit Log", kicker: "Tenant-scoped actor and execution evidence", render: renderAuditLog },
+  auditlog: { title: "Organization Audit", kicker: "Verified organization receipts", render: renderOrganizationAuditLog, adminOnly: true },
+  notifications: { title: "Notifications", kicker: "Prioritized business attention queue", render: renderNotifications },
+  approvals: { title: "Approvals", kicker: "Human decisions with execution evidence", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
@@ -3781,8 +4182,8 @@ export function missionWidgets() {
     { id: "leads", icon: "◉", title: "Client CRM", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "client memory current", alert: dueLeads.length > 0 },
     { id: "sites", icon: "▦", title: "Site Portfolio", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
-    { id: "protect", icon: "⬡", title: "Security Watch", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
-    { id: "money", icon: "◈", title: "Accounting", stat: m.transactions.length ? moneySigned(m.netCash) : `${m.open.length} offer${m.open.length === 1 ? "" : "s"}`, sub: `${m.transactions.length} transactions · ${revs.length} to review`, alert: false },
+    { id: "riskwatch", icon: "⬡", title: "Risk Watch", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
+    { id: "money", icon: "◈", title: "Quotes & Money", stat: m.transactions.length ? moneySigned(m.netCash) : `${m.open.length} offer${m.open.length === 1 ? "" : "s"}`, sub: `${m.transactions.length} transactions · ${revs.length} to review`, alert: false },
     { id: "workforce", icon: "⬢", title: "Workforce", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];

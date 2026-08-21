@@ -18,7 +18,7 @@ assert.match(main, /starter: null/u, "Customer navigation tiers must be open by 
 assert.match(main, /function navFeatureDisabled\(item\) \{\s*return false;\s*\}/u, "Plan limits must not render customer nav items as disabled.");
 assert.match(main, /function isDeveloperTier\(\) \{\s*return false;\s*\}/u, "Customer plans must not unlock the owner Developer surface.");
 assert.match(main, /openNavTabs = new Set\(\[[\s\S]*"planner"[\s\S]*"phantomplay"/u, "PhantomPlay and Planner must be normal working-set tabs.");
-assert.match(index, /data-nav-id="phantomplay"[^>]*>PhantomPlay</u, "Command rail must expose PhantomPlay as a visible clickable module.");
+assert.match(main, /id: "phantomplay", label: "PhantomPlay"[\s\S]*navZone: "bottom"[\s\S]*quiet: true/u, "Utility navigation must expose PhantomPlay as a visible clickable module without displacing daily owner jobs.");
 
 assert.match(customizationClient, /phantomplay[\s\S]*forceEnabled: true[\s\S]*accessMode: "entire_organization"/u, "Frontend customization fallback must force PhantomPlay open.");
 assert.match(customizationClient, /if \(moduleId === "phantomplay"\) return true;/u, "Frontend access checks must not preserve selected-member PhantomPlay locks.");

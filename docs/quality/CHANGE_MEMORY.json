@@ -397,12 +397,12 @@
       "id": "accounting-real-transactions-not-fake-pipeline",
       "status": "active",
       "title": "Accounting means confirmed transactions",
-      "ownerDecision": "Money became Accounting. It must track real/imported transaction records. Pipeline, won quotes, and retainers belong to goals or offer potential, not cash truth.",
+      "ownerDecision": "The owner-facing destination is Quotes & Money. Its Accounting section must still track real/imported transaction records. Pipeline, won quotes, and retainers belong to offer potential, not cash truth.",
       "requiredPatterns": [
         {
           "file": "app/js/main.js",
-          "pattern": "\\{ id: \"money\",\\s+label: \"Accounting\"",
-          "description": "The nav label is Accounting, not Money."
+          "pattern": "\\{ id: \"money\",\\s+label: \"Quotes & Money\"",
+          "description": "The owner workflow is labeled Quotes & Money while the accounting ledger remains transaction-based."
         },
         {
           "file": "app/js/workspaces.js",
@@ -1503,7 +1503,7 @@
       "id": "phantombot-automation-control-plane",
       "status": "active",
       "title": "PhantomBot owns PhantomForce internal and workspace automations",
-      "ownerDecision": "Automations are managed inside PhantomBot rather than as a separate top-level application. PhantomBot owns the native scheduler, run-now controls, approvals, logs, and receipts. Legacy Automation routes redirect into PhantomBot. A Codex schedule may be removed only after an equivalent PhantomBot-native job is verified, so migration never silently drops real work.",
+      "ownerDecision": "PhantomBot owns the native scheduler, run-now controls, approvals, logs, and receipts. Automations also has a quiet system destination for operator visibility, but it cannot compete with daily owner jobs in the primary command rail. A Codex schedule may be removed only after an equivalent PhantomBot-native job is verified, so migration never silently drops real work.",
       "requiredPatterns": [
         {
           "file": "app/js/main.js",
@@ -1524,18 +1524,18 @@
           "file": "server/src/phantom-ai/automation-engine.ts",
           "pattern": "id: \"phantomstore-live-route-guard\"[\\s\\S]*cadence: \"hourly\"",
           "description": "The former Codex PhantomStore route guard has a native hourly PhantomBot replacement."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "\\{ id: \"automation\",\\s+label: \"Automations\",[\\s\\S]*navZone: \"bottom\"",
+          "description": "Automations remains available as a quiet operator system destination."
         }
       ],
       "forbiddenPatterns": [
         {
-          "file": "app/js/main.js",
-          "pattern": "\\{ id: \"automation\",\\s+label: \"Automations\"",
-          "description": "Automations cannot regress into a separate top-level application."
-        },
-        {
           "file": "app/index.html",
           "pattern": "data-nav-id=\"automation\"[^>]*>Automations",
-          "description": "Automations cannot regress into the global command rail."
+          "description": "Automations cannot displace owner jobs in the primary command rail."
         }
       ]
     },
@@ -1572,13 +1572,13 @@
     {
       "id": "primary-navigation-search-and-accounting-simplification",
       "status": "active",
-      "title": "Primary navigation stays direct and Search stays non-AI",
-      "ownerDecision": "Analytics, Websites, Accounting, and Away Mode remain direct primary navigation destinations. Analytics cannot be renamed Business. Global Search only finds pages, records, and explicit actions; conversational prompting belongs in PhantomBot. Offers and review requests are Accounting sections, never separate Offer Desk or Review Desk products.",
+      "title": "Primary navigation follows owner jobs and Search stays non-AI",
+      "ownerDecision": "Primary navigation follows owner outcomes: Overview, Leads, Follow-up, Bookings, Clients, Quotes & Money, Media Lab, Sites & Stores, Approvals, Risk Watch, and Analytics. System and ecosystem destinations remain available but quieter. Global Search only finds pages, records, and explicit actions; conversational prompting belongs in PhantomBot. Offers and review requests remain Quotes & Money sections, never separate desk products.",
       "requiredPatterns": [
         {
           "file": "app/index.html",
-          "pattern": "data-nav-id=\"sites\"[^>]*>Websites<[\\s\\S]*data-nav-id=\"analytics\"[^>]*>Analytics<[\\s\\S]*data-nav-id=\"money\"[^>]*>Accounting<[\\s\\S]*data-nav-id=\"vacation\"[^>]*>Away Mode<",
-          "description": "The global rail directly exposes all four owner-approved primary destinations."
+          "pattern": "data-nav-id=\"dashboard\"[^>]*>Overview<[\\s\\S]*data-nav-id=\"leads\"[^>]*>Leads<[\\s\\S]*data-nav-id=\"followup\"[^>]*>Follow-up<[\\s\\S]*data-nav-id=\"bookings\"[^>]*>Bookings<[\\s\\S]*data-nav-id=\"clients\"[^>]*>Clients<[\\s\\S]*data-nav-id=\"money\"[^>]*>Quotes &amp; Money<[\\s\\S]*data-nav-id=\"media\"[^>]*>Media Lab<[\\s\\S]*data-nav-id=\"sites\"[^>]*>Sites &amp; Stores<[\\s\\S]*data-nav-id=\"approvals\"[^>]*>Approvals<[\\s\\S]*data-nav-id=\"riskwatch\"[^>]*>Risk Watch<[\\s\\S]*data-nav-id=\"analytics\"[^>]*>Analytics<",
+          "description": "The primary command rail directly exposes the owner jobs in audited priority order."
         },
         {
           "file": "app/js/main.js",
@@ -2252,15 +2252,15 @@
       ]
     },
     {
-      "id": "phantomstrike-v26-installed-blackridge-floor",
+      "id": "phantomstrike-v28-installed-first-person-natural-floor",
       "status": "active",
-      "title": "PhantomStrike keeps the installed V26R1 Blackridge grounded-combat identity",
-      "ownerDecision": "PhantomStrike's verified installed release floor is V26R1 Blackridge inside the mixed V25R3+CUBETOWN-V19R1+PHANTOMSTRIKE-V26R1 PhantomPlay set. V26 preserves the staged Operation Nightglass mission and V19 persistent-world route while making the checked-in Helix military operator family authoritative; shared fantasy Rogue, Knight, and Barbarian bodies are forbidden. The first-person view retains visible tactical arms, camera and weapon inertia, warm physical muzzle presentation and casing ejection. Operators retain movement, recoil, hit, and collapse presentation. The HUD stays restrained and the world uses cool storm ambience, warm practicals, wrecks, rubble, and a readable breach/relay tableau. Generated images are original visual targets translated into real runtime systems. Routine local successors promote automatically after compile, package, focused regression, identity/hash, and rollback-readiness gates pass; the prior install must be preserved and restored automatically on failure, and the user is not asked to type a release keyword.",
+      "title": "PhantomStrike keeps the installed V28R7 first-person natural-environment floor",
+      "ownerDecision": "PhantomStrike's verified installed release floor is V28R7 inside the V25R12+PHANTOMSTRIKE-V28R7 PhantomPlay set. V28 preserves the staged Operation Nightglass mission, tactical AI, modern-military operator family, first-person weapon presentation, and historical V19/V26 authored lineage while enforcing player possession, direct input fallback, an owner-hidden third-person mesh, a natural eye-line camera, collision-safe insertion, and a grounded Blackridge coastal route. Shared fantasy Rogue, Knight, and Barbarian bodies remain forbidden. The environment uses restrained daylight, tiled PBR roadway, production ArchVis vegetation, rolling PBR landforms, boulders, and legacy-render cleanup instead of the superseded prototype-city layer. Routine local successors promote automatically after compile, package, focused regression, identity/hash, gameplay-proof, and rollback-readiness gates pass; the prior install must be preserved and restored automatically on failure, and the user is not asked to type a release keyword.",
       "requiredPatterns": [
         {
           "file": "docs/phantomplay-production/creative-bibles/phantom-strike.json",
-          "pattern": "current_floor\": \"V26R1 Blackridge verified installed PhantomStrike release[\\s\\S]*V26R1 is the no-regression floor",
-          "description": "The creative bible identifies V26R1 Blackridge as the installed no-regression floor."
+          "pattern": "current_floor\": \"V28R7 first-person natural-environment release verified installed[\\s\\S]*V28R7 is the no-regression floor",
+          "description": "The creative bible identifies V28R7 as the installed no-regression floor."
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
@@ -2274,8 +2274,8 @@
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
-          "pattern": "SpawnEjectedCasing[\\s\\S]*TEXT\\(\"RightTacticalForearm\"\\)[\\s\\S]*Helix operator is the authoritative modern-military squad silhouette[\\s\\S]*V26 sight picture[\\s\\S]*BuildV27BlackridgeRealism",
-          "description": "The V26 military operators, first-person weapon presentation, restrained HUD, and Blackridge atmosphere remain in runtime source."
+          "pattern": "AutoPossessPlayer = EAutoReceiveInput::Player0[\\s\\S]*FirstPersonCamera->SetRelativeLocation[\\s\\S]*GetMesh\\(\\)->SetOwnerNoSee\\(true\\)[\\s\\S]*CapturePermanently_IncludingInitialMouseDown[\\s\\S]*IsInputKeyDown\\(EKeys::W\\)[\\s\\S]*BuildV28NaturalBlackridge",
+          "description": "The V28 runtime enforces true first-person possession, an owner-hidden mannequin, permanent game input capture, direct movement fallback, and the natural Blackridge environment."
         },
         {
           "file": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V26_VISUAL_TARGET_PROMPTS.md",
@@ -2295,7 +2295,12 @@
         {
           "file": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V26_BLACKRIDGE_REPORT.md",
           "pattern": "Current release floor: PhantomStrike V26R1[\\s\\S]*PROMOTED AND VERIFIED INSTALLED[\\s\\S]*automatic_after_verified_local_gates",
-          "description": "The V26 release record stays truthful about the installed floor, evidence, limitations, and automatic verified-promotion policy."
+          "description": "The historical V26 release record remains available as lineage evidence."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V28_FIRST_PERSON_NATURAL_REPORT.md",
+          "pattern": "First-Person Natural Environment Release[\\s\\S]*Test-PhantomStrikeV28Playability.ps1`: pass[\\s\\S]*Installed build-set revision: `V25R12\\+PHANTOMSTRIKE-V28R7`[\\s\\S]*prior V25R12 PhantomStrike install is preserved",
+          "description": "The V28R7 release record proves playability, packaging, installation identity, gameplay capture, and rollback preservation."
         },
         {
           "file": "packages/phantom-games-unreal/Tools/Promote-PhantomStrikeV26R1.ps1",
@@ -2423,8 +2428,8 @@
       "requiredPatterns": [
         {
           "file": "app/js/main.js",
-          "pattern": "id: \"protect\"[\\s\\S]*label: \"Risk Watch\"[\\s\\S]*id: \"auditlog\"[\\s\\S]*label: \"Audit Log\"[\\s\\S]*adminOnly: true",
-          "description": "Risk Watch and Audit Log remain first-class navigation destinations, with audit access restricted to admins."
+          "pattern": "id: \"riskwatch\"[\\s\\S]*label: \"Risk Watch\"[\\s\\S]*id: \"audit\"[\\s\\S]*label: \"Audit Log\"[\\s\\S]*navZone: \"bottom\"",
+          "description": "Risk Watch remains an owner destination and Audit Log remains available in the quieter operator system area."
         },
         {
           "file": "app/js/orgs.js",
@@ -2433,8 +2438,8 @@
         },
         {
           "file": "app/js/workspaces.js",
-          "pattern": "function renderAuditLog[\\s\\S]*VERIFIED ORGANIZATION EVIDENCE[\\s\\S]*Sensitive payload fields are never displayed or exported[\\s\\S]*Export redacted log",
-          "description": "The Audit Log keeps its truth states, organization context, and redacted export boundary."
+          "pattern": "function renderOrganizationAuditLog[\\s\\S]*VERIFIED ORGANIZATION EVIDENCE[\\s\\S]*Sensitive payload fields are never displayed or exported[\\s\\S]*Export redacted log[\\s\\S]*auditlog: \\{[^\\n]*adminOnly: true",
+          "description": "The protected organization receipt view keeps its truth states, organization context, redacted export boundary, and admin-only route."
         },
         {
           "file": "scripts/test-admin-master-audit.mjs",

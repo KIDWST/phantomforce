@@ -8,12 +8,14 @@ const organization = read("app/js/organization.js");
 const settings = read("app/js/settings.js");
 const registry = read("server/src/customization/module-registry.ts");
 
-assert.match(main, /id: "crm",\s+label: "Clients",\s+icon: "users", ws: "leads"/u,
-  "Clients must remain a visible client-pipeline destination.");
-assert.doesNotMatch(main, /id: "crm"[^\n]*navHidden/u,
-  "Clients must not be hidden with the retired Client Setup surface.");
-assert.match(main, /crm: "Clients"/u,
-  "Mobile navigation must call the pipeline Clients, not Client Setup or Leads.");
+assert.match(main, /id: "leads",\s+label: "Leads",\s+icon: "users", ws: "leads"/u,
+  "Leads must remain a visible acquisition-pipeline destination.");
+assert.match(main, /id: "clients",\s+label: "Clients",\s+icon: "users", ws: "clients"/u,
+  "Client 360 must remain distinct from the lead pipeline.");
+assert.doesNotMatch(main, /id: "(?:leads|clients)"[^\n]*navHidden/u,
+  "Leads and Clients must not be hidden with the retired Client Setup surface.");
+assert.match(main, /leads: "Leads"/u,
+  "Mobile navigation must call the acquisition pipeline Leads.");
 assert.doesNotMatch(main, /id: "clientsetup"|label: "Client Setup"/iu,
   "Client Setup must not return as a primary navigation module.");
 

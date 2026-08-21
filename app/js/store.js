@@ -535,6 +535,7 @@ function seed() {
     tasks: [],
     reviews: [],
     bookings: [],
+    communications: [],
     media: [],
     looperPlans: [],
     sites: [],
@@ -542,6 +543,8 @@ function seed() {
     finance: financeSeed(),
     security: [],
     approvals: [],
+    notificationReads: [],
+    riskAcknowledgements: [],
     agents: [],
     vacationRuns: [],
     memory: [],
@@ -571,6 +574,7 @@ function normalizeData(data) {
   d.tasks = Array.isArray(d.tasks) ? d.tasks : [];
   d.reviews = Array.isArray(d.reviews) ? d.reviews : [];
   d.bookings = Array.isArray(d.bookings) ? d.bookings : [];
+  d.communications = Array.isArray(d.communications) ? d.communications : [];
   d.media = Array.isArray(d.media) ? d.media : [];
   d.looperPlans = Array.isArray(d.looperPlans) ? d.looperPlans : [];
   d.sites = Array.isArray(d.sites) ? d.sites : [];
@@ -578,6 +582,8 @@ function normalizeData(data) {
   d.finance = normalizeFinance(d.finance);
   d.security = Array.isArray(d.security) ? d.security : [];
   d.approvals = Array.isArray(d.approvals) ? d.approvals : [];
+  d.notificationReads = Array.isArray(d.notificationReads) ? d.notificationReads : [];
+  d.riskAcknowledgements = Array.isArray(d.riskAcknowledgements) ? d.riskAcknowledgements : [];
   d.agents = Array.isArray(d.agents) ? d.agents : [];
   d.vacationRuns = Array.isArray(d.vacationRuns) ? d.vacationRuns : [];
   d.memory = pruneMemory(Array.isArray(d.memory) ? d.memory : []);
@@ -1273,7 +1279,7 @@ export function todaysPlan() {
   visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status || "new"))
     .forEach((t) => items.push({ id: `task:${t.id}`, recordId: t.id, icon: "▸", text: `Task ready: ${t.title}`, detail: t.notes || "Internal work ready for completion.", kind: "task", open: "workforce", aiAction: "handle", manualAction: "done", approvalRequired: false }));
   visible(store.state.security).forEach((s) => {
-    if (daysUntil(s.rotationDue) <= 30) items.push({ id: `security:${s.id}`, recordId: s.id, icon: "⚠", text: `Password rotation window closes in ${daysUntil(s.rotationDue)} days`, detail: "Phantom can inspect and prepare the safest remediation; credentials still require the authorized owner.", kind: "security", open: "protect", aiAction: "prepare", manualAction: "review", approvalRequired: true });
+    if (daysUntil(s.rotationDue) <= 30) items.push({ id: `security:${s.id}`, recordId: s.id, icon: "⚠", text: `Password rotation window closes in ${daysUntil(s.rotationDue)} days`, detail: "Phantom can inspect and prepare the safest remediation; credentials still require the authorized owner.", kind: "security", open: "riskwatch", aiAction: "prepare", manualAction: "review", approvalRequired: true });
   });
   return items.slice(0, 7);
 }
@@ -1293,7 +1299,13 @@ export function resolveApproval(id, approved, opts = {}) {
   a.decision = changesRequested ? (approved ? "approve-with-changes" : "disapprove-with-changes") : (approved ? "approve" : "disapprove");
   if (approved && !changesRequested) {
     if (a.type === "publish-review") { const r = store.state.reviews.find((x) => x.id === a.ref); if (r) r.status = "published-ready"; }
-    if (a.type === "send-message") { const l = store.state.leads.find((x) => x.id === a.ref); if (l) { l.status = "follow-up"; l.next = "Message approved — send-ready in your outbox"; } }
+    if (a.type === "send-message") {
+      const message = store.state.communications.find((x) => x.id === a.communicationId || x.id === a.ref);
+      const leadId = message?.leadId || a.ref;
+      const l = store.state.leads.find((x) => x.id === leadId);
+      if (message) { message.status = "send-ready"; message.updatedAt = new Date().toISOString(); }
+      if (l) { l.status = "follow-up"; l.next = "Message approved - send-ready in Comms"; }
+    }
     if (a.type === "publish-page") { const s = store.state.sites.find((x) => x.id === a.ref); if (s) s.status = "approved-to-publish"; }
     if (a.type === "media-generation") { const m = store.state.media.find((x) => x.id === a.ref); if (m) m.status = "generation-approved"; }
     if (a.type === "booking") { const b = store.state.bookings.find((x) => x.id === a.ref); if (b) b.status = "approved"; }

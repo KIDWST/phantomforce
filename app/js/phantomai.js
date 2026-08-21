@@ -918,9 +918,11 @@ function openSessionMenu() {
   setChildrenInert(menu.parentElement, menu, true);
   if (name) {
     name.value = activeTask().title || NEW_TASK_TITLE;
+    focusWithoutScroll(name);
+    name.select();
     requestAnimationFrame(() => {
-      name.focus();
-      name.select();
+      if (document.activeElement !== name) focusWithoutScroll(name);
+      if (document.activeElement === name) name.select();
     });
   }
 }
@@ -996,7 +998,15 @@ function closeModelMenu({ restoreFocus = false } = {}) {
   const menu = rootEl?.querySelector("[data-phantombot-model-menu]");
   if (menu) menu.hidden = true;
   rootEl?.querySelector("[data-phantombot-model]")?.setAttribute("aria-expanded", "false");
-  if (restoreFocus) requestAnimationFrame(() => focusWithoutScroll(returnTarget));
+  if (restoreFocus) {
+    const fallbackTarget = [...(rootEl?.querySelectorAll("[data-phantombot-model]") || [])]
+      .find((element) => element.isConnected && element.getBoundingClientRect().width > 0);
+    const focusTarget = returnTarget?.isConnected ? returnTarget : fallbackTarget;
+    focusWithoutScroll(focusTarget);
+    requestAnimationFrame(() => {
+      if (document.activeElement !== focusTarget) focusWithoutScroll(focusTarget);
+    });
+  }
   overlayReturnFocus.model = null;
 }
 

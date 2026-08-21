@@ -43,8 +43,9 @@ assert.match(
 assert.match(css, /Automation workspace — Configured\/Recipes\/Logs\/Safety/u, "Automation CSS should describe the four automation tabs.");
 assert.match(packageJson, /test:automation-workspace/u, "Root package must expose the Automation workspace regression test.");
 assert.match(main, /data-phantomai-tab="automations"[\s\S]*data-phantombot-automations-mount/u, "PhantomBot must contain the automation control plane.");
-assert.doesNotMatch(main, /\{ id: "automation",\s+label: "Automations"/u, "Automation must not remain a separate top-level application.");
+assert.match(main, /\{ id: "automation",\s+label: "Automations"[\s\S]*navZone: "bottom"/u, "Automation must remain a quiet operator destination without entering the primary business rail.");
 assert.match(phantomai, /renderAutomation\(mount\)/u, "PhantomBot must mount the existing real automation workspace.");
+assert.match(main, /automation:\s*\{[\s\S]*renderAutomation\(body/u, "The utility destination and PhantomBot must reuse the same real automation workspace.");
 assert.match(automationEngine, /actor_user_id: "phantombot-automation-engine"[\s\S]*model_id: "phantombot-automation-engine"/u, "Automation receipts must identify PhantomBot as the internal runner.");
 assert.match(automationEngine, /id: "phantomstore-live-route-guard"[\s\S]*cadence: "hourly"/u, "The former Codex PhantomStore guard must have an hourly PhantomBot-native replacement.");
 
