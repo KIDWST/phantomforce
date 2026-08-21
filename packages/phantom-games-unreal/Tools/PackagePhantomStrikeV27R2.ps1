@@ -1,15 +1,9 @@
 param(
     [string]$EngineRoot = 'H:\UE_5.8',
-    [ValidatePattern('^V28R\d+$')][string]$Revision = 'V28R3'
+    [ValidatePattern('^V27R\d+$')][string]$Revision = 'V27R2'
 )
 
 $ErrorActionPreference = 'Stop'
-$VisualProfile = "blackridge-natural-first-person-$($Revision.ToLowerInvariant())"
-$SourceFloor = if ($Revision -match '^V28R([0-9]+)$' -and [int]$Matches[1] -gt 1) {
-    "V28R$([int]$Matches[1] - 1)"
-} else {
-    'V28R1'
-}
 $ProjectRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
 $Project = Join-Path $ProjectRoot 'PhantomGames.uproject'
 $Artifact = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "BuildArtifacts\$Revision\phantom-strike"))
@@ -48,8 +42,8 @@ if (-not (Test-Path -LiteralPath (Join-Path $Candidate 'PhantomStrike.exe'))) {
 Set-Content -LiteralPath (Join-Path $Candidate "PHANTOM_${Revision}_CANDIDATE.txt") -Encoding UTF8 -Value @(
     "PHANTOM $Revision CANDIDATE"
     'game=phantom-strike'
-    "visual_profile=$VisualProfile"
-    "source_floor=$SourceFloor"
+    'visual_profile=blackridge-photoreal-target-v27-camera-recovery'
+    'source_floor=V27R1'
     "built=$([DateTime]::Now.ToString('s'))"
     'promotion=automatic_after_verified_local_gates'
 )
@@ -68,16 +62,13 @@ foreach ($Name in $Critical.Keys) {
     $Hashes[$Name] = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
 }
 $Files = @(Get-ChildItem -LiteralPath $Candidate -Recurse -File)
-$MetadataNames = @("PHANTOM_${Revision}_CANDIDATE.txt", "PHANTOM_${Revision}_MANIFEST.json")
-$RuntimeFiles = @($Files | Where-Object { $MetadataNames -notcontains $_.Name })
 $Manifest = [ordered]@{
     schema_version = 1
     revision = $Revision
     game = 'phantom-strike'
-    visual_profile = $VisualProfile
+    visual_profile = 'blackridge-photoreal-target-v27-camera-recovery'
     generated_utc = [DateTime]::UtcNow.ToString('o')
     file_count_before_manifest = $Files.Count
-    runtime_file_count = $RuntimeFiles.Count
     total_bytes_before_manifest = [long](($Files | Measure-Object -Property Length -Sum).Sum)
     paths = $Critical
     sha256 = $Hashes

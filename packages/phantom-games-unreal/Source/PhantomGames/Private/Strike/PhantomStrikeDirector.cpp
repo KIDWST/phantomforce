@@ -1976,34 +1976,54 @@ void APhantomStrikeDirector::BuildV28NaturalBlackridge()
         It->Settings.VignetteIntensity = 0.18f;
     }
 
-    // Six overlapping authored terrain sections establish real variation on both sides of
-    // the route while the invisible level slab remains a deterministic traversal surface.
-    int32 TerrainIndex = 0;
-    for (int32 XIndex = -1; XIndex <= 1; ++XIndex)
-    {
-        for (int32 YIndex = -1; YIndex <= 1; YIndex += 2)
-        {
-            SpawnStaticMeshAsset(
-                FString::Printf(TEXT("V28NaturalTerrain_%02d"), TerrainIndex++),
-                TEXT("/Game/ArchVis/SampleScene/Building/Meshes/Exterior_Terrain.Exterior_Terrain"),
-                FVector(XIndex * 9800.0f, YIndex * 4400.0f, 145.0f),
-                FVector(2.35f), FRotator(0.0f, XIndex == 0 ? 180.0f : 0.0f, 0.0f),
-                false, false);
-        }
-    }
-
-    // Tile the access road and operations apron instead of stretching one plane across the
-    // entire mission. Each tile keeps its material texel density and avoids the smeared ground
-    // that previously exposed the procedural construction at the insertion point.
+    // Tile every surface instead of stretching a monolithic terrain shell. The former ArchVis
+    // terrain exposed a vertical boundary at the horizon and left the insertion gray and flat.
+    // Close PBR dirt shoulders now blend the asphalt into broad grass bands while the invisible
+    // support slab underneath remains the deterministic traversal surface.
     for (int32 Segment = 0; Segment < 30; ++Segment)
     {
+        const float SegmentX = -12700.0f + Segment * 1000.0f;
         if (AStaticMeshActor* Route = SpawnStaticMeshAsset(
             FString::Printf(TEXT("V28CoastalAccessRoad_%02d"), Segment),
             TEXT("/Engine/BasicShapes/Plane.Plane"),
-            FVector(-12700.0f + Segment * 1000.0f, 0.0f, 154.0f), FVector(10.04f,9.0f,1.0f),
+            FVector(SegmentX, 0.0f, 154.0f), FVector(10.04f,9.0f,1.0f),
             FRotator::ZeroRotator, false, false))
         {
             ApplyMaterialAsset(Route, TEXT("/Game/Phantom/Materials/Production/M_Phantom_Asphalt.M_Phantom_Asphalt"));
+        }
+        if (Segment % 2 == 0)
+        {
+            SpawnShape(EPhantomPrimitive::Cube, FString::Printf(TEXT("V28RoadCenterDash_%02d"), Segment),
+                FVector(SegmentX,0.0f,158.0f), FVector(430.0f,7.0f,1.2f),
+                FLinearColor(0.78f,0.63f,0.16f), FRotator::ZeroRotator, false);
+        }
+        for (int32 Side = -1; Side <= 1; Side += 2)
+        {
+            SpawnShape(EPhantomPrimitive::Cube,
+                FString::Printf(TEXT("V28RoadEdge_%02d_%d"), Segment, Side),
+                FVector(SegmentX,Side * 424.0f,158.0f), FVector(930.0f,4.0f,1.0f),
+                FLinearColor(0.72f,0.72f,0.66f), FRotator::ZeroRotator, false);
+            if (AStaticMeshActor* Shoulder = SpawnStaticMeshAsset(
+                FString::Printf(TEXT("V28NaturalShoulder_%02d_%d"), Segment, Side),
+                TEXT("/Engine/BasicShapes/Plane.Plane"), FVector(SegmentX, Side * 725.0f, 153.5f),
+                FVector(10.04f,5.5f,1.0f), FRotator::ZeroRotator, false, false))
+            {
+                ApplyMaterialAsset(Shoulder, TEXT("/Game/Phantom/Materials/Production/M_Phantom_Dirt.M_Phantom_Dirt"));
+            }
+            if (AStaticMeshActor* InnerMeadow = SpawnStaticMeshAsset(
+                FString::Printf(TEXT("V28InnerMeadow_%02d_%d"), Segment, Side),
+                TEXT("/Engine/BasicShapes/Plane.Plane"), FVector(SegmentX, Side * 3500.0f, 153.0f),
+                FVector(10.04f,50.0f,1.0f), FRotator::ZeroRotator, false, false))
+            {
+                ApplyMaterialAsset(InnerMeadow, TEXT("/Game/Phantom/Materials/Production/M_Phantom_Grass.M_Phantom_Grass"));
+            }
+            if (AStaticMeshActor* OuterMeadow = SpawnStaticMeshAsset(
+                FString::Printf(TEXT("V28OuterMeadow_%02d_%d"), Segment, Side),
+                TEXT("/Engine/BasicShapes/Plane.Plane"), FVector(SegmentX, Side * 10500.0f, 152.5f),
+                FVector(10.04f,90.0f,1.0f), FRotator::ZeroRotator, false, false))
+            {
+                ApplyMaterialAsset(OuterMeadow, TEXT("/Game/Phantom/Materials/Production/M_Phantom_Grass.M_Phantom_Grass"));
+            }
         }
     }
     for (int32 ApronX = 0; ApronX < 6; ++ApronX)
@@ -2021,74 +2041,88 @@ void APhantomStrikeDirector::BuildV28NaturalBlackridge()
         }
     }
 
-    // Dense licensed trees create a genuine woodland silhouette while keeping a readable
-    // shoulder and sightline. Deterministic placement makes release proof stable.
     FRandomStream NaturalStream(2828);
+
+    // Layer broad PBR ellipsoids below the forest to break the billiard-table horizon. Keeping
+    // them outside the playable road corridor preserves deterministic movement while giving the
+    // coastal insertion believable rolling terrain instead of a flat prototype plane.
+    for (int32 Index = 0; Index < 24; ++Index)
+    {
+        const float Side = Index % 2 == 0 ? -1.0f : 1.0f;
+        const float ScaleX = NaturalStream.FRandRange(34.0f, 74.0f);
+        const float ScaleY = NaturalStream.FRandRange(48.0f, 96.0f);
+        const float ScaleZ = NaturalStream.FRandRange(7.0f, 18.0f);
+        const float CrestHeight = NaturalStream.FRandRange(320.0f, 860.0f);
+        const FVector HillLocation(
+            NaturalStream.FRandRange(-15400.0f,18400.0f),
+            Side * NaturalStream.FRandRange(8500.0f,14600.0f),
+            153.0f - 50.0f * ScaleZ + CrestHeight);
+        if (AStaticMeshActor* Hill = SpawnStaticMeshAsset(
+            FString::Printf(TEXT("V28NaturalHill_%02d"), Index),
+            TEXT("/Engine/BasicShapes/Sphere.Sphere"), HillLocation,
+            FVector(ScaleX,ScaleY,ScaleZ), FRotator(0.0f,NaturalStream.FRandRange(0.0f,360.0f),0.0f),
+            false, false))
+        {
+            ApplyMaterialAsset(Hill, TEXT("/Game/Phantom/Materials/Production/M_Phantom_Grass.M_Phantom_Grass"));
+        }
+    }
+
+    // Use the production ArchVis tree exclusively. The recovered CC0 aliases are valid assets,
+    // but their faceted crowns and saturated materials fail the realistic Blackridge contract.
+    // A broad scale range, irregular clearings, and a second sapling layer create variety without
+    // mixing incompatible art styles. Deterministic placement keeps release proof stable.
     TArray<FTransform> NaturalTrees;
-    NaturalTrees.Reserve(240);
-    for (int32 Index = 0; Index < 240; ++Index)
+    TArray<FTransform> NaturalSaplings;
+    NaturalTrees.Reserve(1400);
+    NaturalSaplings.Reserve(700);
+    for (int32 Index = 0; Index < 1400; ++Index)
     {
         const float X = NaturalStream.FRandRange(-15000.0f, 17600.0f);
         const float Side = Index % 2 == 0 ? -1.0f : 1.0f;
-        const float Y = Side * NaturalStream.FRandRange(1500.0f, 14600.0f);
-        const float Scale = NaturalStream.FRandRange(0.72f, 1.28f);
-        NaturalTrees.Emplace(FRotator(0.0f, NaturalStream.FRandRange(0.0f,360.0f), 0.0f),
-            FVector(X,Y,155.0f), FVector(Scale));
+        const float EdgeBias = (Index % 5 == 0) ? 1200.0f : 2100.0f;
+        const float Y = Side * NaturalStream.FRandRange(EdgeBias, 14800.0f);
+        const float UniformScale = NaturalStream.FRandRange(0.52f, 1.18f);
+        const float WidthScale = UniformScale * NaturalStream.FRandRange(0.88f, 1.12f);
+        NaturalTrees.Emplace(
+            FRotator(0.0f, NaturalStream.FRandRange(0.0f,360.0f), 0.0f),
+            FVector(X,Y,154.0f), FVector(WidthScale,WidthScale,UniformScale));
     }
-    SpawnInstancedMeshCluster(TEXT("V28BlackridgeNaturalTrees_HISM"),
-        TEXT("/Game/ArchVis/SampleScene/Tree/HillTree_02.HillTree_02"), NaturalTrees, false);
-
-    TArray<FTransform> NaturalRocks;
-    TArray<FTransform> NaturalBrush;
-    NaturalRocks.Reserve(96);
-    NaturalBrush.Reserve(260);
-    for (int32 Index = 0; Index < 96; ++Index)
-    {
-        const float X = NaturalStream.FRandRange(-14800.0f, 17400.0f);
-        const float Side = Index % 2 == 0 ? -1.0f : 1.0f;
-        const float Y = Side * NaturalStream.FRandRange(1850.0f, 9300.0f);
-        NaturalRocks.Emplace(FRotator(0.0f, NaturalStream.FRandRange(0.0f,360.0f), 0.0f),
-            FVector(X,Y,154.0f), FVector(NaturalStream.FRandRange(0.55f,1.35f)));
-    }
-    for (int32 Index = 0; Index < 260; ++Index)
+    for (int32 Index = 0; Index < 700; ++Index)
     {
         const float X = NaturalStream.FRandRange(-15200.0f, 17800.0f);
         const float Side = Index % 2 == 0 ? -1.0f : 1.0f;
-        const float Y = Side * NaturalStream.FRandRange(700.0f, 7200.0f);
-        NaturalBrush.Emplace(FRotator(0.0f, NaturalStream.FRandRange(0.0f,360.0f), 0.0f),
-            FVector(X,Y,154.0f), FVector(NaturalStream.FRandRange(0.65f,1.45f)));
+        const float Y = Side * NaturalStream.FRandRange(1050.0f, 9800.0f);
+        const float UniformScale = NaturalStream.FRandRange(0.13f, 0.29f);
+        NaturalSaplings.Emplace(
+            FRotator(0.0f, NaturalStream.FRandRange(0.0f,360.0f), 0.0f),
+            FVector(X,Y,154.0f), FVector(UniformScale));
     }
-    SpawnInstancedMeshCluster(TEXT("V28BlackridgeRocks_HISM"),
-        TEXT("/Game/Phantom/Generated/Common/SM_RockCluster_A.SM_RockCluster_A"), NaturalRocks, false);
-    SpawnInstancedMeshCluster(TEXT("V28BlackridgeBrush_HISM"),
-        TEXT("/Game/Phantom/Generated/Common/SM_Bush_A.SM_Bush_A"), NaturalBrush, false);
+    SpawnInstancedMeshCluster(TEXT("V28BlackridgeNaturalTrees_HISM"),
+        TEXT("/Game/ArchVis/SampleScene/Tree/HillTree_02.HillTree_02"), NaturalTrees, false);
+    SpawnInstancedMeshCluster(TEXT("V28BlackridgeNaturalSaplings_HISM"),
+        TEXT("/Game/ArchVis/SampleScene/Tree/HillTree_02.HillTree_02"), NaturalSaplings, false);
 
-    struct FNaturalSetpiece
+    // PBR boulders use a smooth engine mesh with deliberately irregular proportions. This avoids
+    // reintroducing the faceted CC0 rocks while giving the shoulders real parallax and breakup.
+    for (int32 Index = 0; Index < 42; ++Index)
     {
-        const TCHAR* Name;
-        const TCHAR* Asset;
-        FVector Location;
-        float Scale;
-        float Yaw;
-        bool bCollision;
-    };
-    const FNaturalSetpiece Setpieces[] = {
-        // SM_Car is normalized to a 4.6 m vehicle in SpawnStaticMeshAsset. These are
-        // presentation variations around that real-world target, not raw import multipliers.
-        {TEXT("V28InsertionVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-7300.0f,-2850.0f,154.0f), 1.00f, 18.0f, true},
-        {TEXT("V28CheckpointVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-3900.0f,2750.0f,154.0f), 1.04f, -22.0f, true},
-        {TEXT("V28OutpostResponseVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(3440.0f,2640.0f,154.0f), 1.02f, 164.0f, true},
-        {TEXT("V28OperationsVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(7200.0f,-2720.0f,154.0f), 1.06f, 12.0f, true},
-        {TEXT("V28InsertionRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(-6500.0f,1740.0f,154.0f), 0.82f, 12.0f, false},
-        {TEXT("V28CheckpointSandbags"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_SandbagWall.SM_V9_SandbagWall"), FVector(-2550.0f,-1560.0f,154.0f), 0.90f, 8.0f, true},
-        {TEXT("V28OutpostBarricade"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_TacticalBarricade.SM_V9_TacticalBarricade"), FVector(2220.0f,1520.0f,154.0f), 0.88f, 78.0f, true},
-        {TEXT("V28OperationsContainerA"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_CargoContainer_0.SM_V9_CargoContainer_0"), FVector(8420.0f,-1800.0f,154.0f), 0.72f, 90.0f, true},
-        {TEXT("V28OperationsContainerB"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_CargoContainer_1.SM_V9_CargoContainer_1"), FVector(9580.0f,1800.0f,154.0f), 0.72f, -90.0f, true}
-    };
-    for (const FNaturalSetpiece& Setpiece : Setpieces)
-    {
-        SpawnStaticMeshAsset(Setpiece.Name, Setpiece.Asset, Setpiece.Location, FVector(Setpiece.Scale),
-            FRotator(0.0f, Setpiece.Yaw, 0.0f), Setpiece.bCollision, true);
+        const float Side = Index % 2 == 0 ? -1.0f : 1.0f;
+        const float ScaleX = NaturalStream.FRandRange(1.4f,4.8f);
+        const float ScaleY = NaturalStream.FRandRange(1.2f,4.2f);
+        const float ScaleZ = NaturalStream.FRandRange(1.1f,3.0f);
+        const FVector BoulderLocation(
+            NaturalStream.FRandRange(-14800.0f,17600.0f),
+            Side * NaturalStream.FRandRange(1250.0f,7600.0f),
+            153.0f + ScaleZ * 22.0f);
+        if (AStaticMeshActor* Boulder = SpawnStaticMeshAsset(
+            FString::Printf(TEXT("V28NaturalBoulder_%02d"), Index),
+            TEXT("/Engine/BasicShapes/Sphere.Sphere"), BoulderLocation,
+            FVector(ScaleX,ScaleY,ScaleZ),
+            FRotator(NaturalStream.FRandRange(-14.0f,14.0f),NaturalStream.FRandRange(0.0f,360.0f),NaturalStream.FRandRange(-12.0f,12.0f)),
+            false, false))
+        {
+            ApplyMaterialAsset(Boulder, TEXT("/Game/Phantom/Materials/Production/M_Phantom_Rock.M_Phantom_Rock"));
+        }
     }
 
     const FVector PracticalLights[] = {

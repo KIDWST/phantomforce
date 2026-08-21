@@ -11,10 +11,11 @@ REQUIRED_ASSETS = {
     "/Game/ProductAssets/Mesh/SM_Car": "StaticMesh",
     "/Game/ProductAssets/Materials/M_Concrete": "Material",
     "/Game/ArchVis/SampleScene/Tree/HillTree_02": "StaticMesh",
-    "/Game/ArchVis/SampleScene/Building/Meshes/Exterior_Terrain": "StaticMesh",
-    "/Game/ArchVis/SampleScene/Building/Materials/Terrain": "Material",
     "/Game/Phantom/Materials/Production/M_Phantom_Asphalt": "Material",
     "/Game/Phantom/Materials/Production/M_Phantom_Concrete": "Material",
+    "/Game/Phantom/Materials/Production/M_Phantom_Grass": "Material",
+    "/Game/Phantom/Materials/Production/M_Phantom_Dirt": "Material",
+    "/Game/Phantom/Materials/Production/M_Phantom_Rock": "Material",
 }
 
 

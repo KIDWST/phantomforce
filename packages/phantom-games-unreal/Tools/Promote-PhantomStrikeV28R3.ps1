@@ -3,11 +3,12 @@ param(
     [string]$ProjectRoot = '',
     [string]$InstalledRoot = '',
     [string]$BackupRoot = '',
+    [ValidatePattern('^V28R\d+$')][string]$Revision = 'V28R3',
     [switch]$VerifyOnly
 )
 
 $ErrorActionPreference = 'Stop'
-$Revision = 'V28R3'
+$VisualProfile = "blackridge-natural-first-person-$($Revision.ToLowerInvariant())"
 
 function Get-NormalizedPath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -64,23 +65,29 @@ if ([string]::IsNullOrWhiteSpace($BackupRoot)) { $BackupRoot = Join-Path ([Envir
 $BackupRoot = Get-NormalizedPath $BackupRoot
 
 $CandidateRoot = Assert-ExactPath `
-    (Join-Path $ProjectRoot 'CandidateBuilds\V28R3\phantom-strike') `
-    (Join-Path $ProjectRoot 'CandidateBuilds\V28R3\phantom-strike') `
+    (Join-Path $ProjectRoot "CandidateBuilds\$Revision\phantom-strike") `
+    (Join-Path $ProjectRoot "CandidateBuilds\$Revision\phantom-strike") `
     'PhantomStrike candidate root'
-$candidateMarker = Join-Path $CandidateRoot 'PHANTOM_V28R3_CANDIDATE.txt'
-$manifestPath = Join-Path $CandidateRoot 'PHANTOM_V28R3_MANIFEST.json'
+$candidateMarker = Join-Path $CandidateRoot "PHANTOM_${Revision}_CANDIDATE.txt"
+$manifestPath = Join-Path $CandidateRoot "PHANTOM_${Revision}_MANIFEST.json"
 if (-not (Test-Path -LiteralPath $candidateMarker -PathType Leaf)) { throw 'V28 candidate marker is missing.' }
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'V28 candidate manifest is missing.' }
 $markerText = Get-Content -LiteralPath $candidateMarker -Raw
-if ($markerText -notmatch 'game=phantom-strike' -or $markerText -notmatch 'visual_profile=blackridge-natural-first-person-v28r3') {
+if ($markerText -notmatch 'game=phantom-strike' -or $markerText -notmatch [regex]::Escape("visual_profile=$VisualProfile")) {
     throw 'V28 candidate identity marker is invalid.'
 }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ([string]$manifest.revision -cne $Revision -or [string]$manifest.game -cne 'phantom-strike' -or [string]$manifest.visual_profile -cne 'blackridge-natural-first-person-v28r3') {
+if ([string]$manifest.revision -cne $Revision -or [string]$manifest.game -cne 'phantom-strike' -or [string]$manifest.visual_profile -cne $VisualProfile) {
     throw 'V28 candidate manifest identity is invalid.'
 }
 $candidateSummary = Get-TreeSummary $CandidateRoot
-if ($candidateSummary.file_count -ne ([int]$manifest.file_count_before_manifest + 1)) {
+$candidateRuntimeFiles = @(Get-ChildItem -LiteralPath $CandidateRoot -Recurse -File | Where-Object {
+    $_.Name -notin @("PHANTOM_${Revision}_CANDIDATE.txt", "PHANTOM_${Revision}_MANIFEST.json")
+})
+if ($null -eq $manifest.runtime_file_count -or $candidateRuntimeFiles.Count -ne [int]$manifest.runtime_file_count) {
+    throw "V28 candidate runtime file-count mismatch: $($candidateRuntimeFiles.Count)."
+}
+if ($candidateSummary.file_count -ne ($candidateRuntimeFiles.Count + 2)) {
     throw "V28 candidate file-count mismatch: $($candidateSummary.file_count)."
 }
 
@@ -126,7 +133,7 @@ if ($null -ne (Get-Process -Name 'PhantomStrike' -ErrorAction SilentlyContinue))
 
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $safePreviousRevision = $previousRevision.ToLowerInvariant() -replace '[^a-z0-9._-]+', '-'
-$backupPath = Assert-PathWithin (Join-Path $BackupRoot "phantomplay-phantom-strike-$safePreviousRevision-to-v28r3-$timestamp") $BackupRoot 'Rollback checkpoint'
+$backupPath = Assert-PathWithin (Join-Path $BackupRoot "phantomplay-phantom-strike-$safePreviousRevision-to-$($Revision.ToLowerInvariant())-$timestamp") $BackupRoot 'Rollback checkpoint'
 $backupStrike = Assert-PathWithin (Join-Path $backupPath 'phantom-strike') $backupPath 'Rollback game tree'
 $backupBuildset = Join-Path $backupPath 'PHANTOMPLAY_BUILDSET.json'
 New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
@@ -144,14 +151,14 @@ try {
     & robocopy.exe $CandidateRoot $InstalledRoot /E /COPY:DAT /DCOPY:DAT /R:1 /W:1 /NFL /NDL /NJH /NJS | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "PhantomStrike copy failed with robocopy exit code $LASTEXITCODE." }
 
-    $installedMarker = Join-Path $InstalledRoot 'PHANTOM_V28R3_INSTALLED.txt'
-    Move-Item -LiteralPath (Join-Path $InstalledRoot 'PHANTOM_V28R3_CANDIDATE.txt') -Destination $installedMarker
+    $installedMarker = Join-Path $InstalledRoot "PHANTOM_${Revision}_INSTALLED.txt"
+    Move-Item -LiteralPath (Join-Path $InstalledRoot "PHANTOM_${Revision}_CANDIDATE.txt") -Destination $installedMarker
     $promotedUtc = [DateTime]::UtcNow.ToString('o')
     Set-Content -LiteralPath $installedMarker -Encoding UTF8 -Value @(
-        'PHANTOM V28R3 INSTALLED'
+        "PHANTOM $Revision INSTALLED"
         'game=phantom-strike'
         "promoted_utc=$promotedUtc"
-        'visual_profile=blackridge-natural-first-person-v28r3'
+        "visual_profile=$VisualProfile"
         "base_buildset=$previousRevision"
         'promotion_policy=automatic_after_verified_local_gates'
         'authorization=current_owner_request'
