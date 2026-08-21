@@ -70,6 +70,16 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **PhantomStrike V19R1 Operation Nightglass candidate (2026-08-20)** —
+  additive source and persistent-world upgrade on the verified V18R1 installed
+  floor. PhantomStrike now has staged insertion, street advance, command-center
+  breach, physical uplink, marina extraction, friendly squad presence, tactical
+  enemy repositioning, a mission-aware HUD, upgraded route lighting, and 122
+  reproducible V19 world actors. Unreal 5.8.1 Development and Shipping builds,
+  the 4,818-package cook, production-world validation, IoStore archive, and a
+  hidden packaged startup smoke pass succeeded. Candidate remains unpromoted;
+  installed V18R1 was not touched while visual, real-input, and performance gates
+  remain open.
 - **Giant translucent PhantomBot presence (2026-08-19)** — browser build
   `phantom-live-20260819-172`. Removed the late desktop-parity regression that
   shrank PhantomBot to a 190px mascot. The shared web/desktop surface now renders

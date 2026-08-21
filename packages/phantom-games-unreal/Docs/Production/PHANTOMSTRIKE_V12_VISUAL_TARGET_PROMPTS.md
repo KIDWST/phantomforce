@@ -1,6 +1,6 @@
-# PhantomStrike V12 — Visual Target Generation Prompts
+# PhantomStrike V19 — Visual Target Generation Prompts
 
-These are the exact prompts used with the built-in image generation workflow to create the three checked-in V12 visual targets. They define original PhantomStrike art direction and explicitly prohibit copying another franchise's protected characters, maps, weapons, UI, logos, audio, animation, or branding.
+These are the exact prompts used with the built-in image generation workflow to create the three checked-in visual targets for the V19 pass on top of V18R1. They define original PhantomStrike art direction and explicitly prohibit copying another franchise's protected characters, maps, weapons, UI, logos, audio, animation, or branding.
 
 ## Exterior gameplay target
 

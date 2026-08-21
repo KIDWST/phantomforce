@@ -21,6 +21,7 @@ const phantomAges = read("../packages/phantom-games-unreal/Source/PhantomGames/P
 const phantomStrike = read("../packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp");
 const phantomStrikeV12Prompt = read("../packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md");
 const phantomStrikeV12VisualPrompts = read("../packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V12_VISUAL_TARGET_PROMPTS.md");
+const phantomStrikeV19Patch = read("../packages/phantom-games-unreal/Tools/PatchPhantomStrikeV19.py");
 const flagshipCatalog = read("../server/src/phantom-ai/phantomplay-flagship.ts");
 const serverCatalog = read("../server/src/phantom-ai/phantomplay.ts");
 const serverV2Catalog = read("../server/src/phantom-ai/phantomplay-v2.ts");
@@ -381,7 +382,7 @@ assert.match(flagshipCatalog, /id:\s*"phantom-strike"[\s\S]*unrealPlayerUrl\("ph
 assert.match(phantomStrike, /LineTraceSingleByChannel[\s\S]*ApplyPointDamage/u, "Phantom Strike must use real hit tracing and damage.");
 assert.match(phantomStrike, /SpawnWave[\s\S]*EPhantomStrikeEnemyRole::Heavy/u, "Phantom Strike must retain escalating enemy waves and archetypes.");
 assert.match(phantomStrike, /bTriggerHeld[\s\S]*bAiming[\s\S]*StrikeReloadDuration/u, "Phantom Strike must retain automatic fire, aiming, and reload handling.");
-assert.match(phantomStrike, /OBJECTIVE: BREAK THE HELIX LINE AND SECURE EXTRACTION/u, "Phantom Strike must retain a concrete extraction objective.");
+assert.match(phantomStrike, /OBJECTIVE: ADVANCE TO THE BLACKRIDGE CHECKPOINT[\s\S]*OBJECTIVE: REACH MARINA EXTRACTION/u, "Phantom Strike must retain a concrete staged mission and extraction objective.");
 for (const target of [
   "phantom-strike-v12-exterior-gameplay-target.png",
   "phantom-strike-v12-interior-breach-target.png",
@@ -392,10 +393,14 @@ for (const target of [
     `Phantom Strike V12 visual target must exist: ${target}`,
   );
 }
-assert.match(phantomStrikeV12Prompt, /Treat V11R6 as the minimum acceptable gameplay floor/u, "The V12 prompt must prohibit gameplay regressions.");
+assert.match(phantomStrikeV12Prompt, /Treat V18R1 as the minimum acceptable release floor/u, "The V19 prompt must prohibit release regressions.");
 assert.match(phantomStrikeV12Prompt, /Do not copy any existing franchise/u, "The V12 prompt must keep PhantomStrike original rather than cloning another shooter.");
 assert.match(phantomStrikeV12Prompt, /clean compile and cook[\s\S]*visual proof[\s\S]*performance evidence/u, "The V12 prompt must require real release proof rather than source-only completion.");
-assert.match(phantomStrikeV12VisualPrompts, /Exterior gameplay target[\s\S]*Interior breach target[\s\S]*HUD and weapon target/u, "The exact V12 visual-target prompt set must remain reproducible.");
+assert.match(phantomStrikeV12VisualPrompts, /Exterior gameplay target[\s\S]*Interior breach target[\s\S]*HUD and weapon target/u, "The exact V19 visual-target prompt set must remain reproducible.");
+assert.match(phantomStrike, /APhantomStrikeSquadmate[\s\S]*suppression\/readability only/u, "Phantom Strike V19 must keep visible squad support without letting AI complete combat for the player.");
+assert.match(phantomStrike, /COMMAND CENTER BREACH[\s\S]*SECURE THE UPLINK/u, "Phantom Strike V19 must expose its staged Operation Nightglass objective flow.");
+assert.match(phantomStrike, /FlankWeight[\s\S]*ExposureRemaining/u, "Phantom Strike V19 enemies must retain tactical flank and exposure decisions.");
+assert.match(phantomStrikeV19Patch, /PATCH_TAG = "PhantomStrikeV19"[\s\S]*actor_count/u, "The V19 persistent-world pass must remain idempotent and report its authored contribution.");
 assert.doesNotThrow(() => new Function(vespergateGame), "Vespergate game script must parse.");
 assert.doesNotThrow(() => new Function(vespergateRooms), "Vespergate room script must parse.");
 assert.doesNotThrow(() => new Function(vespergateEngine), "Vespergate engine script must parse.");

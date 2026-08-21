@@ -1,4 +1,19 @@
-# Phantom Codex Checkpoint — 2026-08-19 V18R1 installed release
+# Phantom Codex Checkpoint — 2026-08-20 PhantomStrike V19R1 review candidate
+
+## V19R1 candidate state
+
+- PhantomStrike now carries the additive Operation Nightglass V19 pass on top of the verified installed V18R1 release floor.
+- Runtime source adds staged insertion/advance/breach/uplink/extraction objectives, two non-lethal friendly operators, tactical enemy exposure/flank/reposition decisions, mission-aware HUD state, and route lighting.
+- The persistent world contains 122 idempotently tagged V19 actors and passes the production-world gate with 889 production actors, 551 authored-material real actors near start, no basic-shape violations, no rejected aliases, no oversized non-terrain actors, and no spawn blockers.
+- Unreal Engine 5.8.1 Development runtime and editor targets compile. The V19R1 Shipping target, 4,818-package cook, IoStore assembly, archive, and hidden 12-second packaged startup all pass.
+- Repository verification passes: focused PhantomPlay safety, full PhantomPlay server/edge suite, `verify`, 38/38 native desktop tests, 33/33 release-critical checks, and 374 change-memory checks.
+- Review candidate: `packages/phantom-games-unreal/CandidateBuilds/V19R1/phantom-strike` (31 files, 1,043,192,662 bytes).
+- Shipping runtime SHA-256: `29ADF7EBC8CE0E9FCBB03A34E32ACFEF5ADDB6B4000277C3D2156726894699D4`.
+- Main cooked payload SHA-256: `18D41EECD1950390A6E36E33EBD6AA823DBC8B76E5CBED8463C9E7B91709130D`.
+- Disposition: **REVIEW CANDIDATE — NOT PROMOTED**. Visual target captures, complete real-input coverage, and performance/soak evidence remain open because no visible app or game window was taken over while the owner was using the workstation.
+- The installed PhantomPlay shell and installed V18R1 four-game set were not stopped, replaced, or restarted.
+
+## Prior installed baseline — 2026-08-19 V18R1
 
 ## State
 

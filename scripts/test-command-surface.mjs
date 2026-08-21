@@ -153,7 +153,7 @@ assert.match(main, /chatAttachMedia\(r\.media\)/u, "Completed media must render 
 assert.match(main, /Byting cyberchips into the frame/u, "Creative render progress should have a specific Phantom voice.");
 assert.match(css, /\.chat-media\s*\{/u, "Inline chat media needs a stable media card treatment.");
 assert.match(workspaces, /data-production-core-panel/u, "PhantomOps must expose the canonical Production Core status and diagnosis surface.");
-assert.match(main, /adminos:[\s\S]*data-production-core-panel[\s\S]*mountProductionCorePanel\(corePanel\)[\s\S]*renderOperatorSettings\(settingsPanel/u, "The live Admin route must mount Production Core before organization settings.");
+assert.match(workspaces, /function renderAdmin\(el, rerender\)[\s\S]*data-production-core-panel[\s\S]*mountProductionCorePanel\(el\.querySelector\("\[data-production-core-panel\]"\)\)/u, "The owner-only PhantomOps diagnostics route must mount Production Core.");
 assert.match(productionCore, /\/api\/production-core\/commands/u, "Production Core UI commands must use the typed backend command transport.");
 assert.match(productionCore, /real[\s\S]*sandbox[\s\S]*mock[\s\S]*degraded[\s\S]*unavailable/u, "Production Core UI must distinguish every truthful system-state class.");
 assert.match(productionCore, /\/api\/production-core\/admin\/diagnose/u, "PhantomOps must diagnose a correlation without database access.");

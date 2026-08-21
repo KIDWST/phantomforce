@@ -176,13 +176,15 @@ function Assert-ImportedContent {
     $WorldReport=Join-Path $Saved 'PhantomProductionWorldsV11.json'
     $PortfolioWorldReport=Join-Path $Saved 'PhantomPortfolioWorldsV13.json'
     $CubeTownV17Report=Join-Path $Saved 'CubeTownV17DioramaPatch.json'
+    $StrikeV19Report=Join-Path $Saved 'PhantomStrikeV19.json'
     $WorldValidation=Join-Path $Saved 'PhantomProductionWorldValidationV11.json'
-    foreach($r in @($WorldReport,$PortfolioWorldReport,$CubeTownV17Report,$WorldValidation)){if(-not(Test-Path $r)){throw "Production-world proof missing: $r"}}
+    foreach($r in @($WorldReport,$PortfolioWorldReport,$CubeTownV17Report,$StrikeV19Report,$WorldValidation)){if(-not(Test-Path $r)){throw "Production-world proof missing: $r"}}
     $WorldData=Get-Content $WorldReport -Raw | ConvertFrom-Json
     $PortfolioWorldData=Get-Content $PortfolioWorldReport -Raw | ConvertFrom-Json
     $CubeTownV17Data=Get-Content $CubeTownV17Report -Raw | ConvertFrom-Json
+    $StrikeV19Data=Get-Content $StrikeV19Report -Raw | ConvertFrom-Json
     $ValidationData=Get-Content $WorldValidation -Raw | ConvertFrom-Json
-    if($WorldData.status -ne 'PASS' -or $PortfolioWorldData.status -ne 'PASS' -or $CubeTownV17Data.status -ne 'PASS' -or $ValidationData.status -ne 'PASS'){throw 'Production-world build, V13 portfolio patch, CubeTown V17 diorama patch, or density/occlusion validation failed.'}
+    if($WorldData.status -ne 'PASS' -or $PortfolioWorldData.status -ne 'PASS' -or $CubeTownV17Data.status -ne 'PASS' -or $StrikeV19Data.status -ne 'PASS' -or $ValidationData.status -ne 'PASS'){throw 'Production-world build, V13 portfolio patch, CubeTown V17 diorama patch, PhantomStrike V19 pass, or density/occlusion validation failed.'}
 
     $OneShot=Join-Path $Saved 'PhantomOneShotEditorPipelineV11.txt'
     if(-not(Test-Path $OneShot)){throw 'V11 one-shot Unreal content pipeline report missing.'}
@@ -202,7 +204,7 @@ function Assert-ImportedContent {
             throw "V11 one-shot Unreal content pipeline did not import or retain passing proof for $step"
         }
     }
-    foreach($step in @('ImportUnityBaselineAssets.py','HarvestOwnedFabAssets.py','BuildProductionWorlds.py','PatchProductionWorldsV11R7.py','PatchProductionWorldsV11R10.py','PatchCubetownFlagshipV12.py','PatchPortfolioWorldsV13.py','RepairCubeTownV17Materials.py','PatchCubeTownV17Diorama.py','ValidateProductionWorlds.py')){
+    foreach($step in @('ImportUnityBaselineAssets.py','HarvestOwnedFabAssets.py','BuildProductionWorlds.py','PatchProductionWorldsV11R7.py','PatchProductionWorldsV11R10.py','PatchCubetownFlagshipV12.py','PatchPortfolioWorldsV13.py','RepairCubeTownV17Materials.py','PatchCubeTownV17Diorama.py','PatchPhantomStrikeV19.py','ValidateProductionWorlds.py')){
         if($OneShotText -notmatch [regex]::Escape("PASS $step")){throw "V11 one-shot Unreal content pipeline did not PASS $step"}
     }
     Write-Host "Four-game content gate PASS: all games received the V13 density/safety layer, and CubeTown retained its V17 diorama layer, rigged characters, PBR surfaces, and persistent worlds." -ForegroundColor Green

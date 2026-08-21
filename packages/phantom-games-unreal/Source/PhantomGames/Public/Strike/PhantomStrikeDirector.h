@@ -20,6 +20,17 @@ enum class EPhantomStrikeEnemyRole : uint8
     Marksman
 };
 
+UENUM(BlueprintType)
+enum class EPhantomStrikeMissionPhase : uint8
+{
+    Insertion,
+    StreetAdvance,
+    Breach,
+    Uplink,
+    Extraction,
+    Complete
+};
+
 UCLASS()
 class PHANTOMGAMES_API APhantomStrikeCharacter : public ACharacter
 {
@@ -204,8 +215,39 @@ private:
     float Damage = 9.0f;
     float StrafeDirection = 1.0f;
     float MuzzleFlashRemaining = 0.0f;
+    float DecisionRemaining = 0.0f;
+    float ExposureRemaining = 0.0f;
+    float FlankWeight = 0.0f;
 
     bool HasLineOfSightTo(AActor* Target) const;
+};
+
+UCLASS()
+class PHANTOMGAMES_API APhantomStrikeSquadmate : public ACharacter
+{
+    GENERATED_BODY()
+
+public:
+    APhantomStrikeSquadmate();
+    virtual void BeginPlay() override;
+    virtual void Tick(float DeltaSeconds) override;
+    void ConfigureSquadmate(int32 NewSquadIndex);
+    bool IsOperational() const { return bOperational; }
+
+private:
+    UPROPERTY()
+    UStaticMeshComponent* VisualModel;
+
+    UPROPERTY()
+    UStaticMeshComponent* WeaponModel;
+
+    UPROPERTY()
+    UPointLightComponent* StatusLight;
+
+    int32 SquadIndex = 0;
+    float FireRemaining = 0.0f;
+    float RepathRemaining = 0.0f;
+    bool bOperational = true;
 };
 
 UCLASS()
@@ -232,8 +274,16 @@ public:
     int32 GetRemainingEnemies() const { return RemainingEnemies; }
     bool IsMissionComplete() const { return bMissionComplete; }
     bool IsExtractionOpen() const { return bExtractionOpen; }
+    bool IsAwaitingUplink() const { return bAwaitingUplink; }
     float GetIntermissionRemaining() const { return IntermissionRemaining; }
     FVector GetExtractionLocation() const { return ExtractionLocation; }
+    FVector GetUplinkLocation() const { return UplinkLocation; }
+    EPhantomStrikeMissionPhase GetMissionPhase() const;
+    FString GetMissionPhaseLabel() const;
+    FString GetObjectiveText() const;
+    float GetMissionProgress() const;
+    int32 GetOperationalSquadmates() const;
+    void TryActivateUplink(APhantomStrikeCharacter* Player);
 
 private:
     int32 Wave = 0;
@@ -242,8 +292,13 @@ private:
     float IntermissionRemaining = 0.0f;
     bool bMissionComplete = false;
     bool bExtractionOpen = false;
-    FVector ExtractionLocation = FVector(9000.0f, 0.0f, 105.0f);
+    bool bAwaitingUplink = false;
+    float MissionElapsed = 0.0f;
+    FVector UplinkLocation = FVector(9000.0f, 0.0f, 105.0f);
+    FVector ExtractionLocation = FVector(14600.0f, -9200.0f, 105.0f);
 
     void BuildCommandComplex();
     void SpawnWave();
+    void SpawnSquad();
+    void OpenExtraction();
 };

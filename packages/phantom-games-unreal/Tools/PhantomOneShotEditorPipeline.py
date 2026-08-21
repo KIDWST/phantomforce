@@ -27,6 +27,8 @@ steps = [
     # V17 is additive after the shared portfolio pass. It uses committed Unreal assets and
     # remains reproducible without the missing external SourceArt directory.
     "PatchCubeTownV17Diorama.py",
+    # V19 adds the Operation Nightglass route, breach, uplink, and extraction detail on top of V18R1.
+    "PatchPhantomStrikeV19.py",
     "ValidateProductionWorlds.py",
 ]
 log=[]

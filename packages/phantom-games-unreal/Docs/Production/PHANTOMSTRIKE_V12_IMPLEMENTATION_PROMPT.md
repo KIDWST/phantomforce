@@ -1,6 +1,6 @@
-# PhantomStrike V12 — Premium Tactical FPS Execution Prompt
+# PhantomStrike V19 — Premium Tactical FPS Execution Prompt
 
-You are the principal Unreal Engine gameplay, rendering, animation, UI, audio, and release engineer responsible for taking **PhantomStrike: Operation Nightglass** from its current V11R6 vertical slice to a polished, original, premium modern military FPS benchmark.
+You are the principal Unreal Engine gameplay, rendering, animation, UI, audio, and release engineer responsible for taking **PhantomStrike: Operation Nightglass** from its verified V18R1 release to a polished, original, premium modern military FPS benchmark.
 
 ## Source of truth
 
@@ -13,7 +13,7 @@ You are the principal Unreal Engine gameplay, rendering, animation, UI, audio, a
 - Interior target: `SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png`
 - HUD/weapon target: `SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png`
 
-Treat V11R6 as the minimum acceptable gameplay floor. Do not remove, replace with mock UI, or regress its real first-person movement, ADS, automatic and semi-automatic fire, reload, weapon switching, melee, grenade, tactical, sprint, crouch, prone, slide, mantle, hitscan damage, headshots, enemy archetypes, waves, objective, extraction, scoring, map, scoreboard, checkpoint recovery, or native standalone launch.
+Treat V18R1 as the minimum acceptable release floor. Preserve its recovered V13–V17 world work, V18 production gates, installed-build compatibility, and real first-person movement, ADS, automatic and semi-automatic fire, reload, weapon switching, melee, grenade, tactical, sprint, crouch, prone, slide, mantle, hitscan damage, headshots, enemy archetypes, mission flow, extraction, scoring, map, scoreboard, checkpoint recovery, and native standalone launch.
 
 ## Product target
 
@@ -83,7 +83,7 @@ Build an original PhantomStrike experience with the responsiveness, spectacle, r
 6. Capture packaged 1920×1080 frames for exterior combat, interior breach, ADS/fire feedback, HUD, and extraction. Compare them side-by-side with all three V12 visual targets.
 7. Run Unreal Insights or equivalent packaged profiling and record evidence. Fix the largest measured frame, render, memory, and hitch problems before polishing smaller ones.
 8. Update automated source/identity tests and add gameplay automation for the new components.
-9. Write `Docs/Production/PHANTOMSTRIKE_V12_PRODUCTION_REPORT.md` with exact commands, build paths, test results, profiling metrics, screenshots, known issues, and a truthful pass/fail disposition.
+9. Write `Docs/Production/PHANTOMSTRIKE_V19_PRODUCTION_REPORT.md` with exact commands, build paths, test results, profiling metrics, screenshots, known issues, and a truthful pass/fail disposition.
 
 ## Visual acceptance gates
 
@@ -98,4 +98,4 @@ Build an original PhantomStrike experience with the responsiveness, spectacle, r
 
 ## Completion rule
 
-Do not report completion because source was edited, assets were imported, or an editor build opened. Completion requires a clean compile and cook, exact PhantomStrike packaged launch, real input and gameplay validation, visual proof against the three targets, performance evidence, updated tests, and the V12 production report. If any gate fails, keep the disposition as **REVIEW CANDIDATE — NOT PROMOTED** and state the exact blocker.
+Do not report completion because source was edited, assets were imported, or an editor build opened. Completion requires a clean compile and cook, exact PhantomStrike packaged launch, real input and gameplay validation, visual proof against the three targets, performance evidence, updated tests, and the V19 production report. If any gate fails, keep the disposition as **REVIEW CANDIDATE — NOT PROMOTED** and state the exact blocker.

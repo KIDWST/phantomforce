@@ -16,6 +16,7 @@ if not level or not actorsys:raise RuntimeError('V18 validation requires editor 
 
 PATCH_TAG='PhantomPortfolioWorldV13'
 V17_TAG='PhantomProductionWorldV17'
+STRIKE_V19_TAG='PhantomStrikeV19'
 V13_MIN={'cubetown':50,'phantom-ages':50,'phantom-legends':70,'phantom-strike':60}
 
 specs={
@@ -78,6 +79,7 @@ for game,(path,start,radius,min_total,min_near,min_real_near) in specs.items():
     player_starts=[a for a in aa if isinstance(a,unreal.PlayerStart)]
     v13=[a for a in production if any(str(t)==PATCH_TAG for t in (a.get_editor_property('tags') or []))]
     v17=[a for a in aa if any(str(t)==V17_TAG for t in (a.get_editor_property('tags') or []))]
+    strike_v19=[a for a in aa if any(str(t)==STRIKE_V19_TAG for t in (a.get_editor_property('tags') or []))]
     near=[a for a in production if dist2d(a,start)<=radius]
     paths=[mesh_path(a) for a in production]
     basic=[(label(a),mesh_path(a)) for a in production if '/Engine/BasicShapes/' in mesh_path(a)]
@@ -96,7 +98,7 @@ for game,(path,start,radius,min_total,min_near,min_real_near) in specs.items():
                 or 'groundpatch' in mesh_lower or 'ground_plane' in mesh_lower):continue
         d=dims(a)
         if max(d)>8000:max_nonterrain.append((label(a),d,mesh))
-    r={'actors':len(production),'player_starts':[label(a) for a in player_starts],'v13_actors':len(v13),'v17_actors':len(v17),'near_start':len(near),'real_near_start':len(real_near),'authored_material_real_near':len(authored_material_near),'basic_shapes':basic[:20],'rejected_aliases':rejected_aliases[:20],'oversize_nonterrain':max_nonterrain[:20]}
+    r={'actors':len(production),'player_starts':[label(a) for a in player_starts],'v13_actors':len(v13),'v17_actors':len(v17),'strike_v19_actors':len(strike_v19),'near_start':len(near),'real_near_start':len(real_near),'authored_material_real_near':len(authored_material_near),'basic_shapes':basic[:20],'rejected_aliases':rejected_aliases[:20],'oversize_nonterrain':max_nonterrain[:20]}
     if not player_starts:fail.append(f'{game}: no PlayerStart; default pawn/HUD cannot initialize reliably')
     if len(production)<min_total:fail.append(f'{game}: actors {len(production)} < {min_total}')
     if len(v13)<V13_MIN[game]:fail.append(f'{game}: V13 portfolio actors {len(v13)} < {V13_MIN[game]}')
@@ -107,6 +109,7 @@ for game,(path,start,radius,min_total,min_near,min_real_near) in specs.items():
     if rejected_aliases:fail.append(f'{game}: persistent world still contains {len(rejected_aliases)} rejected SM_CC0_Tree_B aliases')
     if max_nonterrain:fail.append(f'{game}: {len(max_nonterrain)} non-terrain actors exceed 80m bounds (camera-occlusion risk)')
     if game=='phantom-strike':
+        if len(strike_v19)<110:fail.append(f'phantom-strike: V19 Operation Nightglass actors {len(strike_v19)} < 110')
         blockers=[]
         for a in production:
             l=label(a)

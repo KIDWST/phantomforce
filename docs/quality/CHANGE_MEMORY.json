@@ -2252,6 +2252,51 @@
       ]
     },
     {
+      "id": "phantomstrike-v18-floor-and-v19-operation-nightglass",
+      "status": "active",
+      "title": "PhantomStrike never rolls back below V18R1 and keeps Operation Nightglass",
+      "ownerDecision": "PhantomStrike's verified release floor is V18R1, never the historical V11R6 checkpoint. New work must preserve recovered V13–V17 world/gameplay upgrades and the V18 production gates. The V19 Operation Nightglass candidate adds staged insertion, street advance, command-center breach, a physical uplink interaction, marina extraction, visible friendly operators who cannot complete combat for the player, tactical enemy exposure/flank/reposition decisions, mission-aware HUD state, and an idempotent 122-actor persistent-world pass. Candidate packaging remains isolated and the installed set cannot change without exact PROMOTE authorization after visual, real-input, and performance gates pass.",
+      "requiredPatterns": [
+        {
+          "file": "docs/phantomplay-production/creative-bibles/phantom-strike.json",
+          "pattern": "current_floor\": \"V18R1 verified installed Unreal release[\\s\\S]*next_target\": \"V19 Operation Nightglass",
+          "description": "The creative bible identifies the real installed release floor and current successor."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
+          "pattern": "APhantomStrikeSquadmate[\\s\\S]*suppression/readability only[\\s\\S]*COMMAND CENTER BREACH[\\s\\S]*SECURE THE UPLINK[\\s\\S]*REACH MARINA EXTRACTION",
+          "description": "Friendly presence, player-owned combat, and the complete staged mission remain in the runtime."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
+          "pattern": "FlankWeight[\\s\\S]*ExposureRemaining[\\s\\S]*DecisionRemaining",
+          "description": "Enemy behavior retains explicit tactical exposure, flank, and decision windows."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Tools/PatchPhantomStrikeV19.py",
+          "pattern": "PATCH_TAG = \"PhantomStrikeV19\"[\\s\\S]*remove_previous_pass[\\s\\S]*actor_count",
+          "description": "The V19 persistent-world pass remains idempotent and reports its authored contribution."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Tools/ValidateProductionWorlds.py",
+          "pattern": "STRIKE_V19_TAG='PhantomStrikeV19'[\\s\\S]*V19 Operation Nightglass actors.*< 110",
+          "description": "The production validator rejects a missing or materially reduced V19 world pass."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V19_PRODUCTION_REPORT.md",
+          "pattern": "Release floor: installed V18R1[\\s\\S]*REVIEW CANDIDATE — NOT PROMOTED[\\s\\S]*exact literal `PROMOTE`",
+          "description": "The release record stays truthful about the baseline, evidence, and unpromoted disposition."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "docs/phantomplay-production/creative-bibles/phantom-strike.json",
+          "pattern": "current_floor\": \"V11R6",
+          "description": "The historical V11R6 checkpoint cannot replace the verified V18R1 floor."
+        }
+      ]
+    },
+    {
       "id": "phantombot-interstellar-mission-intelligence-floor",
       "status": "active",
       "title": "PhantomBot keeps its mission constellation, continuity, and live brain mesh",

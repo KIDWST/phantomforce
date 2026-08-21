@@ -8,9 +8,9 @@
 - Visual gate: FAIL — detail-tile ratio 0.535 and lower detail 0.556 remain below the acceptance thresholds despite the strongest frame of the four.
 - Disposition: retain as a V11R6 review candidate; do not promote.
 
-## V12 successor target
+## Current release lineage and V19 successor target
 
-V11R6 remains the newest verified gameplay floor. The next implementation pass is defined by:
+V11R6 is retained only as the historical checkpoint documented above. V18R1 is the verified installed release floor; V19 must preserve the recovered V13–V17 world/gameplay work and V18 gates. The next implementation pass is defined by:
 
 - `PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md`
 - `PHANTOMSTRIKE_V12_VISUAL_TARGET_PROMPTS.md`
@@ -18,4 +18,4 @@ V11R6 remains the newest verified gameplay floor. The next implementation pass i
 - `SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png`
 - `SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png`
 
-These references do not promote the build by themselves. V12 must still compile, package, pass real-input gameplay checks, meet the visual targets in captured gameplay, and provide measured performance evidence.
+These references do not promote the build by themselves. The implemented V19R1 candidate compiles, cooks, packages, and passes a hidden startup smoke test; real-input visual acceptance and measured performance evidence remain mandatory before promotion. See `PHANTOMSTRIKE_V19_PRODUCTION_REPORT.md`.

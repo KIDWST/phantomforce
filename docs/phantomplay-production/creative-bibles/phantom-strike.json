@@ -10,8 +10,8 @@
     "Standalone resizable native-window play"
   ],
   "camera_contract": "First-person only during gameplay.",
-  "current_floor": "V11R6 playable Unreal vertical slice",
-  "next_target": "V12 premium tactical FPS execution",
+  "current_floor": "V18R1 verified installed Unreal release",
+  "next_target": "V19 Operation Nightglass premium tactical FPS candidate",
   "visual_targets": [
     "packages/phantom-games-unreal/SourceArt/VisualTargets/phantom-strike-v12-exterior-gameplay-target.png",
     "packages/phantom-games-unreal/SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png",
@@ -23,5 +23,5 @@
     "Phantom Ages fixed-lane controller",
     "Phantom Legends RTS selection camera"
   ],
-  "production_status": "V11R6 is the verified Unreal gameplay floor. V12 visual targets and a no-fabricated-completion execution prompt now define the required authored environment, gunfeel, animation, AI, HUD, audio, packaged proof, and performance upgrade."
+  "production_status": "V18R1 is the verified installed Unreal release floor. The V19 Operation Nightglass pass adds staged mission flow, friendly squad presence, tactical enemy movement, upgraded HUD/lighting, an additive persistent-world route, and strict candidate-only proof requirements."
 }

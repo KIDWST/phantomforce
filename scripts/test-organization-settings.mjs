@@ -23,8 +23,8 @@ assert.match(settings, /id: "plan", label: "Plan & access", category: "Workspace
   "Plan testing and entitlement restrictions must live under Settings, not Clients.");
 assert.match(settings, /id: "workspace", label: "Workspace Studio", category: "Workspace"/u,
   "Workspace Studio must remain in the same Settings category.");
-assert.match(settings, /id: "bridge", label: "ChatGPT Bridge", category: "AI Brain"/u,
-  "ChatGPT Bridge setup belongs in AI Brain settings.");
+assert.match(settings, /id: "bridge", label: "Bridges", category: "Connections"/u,
+  "Subscription-backed AI and creative bridges must keep their dedicated Connections section.");
 assert.match(settings, /\/phantom-ai\/agent-assist\/status/u,
   "Settings must read the universal agent assist bridge status.");
 assert.doesNotMatch(settings, /OPENAI_API_KEY|api.?key input|password input/iu,
@@ -35,8 +35,8 @@ assert.match(settings, /data-chatgpt-account="logout"[\s\S]*Log out of ChatGPT/u
   "ChatGPT Bridge settings must offer a direct logout action.");
 assert.match(settings, /window\.PhantomBotDesktop\?\.openExternal[\s\S]*window\.open/u,
   "ChatGPT account controls must work in both PhantomBot desktop and browser settings.");
-assert.match(settings, /data-agent-assist-refresh/u,
-  "Settings must let the owner refresh bridge status.");
+assert.match(settings, /data-bridge-refresh[\s\S]*Refresh all/u,
+  "Settings must let the owner refresh both bridge statuses together.");
 assert.match(settings, /renderOrganizationPanel\(organizationMount, opts\)/u,
   "Settings must mount the real Organization panel.");
 assert.match(settings, /title: "Organization & access"/u,
