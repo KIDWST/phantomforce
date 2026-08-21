@@ -11,6 +11,9 @@ class UCameraComponent;
 class USceneComponent;
 class USpringArmComponent;
 class UStaticMeshComponent;
+class USkeletalMeshComponent;
+class UAnimSequence;
+class UPointLightComponent;
 class AStaticMeshActor;
 class ADirectionalLight;
 class APointLight;
@@ -287,9 +290,22 @@ private:
     UPROPERTY()
     UStaticMeshComponent* VisualModel;
 
+    UPROPERTY()
+    USkeletalMeshComponent* FriendSkeletalVisual;
+
+    UPROPERTY()
+    UAnimSequence* FriendIdleAnimation;
+
+    UPROPERTY()
+    UAnimSequence* FriendWalkAnimation;
+
+    UPROPERTY()
+    UAnimSequence* ActiveFriendAnimation;
+
     ECubetownFriend FriendType = ECubetownFriend::Mira;
     FVector HomeLocation = FVector::ZeroVector;
     float WanderPhase = 0.0f;
+    bool bProductionFriendVisual = false;
 };
 
 UCLASS()
@@ -335,6 +351,15 @@ private:
     UStaticMeshComponent* CloakMesh;
 
     UPROPERTY()
+    UStaticMeshComponent* MakerSatchel;
+
+    UPROPERTY()
+    UStaticMeshComponent* MakerBelt;
+
+    UPROPERTY()
+    UStaticMeshComponent* RuneGauntlet;
+
+    UPROPERTY()
     UStaticMeshComponent* ShoulderGem;
 
     UPROPERTY()
@@ -361,6 +386,38 @@ private:
     UPROPERTY()
     UStaticMeshComponent* VisualModel;
 
+    // V19 Maker identity: the production modular hero is animated independently from the
+    // guaranteed static-mesh fallback and carries a readable cyan echo signature in motion.
+    UPROPERTY()
+    UStaticMeshComponent* EchoOrbitA;
+
+    UPROPERTY()
+    UStaticMeshComponent* EchoOrbitB;
+
+    UPROPERTY()
+    UStaticMeshComponent* EchoOrbitC;
+
+    UPROPERTY()
+    UPointLightComponent* MakerEchoLight;
+
+    UPROPERTY()
+    UAnimSequence* MakerIdleAnimation;
+
+    UPROPERTY()
+    UAnimSequence* MakerWalkAnimation;
+
+    UPROPERTY()
+    UAnimSequence* MakerRunAnimation;
+
+    UPROPERTY()
+    UAnimSequence* MakerAttackAnimation;
+
+    UPROPERTY()
+    UAnimSequence* MakerHitAnimation;
+
+    UPROPERTY()
+    UAnimSequence* ActiveMakerAnimation;
+
     float Health = 120.0f;
     float AttackRemaining = 0.0f;
     float DashRemaining = 0.0f;
@@ -372,6 +429,7 @@ private:
     bool bGuarding = false;
     bool bSprinting = false;
     bool bCrouchedByInput = false;
+    bool bProductionMakerVisual = false;
     int32 ComboStep = 0;
     TWeakObjectPtr<ACubetownEnemy> LockedTarget;
 
@@ -419,6 +477,8 @@ private:
     void ToggleCrouch();
     void RecenterCamera();
     void JumpOrClimb();
+    void UpdateMakerPresentation(float DeltaSeconds);
+    void PlayMakerAnimation(UAnimSequence* Animation, bool bLoop, float PlayRate);
 };
 
 UCLASS()
@@ -560,6 +620,7 @@ private:
     void BuildDreamWorld();
     void SpawnDreamTree(const FString& Name, const FVector& Location, float Scale, int32 PaletteVariant, bool bCollision = true);
     void SpawnDreamWorldDetails();
+    void SpawnMakerArrivalTrail();
     void SpawnMemorycraftTrials();
     AStaticMeshActor* SpawnCreationProp(ECubetownEchoType Type, const FVector& Location, const FRotator& Rotation, bool bWorldSource);
     void UpdateWeave(float DeltaSeconds);

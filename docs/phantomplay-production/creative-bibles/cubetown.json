@@ -1,28 +1,50 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "game_id": "cubetown",
   "title": "Cubetown: Echoes of the Maker",
   "production_status": "Unreal Engine 5 native vertical slice",
-  "core_fantasy": "A colorful block world where every obstacle can become a building material and defeated creatures become reusable echoes.",
+  "current_floor": "V18R1 verified installed Unreal release; preserve its recovered V13-V17 world, gameplay, material, camera, and safety upgrades",
+  "next_target": "V19 Maker's Journey review candidate — not promoted",
+  "core_fantasy": "A handcrafted storybook adventure where the Maker remembers creatures and world objects as living echoes, then combines them to fight, traverse, solve, and build a home in an impossible seasonal valley.",
   "design_pillars": [
-    "Voxel mining and placement must be immediate, readable, and useful in exploration or combat.",
-    "Creature echoes are learned abilities and visible companions, not passive inventory text.",
-    "Shrines create an authored adventure spine inside a freely rebuildable world.",
-    "Combat, traversal, building, and puzzle solving should combine rather than live in separate modes."
+    "The Maker is a profession-readable adventure hero with a crimson mantle, teal field gear, a cyan echo rod, and complete locomotion/combat animation states — never a default pawn or permanently idling mesh.",
+    "Creature and object echoes are visible companions and physical tools, not passive inventory text.",
+    "Heartstone village, shrines, friendships, the Guardian, and sky-island landmarks create an authored adventure spine inside a freely explored world.",
+    "Combat, traversal, Memorycraft, Weave, Build Mode, puzzles, and town life combine rather than live in disconnected modes.",
+    "Every opening frame must show a readable path, crimson canopy, turquoise water or magic, warm architecture, friends or creatures, and a destination across foreground, midground, and background."
   ],
+  "visual_identity": {
+    "hero": "The Maker — compact athletic adventurer, asymmetric crimson hooded mantle, deep-teal layered tunic, cream trousers, rugged boots, brass and leather maker kit, rune gauntlet, cyan crystal echo rod, lavender charm.",
+    "world": "Warm storybook PBR with signature crimson canopy, teal ecology, cream and lavender stone, turquoise water and magic, warm timber, brass craft details, and composed diorama depth.",
+    "hud": "Minimal near-black glass with cyan and crimson accents: life/stamina lower left, three Maker tools lower center, objective and distance upper right. No generic sci-fi shell and no purple-blue gradient UI.",
+    "visual_targets": [
+      "packages/phantom-games-unreal/SourceArt/VisualTargets/cubetown-v19-maker-character-reference.png",
+      "packages/phantom-games-unreal/SourceArt/VisualTargets/cubetown-v19-heartstone-gameplay-target.png"
+    ]
+  },
   "forbidden_crossovers": [
+    "Do not copy or imitate Nintendo, Zelda, Minecraft, Fortnite, Genshin, Pixar, or any other existing franchise.",
     "Do not import Phantom Ages lane-battle controls or age progression.",
     "Do not import Phantom Legends RTS selection or settlement economy.",
+    "Do not resurrect voxel block placement as the primary loop; architecture uses Build Mode and world manipulation uses Memorycraft.",
     "Do not replace the existing multi-engine Cubetown web source; keep it as compatibility reference."
   ],
   "controls": {
-    "move": "WASD",
-    "mine_or_attack": "left mouse",
-    "place_block": "right mouse",
-    "cycle_block": "Q",
-    "cycle_echo": "R",
-    "summon_echo": "E",
+    "move": "WASD / arrows",
+    "camera": "mouse",
+    "combo_attack": "left mouse",
+    "guard_or_cancel": "right mouse",
+    "sprint": "left shift",
+    "vault_or_jump": "space",
+    "dash": "left control",
+    "lock_on": "middle mouse",
+    "create_memory": "hold Q",
+    "remember_world_example": "C",
+    "weave_memory": "hold X",
+    "ride_weave": "G",
+    "build_mode": "B",
     "interact": "F",
-    "dash": "Space"
-  }
+    "inventory_map_journal": "Tab / M / J"
+  },
+  "release_policy": "All V19 work packages to an isolated candidate. The installed build cannot change without exact literal PROMOTE authorization after compile, cook, visual, real-input, and performance gates pass."
 }

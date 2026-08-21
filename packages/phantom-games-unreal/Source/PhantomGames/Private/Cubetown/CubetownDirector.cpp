@@ -17,6 +17,7 @@
 #include "Engine/World.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PointLight.h"
+#include "Animation/AnimSingleNodeInstance.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "EngineUtils.h"
@@ -715,6 +716,7 @@ void ACubetownEcho::Configure(ECubetownEchoType NewType)
         BodyMesh->SetRelativeScale3D(FVector(0.62f));
         ApplyColor(BodyMesh, FLinearColor(0.5f, 0.38f, 0.24f));
         ApplyColor(SymbolMesh, FLinearColor(1.0f, 0.52f, 0.08f));
+        ApplyColor(VisualModel, FLinearColor(0.52f, 0.34f, 0.18f));
     }
     else if (EchoType == ECubetownEchoType::Bloom)
     {
@@ -723,6 +725,7 @@ void ACubetownEcho::Configure(ECubetownEchoType NewType)
         AttackRange = 360.0f;
         ApplyColor(BodyMesh, FLinearColor(0.18f, 0.82f, 0.4f));
         ApplyColor(SymbolMesh, FLinearColor(0.8f, 1.0f, 0.2f));
+        ApplyColor(VisualModel, FLinearColor(0.18f, 0.78f, 0.36f));
     }
     else
     {
@@ -731,6 +734,7 @@ void ACubetownEcho::Configure(ECubetownEchoType NewType)
         AttackRange = 160.0f;
         ApplyColor(BodyMesh, FLinearColor(0.12f, 0.72f, 1.0f));
         ApplyColor(SymbolMesh, FLinearColor(0.72f, 0.18f, 1.0f));
+        ApplyColor(VisualModel, FLinearColor(0.08f, 0.82f, 0.78f));
     }
 }
 
@@ -751,6 +755,12 @@ void ACubetownEcho::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     AttackRemaining = FMath::Max(0.0f, AttackRemaining - DeltaSeconds);
     SymbolMesh->AddLocalRotation(FRotator(0.0f, DeltaSeconds * 120.0f, 0.0f));
+    if (VisualModel && VisualModel->IsVisible())
+    {
+        const float Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+        VisualModel->SetRelativeLocation(FVector(0.0f, 0.0f, -34.0f + FMath::Sin(Time * 6.2f + GetUniqueID() * 0.17f) * 3.4f));
+        VisualModel->SetRelativeRotation(FRotator(FMath::Sin(Time * 3.1f) * 2.2f, 0.0f, FMath::Sin(Time * 4.7f) * 3.5f));
+    }
     ACubetownHero* Hero = Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this, 0));
     if (!Hero) return;
     ACubetownEnemy* Nearest = nullptr;
@@ -855,6 +865,11 @@ ACubetownVillager::ACubetownVillager()
     VisualModel->SetupAttachment(Root);
     VisualModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     VisualModel->SetVisibility(false);
+
+    FriendSkeletalVisual = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FriendProductionVisual"));
+    FriendSkeletalVisual->SetupAttachment(Root);
+    FriendSkeletalVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    FriendSkeletalVisual->SetVisibility(false, true);
 }
 
 void ACubetownVillager::Configure(ECubetownFriend NewFriend, const FVector& NewHome)
@@ -891,6 +906,42 @@ void ACubetownVillager::Configure(ECubetownFriend NewFriend, const FVector& NewH
         BodyMesh->SetVisibility(false); HeadMesh->SetVisibility(false); AccentMesh->SetVisibility(false);
         LeftArm->SetVisibility(false); RightArm->SetVisibility(false); LeftLeg->SetVisibility(false); RightLeg->SetVisibility(false);
         EyeLeft->SetVisibility(false); EyeRight->SetVisibility(false);
+    }
+
+    const TCHAR* FriendMeshPath = FriendType == ECubetownFriend::Mira
+        ? TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue")
+        : (FriendType == ECubetownFriend::Rowan
+            ? TEXT("/Game/Phantom/Characters/Production/SK_Barbarian.SK_Barbarian")
+            : TEXT("/Game/Phantom/Characters/Production/SK_Mage.SK_Mage"));
+    const TCHAR* FriendIdlePath = FriendType == ECubetownFriend::Mira
+        ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Idle.A_Rogue_Idle")
+        : (FriendType == ECubetownFriend::Rowan
+            ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Barbarian_Idle.A_Barbarian_Idle")
+            : TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Idle.A_Mage_Idle"));
+    const TCHAR* FriendWalkPath = FriendType == ECubetownFriend::Mira
+        ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Walk.A_Rogue_Walk")
+        : (FriendType == ECubetownFriend::Rowan
+            ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Barbarian_Walk.A_Barbarian_Walk")
+            : TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Walk.A_Mage_Walk"));
+    bProductionFriendVisual = PhantomModularCharacter::Configure(
+        this,
+        FriendSkeletalVisual,
+        Root,
+        FriendMeshPath,
+        FriendIdlePath,
+        172.0f,
+        0.0f,
+        -90.0f
+    );
+    if (bProductionFriendVisual)
+    {
+        VisualModel->SetVisibility(false);
+        BodyMesh->SetVisibility(false); HeadMesh->SetVisibility(false); AccentMesh->SetVisibility(false);
+        LeftArm->SetVisibility(false); RightArm->SetVisibility(false); LeftLeg->SetVisibility(false); RightLeg->SetVisibility(false);
+        EyeLeft->SetVisibility(false); EyeRight->SetVisibility(false);
+        FriendIdleAnimation = LoadObject<UAnimSequence>(nullptr, FriendIdlePath);
+        FriendWalkAnimation = LoadObject<UAnimSequence>(nullptr, FriendWalkPath);
+        ActiveFriendAnimation = FriendIdleAnimation;
     }
     ApplyColor(BodyMesh, Body);
     ApplyColor(HeadMesh, FLinearColor(0.82f, 0.65f, 0.5f));
@@ -930,13 +981,28 @@ void ACubetownVillager::Tick(float DeltaSeconds)
     SetActorLocation(Next);
     const FVector Move = Next - Before;
     if (Move.SizeSquared2D() > 1.0f) SetActorRotation(FMath::RInterpTo(GetActorRotation(), Move.Rotation(), DeltaSeconds, 4.0f));
+    if (bProductionFriendVisual && FriendSkeletalVisual)
+    {
+        UAnimSequence* Desired = Move.SizeSquared2D() > 0.08f ? FriendWalkAnimation : FriendIdleAnimation;
+        if (Desired && Desired != ActiveFriendAnimation)
+        {
+            FriendSkeletalVisual->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+            FriendSkeletalVisual->PlayAnimation(Desired, true);
+            ActiveFriendAnimation = Desired;
+        }
+        if (UAnimSingleNodeInstance* SingleNode = FriendSkeletalVisual->GetSingleNodeInstance())
+            SingleNode->SetPlayRate(Move.SizeSquared2D() > 0.08f ? 0.84f : 1.0f);
+    }
     const float Bob = FMath::Sin(GetWorld()->GetTimeSeconds() * 3.0f + WanderPhase) * 2.5f;
     AccentMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 142.0f + Bob));
-    const float Step = FMath::Sin(GetWorld()->GetTimeSeconds() * 5.5f + WanderPhase) * 15.0f;
-    LeftArm->SetRelativeRotation(FRotator(Step, 0.0f, 0.0f));
-    RightArm->SetRelativeRotation(FRotator(-Step, 0.0f, 0.0f));
-    LeftLeg->SetRelativeRotation(FRotator(-Step * 0.65f, 0.0f, 0.0f));
-    RightLeg->SetRelativeRotation(FRotator(Step * 0.65f, 0.0f, 0.0f));
+    if (!bProductionFriendVisual)
+    {
+        const float Step = FMath::Sin(GetWorld()->GetTimeSeconds() * 5.5f + WanderPhase) * 15.0f;
+        LeftArm->SetRelativeRotation(FRotator(Step, 0.0f, 0.0f));
+        RightArm->SetRelativeRotation(FRotator(-Step, 0.0f, 0.0f));
+        LeftLeg->SetRelativeRotation(FRotator(-Step * 0.65f, 0.0f, 0.0f));
+        RightLeg->SetRelativeRotation(FRotator(Step * 0.65f, 0.0f, 0.0f));
+    }
 }
 
 ACubetownHero::ACubetownHero()
@@ -1026,6 +1092,31 @@ ACubetownHero::ACubetownHero()
     CloakMesh->SetRelativeScale3D(V8HeroCloak ? FVector(1.0f) : FVector(0.34f, 0.38f, 0.72f));
     CloakMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
+    // Costume layers keep the production body from reading as a stock mannequin. They carry the
+    // generated Maker target's crimson mantle, brass utility belt, satchel and rune-gauntlet silhouette.
+    MakerSatchel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerSatchel"));
+    MakerSatchel->SetupAttachment(GetCapsuleComponent());
+    MakerSatchel->SetStaticMesh(Cube);
+    MakerSatchel->SetRelativeLocation(FVector(-7.0f, -31.0f, -9.0f));
+    MakerSatchel->SetRelativeRotation(FRotator(0.0f, -12.0f, 8.0f));
+    MakerSatchel->SetRelativeScale3D(FVector(0.25f, 0.12f, 0.29f));
+    MakerSatchel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+    MakerBelt = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerUtilityBelt"));
+    MakerBelt->SetupAttachment(GetCapsuleComponent());
+    MakerBelt->SetStaticMesh(Cylinder);
+    MakerBelt->SetRelativeLocation(FVector(0.0f, 0.0f, -18.0f));
+    MakerBelt->SetRelativeScale3D(FVector(0.36f, 0.36f, 0.07f));
+    MakerBelt->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+    RuneGauntlet = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerRuneGauntlet"));
+    RuneGauntlet->SetupAttachment(GetCapsuleComponent());
+    RuneGauntlet->SetStaticMesh(Cylinder);
+    RuneGauntlet->SetRelativeLocation(FVector(10.0f, 31.0f, -4.0f));
+    RuneGauntlet->SetRelativeRotation(FRotator(90.0f, 0.0f, 0.0f));
+    RuneGauntlet->SetRelativeScale3D(FVector(0.13f, 0.13f, 0.22f));
+    RuneGauntlet->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
     ShoulderGem = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ShoulderGem"));
     ShoulderGem->SetupAttachment(GetCapsuleComponent());
     ShoulderGem->SetStaticMesh(Sphere);
@@ -1081,6 +1172,31 @@ ACubetownHero::ACubetownHero()
     VisualModel->SetupAttachment(GetCapsuleComponent());
     VisualModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     VisualModel->SetVisibility(false);
+
+    // V19 Maker signature. These orbiting crystal sparks and the local cyan light make the
+    // protagonist identifiable from the high adventure camera even before the player moves.
+    EchoOrbitA = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerEchoOrbitA"));
+    EchoOrbitA->SetupAttachment(GetCapsuleComponent());
+    EchoOrbitA->SetStaticMesh(Sphere);
+    EchoOrbitA->SetRelativeScale3D(FVector(0.065f));
+    EchoOrbitA->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    EchoOrbitB = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerEchoOrbitB"));
+    EchoOrbitB->SetupAttachment(GetCapsuleComponent());
+    EchoOrbitB->SetStaticMesh(Sphere);
+    EchoOrbitB->SetRelativeScale3D(FVector(0.050f));
+    EchoOrbitB->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    EchoOrbitC = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerEchoOrbitC"));
+    EchoOrbitC->SetupAttachment(GetCapsuleComponent());
+    EchoOrbitC->SetStaticMesh(Sphere);
+    EchoOrbitC->SetRelativeScale3D(FVector(0.040f));
+    EchoOrbitC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    MakerEchoLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("MakerEchoLight"));
+    MakerEchoLight->SetupAttachment(GetCapsuleComponent());
+    MakerEchoLight->SetRelativeLocation(FVector(28.0f, 18.0f, 30.0f));
+    MakerEchoLight->SetLightColor(FLinearColor(0.10f, 0.92f, 0.88f));
+    MakerEchoLight->SetIntensity(850.0f);
+    MakerEchoLight->SetAttenuationRadius(260.0f);
+    MakerEchoLight->SetCastShadows(false);
 }
 
 void ACubetownHero::BeginPlay()
@@ -1114,18 +1230,34 @@ void ACubetownHero::BeginPlay()
         FirstPC->SetControlRotation(FRotator(-42.0f, 90.0f, 0.0f));
     const bool bProductionHero = ConfigureProductionSkeletalCharacter(
         this,
-        TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue"),
-        TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Idle.A_Rogue_Idle"),
+        TEXT("/Game/Phantom/Characters/Production/SK_Mage.SK_Mage"),
+        TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Idle.A_Mage_Idle"),
         188.0f,
         -90.0f
     );
+    bProductionMakerVisual = bProductionHero;
     if (bProductionHero)
     {
         BodyMesh->SetVisibility(false); HeadMesh->SetVisibility(false); CapMesh->SetVisibility(false);
-        WandMesh->SetVisibility(false); CloakMesh->SetVisibility(false); ShoulderGem->SetVisibility(false);
-        WandCore->SetVisibility(false); LeftArm->SetVisibility(false); RightArm->SetVisibility(false);
+        CloakMesh->SetVisibility(true);
+        LeftArm->SetVisibility(false); RightArm->SetVisibility(false);
         LeftLeg->SetVisibility(false); RightLeg->SetVisibility(false); EyeLeft->SetVisibility(false); EyeRight->SetVisibility(false);
         VisualModel->SetVisibility(false);
+
+        // Keep the hand-authored echo rod and crystal accents visible over the modular Mage body.
+        // The rod is the Maker's profession-readable silhouette and is animated below with each verb.
+        WandMesh->SetVisibility(true);
+        WandCore->SetVisibility(true);
+        ShoulderGem->SetVisibility(true);
+        MakerSatchel->SetVisibility(true);
+        MakerBelt->SetVisibility(true);
+        RuneGauntlet->SetVisibility(true);
+        MakerIdleAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Idle.A_Mage_Idle"));
+        MakerWalkAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Walk.A_Mage_Walk"));
+        MakerRunAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Run.A_Mage_Run"));
+        MakerAttackAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Attack.A_Mage_Attack"));
+        MakerHitAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Hit.A_Mage_Hit"));
+        ActiveMakerAnimation = MakerIdleAnimation;
     }
 
     // V7: arbitrary CC0 FBX characters imported as static meshes produced sideways/flattened heroes.
@@ -1144,23 +1276,30 @@ void ACubetownHero::BeginPlay()
         VisualModel->SetRelativeRotation(FRotator::ZeroRotator);
         VisualModel->SetVisibility(true);
         BodyMesh->SetVisibility(false); HeadMesh->SetVisibility(false); CapMesh->SetVisibility(false); WandMesh->SetVisibility(false);
-        CloakMesh->SetVisibility(false); ShoulderGem->SetVisibility(false); WandCore->SetVisibility(false);
+        CloakMesh->SetVisibility(false); MakerSatchel->SetVisibility(false); MakerBelt->SetVisibility(false);
+        RuneGauntlet->SetVisibility(false); ShoulderGem->SetVisibility(false); WandCore->SetVisibility(false);
         LeftArm->SetVisibility(false); RightArm->SetVisibility(false); LeftLeg->SetVisibility(false); RightLeg->SetVisibility(false);
         EyeLeft->SetVisibility(false); EyeRight->SetVisibility(false);
     }
-    ApplyColor(BodyMesh, FLinearColor(0.16f, 0.54f, 0.9f));
+    ApplyColor(BodyMesh, FLinearColor(0.03f, 0.34f, 0.32f));
     ApplyColor(HeadMesh, FLinearColor(0.76f, 0.6f, 0.46f));
-    ApplyColor(CapMesh, FLinearColor(0.54f, 0.13f, 0.9f));
-    ApplyColor(WandMesh, FLinearColor(0.16f, 0.92f, 1.0f));
-    ApplyColor(CloakMesh, FLinearColor(0.12f, 0.055f, 0.28f));
-    ApplyColor(ShoulderGem, FLinearColor(0.32f, 0.92f, 1.0f));
-    ApplyColor(WandCore, FLinearColor(0.55f, 0.16f, 1.0f));
-    ApplyColor(LeftArm, FLinearColor(0.20f, 0.64f, 0.96f));
-    ApplyColor(RightArm, FLinearColor(0.20f, 0.64f, 0.96f));
-    ApplyColor(LeftLeg, FLinearColor(0.09f, 0.13f, 0.28f));
-    ApplyColor(RightLeg, FLinearColor(0.09f, 0.13f, 0.28f));
+    ApplyColor(CapMesh, FLinearColor(0.58f, 0.055f, 0.09f));
+    ApplyColor(WandMesh, FLinearColor(0.20f, 0.12f, 0.055f));
+    ApplyColor(CloakMesh, FLinearColor(0.58f, 0.055f, 0.09f));
+    ApplyColor(MakerSatchel, FLinearColor(0.20f, 0.105f, 0.045f));
+    ApplyColor(MakerBelt, FLinearColor(0.72f, 0.43f, 0.12f));
+    ApplyColor(RuneGauntlet, FLinearColor(0.18f, 0.48f, 0.44f));
+    ApplyColor(ShoulderGem, FLinearColor(0.16f, 0.96f, 0.90f));
+    ApplyColor(WandCore, FLinearColor(0.16f, 0.96f, 0.90f));
+    ApplyColor(LeftArm, FLinearColor(0.03f, 0.34f, 0.32f));
+    ApplyColor(RightArm, FLinearColor(0.03f, 0.34f, 0.32f));
+    ApplyColor(LeftLeg, FLinearColor(0.72f, 0.64f, 0.48f));
+    ApplyColor(RightLeg, FLinearColor(0.72f, 0.64f, 0.48f));
     ApplyColor(EyeLeft, FLinearColor(0.025f, 0.035f, 0.05f));
     ApplyColor(EyeRight, FLinearColor(0.025f, 0.035f, 0.05f));
+    ApplyColor(EchoOrbitA, FLinearColor(0.10f, 0.96f, 0.90f));
+    ApplyColor(EchoOrbitB, FLinearColor(0.96f, 0.22f, 0.30f));
+    ApplyColor(EchoOrbitC, FLinearColor(0.72f, 0.55f, 0.92f));
     if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
     {
         PlayerController->SetControlRotation(FRotator(-42.0f, 90.0f, 0.0f));
@@ -1252,17 +1391,104 @@ void ACubetownHero::Tick(float DeltaSeconds)
         const float Bob = Speed > 40.0f ? FMath::Sin(GetWorld()->GetTimeSeconds() * 10.0f) * 0.9f : 0.0f;
         VisualModel->SetRelativeLocation(FVector(0.0f,0.0f,-72.0f + Bob));
     }
-    WandCore->AddLocalRotation(FRotator(0.0f, DeltaSeconds * 160.0f, 0.0f));
-    ShoulderGem->SetRelativeScale3D(FVector(0.14f + FMath::Sin(GetWorld()->GetTimeSeconds() * 4.0f) * 0.018f));
-    const float Swing = AttackRemaining > 0.0f ? FMath::Sin(AttackRemaining * 18.0f) * 34.0f : 0.0f;
-    WandMesh->SetRelativeRotation(FRotator(0.0f, 0.0f, -28.0f + Swing));
+    UpdateMakerPresentation(DeltaSeconds);
+}
+
+void ACubetownHero::PlayMakerAnimation(UAnimSequence* Animation, bool bLoop, float PlayRate)
+{
+    if (!bProductionMakerVisual || !Animation || !GetMesh()) return;
+    if (ActiveMakerAnimation != Animation)
+    {
+        GetMesh()->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+        GetMesh()->PlayAnimation(Animation, bLoop);
+        ActiveMakerAnimation = Animation;
+    }
+    if (UAnimSingleNodeInstance* SingleNode = GetMesh()->GetSingleNodeInstance())
+        SingleNode->SetPlayRate(FMath::Clamp(PlayRate, 0.35f, 1.75f));
+}
+
+void ACubetownHero::UpdateMakerPresentation(float DeltaSeconds)
+{
+    const float Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
     const float Speed = GetVelocity().Size2D();
-    const float WalkPhase = GetWorld()->GetTimeSeconds() * (Speed > 40.0f ? 9.0f : 2.0f);
-    const float LimbSwing = Speed > 40.0f ? FMath::Sin(WalkPhase) * 22.0f : 0.0f;
-    LeftArm->SetRelativeRotation(FRotator(LimbSwing, 0.0f, 0.0f));
-    RightArm->SetRelativeRotation(FRotator(-LimbSwing - Swing * 0.22f, 0.0f, 0.0f));
-    LeftLeg->SetRelativeRotation(FRotator(-LimbSwing * 0.72f, 0.0f, 0.0f));
-    RightLeg->SetRelativeRotation(FRotator(LimbSwing * 0.72f, 0.0f, 0.0f));
+    const bool bAirborne = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
+
+    if (bProductionMakerVisual)
+    {
+        UAnimSequence* Desired = MakerIdleAnimation;
+        bool bLoop = true;
+        float Rate = 1.0f;
+        if (DamageFlash > 0.72f && MakerHitAnimation)
+        {
+            Desired = MakerHitAnimation;
+            bLoop = false;
+            Rate = 1.10f;
+        }
+        else if (AttackRemaining > 0.0f && MakerAttackAnimation)
+        {
+            Desired = MakerAttackAnimation;
+            bLoop = false;
+            Rate = ComboStep == 3 ? 0.92f : 1.28f;
+        }
+        else if (bAirborne && MakerRunAnimation)
+        {
+            Desired = MakerRunAnimation;
+            Rate = 0.70f;
+        }
+        else if ((bSprinting || DashRemaining > 0.0f || Speed > 610.0f) && MakerRunAnimation)
+        {
+            Desired = MakerRunAnimation;
+            Rate = DashRemaining > 0.0f ? 1.48f : FMath::Clamp(Speed / 620.0f, 1.02f, 1.34f);
+        }
+        else if (Speed > 35.0f && MakerWalkAnimation)
+        {
+            Desired = MakerWalkAnimation;
+            Rate = FMath::Clamp(Speed / 430.0f, 0.72f, 1.24f);
+        }
+        PlayMakerAnimation(Desired, bLoop, Rate);
+    }
+
+    // The crystal train and rod intentionally react to every core verb. This makes running,
+    // guarding, dashing and staff combat readable even from the elevated diorama framing.
+    const float Activity = FMath::Clamp(Speed / 620.0f, 0.0f, 1.0f);
+    const float OrbitRate = 1.65f + Activity * 2.35f;
+    const float OrbitRadius = 38.0f + Activity * 11.0f;
+    const float OrbitZ = 17.0f + FMath::Sin(Time * 2.2f) * 8.0f;
+    EchoOrbitA->SetRelativeLocation(FVector(FMath::Cos(Time * OrbitRate) * OrbitRadius, FMath::Sin(Time * OrbitRate) * OrbitRadius, OrbitZ));
+    EchoOrbitB->SetRelativeLocation(FVector(FMath::Cos(Time * OrbitRate + 2.094f) * OrbitRadius, FMath::Sin(Time * OrbitRate + 2.094f) * OrbitRadius, OrbitZ + 9.0f));
+    EchoOrbitC->SetRelativeLocation(FVector(FMath::Cos(Time * OrbitRate + 4.188f) * OrbitRadius, FMath::Sin(Time * OrbitRate + 4.188f) * OrbitRadius, OrbitZ - 7.0f));
+    EchoOrbitA->AddLocalRotation(FRotator(DeltaSeconds * 140.0f, DeltaSeconds * 210.0f, 0.0f));
+    EchoOrbitB->AddLocalRotation(FRotator(0.0f, DeltaSeconds * -180.0f, DeltaSeconds * 120.0f));
+    EchoOrbitC->AddLocalRotation(FRotator(DeltaSeconds * -160.0f, 0.0f, DeltaSeconds * 190.0f));
+
+    const float Swing = AttackRemaining > 0.0f ? FMath::Sin(AttackRemaining * 18.0f) * 48.0f : 0.0f;
+    const float SprintLean = (bSprinting || DashRemaining > 0.0f) ? -18.0f : 0.0f;
+    const float GuardRaise = bGuarding ? 34.0f : 0.0f;
+    const float RodBob = Speed > 35.0f ? FMath::Sin(Time * 10.0f) * 3.2f : FMath::Sin(Time * 2.6f) * 1.2f;
+    WandMesh->SetRelativeLocation(FVector(30.0f, bGuarding ? 10.0f : 24.0f, -3.0f + RodBob + GuardRaise * 0.22f));
+    WandMesh->SetRelativeRotation(FRotator(SprintLean, bGuarding ? -16.0f : 0.0f, -28.0f + Swing + GuardRaise));
+    WandCore->SetRelativeLocation(WandMesh->GetRelativeLocation() + FVector(20.0f, bGuarding ? 1.0f : -24.0f, 26.0f));
+    WandCore->AddLocalRotation(FRotator(0.0f, DeltaSeconds * (190.0f + Activity * 160.0f), 0.0f));
+    ShoulderGem->SetRelativeScale3D(FVector(0.14f + FMath::Sin(Time * 4.0f) * 0.018f));
+    const float CostumeStride = FMath::Sin(Time * (3.0f + Activity * 7.0f));
+    CloakMesh->SetRelativeLocation(FVector(-24.0f - Activity * 5.0f, 0.0f, -8.0f + CostumeStride * Activity * 2.2f));
+    CloakMesh->SetRelativeRotation(FRotator(SprintLean * 0.55f, CostumeStride * Activity * 5.0f, 18.0f + CostumeStride * Activity * 7.0f));
+    MakerSatchel->SetRelativeLocation(FVector(-7.0f, -31.0f, -9.0f + FMath::Abs(CostumeStride) * Activity * 2.6f));
+    MakerSatchel->SetRelativeRotation(FRotator(0.0f, -12.0f + CostumeStride * Activity * 7.0f, 8.0f - CostumeStride * Activity * 9.0f));
+    MakerBelt->SetRelativeRotation(FRotator(0.0f, 0.0f, CostumeStride * Activity * 2.5f));
+    RuneGauntlet->SetRelativeRotation(FRotator(90.0f + Swing * 0.18f, GuardRaise * -0.28f, CostumeStride * Activity * 9.0f));
+    if (MakerEchoLight)
+        MakerEchoLight->SetIntensity(720.0f + Activity * 520.0f + (AttackRemaining > 0.0f ? 620.0f : 0.0f));
+
+    if (!bProductionMakerVisual)
+    {
+        const float WalkPhase = Time * (Speed > 40.0f ? 9.0f : 2.0f);
+        const float LimbSwing = Speed > 40.0f ? FMath::Sin(WalkPhase) * 22.0f : 0.0f;
+        LeftArm->SetRelativeRotation(FRotator(LimbSwing, 0.0f, 0.0f));
+        RightArm->SetRelativeRotation(FRotator(-LimbSwing - Swing * 0.22f, 0.0f, 0.0f));
+        LeftLeg->SetRelativeRotation(FRotator(-LimbSwing * 0.72f, 0.0f, 0.0f));
+        RightLeg->SetRelativeRotation(FRotator(LimbSwing * 0.72f, 0.0f, 0.0f));
+    }
 }
 
 void ACubetownHero::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -1634,7 +1860,9 @@ void ACubetownHUD::DrawHUD()
     const float UIScale=FMath::Clamp(FMath::Min(Width/1920.0f,Height/1080.0f),0.78f,1.75f);
     const auto S=[UIScale](float V){return V*UIScale;};
     UFont* Medium=GEngine?GEngine->GetMediumFont():nullptr;
-    const FLinearColor Panel(0.055f,0.030f,0.048f,0.82f), Mint(0.96f,0.36f,0.42f);
+    const FLinearColor Panel(0.012f,0.026f,0.024f,0.88f);
+    const FLinearColor Mint(0.10f,0.94f,0.82f);
+    const FLinearColor Crimson(0.94f,0.12f,0.20f);
     const float Pad=S(18.0f);
 
     // Third-person interaction reticle. Mining, attacks and Maker placement use this center aim point.
@@ -1646,7 +1874,7 @@ void ACubetownHUD::DrawHUD()
 
     // Adventure HUD: only the information needed while moving through the world.
     DrawRect(Panel,Pad,Pad,S(610.0f),S(96.0f));
-    DrawRect(Mint,Pad,Pad,S(5.0f),S(96.0f));
+    DrawRect(Crimson,Pad,Pad,S(5.0f),S(96.0f));
     DrawText(FString::Printf(TEXT("CUBETOWN // %s"),*Director->GetRegionName(Hero->GetActorLocation())),FLinearColor(1.0f,0.91f,0.76f),Pad+S(20.0f),Pad+S(13.0f),Medium,S(0.68f));
     DrawText(Director->GetQuestStatus(),FLinearColor(0.78f,0.88f,0.92f),Pad+S(20.0f),Pad+S(45.0f),Medium,S(0.48f));
     DrawText(FString::Printf(TEXT("SHRINES %d/3   MEMORIES %d/9   LOAD %d/%d   %02d:%02d   %s"),Director->GetShrinesRestored(),Director->GetUnlockedCreationCount(),Director->GetCreationBudgetUsed(),Director->GetCreationBudgetMax(),FMath::FloorToInt(Director->GetTimeOfDayHours()),FMath::FloorToInt(FMath::Fmod(Director->GetTimeOfDayHours(),1.0f)*60.0f),*Director->GetWeatherName()),FLinearColor(1.0f,0.76f,0.34f),Pad+S(20.0f),Pad+S(71.0f),Medium,S(0.45f));
@@ -1658,7 +1886,7 @@ void ACubetownHUD::DrawHUD()
     {
         const float ObjectiveW=S(360.0f),ObjectiveX=Width-ObjectiveW-Pad;
         DrawRect(FLinearColor(0.055f,0.030f,0.048f,0.86f),ObjectiveX,Pad+S(112.0f),ObjectiveW,S(44.0f));
-        DrawRect(FLinearColor(1.0f,0.62f,0.24f),ObjectiveX,Pad+S(112.0f),S(5.0f),S(44.0f));
+        DrawRect(Mint,ObjectiveX,Pad+S(112.0f),S(5.0f),S(44.0f));
         DrawText(ObjectiveMarker,FLinearColor(1.0f,0.91f,0.76f),ObjectiveX+S(18.0f),Pad+S(124.0f),Medium,S(0.56f));
     }
 
@@ -1667,26 +1895,37 @@ void ACubetownHUD::DrawHUD()
     DrawText(TEXT("LIFE"),FLinearColor(1.0f,0.72f,0.76f),HeartX+S(14.0f),HeartY+S(10.0f),Medium,S(0.58f));
     for(int32 I=0;I<6;++I){const bool Full=Hero->GetHealth()>=((I+1)*20.0f);DrawRect(Full?FLinearColor(1.0f,0.24f,0.38f):FLinearColor(0.20f,0.09f,0.12f),HeartX+S(66.0f+I*31.0f),HeartY+S(12.0f),S(23.0f),S(17.0f));}
     DrawRect(FLinearColor(0.07f,0.08f,0.09f),HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f),S(7.0f));
-    DrawRect(FLinearColor(0.26f,0.92f,0.52f),HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f)*Hero->GetStamina()/100.0f,S(7.0f));
+    DrawRect(Mint,HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f)*Hero->GetStamina()/100.0f,S(7.0f));
 
-    const float ActionW=FMath::Min(S(720.0f),Width-S(560.0f));
-    const float ActionX=(Width-ActionW)*0.5f, ActionY=Height-S(64.0f);
-    DrawRect(Panel,ActionX,ActionY,ActionW,S(45.0f));
-    DrawText(FString::Printf(TEXT("[LMB] COMBO  [Q] CREATE %s  [C] REMEMBER  [X] WEAVE  [G] RIDE WEAVE  [BACKSPACE] CLEAR  [B] BUILD"),EchoName(Director->GetSelectedEcho())),FLinearColor(0.96f,0.84f,0.74f),ActionX+S(16.0f),ActionY+S(12.0f),Medium,S(0.44f));
+    // V19 command deck: three readable Maker tools instead of one dense instruction sentence.
+    const float SlotW=S(142.0f),SlotH=S(52.0f),SlotGap=S(10.0f);
+    const float DeckW=SlotW*3.0f+SlotGap*2.0f,DeckX=(Width-DeckW)*0.5f,DeckY=Height-S(70.0f);
+    const TCHAR* SlotKeys[]={TEXT("Q"),TEXT("C"),TEXT("X")};
+    const FString SlotNames[]={FString::Printf(TEXT("CREATE %s"),EchoName(Director->GetSelectedEcho())),TEXT("REMEMBER"),TEXT("WEAVE")};
+    for(int32 Slot=0;Slot<3;++Slot)
+    {
+        const float X=DeckX+Slot*(SlotW+SlotGap);
+        DrawRect(Panel,X,DeckY,SlotW,SlotH);
+        DrawRect(Slot==0?Mint:Crimson,X,DeckY,S(4.0f),SlotH);
+        DrawText(SlotKeys[Slot],FLinearColor(1.0f,0.92f,0.76f),X+S(13.0f),DeckY+S(9.0f),Medium,S(0.56f));
+        DrawText(SlotNames[Slot],FLinearColor(0.72f,0.91f,0.86f),X+S(38.0f),DeckY+S(12.0f),Medium,S(0.40f));
+        DrawText(Slot==0?TEXT("HOLD / CHOOSE"):Slot==1?TEXT("CAPTURE WORLD"):TEXT("MOVE MEMORY"),FLinearColor(0.56f,0.66f,0.64f),X+S(13.0f),DeckY+S(33.0f),Medium,S(0.30f));
+    }
+    DrawText(TEXT("LMB COMBO   SHIFT SPRINT   SPACE VAULT   B BUILD"),FLinearColor(0.72f,0.78f,0.74f),DeckX+S(42.0f),DeckY-S(20.0f),Medium,S(0.34f));
 
     const FString InteractionPrompt=Director->GetInteractionPrompt(Hero->GetActorLocation());
     if(!InteractionPrompt.IsEmpty() && !Director->IsBuildMode())
     {
         const float PromptW=S(440.0f),PromptX=(Width-PromptW)*0.5f,PromptY=Height-S(92.0f);
         DrawRect(FLinearColor(0.12f,0.045f,0.07f,0.94f),PromptX,PromptY,PromptW,S(42.0f));
-        DrawRect(FLinearColor(0.96f,0.30f,0.40f),PromptX,PromptY,S(5.0f),S(42.0f));
+        DrawRect(Mint,PromptX,PromptY,S(5.0f),S(42.0f));
         DrawText(InteractionPrompt,FLinearColor(1.0f,0.92f,0.78f),PromptX+S(18.0f),PromptY+S(12.0f),Medium,S(0.52f));
     }
 
     DrawRect(Panel,Width-S(360.0f)-Pad,Pad,S(360.0f),S(96.0f));
     DrawText(TEXT("TOWN LIFE"),FLinearColor(1.0f,0.90f,0.74f),Width-S(342.0f)-Pad,Pad+S(11.0f),Medium,S(0.66f));
     DrawText(FString::Printf(TEXT("MIRA %d/5   ROWAN %d/5   PIP %d/5"),Director->GetFriendship(0),Director->GetFriendship(1),Director->GetFriendship(2)),FLinearColor(1.0f,0.58f,0.78f),Width-S(342.0f)-Pad,Pad+S(43.0f),Medium,S(0.54f));
-    DrawText(Director->IsGuardianDefeated()?TEXT("HEARTSTONE SAFE"):TEXT("RIFT THREAT ACTIVE"),Director->IsGuardianDefeated()?Mint:FLinearColor(0.82f,0.62f,1.0f),Width-S(342.0f)-Pad,Pad+S(70.0f),Medium,S(0.50f));
+    DrawText(Director->IsGuardianDefeated()?TEXT("HEARTSTONE SAFE"):TEXT("RIFT THREAT ACTIVE"),Director->IsGuardianDefeated()?Mint:Crimson,Width-S(342.0f)-Pad,Pad+S(70.0f),Medium,S(0.50f));
 
     if(Hero->IsLockedOn())
     {
@@ -1781,6 +2020,7 @@ void ACubetownDirector::BeginPlay()
     Super::BeginPlay();
     LoadProgress();
     BuildDreamWorld();
+    SpawnMakerArrivalTrail();
     RestoreSavedBuilds();
     SpawnVillage();
     SpawnMemorycraftTrials();
@@ -1886,6 +2126,97 @@ void ACubetownDirector::SpawnDreamWorldDetails()
     SpawnStaticMeshAsset(TEXT("ForgottenPicnicCrate"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Crate.SM_CC0_Crate"),FVector(7200,8300,30),FVector(0.72f),FRotator(0,28,0),false,true);
     SpawnStaticMeshAsset(TEXT("OldGardenBench"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Bench.SM_CC0_Bench"),FVector(-5400,8200,30),FVector(0.9f),FRotator(0,-20,0),false,true);
     SpawnStaticMeshAsset(TEXT("MoonmossBrokenCart"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Cart.SM_CC0_Cart"),FVector(-15000,-8000,30),FVector(0.92f),FRotator(0,63,0),false,true);
+}
+
+void ACubetownDirector::SpawnMakerArrivalTrail()
+{
+    // V19 opening composition follows the approved visual target: crimson canopy, cyan guidance,
+    // a readable village road, tactile maker props and a companion already moving with the hero.
+    // It is additive and idempotent at runtime, so the authored V18R1 map remains the release floor.
+    for (int32 I = 0; I < 7; ++I)
+    {
+        const float Y = -9700.0f + I * 920.0f;
+        const float Bend = FMath::Sin(I * 0.72f) * 180.0f;
+        for (int32 Side = -1; Side <= 1; Side += 2)
+        {
+            const FVector P(Bend + Side * (520.0f + (I % 2) * 90.0f), Y, 28.0f);
+            SpawnStaticMeshAsset(
+                FString::Printf(TEXT("MakerTrailLantern_%02d_%d"), I, Side),
+                TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Lantern.SM_CC0_Lantern"),
+                P,
+                FVector(0.78f),
+                FRotator(0.0f, Side < 0 ? 24.0f : -24.0f, 0.0f),
+                false,
+                true
+            );
+            if ((I % 2) == 0)
+            {
+                if (APointLight* Light = SpawnPointLight(
+                    FString::Printf(TEXT("MakerTrailGlow_%02d_%d"), I, Side),
+                    P + FVector(0.0f, 0.0f, 135.0f),
+                    FLinearColor(0.08f, 0.88f, 0.82f),
+                    930.0f,
+                    390.0f,
+                    false))
+                {
+                    DreamNightLights.Add(Light);
+                }
+            }
+        }
+        SpawnStaticMeshAsset(
+            FString::Printf(TEXT("MakerTrailWildflowers_%02d"), I),
+            TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFlowerPatch_A.SM_CubeDreamFlowerPatch_A"),
+            FVector(Bend + ((I & 1) ? 760.0f : -760.0f), Y + 210.0f, 16.0f),
+            FVector(0.32f + (I % 3) * 0.05f),
+            FRotator(0.0f, I * 37.0f, 0.0f),
+            false,
+            true
+        );
+    }
+
+    SpawnStaticMeshAsset(
+        TEXT("MakerTrailGate"),
+        TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamAncientArch_A.SM_CubeDreamAncientArch_A"),
+        FVector(0.0f, -6900.0f, 32.0f),
+        FVector(0.82f),
+        FRotator(0.0f, 90.0f, 0.0f),
+        false,
+        true
+    );
+    SpawnStaticMeshAsset(
+        TEXT("MakerTrailCrystalLeft"),
+        TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A"),
+        FVector(-1040.0f, -5300.0f, 26.0f),
+        FVector(0.46f),
+        FRotator(0.0f, 18.0f, 0.0f),
+        false,
+        true
+    );
+    SpawnStaticMeshAsset(
+        TEXT("MakerTrailCrystalRight"),
+        TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A"),
+        FVector(1040.0f, -5150.0f, 26.0f),
+        FVector(0.38f),
+        FRotator(0.0f, -26.0f, 0.0f),
+        false,
+        true
+    );
+
+    const FVector CanopyLocations[] = {
+        FVector(-2500.0f, -8500.0f, 30.0f), FVector(2700.0f, -8100.0f, 30.0f),
+        FVector(-3300.0f, -5650.0f, 30.0f), FVector(3400.0f, -5000.0f, 30.0f)
+    };
+    for (int32 I = 0; I < UE_ARRAY_COUNT(CanopyLocations); ++I)
+        SpawnDreamTree(FString::Printf(TEXT("MakerTrailCrimsonTree_%02d"), I), CanopyLocations[I], 0.74f + I * 0.05f, I % 3, true);
+
+    if (ActiveEchoes.Num() == 0)
+    {
+        if (ACubetownEcho* FirstEcho = GetWorld()->SpawnActor<ACubetownEcho>(FVector(150.0f, -10350.0f, 180.0f), FRotator(0.0f, 90.0f, 0.0f)))
+        {
+            FirstEcho->Configure(ECubetownEchoType::Blade);
+            ActiveEchoes.Add(FirstEcho);
+        }
+    }
 }
 
 AStaticMeshActor* ACubetownDirector::SpawnCreationProp(ECubetownEchoType Type, const FVector& Location, const FRotator& Rotation, bool bWorldSource)
