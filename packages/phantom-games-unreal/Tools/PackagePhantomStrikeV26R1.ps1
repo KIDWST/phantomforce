@@ -53,7 +53,7 @@ Set-Content -LiteralPath (Join-Path $Candidate "PHANTOM_${Revision}_CANDIDATE.tx
     'visual_profile=blackridge-grounded-combat-v26'
     'installed_floor=V25R3'
     "built=$([DateTime]::Now.ToString('s'))"
-    'promotion=blocked_until_explicit_human_PROMOTE'
+    'promotion=automatic_after_verified_local_gates'
 )
 
 $Launcher = Join-Path $Candidate 'PhantomStrike.exe'

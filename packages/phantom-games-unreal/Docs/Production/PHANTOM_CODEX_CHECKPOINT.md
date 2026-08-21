@@ -1,17 +1,18 @@
-# Phantom Codex Checkpoint — 2026-08-21 PhantomStrike V26R1 candidate
+# Phantom Codex Checkpoint — 2026-08-21 PhantomStrike V26R1 installed
 
-## PhantomStrike V26R1 Blackridge candidate
+## PhantomStrike V26R1 Blackridge installed
 
-- The verified installed PhantomStrike V25R3 build remains untouched inside the mixed `V25R3+CUBETOWN-V19R1` PhantomPlay set.
+- PhantomStrike V26R1 Blackridge is installed inside the truthful mixed `V25R3+CUBETOWN-V19R1+PHANTOMSTRIKE-V26R1` PhantomPlay set.
 - V26 removes the fantasy Rogue/Knight/Barbarian resolution path from PhantomStrike and makes the checked-in Helix modern-military operator family authoritative.
 - Runtime upgrades include visible first-person tactical arms, camera/weapon inertia, warm muzzle bloom, physical casing ejection, operator movement/recoil/hit/collapse presentation, restrained tactical HUD, cool-storm/warm-practical lighting, and additive breach/relay environmental staging.
 - New original visual targets: `phantom-strike-v26-blackridge-gameplay-target.png` and `phantom-strike-v26-blackridge-breach-target.png`; exact prompts are preserved in `PHANTOMSTRIKE_V26_VISUAL_TARGET_PROMPTS.md`.
 - Development compile, focused V26 regression, broader PhantomPlay safety checks, 4,818-package Shipping cook, IoStore assembly, archive, and hidden 15-second Shipping keep-alive smoke pass.
-- Review candidate: `packages/phantom-games-unreal/CandidateBuilds/V26R1/phantom-strike` — 31 files / 1,043,281,311 bytes.
-- Candidate Shipping SHA-256: `38226D4F896569CAB17708C159A0DAFE3100526D05CE724AEF8AB6717E773E2B`.
-- Installed Shipping SHA-256 remains `C99FD4E5D42F189E7FB7912FC378D1AFA48DA5DDF7014102D705F2A193485458` (30 files / 1,055,309,662 bytes).
+- Source candidate: `packages/phantom-games-unreal/CandidateBuilds/V26R1/phantom-strike` — 31 files / 1,043,281,311 bytes.
+- Installed V26R1: `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows\phantom-strike` — 31 files / 1,043,281,384 bytes.
+- Candidate and installed Shipping SHA-256: `38226D4F896569CAB17708C159A0DAFE3100526D05CE724AEF8AB6717E773E2B`.
+- Prior V25R3 rollback: `C:\Users\jorda\Documents\Codex\backups\phantomplay-phantom-strike-v25r3-cubetown-v19r1-to-v26r1-20260821-081115\phantom-strike`.
 - Hidden startup limitation: Shipping remained alive without a crash for the complete smoke window, but this Shipping configuration emitted no requested external log; rendered-frame, real-input, and performance acceptance remain open.
-- Disposition: **REVIEW CANDIDATE — NOT PROMOTED**. A new exact literal `PROMOTE` authorization is required after review.
+- Disposition: **PROMOTED AND VERIFIED INSTALLED**. Future routine local successors auto-promote after verified compile, package, focused regression, identity/hash, and rollback-readiness gates; no release keyword is required.
 
 ## Prior checkpoint — Cubetown V19R1 installed
 

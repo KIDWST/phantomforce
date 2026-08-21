@@ -2252,15 +2252,15 @@
       ]
     },
     {
-      "id": "phantomstrike-v25-floor-and-v26-blackridge",
+      "id": "phantomstrike-v26-installed-blackridge-floor",
       "status": "active",
-      "title": "PhantomStrike keeps the V25R3 floor and the original V26 Blackridge grounded-combat identity",
-      "ownerDecision": "PhantomStrike's verified installed release floor is V25R3 inside the mixed V25R3+CUBETOWN-V19R1 PhantomPlay set. V26 Blackridge must preserve the staged Operation Nightglass mission and V19 persistent-world route while making the checked-in Helix military operator family authoritative; shared fantasy Rogue, Knight, and Barbarian bodies are forbidden. The first-person view retains visible tactical arms, camera and weapon inertia, warm physical muzzle presentation and casing ejection. Operators retain movement, recoil, hit, and collapse presentation. The HUD stays restrained and the world uses cool storm ambience, warm practicals, wrecks, rubble, and a readable breach/relay tableau. Generated images are original visual targets translated into real runtime systems. V26 packaging remains isolated and the installed set cannot change without a new exact PROMOTE authorization after rendered-frame, real-input, and performance gates pass.",
+      "title": "PhantomStrike keeps the installed V26R1 Blackridge grounded-combat identity",
+      "ownerDecision": "PhantomStrike's verified installed release floor is V26R1 Blackridge inside the mixed V25R3+CUBETOWN-V19R1+PHANTOMSTRIKE-V26R1 PhantomPlay set. V26 preserves the staged Operation Nightglass mission and V19 persistent-world route while making the checked-in Helix military operator family authoritative; shared fantasy Rogue, Knight, and Barbarian bodies are forbidden. The first-person view retains visible tactical arms, camera and weapon inertia, warm physical muzzle presentation and casing ejection. Operators retain movement, recoil, hit, and collapse presentation. The HUD stays restrained and the world uses cool storm ambience, warm practicals, wrecks, rubble, and a readable breach/relay tableau. Generated images are original visual targets translated into real runtime systems. Routine local successors promote automatically after compile, package, focused regression, identity/hash, and rollback-readiness gates pass; the prior install must be preserved and restored automatically on failure, and the user is not asked to type a release keyword.",
       "requiredPatterns": [
         {
           "file": "docs/phantomplay-production/creative-bibles/phantom-strike.json",
-          "pattern": "current_floor\": \"V25R3 verified installed PhantomStrike release[\\s\\S]*next_target\": \"V26R1 Blackridge grounded-combat candidate",
-          "description": "The creative bible identifies the installed V25R3 floor and candidate-only V26 successor."
+          "pattern": "current_floor\": \"V26R1 Blackridge verified installed PhantomStrike release[\\s\\S]*V26R1 is the no-regression floor",
+          "description": "The creative bible identifies V26R1 Blackridge as the installed no-regression floor."
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
@@ -2294,8 +2294,13 @@
         },
         {
           "file": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V26_BLACKRIDGE_REPORT.md",
-          "pattern": "Release floor: installed PhantomStrike V25R3[\\s\\S]*ISOLATED REVIEW CANDIDATE — NOT PROMOTED[\\s\\S]*exact literal `PROMOTE`",
-          "description": "The V26 release record stays truthful about the floor, evidence, limitations, and unpromoted disposition."
+          "pattern": "Current release floor: PhantomStrike V26R1[\\s\\S]*PROMOTED AND VERIFIED INSTALLED[\\s\\S]*automatic_after_verified_local_gates",
+          "description": "The V26 release record stays truthful about the installed floor, evidence, limitations, and automatic verified-promotion policy."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Tools/Promote-PhantomStrikeV26R1.ps1",
+          "pattern": "automatic_after_verified_local_gates[\\s\\S]*phantomplay-phantom-strike-[\\s\\S]*Installed Shipping binary[\\s\\S]*prior install was restored",
+          "description": "PhantomStrike promotion remains automatic after verified local gates, transactional, hash-checked, and recoverable."
         },
         {
           "file": "scripts/test-phantomstrike-v26-blackridge.mjs",
@@ -2307,7 +2312,7 @@
         {
           "file": "docs/phantomplay-production/creative-bibles/phantom-strike.json",
           "pattern": "current_floor\": \"V11R6",
-          "description": "The historical V11R6 checkpoint cannot replace the verified V25R3 floor."
+          "description": "The historical V11R6 checkpoint cannot replace the verified V26R1 floor."
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",

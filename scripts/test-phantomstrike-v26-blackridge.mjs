@@ -11,6 +11,7 @@ const report = read("packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE
 const checkpoint = read("packages/phantom-games-unreal/Docs/Production/PHANTOM_CODEX_CHECKPOINT.md");
 const registry = read("docs/phantomplay-production/asset-registries/phantom-games-unreal.json");
 const packager = read("packages/phantom-games-unreal/Tools/PackagePhantomStrikeV26R1.ps1");
+const promoter = read("packages/phantom-games-unreal/Tools/Promote-PhantomStrikeV26R1.ps1");
 
 for (const target of [
   "phantom-strike-v26-blackridge-gameplay-target.png",
@@ -24,8 +25,8 @@ for (const target of [
     `PhantomStrike V26 visual target must be registered: ${target}`);
 }
 
-assert.match(bible, /current_floor": "V25R3 verified installed PhantomStrike release[\s\S]*next_target": "V26R1 Blackridge grounded-combat candidate/u,
-  "PhantomStrike must preserve the installed V25R3 floor and keep V26 candidate-only.");
+assert.match(bible, /current_floor": "V26R1 Blackridge verified installed PhantomStrike release[\s\S]*V26R1 is the no-regression floor/u,
+  "PhantomStrike must preserve V26R1 Blackridge as the installed no-regression floor.");
 assert.match(prompts, /built-in ImageGen[\s\S]*exact scene, UI, map, character, logo, weapon, or protected game design[\s\S]*Runtime translation contract/u,
   "The V26 visual target workflow must remain reproducible and original.");
 
@@ -46,11 +47,13 @@ assert.match(cpp, /V26 sight picture[\s\S]*Compact objective card[\s\S]*TEAM %d\
 assert.match(cpp, /BuildV26BlackridgeAtmosphere[\s\S]*V26InsertionDisabledCar[\s\S]*V26RelayServer[\s\S]*V26BreachLintel/u,
   "The wet-coast combat dressing and relay breach silhouettes must remain intact.");
 
-assert.match(packager, /CandidateBuilds\\\$Revision\\phantom-strike[\s\S]*visual_profile=blackridge-grounded-combat-v26[\s\S]*installed_floor=V25R3[\s\S]*promotion=blocked_until_explicit_human_PROMOTE/u,
-  "V26 packaging must stay isolated and promotion-gated.");
-assert.match(report, /ISOLATED REVIEW CANDIDATE — NOT PROMOTED[\s\S]*38226D4F896569CAB17708C159A0DAFE3100526D05CE724AEF8AB6717E773E2B[\s\S]*C99FD4E5D42F189E7FB7912FC378D1AFA48DA5DDF7014102D705F2A193485458/u,
-  "The V26 report must preserve candidate and installed-floor evidence.");
-assert.match(checkpoint, /PhantomStrike V26R1 Blackridge candidate[\s\S]*REVIEW CANDIDATE — NOT PROMOTED/u,
-  "The shared checkpoint must retain the V26 candidate-only disposition.");
+assert.match(packager, /CandidateBuilds\\\$Revision\\phantom-strike[\s\S]*visual_profile=blackridge-grounded-combat-v26[\s\S]*installed_floor=V25R3[\s\S]*promotion=automatic_after_verified_local_gates/u,
+  "V26 packaging must stay isolated and auto-promote only after verified local gates.");
+assert.match(promoter, /automatic_after_verified_local_gates[\s\S]*phantomplay-phantom-strike-[\s\S]*Installed Shipping binary[\s\S]*prior install was restored/u,
+  "V26 promotion must be automatic after verification, transactional, hash-checked, and recoverable.");
+assert.match(report, /PROMOTED AND VERIFIED INSTALLED[\s\S]*38226D4F896569CAB17708C159A0DAFE3100526D05CE724AEF8AB6717E773E2B[\s\S]*phantomplay-phantom-strike-v25r3-cubetown-v19r1-to-v26r1/u,
+  "The V26 report must preserve installed and rollback evidence.");
+assert.match(checkpoint, /PhantomStrike V26R1 Blackridge installed[\s\S]*PROMOTED AND VERIFIED INSTALLED/u,
+  "The shared checkpoint must retain the V26 installed disposition.");
 
 console.log("PHANTOMSTRIKE_V26_BLACKRIDGE_PASS");

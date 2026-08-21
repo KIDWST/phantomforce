@@ -2,12 +2,13 @@
 
 Date: 2026-08-21
 Engine: Unreal Engine 5.8.1 (`H:\UE_5.8`)
-Release floor: installed PhantomStrike V25R3 inside the mixed `V25R3+CUBETOWN-V19R1` PhantomPlay set
-Disposition: **ISOLATED REVIEW CANDIDATE — NOT PROMOTED**
+Previous release floor: PhantomStrike V25R3 inside the mixed `V25R3+CUBETOWN-V19R1` PhantomPlay set
+Current release floor: PhantomStrike V26R1 inside `V25R3+CUBETOWN-V19R1+PHANTOMSTRIKE-V26R1`
+Disposition: **PROMOTED AND VERIFIED INSTALLED**
 
 ## Outcome
 
-V26R1 is a compiled, cooked, packaged successor candidate that translates the approved Blackridge sample-photo language into original PhantomStrike runtime systems. It preserves the installed V25R3 build as the no-regression floor and does not touch the live install.
+V26R1 is the compiled, cooked, packaged, and transactionally installed successor that translates the approved Blackridge sample-photo language into original PhantomStrike runtime systems. The previous V25R3 install is preserved as a rollback checkpoint.
 
 The pass removes a concrete cross-game regression: PhantomStrike enemies previously attempted to resolve the shared fantasy Rogue, Knight, and Barbarian production bodies before the military operator family. V26 makes the generated Helix modern-military silhouettes authoritative for hostile and friendly operators.
 
@@ -71,11 +72,14 @@ Hidden startup evidence:
 - This Shipping configuration did not emit the requested external log, so no log-backed visual/startup claim is made.
 - No visible window, mouse, keyboard, browser, or active PhantomPlay session was controlled.
 
-Installed-floor verification after packaging:
+Installed promotion verification:
 
-- Installed PhantomStrike remains 30 files / 1,055,309,662 bytes.
-- Installed Shipping SHA-256 remains `C99FD4E5D42F189E7FB7912FC378D1AFA48DA5DDF7014102D705F2A193485458`.
-- Candidate Shipping SHA-256 is distinct: `38226D4F896569CAB17708C159A0DAFE3100526D05CE724AEF8AB6717E773E2B`.
+- V26R1 is installed at `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows\phantom-strike` with 31 files / 1,043,281,384 bytes.
+- Installed Shipping SHA-256 matches the candidate: `38226D4F896569CAB17708C159A0DAFE3100526D05CE724AEF8AB6717E773E2B`.
+- Installed pak, ucas, and utoc hashes match the packaged candidate.
+- The retained Cubetown, Phantom Ages, and Phantom Legends launcher hashes were reverified before mutation.
+- The prior V25R3 PhantomStrike is preserved at `C:\Users\jorda\Documents\Codex\backups\phantomplay-phantom-strike-v25r3-cubetown-v19r1-to-v26r1-20260821-081115\phantom-strike`.
+- Promotion was non-interactive and source-only; no visible application, mouse, keyboard, browser, or active session was controlled.
 
 ## Open acceptance gates
 
@@ -84,4 +88,4 @@ Installed-floor verification after packaging:
 - Frame-time, hitch, GPU, and long-session soak evidence.
 - Any visual defects found in those reviews require a new candidate revision.
 
-Promotion remains blocked until the owner supplies a new exact literal `PROMOTE` authorization after reviewing the candidate evidence. The current request to upgrade/build is not treated as promotion authority.
+Routine local successors now use `automatic_after_verified_local_gates`: promotion follows compile, package, focused regression, identity/hash, and rollback-readiness passes without asking the user for a release keyword. The workflow preserves the previous install and restores it automatically if any mutation or post-copy verification fails.

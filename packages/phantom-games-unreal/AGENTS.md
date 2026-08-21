@@ -8,5 +8,5 @@
 - Treat missing required art, primitive fallback presentation, broken materials, wrong scale, black/blank frames, and non-gameplay captures as hard failures.
 - Use only authored, already-owned, or properly licensed free assets. Record provenance; never scrape credentials or protected downloads.
 - Build, launch, and capture each of the four games independently. One passing game cannot mask another failure.
-- Promotion is manual. Never replace a live build without the user's exact `PROMOTE` instruction and a rollback checkpoint.
+- Routine local promotion follows automatically after the scoped candidate passes compile, package, focused regression, identity/hash, and rollback-readiness gates. Do not require the user to type a release keyword. Preserve a verified rollback checkpoint and restore automatically on failure. Stop for direction only when gates fail or the requested action is destructive outside the approved local game-install target.
 - Update `Docs/Production/PHANTOM_CODEX_CHECKPOINT.md` after a substantial run.
