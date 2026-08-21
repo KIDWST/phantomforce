@@ -175,21 +175,46 @@ $fallbackStateOk = (-not $fallbackActive) -or $fallbackOk
 $states.Add((Result ($(if ($fallbackStateOk) { "OK" } else { "FAIL" })) ($(if (-not $fallbackActive) { "Fallback watcher is not needed." } elseif ($fallbackOk) { "Fallback login/hourly watcher is canonical." } else { "Fallback watcher is present but invalid." }))))
 
 $badProcesses = @()
+$processInspectionTimedOut = $false
+$processInspectionFailed = $false
+$processInspectionJob = $null
 try {
-  $serviceProcesses = Get-CimInstance Win32_Process | Where-Object {
-    $_.ProcessId -ne $PID -and
-    $_.CommandLine -and
-    ($_.CommandLine -match 'Watch-AdminMain')
+  # Win32_Process can block indefinitely when the Windows management provider is
+  # unhealthy. Keep this deep diagnostic bounded so the remaining source checks
+  # still run and the caller receives an honest warning instead of a hung shell.
+  $processInspectionJob = Start-Job -ScriptBlock {
+    Get-CimInstance Win32_Process | Where-Object {
+      $_.CommandLine -and ($_.CommandLine -match 'Watch-AdminMain')
+    } | Select-Object ProcessId, Name, CommandLine
   }
-  foreach ($serviceProcess in $serviceProcesses) {
-    if (-not $serviceProcess.CommandLine.Contains($expectedWatchScript)) {
-      $badProcesses += "$($serviceProcess.Name):$($serviceProcess.ProcessId)"
+
+  $completedProcessInspection = Wait-Job -Job $processInspectionJob -Timeout 15
+  if ($completedProcessInspection) {
+    $serviceProcesses = @(Receive-Job -Job $processInspectionJob -ErrorAction Stop)
+    foreach ($serviceProcess in $serviceProcesses) {
+      if ($serviceProcess.ProcessId -ne $PID -and -not $serviceProcess.CommandLine.Contains($expectedWatchScript)) {
+        $badProcesses += "$($serviceProcess.Name):$($serviceProcess.ProcessId)"
+      }
     }
+  } else {
+    $processInspectionTimedOut = $true
+    Stop-Job -Job $processInspectionJob -ErrorAction SilentlyContinue
   }
 } catch {
-  $states.Add((Result "WARN" "Could not inspect watcher process command lines."))
+  $processInspectionFailed = $true
+} finally {
+  if ($processInspectionJob) {
+    Remove-Job -Job $processInspectionJob -Force -ErrorAction SilentlyContinue
+  }
 }
-$states.Add((Result ($(if ($badProcesses.Count -eq 0) { "OK" } else { "FAIL" })) ($(if ($badProcesses.Count -eq 0) { "No stale admin watcher process can reclaim the live ports." } else { "Non-canonical live processes: $($badProcesses -join ', ')" }))))
+
+if ($processInspectionTimedOut) {
+  $states.Add((Result "WARN" "Windows process inventory did not answer within 15 seconds; canonical startup configuration and active service roots were still verified."))
+} elseif ($processInspectionFailed) {
+  $states.Add((Result "WARN" "Could not inspect watcher process command lines; canonical startup configuration and active service roots were still verified."))
+} else {
+  $states.Add((Result ($(if ($badProcesses.Count -eq 0) { "OK" } else { "FAIL" })) ($(if ($badProcesses.Count -eq 0) { "No stale admin watcher process can reclaim the live ports." } else { "Non-canonical live processes: $($badProcesses -join ', ')" }))))
+}
 
 Section "Change memory guard"
 $guardPath = Join-Path $RepoRoot "scripts\guard-change-memory.mjs"
