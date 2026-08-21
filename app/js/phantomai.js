@@ -14,28 +14,28 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260820-186";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260820-186";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260820-186";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260820-186";
-import { esc } from "./workspaces.js?v=phantom-live-20260820-186";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260820-186";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260820-186";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260820-186";
-import { setCompanionState } from "./companion.js?v=phantom-live-20260820-186";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260820-186";
+} from "./store.js?v=phantom-live-20260820-187";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260820-187";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260820-187";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260820-187";
+import { esc } from "./workspaces.js?v=phantom-live-20260820-187";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260820-187";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260820-187";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260820-187";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260820-187";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260820-187";
 import {
   getOperatorBrainChoices,
   getOperatorBrainMesh,
   getOperatorInfrastructureStatus,
   hydrateOperatorBrainMesh,
   setOperatorBrainChoice,
-} from "./settings.js?v=phantom-live-20260820-186";
+} from "./settings.js?v=phantom-live-20260820-187";
 import {
   buildPromptIntegrityEnvelope,
   MAX_PROMPT_CHARS,
   promptSizeError,
-} from "./prompt-integrity.js?v=phantom-live-20260820-186";
+} from "./prompt-integrity.js?v=phantom-live-20260820-187";
 
 const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -93,11 +93,49 @@ let rootEl = null;
 let taskState = { workspace: "", activeId: "", tasks: [] };
 let chatBindings = null;
 let runningRequest = null;
+let queuedOperatorPrompt = null;
 let keyboardBound = false;
 let detailTab = "context";
 let archivedExpanded = false;
 let sessionStartedAt = Date.now();
 let sessionClockTimer = 0;
+
+function applyQueuedOperatorPrompt() {
+  if (!queuedOperatorPrompt || !chatBindings?.input) return false;
+  const queued = queuedOperatorPrompt;
+  queuedOperatorPrompt = null;
+  activatePhantomAiTab("chat");
+  chatBindings.input.value = queued.prompt;
+  chatBindings.resize();
+  if (queued.autoSubmit && !runningRequest) {
+    setComposerStatus(`${queued.source} handed this work to PhantomBot. Running now…`, "live", 0);
+    void chatBindings.submitPrompt(queued.prompt, []);
+  } else {
+    setComposerStatus(
+      runningRequest
+        ? `${queued.source} prepared the next operation. Send it when the current run finishes.`
+        : `${queued.source} prepared this operation. Review it, then send when ready.`,
+      "live",
+      6200,
+    );
+    setTimeout(() => {
+      try { chatBindings?.input?.focus({ preventScroll: true }); } catch { chatBindings?.input?.focus(); }
+    }, 40);
+  }
+  return true;
+}
+
+export function queuePhantomAiPrompt(prompt, options = {}) {
+  const cleanPrompt = String(prompt || "").replace(/\u0000/g, "").trim().slice(0, MAX_PROMPT_CHARS);
+  if (!cleanPrompt) return false;
+  queuedOperatorPrompt = {
+    prompt: cleanPrompt,
+    autoSubmit: options.autoSubmit === true,
+    source: cleanText(options.source || "PhantomForce", 80),
+  };
+  if (rootEl?.isConnected && chatBindings?.input) applyQueuedOperatorPrompt();
+  return true;
+}
 let readRepliesAloud = false;
 let dictationRecognition = null;
 const overlayReturnFocus = { context: null, session: null, model: null, rail: null };
@@ -1907,6 +1945,7 @@ function mountChatTab() {
     resize();
     setComposerStatus("Bridge setup brief is ready. Review it, then send when you are ready.", "live", 5200);
   }
+  applyQueuedOperatorPrompt();
   setTimeout(() => {
     try { input.focus({ preventScroll: true }); } catch { input.focus(); }
   }, 60);
@@ -1916,7 +1955,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260820-186")
+  import("./brain.js?v=phantom-live-20260820-187")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }

@@ -75,6 +75,7 @@
     "test:command-surface": "node scripts/test-command-surface.mjs",
     "test:dropdown-readability": "node scripts/test-dropdown-readability.mjs",
     "test:automation-workspace": "node scripts/test-automation-workspace.mjs",
+    "test:autopilot-attention": "node scripts/test-autopilot-attention.mjs",
     "test:phantom-presence": "node scripts/test-phantom-presence-recovery.mjs",
     "test:phantombot-desktop": "npm test --workspace @phantomforce/phantombot-desktop",
     "test:phantombot-operator": "npm run test:hermes-acp-transport --workspace @phantomforce/server && npm run test:hermes-acp-operator --workspace @phantomforce/server && npm run test:hermes-engineering-tools --workspace @phantomforce/server && npm run test:hermes-operator-stream --workspace @phantomforce/server && npm run test:hermes-ecosystem-knowledge --workspace @phantomforce/server && npm run test:phantom-capability-registry --workspace @phantomforce/server",

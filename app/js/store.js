@@ -1,4 +1,4 @@
-import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260820-186";
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260820-187";
 
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
@@ -1265,15 +1265,15 @@ export function moneyView() {
 export function todaysPlan() {
   const items = [];
   visible(store.state.approvals).filter((a) => a.status === "pending")
-    .forEach((a) => items.push({ icon: "◈", text: a.title, kind: "approval", open: "approvals" }));
+    .forEach((a) => items.push({ id: `approval:${a.id}`, recordId: a.id, icon: "◈", text: a.title, detail: a.detail || "Owner decision required before external work continues.", kind: "approval", open: "approvals", aiAction: "prepare", manualAction: "review", approvalRequired: true }));
   visible(store.state.leads).filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0)
-    .forEach((l) => items.push({ icon: "▸", text: `${l.next} — ${l.name}`, kind: "lead", open: "leads" }));
+    .forEach((l) => items.push({ id: `lead:${l.id}`, recordId: l.id, icon: "▸", text: `${l.next} — ${l.name}`, detail: "Phantom can prepare the next touch; sending remains approval-gated.", kind: "lead", open: "leads", aiAction: "handle", manualAction: "follow-up-done", approvalRequired: true }));
   visible(store.state.proposals).filter((p) => p.status === "sent-ready")
-    .forEach((p) => items.push({ icon: "▸", text: `Proposal send-ready: ${p.client}`, kind: "proposal", open: "proposals" }));
+    .forEach((p) => items.push({ id: `proposal:${p.id}`, recordId: p.id, icon: "▸", text: `Proposal send-ready: ${p.client}`, detail: "Phantom can run a final review; the owner still controls sending.", kind: "proposal", open: "proposals", aiAction: "prepare", manualAction: "review", approvalRequired: true }));
   visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status || "new"))
-    .forEach((t) => items.push({ icon: "▸", text: `Task ready: ${t.title}`, kind: "task", open: "workforce" }));
+    .forEach((t) => items.push({ id: `task:${t.id}`, recordId: t.id, icon: "▸", text: `Task ready: ${t.title}`, detail: t.notes || "Internal work ready for completion.", kind: "task", open: "workforce", aiAction: "handle", manualAction: "done", approvalRequired: false }));
   visible(store.state.security).forEach((s) => {
-    if (daysUntil(s.rotationDue) <= 30) items.push({ icon: "⚠", text: `Password rotation window closes in ${daysUntil(s.rotationDue)} days`, kind: "security", open: "protect" });
+    if (daysUntil(s.rotationDue) <= 30) items.push({ id: `security:${s.id}`, recordId: s.id, icon: "⚠", text: `Password rotation window closes in ${daysUntil(s.rotationDue)} days`, detail: "Phantom can inspect and prepare the safest remediation; credentials still require the authorized owner.", kind: "security", open: "protect", aiAction: "prepare", manualAction: "review", approvalRequired: true });
   });
   return items.slice(0, 7);
 }

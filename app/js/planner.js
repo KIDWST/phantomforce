@@ -1,7 +1,11 @@
 import {
   store, uid, visible, moneyView, todaysPlan, currentWs, wsName, pushActivity,
-  workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260820-186";
+  workspaceStorageGetItem, workspaceStorageSetItem, session,
+} from "./store.js?v=phantom-live-20260820-187";
+import {
+  brainContractAttentionItems, cachedBrainContract, cachedOrganizationPulse,
+  loadBrainContract, loadOrganizationPulse, organizationPulseState,
+} from "./organizationpulse.js?v=phantom-live-20260820-187";
 
 const PLANNER_ITEMS_KEY = "pf.aiPlanner.items.v1";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -11,6 +15,39 @@ const addDays = (base, days) => {
   date.setDate(date.getDate() + days);
   return date;
 };
+const plannerRuntime = { notice: "", tone: "", running: false };
+
+function authHeaders(json = false) {
+  const token = typeof session?.token === "function" ? session.token() : "";
+  const sessionId = typeof session?.get === "function" ? session.get()?.sessionId : "";
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(sessionId ? { "x-phantomforce-session": sessionId } : {}),
+    ...(json ? { "Content-Type": "application/json" } : {}),
+  };
+}
+
+async function plannerApi(path, options = {}) {
+  const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Operation failed (${response.status}).`);
+  return payload;
+}
+
+function hydratePlannerIntelligence(paint, { force = false } = {}) {
+  const state = organizationPulseState();
+  if (!session.token() || plannerRuntime.running) return;
+  const needsLoad = force || !cachedOrganizationPulse() || !cachedBrainContract();
+  if (!needsLoad || state.status === "loading" || state.brainContractStatus === "loading") return;
+  plannerRuntime.running = true;
+  Promise.all([
+    loadOrganizationPulse({ force }).catch(() => null),
+    loadBrainContract({ force }).catch(() => null),
+  ]).finally(() => {
+    plannerRuntime.running = false;
+    paint();
+  });
+}
 
 function loadPlannerItems() {
   try {
@@ -105,6 +142,103 @@ function aiPrepQueue(signals) {
   return items.slice(0, 6);
 }
 
+function attentionQueue(localItems, { ownerOperator = false } = {}) {
+  const serverItems = brainContractAttentionItems().map((item) => ({
+    id: item.signal?.id || `server:${item.title}`,
+    title: item.title,
+    detail: item.signal?.whatHappened || item.sub,
+    kind: item.signal?.department || "AI signal",
+    open: item.open,
+    source: "Live organization brain",
+    aiAction: item.signal?.canPhantomHandle ? "handle" : "prepare",
+    approvalRequired: item.signal?.approvalRequired === true,
+    repairId: ownerOperator && String(item.signal?.id || "").startsWith("opportunity:automation-failing:")
+      ? String(item.signal.id).replace("opportunity:automation-failing:", "")
+      : "",
+    retryFailedRuns: item.signal?.id === "opportunity:runs-failed",
+  }));
+  const local = localItems.map((item) => ({ ...item, title: item.text, source: "Workspace record" }));
+  const seen = new Set();
+  return [...local, ...serverItems].filter((item) => {
+    const key = `${String(item.open || "").toLowerCase()}:${String(item.title || "").toLowerCase()}`;
+    if (!item.title || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 12);
+}
+
+function operatorPrompt(items, mode = "single") {
+  const scope = items.map((item, index) => `${index + 1}. [${item.kind || "attention"}] ${item.title}${item.detail ? ` — ${item.detail}` : ""}${item.approvalRequired ? " [APPROVAL OR OWNER ACTION REQUIRED]" : ""}`).join("\n");
+  return `Operate this PhantomForce attention ${mode === "bulk" ? "queue" : "item"} end to end for organization ${wsName(currentWs())}.\n\n${scope}\n\nDo every safe internal step you can now: inspect real workspace state, repair retryable internal failures, organize work, draft missing material, and verify the result. Never claim completion without a receipt or a real record change. Do not send, publish, deploy, spend, delete, change credentials, or approve on the owner's behalf. Prepare those consequential steps completely and leave one clear approval card for the owner. Finish with a compact monitor report: completed, still running, needs approval, and blocked with the exact reason.`;
+}
+
+function manualAttentionAction(item) {
+  const now = new Date().toISOString();
+  if (item.manualAction === "done") {
+    const task = (store.state.tasks || []).find((record) => record.id === item.recordId);
+    if (!task) return false;
+    task.status = "done";
+    task.completedAt = now;
+    task.updatedAt = now;
+    pushActivity("Planner", `manually completed task "${task.title}".`, currentWs());
+    store.save();
+    return true;
+  }
+  if (item.manualAction === "follow-up-done") {
+    const lead = (store.state.leads || []).find((record) => record.id === item.recordId);
+    if (!lead) return false;
+    lead.status = "follow-up";
+    lead.lastContactAt = now;
+    lead.due = isoDay(addDays(new Date(), 7));
+    lead.next = "Review the next touch in one week";
+    pushActivity("Planner", `recorded a completed follow-up for ${lead.name}.`, currentWs());
+    store.save();
+    return true;
+  }
+  return false;
+}
+
+async function retryFailedRuns() {
+  const pulse = cachedOrganizationPulse();
+  const failed = pulse?.agentRuns?.available
+    ? (pulse.agentRuns.recent || []).filter((run) => run.state === "failed")
+    : [];
+  const results = await Promise.allSettled(failed.map((run) => plannerApi(`/phantom-ai/runs/${encodeURIComponent(run.id)}/retry`, { method: "POST" })));
+  return { attempted: failed.length, succeeded: results.filter((result) => result.status === "fulfilled").length };
+}
+
+async function runDirectRepair(item) {
+  if (item.repairId) {
+    await plannerApi(`/phantom-ai/automations/${encodeURIComponent(item.repairId)}/run`, { method: "POST" });
+    return "Workflow rerun finished and its proof was refreshed.";
+  }
+  if (item.retryFailedRuns) {
+    const result = await retryFailedRuns();
+    return result.attempted
+      ? `${result.succeeded}/${result.attempted} failed run${result.attempted === 1 ? "" : "s"} safely retried.`
+      : "No retryable failed runs remain.";
+  }
+  return "";
+}
+
+function attentionCard(item) {
+  const directRepair = item.repairId || item.retryFailedRuns;
+  const manual = item.manualAction === "done" || item.manualAction === "follow-up-done";
+  return `<article class="planner-attention-card ${item.approvalRequired ? "needs-approval" : "can-run"}">
+    <div class="planner-attention-copy">
+      <small>${esc(item.kind || "signal")} · ${esc(item.source || "Phantom")}</small>
+      <b>${esc(item.title)}</b>
+      <p>${esc(item.detail || "Phantom has enough context to prepare the next safe step.")}</p>
+      <span>${item.approvalRequired ? "Owner gate preserved" : item.aiAction === "handle" ? "AI can handle" : "AI can prepare"}</span>
+    </div>
+    <div class="planner-attention-actions">
+      ${directRepair ? `<button class="btn btn-primary" type="button" data-pl-repair="${esc(item.id)}">${item.retryFailedRuns ? "Retry safely" : "Repair now"}</button>` : `<button class="btn btn-primary" type="button" data-pl-ai="${esc(item.id)}">${item.aiAction === "handle" ? "AI handle" : "AI prepare"}</button>`}
+      ${manual ? `<button class="btn btn-quiet" type="button" data-pl-manual="${esc(item.id)}">${item.manualAction === "done" ? "Mark done" : "Follow-up done"}</button>` : ""}
+      <button class="btn btn-quiet" type="button" data-open-ws="${esc(item.open || "phantomai")}">Open</button>
+    </div>
+  </article>`;
+}
+
 function metricCard(label, value, sub) {
   return `<span><b>${esc(value)}</b><i>${esc(label)}</i><em>${esc(sub)}</em></span>`;
 }
@@ -188,31 +322,43 @@ export function renderPlanner(el, opts = {}) {
   const signals = plannerSignals();
   const prep = aiPrepQueue(signals);
   const plan = todaysPlan();
+  const attention = attentionQueue(plan, { ownerOperator: opts.isOwnerOperator === true });
+  const pulse = cachedOrganizationPulse();
+  const serverRunning = pulse?.agentRuns?.available ? Number(pulse.agentRuns.running || 0) : 0;
+  const aiReady = typeof opts.runAI === "function";
   const workspaceLabel = wsName(currentWs());
 
   el.innerHTML = `<div class="planner">
     <section class="planner-hero">
       <div>
         <p>AI planner · ${esc(workspaceLabel)}</p>
-        <h2>Plan the business before the business asks.</h2>
-        <span>Phantom watches approvals, CRM, accounting, tasks, schedules, content, sites, and automation coverage, then turns it into a clean operating day.</span>
+        <h2>Monitor the business. Phantom runs the routine.</h2>
+        <span>Phantom watches approvals, CRM, accounting, tasks, schedules, content, sites, and system health—then handles safe work and brings only consequential decisions back to you.</span>
       </div>
       <div class="planner-metrics">
-        ${metricCard("Approvals", signals.approvals.length, "waiting on owner")}
-        ${metricCard("Due CRM", signals.dueLeads.length, "follow-ups now")}
-        ${metricCard("Accounting", signals.finance.uncategorizedCount, "uncategorized")}
+        ${metricCard("Needs attention", attention.length, attention.length ? "real records + live signals" : "all clear")}
+        ${metricCard("AI running", serverRunning, serverRunning ? "working in background" : "ready for work")}
+        ${metricCard("Owner decisions", signals.approvals.length, "never auto-approved")}
         ${metricCard("Automations", signals.activeAutomations.length, `${signals.stockAutomations.length} stocked`)}
       </div>
     </section>
+    <section class="planner-autopilot ${attention.length ? "has-work" : "is-clear"}" aria-label="Phantom Autopilot">
+      <div class="planner-autopilot-state"><span class="planner-autopilot-orb" aria-hidden="true"></span><div><p>Phantom Autopilot</p><h3>${attention.length ? `${attention.length} item${attention.length === 1 ? "" : "s"} triaged` : "Everything is under control"}</h3><span>${attention.length ? "Safe internal work can run together. External actions stay queued for your approval." : "Phantom is watching live organization records and will surface only real work."}</span></div></div>
+      <div class="planner-autopilot-actions">
+        <button class="btn btn-primary" type="button" data-pl-run-all ${!attention.length || !aiReady || plannerRuntime.running ? "disabled" : ""}>${plannerRuntime.running ? "Working…" : "AI complete all safe work"}</button>
+        <button class="btn btn-quiet" type="button" data-pl-refresh ${plannerRuntime.running ? "disabled" : ""}>Recheck everything</button>
+      </div>
+    </section>
+    ${plannerRuntime.notice ? `<div class="planner-operation-notice is-${esc(plannerRuntime.tone || "info")}" role="status">${esc(plannerRuntime.notice)}</div>` : ""}
     <section class="planner-grid">
       <div class="planner-main">
         <section class="planner-card planner-brief">
           <div class="planner-card-head">
-            <div><p>Operating brief</p><h3>Today needs attention here</h3></div>
-            <button class="btn btn-quiet" type="button" data-open-ws="approvals">Review approvals</button>
+            <div><p>AI operating queue</p><h3>Needs attention—already triaged</h3></div>
+            <span class="planner-live-state"><i></i>${session.token() ? "Live organization brain" : "Local workspace monitor"}</span>
           </div>
-          <div class="planner-brief-list">
-            ${plan.length ? plan.map((item) => `<button type="button" data-open-ws="${esc(item.open)}"><b>${esc(item.kind || "signal")}</b><span>${esc(item.text)}</span></button>`).join("") : `<p class="planner-empty">No urgent local records. Planner will keep watching as connectors and workspace records fill in.</p>`}
+          <div class="planner-attention-list">
+            ${attention.length ? attention.map(attentionCard).join("") : `<div class="planner-clear"><b>No work needs you right now.</b><span>Phantom will continue monitoring connections, failed runs, approvals, clients, finance, security, and scheduled work.</span></div>`}
           </div>
         </section>
         ${weekBoard(items, signals)}
@@ -225,7 +371,7 @@ export function renderPlanner(el, opts = {}) {
         <section class="planner-card">
           <div class="planner-card-head"><div><p>AI prep queue</p><h3>What Phantom would prepare next</h3></div></div>
           <div class="planner-prep-list">
-            ${prep.map((item) => `<article><small>${esc(item.priority)}</small><b>${esc(item.title)}</b><p>${esc(item.detail)}</p><div><button class="btn btn-quiet" type="button" data-open-ws="${esc(item.open)}">Open</button><button class="btn btn-quiet" type="button" data-pl-suggest="${esc(item.id)}">Plan it</button></div></article>`).join("")}
+            ${prep.map((item) => `<article><small>${esc(item.priority)}</small><b>${esc(item.title)}</b><p>${esc(item.detail)}</p><div><button class="btn btn-quiet" type="button" data-open-ws="${esc(item.open)}">Open</button><button class="btn btn-quiet" type="button" data-pl-suggest="${esc(item.id)}">Plan it</button><button class="btn btn-primary" type="button" data-pl-prep-ai="${esc(item.id)}" ${!aiReady ? "disabled" : ""}>AI prepare</button></div></article>`).join("")}
           </div>
         </section>
         ${plannerForm()}
@@ -236,6 +382,79 @@ export function renderPlanner(el, opts = {}) {
       </aside>
     </section>
   </div>`;
+
+  el.querySelector("[data-pl-refresh]")?.addEventListener("click", () => {
+    plannerRuntime.notice = "Rechecking live records, system health, and the organization brain…";
+    plannerRuntime.tone = "info";
+    hydratePlannerIntelligence(paint, { force: true });
+    paint();
+  });
+
+  el.querySelector("[data-pl-run-all]")?.addEventListener("click", async () => {
+    if (!attention.length || !aiReady || plannerRuntime.running) return;
+    plannerRuntime.running = true;
+    plannerRuntime.notice = `Phantom is handling ${attention.length} attention item${attention.length === 1 ? "" : "s"}. Consequential actions will wait for approval.`;
+    plannerRuntime.tone = "working";
+    paint();
+    const direct = attention.filter((item) => item.repairId || item.retryFailedRuns);
+    const directResults = await Promise.allSettled(direct.map(runDirectRepair));
+    const repaired = directResults.filter((result) => result.status === "fulfilled").length;
+    const queued = opts.runAI(operatorPrompt(attention, "bulk"), { autoSubmit: true, source: "Needs attention" });
+    plannerRuntime.running = false;
+    plannerRuntime.notice = `${repaired ? `${repaired} retryable system item${repaired === 1 ? "" : "s"} restarted. ` : ""}${queued ? "PhantomBot is completing the remaining safe work now; owner gates are preserved." : "Open PhantomBot to complete the prepared work."}`;
+    plannerRuntime.tone = queued ? "success" : "warn";
+    pushActivity("Phantom Autopilot", `started a bulk safe-work pass for ${attention.length} attention item${attention.length === 1 ? "" : "s"}.`, currentWs());
+    store.save();
+  });
+
+  el.querySelectorAll("[data-pl-ai]").forEach((button) => {
+    button.onclick = () => {
+      const item = attention.find((candidate) => candidate.id === button.dataset.plAi);
+      if (!item || !aiReady) return;
+      opts.runAI(operatorPrompt([item]), { autoSubmit: true, source: "Needs attention" });
+    };
+  });
+
+  el.querySelectorAll("[data-pl-prep-ai]").forEach((button) => {
+    button.onclick = () => {
+      const item = prep.find((candidate) => candidate.id === button.dataset.plPrepAi);
+      if (!item || !aiReady) return;
+      opts.runAI(operatorPrompt([{ ...item, kind: "AI prep", source: "Planner recommendation", aiAction: "prepare" }]), { autoSubmit: true, source: "AI prep queue" });
+    };
+  });
+
+  el.querySelectorAll("[data-pl-manual]").forEach((button) => {
+    button.onclick = () => {
+      const item = attention.find((candidate) => candidate.id === button.dataset.plManual);
+      if (!item || !manualAttentionAction(item)) return;
+      plannerRuntime.notice = `Recorded “${item.title}” as manually handled.`;
+      plannerRuntime.tone = "success";
+      notify("Planner", plannerRuntime.notice);
+      paint();
+    };
+  });
+
+  el.querySelectorAll("[data-pl-repair]").forEach((button) => {
+    button.onclick = async () => {
+      const item = attention.find((candidate) => candidate.id === button.dataset.plRepair);
+      if (!item || plannerRuntime.running) return;
+      plannerRuntime.running = true;
+      plannerRuntime.notice = `Repairing “${item.title}”…`;
+      plannerRuntime.tone = "working";
+      paint();
+      try {
+        plannerRuntime.notice = await runDirectRepair(item);
+        plannerRuntime.tone = "success";
+        await Promise.all([loadOrganizationPulse({ force: true }).catch(() => null), loadBrainContract({ force: true }).catch(() => null)]);
+      } catch (error) {
+        plannerRuntime.notice = error instanceof Error ? error.message : "The repair could not finish.";
+        plannerRuntime.tone = "warn";
+      } finally {
+        plannerRuntime.running = false;
+        paint();
+      }
+    };
+  });
 
   el.querySelector("[data-pl-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -289,4 +508,5 @@ export function renderPlanner(el, opts = {}) {
       paint();
     };
   });
+  hydratePlannerIntelligence(paint);
 }

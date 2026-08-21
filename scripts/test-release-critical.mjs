@@ -10,6 +10,7 @@ const checks = [
   "test:phantombot-interstellar",
   "test:dropdown-readability",
   "test:automation-workspace",
+  "test:autopilot-attention",
   "test:auth-boundaries",
   "test:customer-plan-switching",
   "test:competitor-intelligence",

@@ -18,7 +18,11 @@ assert.match(center, /\/api\/connections\/start/u);
 assert.match(center, /configuration_required/u);
 assert.match(center, /Needs configuration/u);
 assert.match(center, /<details class="set-connect-group"/u, "Connection categories must collapse instead of rendering one endless wall.");
-assert.match(center, /busy \|\| needsConfiguration \? "disabled"/u, "Unavailable sign-in buttons must be disabled until the real broker is configured.");
+assert.match(center, /needsConfiguration \? `data-connection-fix=[\s\S]*: `data-connection-start=/u,
+  "Unavailable sign-in must become an actionable recovery path, never a fake provider start.");
+assert.match(center, /connector\.resolution/u, "Configuration blockers must explain the exact fix.");
+assert.match(center, /Ask platform owner[\s\S]*connectionOpts\.isOwnerOperator/u,
+  "Configuration blockers must preserve the platform-owner boundary.");
 assert.match(social, /Connect \$\{account\.name\}/u);
 assert.match(accounting, /data-act="connector"[\s\S]{0,180}>\$\{connector\.status === "connected" \? "Manage" : "Connect"\}/u);
 assert.match(accounting, /const currentFinance = financeNow\(\)[\s\S]*currentConnector\.status = payload\.state[\s\S]*store\.save\(\)/u,

@@ -579,6 +579,8 @@ export type Opportunity = {
   why: string;
   provenance: { source: string; nodeId?: string };
   action: { label: string; route: string };
+  canPhantomHandle: boolean;
+  approvalRequired: boolean;
 };
 
 export async function getOrganizationOpportunities(
@@ -597,6 +599,8 @@ export async function getOrganizationOpportunities(
       why: `Waiting in the queue: ${pulse.approvals.latest.map((item) => item.action).join(", ")}. Nothing downstream moves until these are decided.`,
       provenance: { source: "hermes-approvals.jsonl", nodeId: pulse.approvals.latest[0] ? `approval:${pulse.approvals.latest[0].id}` : undefined },
       action: { label: "Review approvals", route: "approvals" },
+      canPhantomHandle: false,
+      approvalRequired: true,
     });
   }
   if (pulse.automations.available && pulse.automations.failing.length > 0) {
@@ -606,7 +610,9 @@ export async function getOrganizationOpportunities(
         title: `Platform automation failing: ${job.name}`,
         why: `${job.lastSummary || "The last run reported an error."} This is a platform-level job — it affects the whole PhantomForce install, not just this workspace.`,
         provenance: { source: "automation-engine", nodeId: `automation:${job.id}` },
-        action: { label: "Open automations", route: "automation" },
+        action: { label: "Repair now", route: "automation" },
+        canPhantomHandle: true,
+        approvalRequired: false,
       });
     }
   }
@@ -616,7 +622,9 @@ export async function getOrganizationOpportunities(
       title: `${pulse.agentRuns.failed} agent run(s) failed`,
       why: "Work stopped mid-flight. Review what broke; most runs can be retried once the cause is fixed.",
       provenance: { source: "agent-runs.jsonl" },
-      action: { label: "Review runs", route: "automation" },
+      action: { label: "Retry safely", route: "automation" },
+      canPhantomHandle: true,
+      approvalRequired: false,
     });
   }
   if (pulse.managedGrowth.available) {
@@ -629,7 +637,9 @@ export async function getOrganizationOpportunities(
         title: nextAction.title,
         why: `${nextAction.detail} Backed by ${growth.sourceDocuments} server document(s): client setup, CRM, proposals, and workspace approvals.`,
         provenance: { source: "managed-growth-report", nodeId: `managed-growth:${pulse.tenantId}` },
-        action: { label: `Open ${nextAction.surface}`, route: nextAction.surface },
+        action: { label: nextAction.requiresApproval ? `Prepare ${nextAction.surface}` : `Handle ${nextAction.surface}`, route: nextAction.surface },
+        canPhantomHandle: true,
+        approvalRequired: nextAction.requiresApproval,
       });
     });
   }
@@ -646,6 +656,8 @@ export async function getOrganizationOpportunities(
         why: "Competitor discovery, deep dives, and tailored recommendations all start from the business profile.",
         provenance: { source: "competitor-intelligence.businessProfile" },
         action: { label: "Set up the profile", route: "competitor-intelligence" },
+        canPhantomHandle: false,
+        approvalRequired: false,
       });
     } else if (c.competitorCount === 0 && c.discoveryRuns === 0) {
       push({
@@ -654,6 +666,8 @@ export async function getOrganizationOpportunities(
         why: `The profile for ${c.businessName} is set, but discovery has never run — you're operating without competitive awareness.`,
         provenance: { source: "competitor-intelligence.discoveryRuns" },
         action: { label: "Find competitors", route: "competitor-intelligence" },
+        canPhantomHandle: true,
+        approvalRequired: false,
       });
     }
     if (c.competitorsWithoutSignals > 0) {
@@ -663,6 +677,8 @@ export async function getOrganizationOpportunities(
         why: "Tracked but empty — no public signals recorded, so they contribute nothing to estimates. Run their deep-dive dossiers and log what you find.",
         provenance: { source: "competitor-intelligence.signals" },
         action: { label: "Open deep dives", route: "competitor-intelligence" },
+        canPhantomHandle: true,
+        approvalRequired: false,
       });
     }
     if (c.signalCount >= 3 && c.inferenceCount === 0) {
@@ -672,6 +688,8 @@ export async function getOrganizationOpportunities(
         why: "Evidence is piling up without being turned into labeled estimates. Fusing is one click per competitor.",
         provenance: { source: "competitor-intelligence.inferences" },
         action: { label: "Fuse signals", route: "competitor-intelligence" },
+        canPhantomHandle: true,
+        approvalRequired: false,
       });
     }
   }
@@ -682,6 +700,8 @@ export async function getOrganizationOpportunities(
       why: "Generating replacements for media you already own burns credits. Check the library before the next generation.",
       provenance: { source: "asset-cloud (db)" },
       action: { label: "Open Asset Cloud", route: "assetcloud" },
+      canPhantomHandle: true,
+      approvalRequired: false,
     });
   }
   if (!pulse.assets.available) {
@@ -691,6 +711,8 @@ export async function getOrganizationOpportunities(
       why: "Without the library, Phantom can't recommend reuse and every generation starts from zero.",
       provenance: { source: "database" },
       action: { label: "See what's connected", route: "brain" },
+      canPhantomHandle: false,
+      approvalRequired: false,
     });
   }
   if (pulse.memories.available && pulse.memories.neverRecalled >= 3) {
@@ -700,6 +722,8 @@ export async function getOrganizationOpportunities(
       why: "Stored knowledge that never informs an answer is dead weight — review, sharpen, or prune it.",
       provenance: { source: "brain-memory.jsonl" },
       action: { label: "Open the memory vault", route: "brain" },
+      canPhantomHandle: true,
+      approvalRequired: false,
     });
   }
 

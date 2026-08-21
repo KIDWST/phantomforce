@@ -2339,6 +2339,56 @@
         }
       ],
       "forbiddenPatterns": []
+    },
+    {
+      "id": "autopilot-attention-and-connection-recovery",
+      "status": "active",
+      "title": "Needs Attention is an operator queue and connection failures explain their recovery",
+      "ownerDecision": "PhantomForce should feel AI-operated: users monitor while Phantom triages real organization records and brain signals, completes safe internal work individually or in one bulk pass, and leaves consequential external actions behind explicit owner approval gates. Every attention item must retain an easy AI or truthful manual path. Retryable internal failures use real run endpoints, platform-wide automation repair remains owner-only, and broken connection cards must never be disabled dead ends—they state the reason, the exact next step, and whether the platform owner is required.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/planner.js",
+          "pattern": "Do not send, publish, deploy, spend, delete, change credentials, or approve[\\s\\S]*AI complete all safe work[\\s\\S]*Needs attention—already triaged",
+          "description": "Planner retains one-click safe operation, real triage, and explicit consequential-action gates."
+        },
+        {
+          "file": "app/js/planner.js",
+          "pattern": "data-pl-repair[\\s\\S]*data-pl-ai[\\s\\S]*data-pl-manual|data-pl-ai[\\s\\S]*data-pl-manual[\\s\\S]*data-pl-repair",
+          "description": "Attention items retain direct repair, AI, and manual completion paths."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "export function queuePhantomAiPrompt[\\s\\S]*queuedOperatorPrompt",
+          "description": "Other workspaces can hand prepared or auto-start work into the real PhantomBot session."
+        },
+        {
+          "file": "server/src/phantom-ai/signals.ts",
+          "pattern": "canPhantomHandle: opportunity\\.canPhantomHandle[\\s\\S]*approvalRequired: opportunity\\.approvalRequired",
+          "description": "Organization brain signals preserve truthful actionability and approval requirements."
+        },
+        {
+          "file": "app/js/connection-center.js",
+          "pattern": "connector\\.resolution[\\s\\S]*Diagnose & recheck all[\\s\\S]*connectionOpts\\.isOwnerOperator",
+          "description": "Connection diagnosis stays actionable, reasoned, and owner-scoped."
+        },
+        {
+          "file": "server/src/connectors/customer-connection-catalog.ts",
+          "pattern": "reasonCode:[\\s\\S]*resolution:[\\s\\S]*ownerActionRequired:",
+          "description": "Connector status keeps structured failure reasons and recovery ownership."
+        },
+        {
+          "file": "scripts/test-autopilot-attention.mjs",
+          "pattern": "one-click safe bulk completion[\\s\\S]*actual submission pipeline[\\s\\S]*owner escalation action[\\s\\S]*Approval signals must stay owner-gated",
+          "description": "A focused release gate protects the AI-operated attention and recovery contract."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/planner.js",
+          "pattern": "Today needs attention here",
+          "description": "Planner cannot regress to a passive attention list without operator actions."
+        }
+      ]
     }
   ]
 }

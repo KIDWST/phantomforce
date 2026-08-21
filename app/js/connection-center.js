@@ -2,8 +2,8 @@
    The browser never asks for developer credentials. Connect is enabled only
    when the server can create a real, signed authorization handoff. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260820-186";
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260820-186";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260820-187";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260820-187";
 
 let connectionState = { loaded: false, loading: false, error: "", connectors: [], notice: "", busyId: "" };
 let connectionMount = null;
@@ -25,7 +25,12 @@ function headers(json = false) {
 async function connectionApi(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...headers(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Connection request failed (${response.status}).`);
+  if (!response.ok) {
+    const error = new Error(typeof payload?.error === "string" ? payload.error : `Connection request failed (${response.status}).`);
+    error.code = String(payload?.code || `HTTP_${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 
@@ -47,16 +52,41 @@ function connectionCard(connector) {
   const connected = connector.state === "connected";
   const needsConfiguration = connector.state === "configuration_required";
   const status = connected ? "Connected" : needsConfiguration ? "Needs configuration" : "Ready to connect";
-  const button = connected ? "Manage" : needsConfiguration ? "Needs configuration" : "Connect";
+  const button = connected ? "Manage" : needsConfiguration ? (connectionOpts.isOwnerOperator ? "Open owner setup" : "Ask platform owner") : "Connect";
   const busy = connectionState.busyId === connector.id;
   return `<article class="set-connect-card is-${esc(connector.state || "disconnected")}">
     <div class="set-connect-card-top">
       <span class="set-connect-mark" aria-hidden="true">${connected ? "✓" : "+"}</span>
       <span><b>${esc(connector.name)}</b><i>${esc(connector.detail)}</i></span>
     </div>
-    <div class="set-connect-state"><span>${esc(status)}</span><i>${esc(connector.customerMessage || "Choose Connect to continue.")}</i></div>
-    <button class="btn ${connected || needsConfiguration ? "btn-quiet" : "btn-primary"}" type="button" data-connection-start="${esc(connector.id)}" ${busy || needsConfiguration ? "disabled" : ""}>${busy ? "Opening…" : esc(button)}</button>
+    <div class="set-connect-state"><span>${esc(status)}</span><i>${esc(connector.customerMessage || "Choose Connect to continue.")}</i>${needsConfiguration ? `<small>${esc(connector.resolution || "The platform owner must finish the secure connection service setup.")}</small>` : ""}</div>
+    <button class="btn ${connected || needsConfiguration ? "btn-quiet" : "btn-primary"}" type="button" ${needsConfiguration ? `data-connection-fix="${esc(connector.id)}"` : `data-connection-start="${esc(connector.id)}"`} ${busy ? "disabled" : ""}>${busy ? "Opening…" : esc(button)}</button>
   </article>`;
+}
+
+function connectionHealth() {
+  const external = connectionState.connectors || [];
+  const brains = Array.isArray(connectionOpts.brainRoutes) ? connectionOpts.brainRoutes : [];
+  const configured = Array.isArray(connectionOpts.configuredConnections) ? connectionOpts.configuredConnections : [];
+  const all = [...brains, ...configured];
+  return {
+    active: external.filter((item) => item.state === "connected").length + all.filter((item) => item.state === "connected").length,
+    ready: external.filter((item) => item.state === "available").length,
+    attention: external.filter((item) => item.state === "configuration_required").length + all.filter((item) => item.state === "attention").length,
+    checking: all.filter((item) => item.state === "checking").length,
+    total: external.length + all.length,
+  };
+}
+
+async function diagnoseConnections() {
+  connectionState.notice = "Checking every brain route, bridge, API provider, and business account…";
+  if (connectionMount?.isConnected) renderConnectionCenter(connectionMount, connectionOpts);
+  await refreshConnections({ force: true });
+  const health = connectionHealth();
+  connectionState.notice = health.attention
+    ? `${health.active} active · ${health.ready} ready to connect · ${health.attention} need owner setup. Every blocker now shows its exact next step.`
+    : `${health.active} active · ${health.ready} ready to connect · no broken configured connections detected.`;
+  if (connectionMount?.isConnected) renderConnectionCenter(connectionMount, connectionOpts);
 }
 
 function overviewStatus(state) {
@@ -133,12 +163,14 @@ function connectionGroups() {
 export function renderConnectionCenter(el, opts = {}) {
   connectionMount = el;
   connectionOpts = opts;
+  const health = connectionHealth();
   const socialMountId = `social-connect-${Math.random().toString(36).slice(2)}`;
   el.innerHTML = `<div class="set-connection-center">
     <section class="set-section set-connect-hero">
-      <div><p class="set-eyebrow">One-click connections</p><h3>Everything connected to PhantomForce</h3><p class="set-note">Active brain routes, bridges, API providers, and business accounts stay at the top. Choose Connect below when your workspace needs another service.</p></div>
-      <button class="btn btn-quiet" type="button" data-connections-refresh>${connectionState.loading ? "Checking…" : "Refresh status"}</button>
+      <div><p class="set-eyebrow">One-click connections · Command center</p><h3>Everything connected to PhantomForce</h3><p class="set-note">Phantom continuously checks every brain route, bridge, API provider, and business account. Broken configured services rise first with the exact owner or user action required.</p></div>
+      <div class="set-connect-hero-actions"><button class="btn btn-primary" type="button" data-connections-diagnose ${connectionState.loading ? "disabled" : ""}>${connectionState.loading ? "Checking…" : "Diagnose & recheck all"}</button><button class="btn btn-quiet" type="button" data-connections-refresh ${connectionState.loading ? "disabled" : ""}>Refresh</button></div>
     </section>
+    <section class="set-connect-health" aria-label="Connection health"><span><b>${health.active}</b><i>Active</i></span><span><b>${health.ready}</b><i>Ready to connect</i></span><span class="${health.attention ? "is-attention" : "is-clear"}"><b>${health.attention}</b><i>Needs owner</i></span><span><b>${health.checking}</b><i>Checking</i></span></section>
     ${connectionState.notice ? `<div class="set-social-notice">${esc(connectionState.notice)}</div>` : ""}
     ${connectionState.error ? `<div class="set-social-notice">${esc(connectionState.error)}</div>` : ""}
     ${connectionOverview()}
@@ -148,6 +180,18 @@ export function renderConnectionCenter(el, opts = {}) {
   </div>`;
 
   el.querySelector("[data-connections-refresh]")?.addEventListener("click", () => void refreshConnections({ force: true }));
+  el.querySelector("[data-connections-diagnose]")?.addEventListener("click", () => void diagnoseConnections());
+  el.querySelectorAll("[data-connection-fix]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (connectionOpts.isOwnerOperator && typeof connectionOpts.openWorkspace === "function") {
+        connectionState.notice = "Opening owner diagnostics. The connection broker must be healthy before secure account sign-in can start.";
+        connectionOpts.openWorkspace("developer");
+      } else {
+        connectionState.notice = "The PhantomForce platform owner must finish this secure connection service. No API key belongs in this screen.";
+        renderConnectionCenter(el, opts);
+      }
+    });
+  });
   el.querySelectorAll("[data-connection-settings-tab]").forEach((button) => {
     button.addEventListener("click", () => connectionOpts.onOpenSettingsTab?.(button.dataset.connectionSettingsTab || "model"));
   });

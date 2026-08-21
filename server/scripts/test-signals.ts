@@ -18,6 +18,8 @@ const opportunities: Opportunity[] = [
     why: "Waiting in the queue: Publish post, Send proposal.",
     provenance: { source: "hermes-approvals.jsonl", nodeId: "approval:queue-1" },
     action: { label: "Review approvals", route: "approvals" },
+    canPhantomHandle: false,
+    approvalRequired: true,
   },
   {
     id: "automation-failing:job-9",
@@ -25,7 +27,9 @@ const opportunities: Opportunity[] = [
     title: "Platform automation failing: Nightly digest",
     why: "Last run reported an error.",
     provenance: { source: "automation-engine", nodeId: "automation:job-9" },
-    action: { label: "Open automations", route: "automation" },
+    action: { label: "Repair now", route: "automation" },
+    canPhantomHandle: true,
+    approvalRequired: false,
   },
   {
     id: "runs-failed",
@@ -33,7 +37,9 @@ const opportunities: Opportunity[] = [
     title: "1 agent run(s) failed",
     why: "Work stopped mid-flight.",
     provenance: { source: "agent-runs.jsonl" },
-    action: { label: "Review runs", route: "automation" },
+    action: { label: "Retry safely", route: "automation" },
+    canPhantomHandle: true,
+    approvalRequired: false,
   },
   {
     id: "managed-growth:0:crm",
@@ -42,6 +48,8 @@ const opportunities: Opportunity[] = [
     why: "Follow-up is due now. Backed by 4 server document(s).",
     provenance: { source: "managed-growth-report", nodeId: `managed-growth:${tenantId}` },
     action: { label: "Open crm", route: "crm" },
+    canPhantomHandle: true,
+    approvalRequired: false,
   },
   {
     id: "discovery-never-run",
@@ -50,6 +58,8 @@ const opportunities: Opportunity[] = [
     why: "The profile is set, but discovery has never run.",
     provenance: { source: "competitor-intelligence.discoveryRuns" },
     action: { label: "Find competitors", route: "competitor-intelligence" },
+    canPhantomHandle: true,
+    approvalRequired: false,
   },
   {
     id: "memories-idle",
@@ -58,6 +68,8 @@ const opportunities: Opportunity[] = [
     why: "Stored knowledge that never informs an answer is dead weight.",
     provenance: { source: "brain-memory.jsonl" },
     action: { label: "Open the memory vault", route: "brain" },
+    canPhantomHandle: true,
+    approvalRequired: false,
   },
 ];
 
@@ -105,7 +117,10 @@ assert.equal(byId("opportunity:memories-idle")?.department, "Intelligence");
 assert.equal(byId("gap:system:competitor-intelligence")?.department, "Technology");
 assert.equal(byId("gap:system:competitor-intelligence")?.confidence, "medium");
 assert.equal(byId("opportunity:approvals-pending")?.canPhantomHandle, false);
-assert.equal(byId("opportunity:approvals-pending")?.approvalRequired, false);
+assert.equal(byId("opportunity:approvals-pending")?.approvalRequired, true);
+assert.equal(byId("opportunity:automation-failing:job-9")?.canPhantomHandle, true);
+assert.equal(byId("opportunity:automation-failing:job-9")?.approvalRequired, false);
+assert.equal(byId("opportunity:runs-failed")?.canPhantomHandle, true);
 
 const changed = await getWhatChanged(session, access, precomputed);
 assert.deepEqual(

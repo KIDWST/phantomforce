@@ -58,6 +58,13 @@ export function customerConnectionCatalog(tenantId: string) {
         : brokerConfigured
           ? "Choose Connect to open the provider's secure sign-in."
           : "The secure account broker must be configured by the platform owner before sign-in can open.",
+      reasonCode: connected ? null : brokerConfigured ? null : "CONNECTION_BROKER_CONFIGURATION_REQUIRED",
+      resolution: connected
+        ? "No action needed."
+        : brokerConfigured
+          ? "Sign in with the provider and approve the requested access."
+          : "Platform owner: configure the secure account broker URL and signing secret, then run Diagnose & recheck all.",
+      ownerActionRequired: !connected && !brokerConfigured,
       requestedAt: request?.requestedAt || null,
       connected,
       brokerConfigured,

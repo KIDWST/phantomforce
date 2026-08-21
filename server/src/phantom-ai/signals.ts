@@ -48,9 +48,9 @@ export type Signal = {
   whatHappened: string;
   evidence: { source: string; nodeId?: string };
   recommendedAction?: { label: string; route: string };
-  /* Conservative by construction: every input here is a navigation
-     recommendation, not an executed action, so both default false. Nothing
-     in this module claims autonomy or an approval gate it doesn't enforce. */
+  /* Actionability is explicit and still conservative: `canPhantomHandle`
+     means safe internal preparation/repair can start from the operator queue.
+     It never bypasses `approvalRequired` for consequential external work. */
   canPhantomHandle: boolean;
   approvalRequired: boolean;
   isLiveActivity: boolean;
@@ -117,8 +117,8 @@ function signalFromOpportunity(opportunity: Opportunity): Signal {
     whatHappened: opportunity.why,
     evidence: { source: opportunity.provenance.source, nodeId: opportunity.provenance.nodeId },
     recommendedAction: { label: opportunity.action.label, route: opportunity.action.route },
-    canPhantomHandle: false,
-    approvalRequired: false,
+    canPhantomHandle: opportunity.canPhantomHandle,
+    approvalRequired: opportunity.approvalRequired,
     isLiveActivity: isLiveActivityOpportunity(opportunity),
   };
 }
