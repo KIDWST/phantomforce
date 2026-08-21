@@ -2,7 +2,7 @@
 #include "Core/PhantomGameShell.h"
 #include "Core/PhantomInteractionSpec.h"
 #include "Core/PhantomModularCharacter.h"
-
+#include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SceneComponent.h"
@@ -48,25 +48,114 @@ namespace
     }
 
 
-    bool ConfigureLegendsProductionSkeletal(
-        APhantomLegendsUnit* Unit,
-        const TCHAR* MeshPath,
-        const TCHAR* IdleAnimPath,
-        float TargetHeightCm,
-        float YawOffset
-    )
+    void SuppressRecoveredLegendsSkeletalVisuals(APhantomLegendsUnit* Unit)
     {
-        if (!Unit || !Unit->GetCapsuleComponent()) return false;
-        return PhantomModularCharacter::Configure(
-            Unit,
-            Unit->GetMesh(),
-            Unit->GetCapsuleComponent(),
-            MeshPath,
-            IdleAnimPath,
-            TargetHeightCm,
-            -Unit->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight(),
-            YawOffset
+        if (!Unit) return;
+        TArray<USkeletalMeshComponent*> SkeletalComponents;
+        Unit->GetComponents<USkeletalMeshComponent>(SkeletalComponents);
+        for (USkeletalMeshComponent* Component : SkeletalComponents)
+        {
+            if (!Component) continue;
+            USkeletalMesh* CurrentMesh = Component->GetSkeletalMeshAsset();
+            if (CurrentMesh && CurrentMesh->GetPathName().Contains(TEXT("/Game/Characters/Mannequins/")))
+            {
+                continue;
+            }
+            Component->SetVisibility(false, true);
+            Component->SetHiddenInGame(true, true);
+            Component->Stop();
+            Component->SetSkeletalMeshAsset(nullptr);
+
+            // Older recovered builds dynamically attached modular Production_* followers to the
+            // capsule. They are not default subobjects, so remove them completely if a stale class
+            // instance or cooked package ever recreates one.
+            if (Component != Unit->GetMesh() && Component->GetName().StartsWith(TEXT("Production_")))
+                Component->DestroyComponent();
+        }
+    }
+
+    int32 SanitizeLegendsWorldMeshes(UWorld* World)
+    {
+        if (!World) return 0;
+        UStaticMesh* SafeRock = LoadObject<UStaticMesh>(
+            nullptr,
+            TEXT("/Game/Phantom/Generated/Common/SM_RockCluster_A.SM_RockCluster_A")
         );
+        UStaticMesh* SafeTree = LoadObject<UStaticMesh>(
+            nullptr,
+            TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A")
+        );
+        UStaticMesh* SafeBarracks = LoadObject<UStaticMesh>(
+            nullptr,
+            TEXT("/Game/Phantom/Curated/Legends/SM_Legends_Barracks.SM_Legends_Barracks")
+        );
+        if (!SafeRock || !SafeTree || !SafeBarracks) return 0;
+
+        int32 Replaced = 0;
+        for (TActorIterator<AActor> It(World); It; ++It)
+        {
+            TArray<UStaticMeshComponent*> Components;
+            It->GetComponents<UStaticMeshComponent>(Components);
+            for (UStaticMeshComponent* Component : Components)
+            {
+                UStaticMesh* Mesh = Component ? Component->GetStaticMesh() : nullptr;
+                if (!Mesh) continue;
+                const FString MeshPath = Mesh->GetPathName();
+                const bool bRejectedRockAlias = MeshPath.Contains(
+                    TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.")
+                );
+                const bool bOrphanedFaceAsset = MeshPath.Contains(
+                    TEXT("/Game/Phantom/External/CC0/Aliases/Face")
+                );
+                const bool bMislabeledPineAsset = MeshPath.Contains(
+                    TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.")
+                );
+                const bool bContaminatedTreeAlias = MeshPath.Contains(
+                    TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.")
+                );
+                const bool bContaminatedGeneratedTree = MeshPath.Contains(
+                    TEXT("/Game/Phantom/Generated/Common/SM_StorybookTree_")
+                );
+                const bool bContaminatedFabBarracks = MeshPath.Contains(
+                    TEXT("/Game/Phantom/Curated/Fab/Legends/SM_Fab_Barracks.")
+                );
+                const bool bLegacyTreeSlot = It->GetName().StartsWith(TEXT("LEG_V11R7_CapitalDressing_"))
+                    || It->GetName().StartsWith(TEXT("LEG_V13_CapitalRing_"));
+                const bool bOverscaledLegacyTree = bLegacyTreeSlot
+                    && MeshPath.Contains(TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A."))
+                    && Component->Bounds.BoxExtent.GetMax() * 2.0f > 900.0f;
+                if (!bRejectedRockAlias && !bOrphanedFaceAsset && !bMislabeledPineAsset && !bContaminatedTreeAlias && !bContaminatedGeneratedTree && !bContaminatedFabBarracks && !bOverscaledLegacyTree) continue;
+
+                if (bContaminatedFabBarracks)
+                {
+                    const float OldGroundZ = Component->Bounds.Origin.Z - Component->Bounds.BoxExtent.Z;
+                    const FVector SafeSize = SafeBarracks->GetBounds().BoxExtent * 2.0f;
+                    const float SafeLongestAxis = FMath::Max3(SafeSize.X, SafeSize.Y, SafeSize.Z);
+                    Component->SetStaticMesh(SafeBarracks);
+                    Component->SetWorldScale3D(FVector(720.0f / FMath::Max(1.0f, SafeLongestAxis)));
+                    Component->UpdateBounds();
+                    It->AddActorWorldOffset(FVector(0.0f, 0.0f, OldGroundZ - (Component->Bounds.Origin.Z - Component->Bounds.BoxExtent.Z)));
+                }
+                else if (bMislabeledPineAsset || bContaminatedTreeAlias || bContaminatedGeneratedTree || bOverscaledLegacyTree)
+                {
+                    const float OldGroundZ = Component->Bounds.Origin.Z - Component->Bounds.BoxExtent.Z;
+                    const FVector SafeSize = SafeTree->GetBounds().BoxExtent * 2.0f;
+                    const float SafeLongestAxis = FMath::Max3(SafeSize.X, SafeSize.Y, SafeSize.Z);
+                    Component->SetStaticMesh(SafeTree);
+                    Component->SetWorldScale3D(FVector(520.0f / FMath::Max(1.0f, SafeLongestAxis)));
+                    Component->UpdateBounds();
+                    It->AddActorWorldOffset(FVector(0.0f, 0.0f, OldGroundZ - (Component->Bounds.Origin.Z - Component->Bounds.BoxExtent.Z)));
+                }
+                else
+                {
+                    Component->SetStaticMesh(SafeRock);
+                }
+                Component->SetVisibility(true, true);
+                Component->SetHiddenInGame(false, true);
+                ++Replaced;
+            }
+        }
+        return Replaced;
     }
 
     const TCHAR* ResourceName(EPhantomLegendsResource Resource)
@@ -119,13 +208,12 @@ void APhantomLegendsResourceNode::Configure(EPhantomLegendsResource NewType, int
     switch (ResourceType)
     {
         case EPhantomLegendsResource::Wood:
-            // Use the RTS baseline forest cluster with its authored wood/foliage materials. The
-            // old generated tree had no material slots and read as a translucent egg at command zoom.
-            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"));
-            if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"));
+            // The recovered U_Legends_0009_PineTrees payload is mislabeled: its cooked geometry is
+            // a translucent human head. Keep wood nodes on the verified bounded tree asset.
+            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"));
             break;
         case EPhantomLegendsResource::Stone:
-            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock"));
+            ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Common/SM_RockCluster_A.SM_RockCluster_A"));
             if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0010_Rocks.U_Legends_0010_Rocks"));
             break;
         case EPhantomLegendsResource::Gold:
@@ -135,7 +223,7 @@ void APhantomLegendsResourceNode::Configure(EPhantomLegendsResource NewType, int
         case EPhantomLegendsResource::Shard:
             ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A"));
             if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Legends/V9/Economy/SM_V9_CrystalNode.SM_V9_CrystalNode"));
-            if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock"));
+            if (!ResourceVisual) ResourceVisual = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Common/SM_RockCluster_A.SM_RockCluster_A"));
             break;
     }
 
@@ -636,6 +724,7 @@ void APhantomLegendsUnit::Configure(bool bNewWorker, const FLinearColor& Color)
 
 void APhantomLegendsUnit::ConfigureRole(EPhantomLegendsRole NewRole, EPhantomLegendsFaction NewFaction, int32 NewTier)
 {
+    SuppressRecoveredLegendsSkeletalVisuals(this);
     Role = NewRole;
     Faction = NewFaction;
     bWorker = Role == EPhantomLegendsRole::Worker;
@@ -651,49 +740,34 @@ void APhantomLegendsUnit::ConfigureRole(EPhantomLegendsRole NewRole, EPhantomLeg
     AttackInterval = Role == EPhantomLegendsRole::Ranger ? 1.15f : (Role == EPhantomLegendsRole::Brute ? 1.05f : 0.72f);
     GetCharacterMovement()->MaxWalkSpeed = bWorker ? 420.0f : (Role == EPhantomLegendsRole::Raider ? 500.0f : (Role == EPhantomLegendsRole::Brute ? 285.0f : 390.0f));
 
-    const TCHAR* SkelPath = nullptr;
-    const TCHAR* AnimPath = nullptr;
-    if (bLegion)
+    // The verified Manny mesh has stable packaged bounds and real velocity-driven locomotion.
+    // Recovered monolithic imports remain suppressed, but valid production humans are preserved.
+    const float ProductionHeight = Role == EPhantomLegendsRole::Brute ? 250.0f : (bWorker ? 185.0f : 215.0f);
+    const bool bProductionSkeletal = PhantomModularCharacter::Configure(
+        this,
+        GetMesh(),
+        GetCapsuleComponent(),
+        TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"),
+        TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"),
+        ProductionHeight,
+        -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight(),
+        -90.0f,
+        true
+    );
+    if (bProductionSkeletal)
     {
-        if (Role == EPhantomLegendsRole::Brute)
+        if (UClass* LocomotionClass = LoadClass<UAnimInstance>(
+            nullptr,
+            TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C")
+        ))
         {
-            SkelPath = TEXT("/Game/Phantom/Characters/Production/SK_Barbarian.SK_Barbarian");
-            AnimPath = TEXT("/Game/Phantom/Characters/Production/Animations/A_Barbarian_Idle.A_Barbarian_Idle");
-        }
-        else if (Role == EPhantomLegendsRole::Ranger || Role == EPhantomLegendsRole::Raider || bWorker)
-        {
-            SkelPath = TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue");
-            AnimPath = TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Idle.A_Rogue_Idle");
-        }
-        else
-        {
-            SkelPath = TEXT("/Game/Phantom/Characters/Production/SK_Knight.SK_Knight");
-            AnimPath = TEXT("/Game/Phantom/Characters/Production/Animations/A_Knight_Idle.A_Knight_Idle");
+            GetMesh()->SetAnimInstanceClass(LocomotionClass);
         }
     }
     else
     {
-        if (Role == EPhantomLegendsRole::Ranger)
-        {
-            SkelPath = TEXT("/Game/Phantom/Characters/Production/SK_SkeletonRogue.SK_SkeletonRogue");
-            AnimPath = TEXT("/Game/Phantom/Characters/Production/Animations/A_SkeletonRogue_Idle.A_SkeletonRogue_Idle");
-        }
-        else if (Role == EPhantomLegendsRole::Brute)
-        {
-            SkelPath = TEXT("/Game/Phantom/Characters/Production/SK_SkeletonWarrior.SK_SkeletonWarrior");
-            AnimPath = TEXT("/Game/Phantom/Characters/Production/Animations/A_SkeletonWarrior_Idle.A_SkeletonWarrior_Idle");
-        }
-        else
-        {
-            SkelPath = TEXT("/Game/Phantom/Characters/Production/SK_SkeletonMinion.SK_SkeletonMinion");
-            AnimPath = TEXT("/Game/Phantom/Characters/Production/Animations/A_SkeletonMinion_Idle.A_SkeletonMinion_Idle");
-        }
+        GetMesh()->SetVisibility(false, true);
     }
-    const bool bProductionSkeletal = ConfigureLegendsProductionSkeletal(
-        this, SkelPath, AnimPath,
-        Role == EPhantomLegendsRole::Brute ? 285.0f : (bWorker ? 180.0f : 205.0f),
-        bLegion ? -90.0f : 90.0f
-    );
 
     const TCHAR* GeneratedCharacter = nullptr;
     if (bLegion)
@@ -722,9 +796,17 @@ void APhantomLegendsUnit::ConfigureRole(EPhantomLegendsRole NewRole, EPhantomLeg
         : (Role == EPhantomLegendsRole::Ranger ? TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_RedRanger.SM_V9_RedRanger")
            : (Role == EPhantomLegendsRole::Brute ? TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_RedGolem.SM_V9_RedGolem")
               : TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_RedGuard.SM_V9_RedGuard")));
-    UStaticMesh* AuthoredCharacter = bProductionSkeletal ? nullptr : LoadObject<UStaticMesh>(nullptr, V9Character);
-    if (!AuthoredCharacter) AuthoredCharacter = GeneratedCharacter ? LoadObject<UStaticMesh>(nullptr, GeneratedCharacter) : nullptr;
-    if (!AuthoredCharacter)
+    // The generated current character is the first static fallback.  Several recovered V9 golem
+    // assets contain environment-scale sculpt parts and must never become a screen-filling unit
+    // merely because the production skeletal mesh is unavailable on a target machine.
+    UStaticMesh* AuthoredCharacter = bProductionSkeletal || !GeneratedCharacter || Role == EPhantomLegendsRole::Brute
+        ? nullptr
+        : LoadObject<UStaticMesh>(nullptr, GeneratedCharacter);
+    if (!AuthoredCharacter && !bProductionSkeletal && Role != EPhantomLegendsRole::Brute)
+    {
+        AuthoredCharacter = LoadObject<UStaticMesh>(nullptr, V9Character);
+    }
+    if (!AuthoredCharacter && Role != EPhantomLegendsRole::Brute)
     {
         const TCHAR* CharacterAlias = bWorker
             ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Char_Worker.SM_CC0_Char_Worker")
@@ -736,8 +818,11 @@ void APhantomLegendsUnit::ConfigureRole(EPhantomLegendsRole NewRole, EPhantomLeg
         AuthoredCharacter = LoadObject<UStaticMesh>(nullptr, CharacterAlias);
     }
 
+    // All recovered monolithic Legends character meshes have failed packaged bounds/orientation
+    // checks. The deterministic component rig cannot turn one bad bound into a giant head.
+    AuthoredCharacter = nullptr;
     VisualModel->SetStaticMesh(AuthoredCharacter);
-    VisualModel->SetVisibility(AuthoredCharacter != nullptr && !bProductionSkeletal);
+    VisualModel->SetVisibility(false);
     if (AuthoredCharacter)
     {
         const FBoxSphereBounds VisualBounds = AuthoredCharacter->GetBounds();
@@ -788,6 +873,7 @@ void APhantomLegendsUnit::ConfigureRole(EPhantomLegendsRole NewRole, EPhantomLeg
     ApplyColor(SelectionRing, FLinearColor(0.05f, 1.0f, 0.42f));
     ApplyColor(HealthBack, FLinearColor(0.02f, 0.025f, 0.035f));
     ApplyColor(HealthFill, bLegion ? FLinearColor(0.15f, 0.95f, 0.72f) : FLinearColor(1.0f, 0.12f, 0.22f));
+    SuppressRecoveredLegendsSkeletalVisuals(this);
     RefreshHealthBar();
 }
 
@@ -1165,9 +1251,10 @@ APhantomLegendsPawn::APhantomLegendsPawn()
     SetRootComponent(CameraRoot);
     SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("StrategyBoom"));
     SpringArm->SetupAttachment(CameraRoot);
-    // Conventional RTS default: start high enough to read the whole tactical situation.
-    SpringArm->TargetArmLength = 8200.0f;
-    SpringArm->SetRelativeRotation(FRotator(-48.0f, -42.0f, 0.0f));
+    // Command from inside the capital, with a readable horizon and real building silhouettes.
+    // The old -48/8200 opening exposed the square patch grid and made the city look miniature.
+    SpringArm->TargetArmLength = 3600.0f;
+    SpringArm->SetRelativeRotation(FRotator(-18.0f, -42.0f, 0.0f));
     SpringArm->bDoCollisionTest = false;
     SpringArm->bEnableCameraLag = true;
     SpringArm->CameraLagSpeed = 14.0f;
@@ -1273,12 +1360,12 @@ void APhantomLegendsPawn::Tick(float DeltaSeconds)
                 const bool bOrbit=PlayerController->IsInputKeyDown(EKeys::LeftAlt)||PlayerController->IsInputKeyDown(EKeys::RightAlt);
                 if(bOrbit && SpringArm)
                 {
-                    FRotator R=SpringArm->GetRelativeRotation(); R.Yaw+=Delta.X*0.16f; R.Pitch=FMath::Clamp(R.Pitch-Delta.Y*0.11f,-72.0f,-30.0f); SpringArm->SetRelativeRotation(R);
+                    FRotator R=SpringArm->GetRelativeRotation(); R.Yaw+=Delta.X*0.16f; R.Pitch=FMath::Clamp(R.Pitch-Delta.Y*0.11f,-72.0f,-20.0f); SpringArm->SetRelativeRotation(R);
                 }
                 else
                 {
                     const float DragScale = SpringArm
-                        ? FMath::GetMappedRangeValueClamped(FVector2D(3800.0f, 14000.0f), FVector2D(2.0f, 7.0f), SpringArm->TargetArmLength)
+                        ? FMath::GetMappedRangeValueClamped(FVector2D(2600.0f, 14000.0f), FVector2D(2.0f, 7.0f), SpringArm->TargetArmLength)
                         : 3.0f;
                     AddActorWorldOffset((-ScreenRight * Delta.X + ScreenForward * Delta.Y) * DragScale);
                 }
@@ -1294,7 +1381,7 @@ void APhantomLegendsPawn::Tick(float DeltaSeconds)
             {
                 SpringArm->TargetArmLength = FMath::Clamp(
                     SpringArm->TargetArmLength - DirectWheel * 1000.0f,
-                    3800.0f,
+                    2600.0f,
                     14000.0f);
             }
 
@@ -1335,7 +1422,7 @@ void APhantomLegendsPawn::Tick(float DeltaSeconds)
     const FVector Forward = ScreenForward * FMath::Clamp(ForwardInput + DirectForward + EdgeForward, -1.0f, 1.0f);
     const FVector Right = ScreenRight * FMath::Clamp(RightInput + DirectRight + EdgeRight, -1.0f, 1.0f);
     const float ZoomAlpha = SpringArm
-        ? FMath::GetMappedRangeValueClamped(FVector2D(3800.0f, 14000.0f), FVector2D(0.62f, 1.55f), SpringArm->TargetArmLength)
+        ? FMath::GetMappedRangeValueClamped(FVector2D(2600.0f, 14000.0f), FVector2D(0.62f, 1.55f), SpringArm->TargetArmLength)
         : 1.0f;
     const float PanModifier = PlayerController && (PlayerController->IsInputKeyDown(EKeys::LeftShift)||PlayerController->IsInputKeyDown(EKeys::RightShift)) ? 2.0f
         : (PlayerController && (PlayerController->IsInputKeyDown(EKeys::LeftControl)||PlayerController->IsInputKeyDown(EKeys::RightControl)) ? 0.5f : 1.0f);
@@ -1348,7 +1435,7 @@ void APhantomLegendsPawn::Tick(float DeltaSeconds)
 
     if (SpringArm)
     {
-        SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - ZoomInput * 1000.0f, 3800.0f, 14000.0f);
+        SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - ZoomInput * 1000.0f, 2600.0f, 14000.0f);
     }
     ZoomInput = 0.0f;
 }
@@ -1400,11 +1487,11 @@ void APhantomLegendsPawn::MoveRight(float Value) { RightInput = Value; }
 void APhantomLegendsPawn::Zoom(float Value) { ZoomInput = Value; }
 void APhantomLegendsPawn::ZoomIn()
 {
-    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - 2200.0f, 3800.0f, 14000.0f);
+    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - 2200.0f, 2600.0f, 14000.0f);
 }
 void APhantomLegendsPawn::ZoomOut()
 {
-    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength + 2200.0f, 3800.0f, 14000.0f);
+    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength + 2200.0f, 2600.0f, 14000.0f);
 }
 void APhantomLegendsPawn::RotateLeft()
 {
@@ -1551,8 +1638,8 @@ void APhantomLegendsPawn::FocusCapital()
 void APhantomLegendsPawn::ResetCamera()
 {
     if (!SpringArm) return;
-    SpringArm->SetRelativeRotation(FRotator(-48.0f,-42.0f,0.0f));
-    SpringArm->TargetArmLength = 8200.0f;
+    SpringArm->SetRelativeRotation(FRotator(-18.0f,-42.0f,0.0f));
+    SpringArm->TargetArmLength = 3600.0f;
 }
 
 void APhantomLegendsPawn::HandleControlGroup(int32 GroupIndex)
@@ -1676,6 +1763,8 @@ void APhantomLegendsDirector::BeginPlay()
     Super::BeginPlay();
     LoadProgress();
     BuildRealm();
+    const int32 SanitizedWorldMeshes = SanitizeLegendsWorldMeshes(GetWorld());
+    UE_LOG(LogTemp, Display, TEXT("[PhantomLegends] Replaced %d rejected recovered world meshes before gameplay."), SanitizedWorldMeshes);
     // A deliberate opening formation keeps economy, army and threat readable at a glance.
     const FVector LegionAnchor=Stronghold?Stronghold->GetActorLocation():FVector(-120000.0f,-95000.0f,35.0f);
     for(int32 I=0;I<8;++I)
@@ -1758,8 +1847,11 @@ void APhantomLegendsDirector::Tick(float DeltaSeconds)
 
 void APhantomLegendsDirector::BuildRealm()
 {
-    SpawnSun(4.25f, FRotator(-45.0f,-34.0f,0.0f), FLinearColor(1.0f,0.88f,0.70f));
-    SetWorldMood(FLinearColor(0.08f,0.12f,0.10f),0.0014f,FLinearColor(0.34f,0.42f,0.48f));
+    // A higher late-morning sun keeps the capital readable from the opening RTS camera.
+    // The previous 45-degree light threw entire building silhouettes across the command lane.
+    SpawnSun(2.75f, FRotator(-68.0f,-34.0f,0.0f), FLinearColor(0.98f,0.96f,0.90f));
+    SetWorldMood(FLinearColor(0.045f,0.11f,0.085f),0.0010f,FLinearColor(0.56f,0.57f,0.59f));
+    StyleWorldPostProcess(-0.04f, 1.02f, 1.03f, 0.28f, 0.12f);
 
     // V10 PRODUCTION MAP: macro terrain, roads, river, capitals, settlements and forests are
     // persistent editor-authored actors. Runtime creates only interactive RTS state. This avoids
@@ -1912,7 +2004,7 @@ void APhantomLegendsDirector::BuildRealm()
             const float A=J*(2.0f*PI/8.0f)+(TreeIndex%3)*0.14f;
             const float R=260.0f+(J%4)*190.0f;
             const FVector P=Center+FVector(FMath::Cos(A)*R,FMath::Sin(A)*R,18);
-            const TCHAR* Tree=J%3==0?TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A");
+            const TCHAR* Tree=TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A");
             SpawnStaticMeshAsset(FString::Printf(TEXT("RealmTree_%03d"),TreeIndex++),Tree,P,FVector(0.66f+(J%3)*0.06f),FRotator(0,J*31,0),false,true);
         }
     }
@@ -2004,7 +2096,7 @@ void APhantomLegendsDirector::BuildRealm()
         for(int32 J=0;J<12;++J)
         {
             const float A=J*(2.0f*PI/12.0f); const FVector P=C+FVector(FMath::Cos(A)*FMath::FRandRange(2600.0f,5200.0f),FMath::Sin(A)*FMath::FRandRange(2600.0f,5200.0f),0);
-            SpawnStaticMeshAsset(FString::Printf(TEXT("Macro%d_Tree%d"),M,J),J%2?TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"):TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"),P,FVector(0.72f),FRotator(0,J*29.0f,0),false,true);
+            SpawnStaticMeshAsset(FString::Printf(TEXT("Macro%d_Tree%d"),M,J),TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"),P,FVector(0.72f),FRotator(0,J*29.0f,0),false,true);
         }
         const EPhantomLegendsResource Types[]={EPhantomLegendsResource::Wood,EPhantomLegendsResource::Stone,EPhantomLegendsResource::Gold,EPhantomLegendsResource::Shard};
         for(int32 J=0;J<4;++J){APhantomLegendsResourceNode* Node=GetWorld()->SpawnActor<APhantomLegendsResourceNode>(C+FVector((J-1.5f)*1100.0f,2200.0f,40),FRotator::ZeroRotator);if(Node)Node->Configure(Types[J],1000+J*250);}
@@ -2024,7 +2116,7 @@ void APhantomLegendsDirector::BuildRealm()
             const float A=J*(2.0f*PI/10.0f)+H*0.21f;
             const float R=2300.0f+(J%4)*1200.0f;
             SpawnStaticMeshAsset(FString::Printf(TEXT("StrategicHub%d_Tree%d"),H,J),
-                J%3==0?TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"),
+                TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"),
                 C+FVector(FMath::Cos(A)*R,FMath::Sin(A)*R,0),FVector(0.72f+(J%3)*0.08f),FRotator(0,J*31.0f,0),false,true);
         }
         SpawnStaticMeshAsset(FString::Printf(TEXT("StrategicHub%d_Ruin"),H),
@@ -2057,7 +2149,7 @@ void APhantomLegendsDirector::BuildRealm()
                 const float R=2600.0f+(J%5)*1250.0f;
                 const FVector P=C+FVector(FMath::Cos(A)*R,FMath::Sin(A)*R,0);
                 SpawnStaticMeshAsset(FString::Printf(TEXT("WorldCellTree_%03d_%02d"),DensityId,J),
-                    J%3==0?TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"),
+                    TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"),
                     P,FVector(0.68f+(J%4)*0.08f),FRotator(0,J*29.0f,0),false,true);
             }
             APhantomLegendsResourceNode* CellNode=GetWorld()->SpawnActor<APhantomLegendsResourceNode>(
@@ -2088,9 +2180,9 @@ void APhantomLegendsDirector::BuildRealm()
                 RealmRocks.Emplace(FRotator(0.0f,(GX*19-GY*37)%360,0.0f),FVector(X+1700.0f,Y-1100.0f,16.0f),FVector(0.42f+((GX-GY)&3)*0.06f));
         }
     }
-    SpawnInstancedMeshCluster(TEXT("LegendsRealmTreesA_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"),RealmTreesA,false);
-    SpawnInstancedMeshCluster(TEXT("LegendsRealmTreesB_HISM"),TEXT("/Game/Phantom/UnityHarvest/Legends/character/U_Legends_0009_PineTrees.U_Legends_0009_PineTrees"),RealmTreesB,false);
-    SpawnInstancedMeshCluster(TEXT("LegendsRealmRocks_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock"),RealmRocks,false);
+    SpawnInstancedMeshCluster(TEXT("LegendsRealmTreesA_HISM"),TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"),RealmTreesA,false);
+    SpawnInstancedMeshCluster(TEXT("LegendsRealmTreesB_HISM"),TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"),RealmTreesB,false);
+    SpawnInstancedMeshCluster(TEXT("LegendsRealmRocks_HISM"),TEXT("/Game/Phantom/Generated/Common/SM_RockCluster_A.SM_RockCluster_A"),RealmRocks,false);
 
     TArray<FTransform> RealmSettlementHomes;
     RealmSettlementHomes.Reserve(UE_ARRAY_COUNT(StrategicHubs)*8);

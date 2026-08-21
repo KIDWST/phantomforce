@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "revision": "V25R9",
+  "engine": "Unreal Engine 5.8.1",
+  "candidate_root": "C:\\Users\\jorda\\Documents\\Codex\\worktrees\\phantomforce-phantomplay-recovery-20260819\\packages\\phantom-games-unreal\\CandidateBuilds\\V25R9",
+  "proof_root": "C:\\Users\\jorda\\Documents\\Codex\\worktrees\\phantomforce-phantomplay-recovery-20260819\\packages\\phantom-games-unreal\\Saved\\PhantomGameplayProofV25R9",
+  "games": [
+    {
+      "id": "cubetown",
+      "exe": "Cubetown.exe",
+      "file_count": 31,
+      "total_bytes": 1059047444,
+      "sha256": "D65B2EFEA49F8F1F168C0553F6FCC99F50A066156D20FBB2C17DE3F774798FF2"
+    },
+    {
+      "id": "phantom-ages",
+      "exe": "PhantomAges.exe",
+      "file_count": 31,
+      "total_bytes": 1059046945,
+      "sha256": "B6FDD24F19C959ABC85E043C2E1CD7305AE328A30D9E16FEF0207C822E9AFB5D"
+    },
+    {
+      "id": "phantom-legends",
+      "exe": "PhantomLegends.exe",
+      "file_count": 31,
+      "total_bytes": 1059046957,
+      "sha256": "D245594FA6A347AB5F00221C982AFBAF68359DB112793576BDAE684653E1D160"
+    },
+    {
+      "id": "phantom-strike",
+      "exe": "PhantomStrike.exe",
+      "file_count": 31,
+      "total_bytes": 1059046953,
+      "sha256": "740ECA65BA5EDDC1E3507C0A04D750F3353B09472FC1654CE6D02EF9B480998B"
+    }
+  ],
+  "proofs": [
+    {
+      "file": "cubetown-GAMEPLAY.png",
+      "sha256": "9FB1B24E885BBD566C471201E81CA17D97BF083E85E25A950E5023C225331D8E"
+    },
+    {
+      "file": "cubetown-LAIR-GAMEPLAY.png",
+      "sha256": "74E529383AD524C3464E75F44E14E15882420EF1C138E4C866CE1BD838F1CEF8"
+    },
+    {
+      "file": "phantom-ages-GAMEPLAY.png",
+      "sha256": "3FE3978CEAD9341269A7B60906625B337414A418680B7FEAB6FF9676A6C3AB49"
+    },
+    {
+      "file": "phantom-legends-GAMEPLAY.png",
+      "sha256": "E8A8ACEC727F3B265A11B4F132E81FC6CF1DFF4572B1AC34BD7144DF93FDA4C6"
+    },
+    {
+      "file": "phantom-strike-GAMEPLAY.png",
+      "sha256": "871C8155F810E8A6DC70845D8955A087F372076CE458D8EB5D911AF4C42CDA09"
+    },
+    {
+      "file": "cubetown-ICON.png",
+      "sha256": "D1BE87D3B911B98D6BF74E058D9B0ECC753CB4B391FFE248D479B01B8E7B350D"
+    },
+    {
+      "file": "phantom-ages-ICON.png",
+      "sha256": "D1BE87D3B911B98D6BF74E058D9B0ECC753CB4B391FFE248D479B01B8E7B350D"
+    },
+    {
+      "file": "phantom-legends-ICON.png",
+      "sha256": "D1BE87D3B911B98D6BF74E058D9B0ECC753CB4B391FFE248D479B01B8E7B350D"
+    },
+    {
+      "file": "phantom-strike-ICON.png",
+      "sha256": "D1BE87D3B911B98D6BF74E058D9B0ECC753CB4B391FFE248D479B01B8E7B350D"
+    },
+    {
+      "file": "V11_VISUAL_GATE.csv",
+      "sha256": "06CE51A4579811D79B3277549F8F96D56E903B8E1E6BEC83B7D06BCEF1916999"
+    }
+  ]
+}

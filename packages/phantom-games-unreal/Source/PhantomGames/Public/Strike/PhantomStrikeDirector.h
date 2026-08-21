@@ -33,6 +33,7 @@ public:
     virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
     void RegisterKill(int32 Points, bool bHeadshot);
+    void ApplyInsertionView();
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
     float Health = 100.0f;
@@ -108,6 +109,8 @@ private:
     bool bScoreboardVisible = false;
     bool bMapVisible = false;
     bool bInitialViewApplied = false;
+    bool bGameplayCapture = false;
+    float GameplayCaptureViewLockRemaining = 0.0f;
     float FireCooldown = 0.0f;
     float ReloadRemaining = 0.0f;
     float WeaponHeat = 0.0f;

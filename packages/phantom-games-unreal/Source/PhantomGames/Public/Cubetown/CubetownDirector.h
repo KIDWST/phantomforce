@@ -8,6 +8,8 @@
 #include "CubetownDirector.generated.h"
 
 class UCameraComponent;
+class UAnimInstance;
+class UAnimSequence;
 class USceneComponent;
 class USpringArmComponent;
 class UStaticMeshComponent;
@@ -109,7 +111,15 @@ public:
     UPROPERTY()
     int32 StoryChapter = 0;
 
-    // Version-2 persistent architecture data. We store asset identifiers + transforms rather than raw Actor references.
+    UPROPERTY()
+    int32 ForgeTier = 0;
+
+    // Only builds authored against the current production scale may be restored. Older experimental
+    // saves used radically different mesh units and could cover the new town with kilometre-wide walls.
+    UPROPERTY()
+    int32 BuildSchemaVersion = 0;
+
+    // Persistent architecture data stores asset identifiers + transforms rather than raw Actor references.
     UPROPERTY()
     TArray<FString> BuildAssetPaths;
 
@@ -311,6 +321,7 @@ public:
     bool IsLockedOn() const { return LockedTarget.IsValid(); }
     AActor* GetLockedTarget() const { return LockedTarget.Get(); }
     void SetBuildCameraMode(bool bEnabled);
+    void FocusOpeningView(const FVector& WorldTarget);
 
 private:
     UPROPERTY()
@@ -361,6 +372,57 @@ private:
     UPROPERTY()
     UStaticMeshComponent* VisualModel;
 
+    UPROPERTY()
+    UAnimSequence* IdleAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* WalkAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* RunAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* BackwardAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* StrafeLeftAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* StrafeRightAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* JumpStartAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* JumpLoopAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* JumpLandAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* DodgeAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* GuardAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* AttackAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* AttackAnimation2 = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* AttackAnimation3 = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* HitAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* ActiveAnimation = nullptr;
+
+    UPROPERTY()
+    TSubclassOf<UAnimInstance> LocomotionAnimClass;
+
     float Health = 120.0f;
     float AttackRemaining = 0.0f;
     float DashRemaining = 0.0f;
@@ -369,14 +431,29 @@ private:
     float Stamina = 100.0f;
     float ComboResetRemaining = 0.0f;
     float ParryWindowRemaining = 0.0f;
+    float LandingAnimationRemaining = 0.0f;
     bool bGuarding = false;
     bool bSprinting = false;
     bool bCrouchedByInput = false;
+    bool bWasFalling = false;
+    bool bLocomotionProofInitialized = false;
+    bool bLocomotionProofJumped = false;
+    bool bLocomotionProofReported = false;
     int32 ComboStep = 0;
+    uint8 LocomotionProofAnimationMask = 0;
+    float LocomotionProofElapsed = 0.0f;
+    float LocomotionProofMaxSpeed = 0.0f;
+    float LocomotionProofYawTravel = 0.0f;
+    float LocomotionProofMinPitch = 90.0f;
+    float LocomotionProofMaxPitch = -90.0f;
+    FVector LocomotionProofStart = FVector::ZeroVector;
     TWeakObjectPtr<ACubetownEnemy> LockedTarget;
 
     void MoveForward(float Value);
     void MoveRight(float Value);
+    void TurnCamera(float Value);
+    void LookCamera(float Value);
+    void UpdateLocomotionAnimation(float DeltaSeconds);
     void ZoomCamera(float Value);
     void ZoomIn();
     void ZoomOut();
@@ -495,6 +572,7 @@ public:
     int32 GetFriendship(int32 Index) const { return Friendship.IsValidIndex(Index) ? Friendship[Index] : 0; }
     int32 GetTotalFriendship() const { int32 Total = 0; for (int32 Value : Friendship) Total += Value; return Total; }
     int32 GetStoryChapter() const { return StoryChapter; }
+    int32 GetForgeTier() const { return ForgeTier; }
 
 private:
     TArray<int32> Inventory = { 28, 18, 10, 6, 18, 0 };
@@ -513,6 +591,7 @@ private:
     ECubetownBlockType SelectedBlock = ECubetownBlockType::Grass;
     ECubetownEchoType SelectedEcho = ECubetownEchoType::Blade;
     int32 EchoEnergy = 24;
+    float PhantomiteRegenSeconds = 0.0f;
     int32 ShrinesRestored = 0;
     TSet<int32> ActiveShrineIndices;
     int32 EnemiesAlive = 0;
@@ -527,6 +606,8 @@ private:
     TArray<int32> Friendship = { 0, 0, 0 };
     TArray<float> FriendTalkCooldowns = { 0.0f, 0.0f, 0.0f };
     int32 StoryChapter = 0;
+    int32 ForgeTier = 0;
+    int32 LoadedBuildSchemaVersion = 0;
     bool bBuildMode = false;
     int32 BuildToolIndex = 0; // 0 prefab, 1 wall, 2 room, 3 fence, 4 garden, 5 decor
     bool bHasBuildStart = false;
@@ -558,6 +639,7 @@ private:
     FString QuestStatus = TEXT("WELCOME TO CUBETOWN // MEET MIRA, ROWAN, AND PIP IN HEARTSTONE VILLAGE");
 
     void BuildDreamWorld();
+    void SpawnProductionWorldPopulation();
     void SpawnDreamTree(const FString& Name, const FVector& Location, float Scale, int32 PaletteVariant, bool bCollision = true);
     void SpawnDreamWorldDetails();
     void SpawnMemorycraftTrials();
@@ -572,6 +654,7 @@ private:
     void RestoreSavedBuilds();
     FString BuildAssetForIndex(int32 Index) const;
     FString BuildNameForIndex(int32 Index) const;
+    bool SpendBuildMaterials(int32 WoodCost, int32 StoneCost, int32 AmberCost, const FString& Action);
     void SpawnBlockAt(const FIntVector& Grid, ECubetownBlockType Type, bool bMineable);
     void SpawnEnemyWave();
     void SpawnEnemy(ECubetownEnemyType Type, const FVector& Location, int32 Tier);

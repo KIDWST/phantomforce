@@ -22,12 +22,14 @@
 
 namespace
 {
-    const FVector FixedBattlefieldCameraLocation(0.0f, -18500.0f, 12500.0f);
-    const FRotator FixedBattlefieldCameraRotation(-34.0f, 90.0f, 0.0f);
-    // Keep the whole one-screen battlefield legible without exposing the empty world
-    // outside the authored combat diorama.  The former 34.5 km framing made the real
-    // armies and V13-V17 set dressing read like a small prototype island.
-    constexpr float FixedBattlefieldOrthoWidth = 27500.0f;
+    // Frame the active war camp and first engagement instead of observing the entire map from
+    // an empty, board-game distance. The closer lens keeps both fortresses readable while the
+    // foreground set pieces and moving formations occupy the lower half of the screen.
+    const FVector FixedBattlefieldCameraLocation(0.0f, -19000.0f, 5200.0f);
+    const FRotator FixedBattlefieldCameraRotation(-17.0f, 90.0f, 0.0f);
+    // Perspective restores depth, silhouettes, and scale to the one-screen battlefield.  The old
+    // orthographic board view made every authored fortress and army read like a flat prototype token.
+    constexpr float FixedBattlefieldFieldOfView = 55.0f;
 
     APhantomAgesDirector* AgesDirector(const UObject* Context)
     {
@@ -605,44 +607,43 @@ void APhantomAgesUnit::Configure(
     UpgradeGlow->SetVisibility(ArmorLevel > 0 || DamageLevel > 0 || Age >= 4);
     const bool bHumanoid = !bSiege && NewType != EPhantomAgesUnitType::Dragon;
 
-    bool bProductionHumanoid = false;
-    if (bHumanoid && SkeletalVisual)
+    // Use the verified full-body mannequin for humanoid combatants. This replaces the visible
+    // stick-figure fallback while preserving authored siege engines and dragons.
+    const bool bProductionHumanoid = bHumanoid && PhantomModularCharacter::Configure(
+        this,
+        SkeletalVisual,
+        Root,
+        TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"),
+        TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"),
+        245.0f,
+        0.0f,
+        -90.0f,
+        true
+    );
+    const bool bUseRecoveredMonolithicHumanoid = false;
+    if (bProductionHumanoid)
     {
-        const bool bPlayer = Team == EPhantomAgesTeam::Player;
-        const TCHAR* MeshPath = nullptr;
-        const TCHAR* IdlePath = nullptr;
-        if (bPlayer)
-        {
-            if (NewType == EPhantomAgesUnitType::FireArcher || NewType == EPhantomAgesUnitType::SpearHunter)
-            {
-                MeshPath = TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue");
-                IdlePath = TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Idle.A_Rogue_Idle");
-            }
-            else
-            {
-                MeshPath = TEXT("/Game/Phantom/Characters/Production/SK_Knight.SK_Knight");
-                IdlePath = TEXT("/Game/Phantom/Characters/Production/Animations/A_Knight_Idle.A_Knight_Idle");
-            }
-        }
-        else
-        {
-            MeshPath = (NewType == EPhantomAgesUnitType::FireArcher || NewType == EPhantomAgesUnitType::SpearHunter)
-                ? TEXT("/Game/Phantom/Characters/Production/SK_SkeletonRogue.SK_SkeletonRogue")
-                : TEXT("/Game/Phantom/Characters/Production/SK_SkeletonWarrior.SK_SkeletonWarrior");
-            IdlePath = (NewType == EPhantomAgesUnitType::FireArcher || NewType == EPhantomAgesUnitType::SpearHunter)
-                ? TEXT("/Game/Phantom/Characters/Production/Animations/A_SkeletonRogue_Idle.A_SkeletonRogue_Idle")
-                : TEXT("/Game/Phantom/Characters/Production/Animations/A_SkeletonWarrior_Idle.A_SkeletonWarrior_Idle");
-        }
-        bProductionHumanoid = PhantomModularCharacter::Configure(
-            this,
-            SkeletalVisual,
-            Root,
-            MeshPath,
-            IdlePath,
-            235.0f,
-            0.0f,
-            bPlayer ? -90.0f : 90.0f
+        ProductionIdleAnimation = LoadObject<UAnimSequence>(
+            nullptr,
+            TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle")
         );
+        ProductionMoveAnimation = LoadObject<UAnimSequence>(
+            nullptr,
+            TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jog/MF_Unarmed_Jog_Fwd.MF_Unarmed_Jog_Fwd")
+        );
+        ProductionAttackAnimation = LoadObject<UAnimSequence>(
+            nullptr,
+            TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_01.MM_Attack_01")
+        );
+        ActiveProductionAnimation = ProductionIdleAnimation;
+    }
+    else if (SkeletalVisual)
+    {
+        SkeletalVisual->SetVisibility(false, true);
+        ProductionIdleAnimation = nullptr;
+        ProductionMoveAnimation = nullptr;
+        ProductionAttackAnimation = nullptr;
+        ActiveProductionAnimation = nullptr;
     }
 
     // Era identity is visual, not just a number. Every civilization tier gets a dedicated
@@ -661,7 +662,9 @@ void APhantomAgesUnit::Configure(
             ? TEXT("/Game/Phantom/Generated/Ages/V9/Units/SM_V9_AgesBlueDragon.SM_V9_AgesBlueDragon")
             : TEXT("/Game/Phantom/Generated/Ages/V9/Units/SM_V9_AgesRedDragon.SM_V9_AgesRedDragon"));
     }
-    else if (!bProductionHumanoid)
+    // Recovered monolithic V9 humanoids have inconsistent axes/bounds in packaged builds and
+    // rendered as tall black columns. Humanoids therefore use the bounded articulated rig.
+    else if (bUseRecoveredMonolithicHumanoid)
     {
         // V9 high-detail faction silhouettes first; era-specific meshes remain the fallback so
         // progression still works even if a future V9 role is absent.
@@ -809,7 +812,7 @@ void APhantomAgesUnit::Configure(
         OffhandMesh->SetRelativeRotation(FRotator(0.0f, 0.0f, 18.0f));
     }
 
-    if (AuthoredVisual)
+    if (AuthoredVisual || bProductionHumanoid)
     {
         BodyMesh->SetVisibility(false);
         HeadMesh->SetVisibility(false);
@@ -928,7 +931,12 @@ void APhantomAgesUnit::Tick(float DeltaSeconds)
         TargetRefresh = 0.16f;
     }
     AActor* TargetActor = CurrentTarget.Get();
-    if (!TargetActor) return;
+    if (!TargetActor)
+    {
+        SetProductionAnimation(ProductionIdleAnimation, true);
+        return;
+    }
+    bool bMovedThisFrame = false;
     const float CenterDistance = FMath::Abs(TargetActor->GetActorLocation().X - GetActorLocation().X);
     const float TargetRadius = Cast<APhantomAgesTower>(TargetActor) ? 185.0f : 0.0f;
     const float Distance = FMath::Max(0.0f, CenterDistance - TargetRadius);
@@ -952,6 +960,7 @@ void APhantomAgesUnit::Tick(float DeltaSeconds)
         if (!bFormationBlocked)
         {
             AddActorWorldOffset(FVector(Direction * MoveSpeed * DeltaSeconds, 0.0f, 0.0f), false);
+            bMovedThisFrame = true;
             if (LeftArm->IsVisible())
             {
                 const float Phase = GetWorld()->GetTimeSeconds() * 9.0f + GetActorLocation().X * 0.012f;
@@ -977,6 +986,22 @@ void APhantomAgesUnit::Tick(float DeltaSeconds)
         ? FMath::Sin((AttackInterval - AttackCooldown) / (AttackInterval * 0.28f) * PI) * 38.0f
         : 0.0f;
     WeaponMesh->SetRelativeRotation(WeaponRestRotation + FRotator(0.0f, 0.0f, AttackSwing));
+    if (AttackCooldown > AttackInterval * 0.72f)
+    {
+        SetProductionAnimation(ProductionAttackAnimation, false);
+    }
+    else
+    {
+        SetProductionAnimation(bMovedThisFrame ? ProductionMoveAnimation : ProductionIdleAnimation, true);
+    }
+}
+
+void APhantomAgesUnit::SetProductionAnimation(UAnimSequence* Animation, bool bLoop)
+{
+    if (!SkeletalVisual || !SkeletalVisual->IsVisible() || !Animation || ActiveProductionAnimation == Animation) return;
+    SkeletalVisual->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+    SkeletalVisual->PlayAnimation(Animation, bLoop);
+    ActiveProductionAnimation = Animation;
 }
 
 float APhantomAgesUnit::TakeDamage(
@@ -1012,8 +1037,8 @@ APhantomAgesPawn::APhantomAgesPawn()
     SpringArm->bEnableCameraRotationLag = false;
     BattlefieldCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("BattlefieldCamera"));
     BattlefieldCamera->SetupAttachment(SpringArm);
-    BattlefieldCamera->ProjectionMode = ECameraProjectionMode::Orthographic;
-    BattlefieldCamera->OrthoWidth = FixedBattlefieldOrthoWidth;
+    BattlefieldCamera->ProjectionMode = ECameraProjectionMode::Perspective;
+    BattlefieldCamera->FieldOfView = FixedBattlefieldFieldOfView;
     AutoPossessPlayer = EAutoReceiveInput::Player0;
 }
 
@@ -1036,7 +1061,11 @@ void APhantomAgesPawn::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds); (void)DeltaSeconds;
     SetActorLocation(FixedBattlefieldCameraLocation);
     SetActorRotation(FixedBattlefieldCameraRotation);
-    if (BattlefieldCamera) BattlefieldCamera->OrthoWidth = FixedBattlefieldOrthoWidth;
+    if (BattlefieldCamera)
+    {
+        BattlefieldCamera->ProjectionMode = ECameraProjectionMode::Perspective;
+        BattlefieldCamera->FieldOfView = FixedBattlefieldFieldOfView;
+    }
     if (SpringArm) { SpringArm->TargetArmLength=0.0f; SpringArm->SetRelativeRotation(FRotator::ZeroRotator); }
 }
 
@@ -1209,6 +1238,7 @@ void APhantomAgesDirector::BuildBattlefield()
 {
     SpawnSun(4.5f, FRotator(-43.0f, -26.0f, 0.0f), FLinearColor(1.0f, 0.80f, 0.60f));
     SetWorldMood(FLinearColor(0.055f, 0.075f, 0.115f), 0.0060f, FLinearColor(0.19f, 0.21f, 0.28f));
+    StyleWorldPostProcess(-0.32f, 1.12f, 0.90f, 0.38f, 0.18f);
 
     // V10: PhantomAges_World already owns the battlefield art, armies, fortresses, siege and
     // spectacle composition. Runtime adds ONLY authoritative gameplay towers/collision/simulation.

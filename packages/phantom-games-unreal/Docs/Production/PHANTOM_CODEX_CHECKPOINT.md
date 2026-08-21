@@ -1,3 +1,142 @@
+# CubeTown V23R1 vertical-slice candidate — 2026-08-20 15:41 CDT
+
+## Outcome
+
+- Accepted candidate: `D:\PhantomForceBuilds\V23R1\cubetown-pass14\Windows`.
+- Packaged executable: `D:\PhantomForceBuilds\V23R1\cubetown-pass14\Windows\Cubetown.exe`.
+- Package inventory: 32 files, 1,078,104,894 bytes.
+- Candidate state: packaged and runtime-verified; **not promoted**.
+- Live PhantomPlay install remains V22R24 at `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows`.
+- Live manifest and CubeTown launcher hash were re-read after verification and remain unchanged.
+- Existing rollback remains `D:\PhantomForceRollbacks\phantomplay-unreal-v18r1-to-v22r24-20260820-122046\Windows`.
+
+## Implemented vertical slice
+
+- Raised, zoomed-out diorama camera: 4,300-unit arm, -47 degree pitch, 46 degree FOV, and 950-unit forward composition.
+- Deterministic packaged-proof camera lock, collision-safe proof framing, streamed-load reassertion, and a cold-start fade that hides world assembly.
+- Authored V23 route from the starter area through town, bridge/gate, and Phantomite Lair.
+- Aligned three-by-three warm-stone civic plaza; the prior mixed blue/tan overlapping composition was visually rejected and replaced.
+- Dark authored lair floor, crystal/torch lighting, staged guardian and adds, lair-safe proof behavior, and the correct `DEFEAT LAIR GUARDIAN` objective.
+- Existing playable continuity retained for resource collection/spending, build costs and persistence, forge tiers 1-3, Phantomite regeneration, combat, NPC/objective routing, HUD, minimap, tool belt, health/damage feedback, and save schema 23.
+- Production world contains 212 actors, including 210 V23 actors, with zero Engine BasicShapes and zero rejected visual aliases.
+
+## Runtime and build evidence
+
+- Unreal Shipping compile/build/cook/stage/pak/IoStore/archive: PASS, 4,822 packages discovered, 4,815 packaged, zero errors.
+- `Tools/ValidatePortfolioGameplayV14.py`: PASS, including camera, cold-load, fade, lair objective, and encounter-staging contracts.
+- `Tools/ValidateProductionWorlds.py`: PASS.
+- `git diff --check`: PASS.
+- Opening packaged-runtime proof: `D:\PhantomForceProof\V23R1\cubetown-v23r1-pass14-opening.png`; SHA-256 `1A73FAF4705DE37E405B4B8551E42D0AB196A9D03A0F842C0E3DADBBF98D14F1`.
+- Lair packaged-runtime proof: `D:\PhantomForceProof\V23R1\cubetown-v23r1-pass14-lair.png`; SHA-256 `123FF679F7464A215D42B4389F831E75FBD723EA13E7449B44785D865A5E164D`.
+
+## Truthful remaining scope
+
+V23R1 is a stronger playable vertical-slice foundation, not completion of every section in the Grezzo-like master specification. Still open are the full waking interior, enterable/furnished building network, named NPC schedules and household/family simulation, the complete multi-room dungeon run, premium icon/UI art, comprehensive automated playthrough coverage, and measured performance/soak profiling. Those remain release work and are not represented as complete.
+
+---
+
+# Phantom Codex Checkpoint — 2026-08-20 V22R24 installed release
+
+## Current V22R24 state
+
+- Branch: `agent/phantomplay-unreal-recovery-20260819`.
+- Exact Unreal project: `packages/phantom-games-unreal/PhantomGames.uproject`.
+- Engine: Unreal Engine 5.8.1 at `H:\UE_5.8`.
+- Candidate: `D:\PhantomForceCandidates\V22R24`.
+- Candidate gameplay evidence: `D:\PhantomForceProof\V22R24`.
+- Installed gameplay evidence: `D:\PhantomForceProof\InstalledV22R24`.
+- Fresh Phantom Legends build evidence: `D:\PhantomForceBuilds\V22R24`; CubeTown, Phantom Ages, and Phantom Strike retain their already-verified V22 Shipping packages.
+- Live state: V22R24 is installed under `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows` after exact `PROMOTE` authorization.
+- Rollback: the complete prior V18R1 installed set is preserved at `D:\PhantomForceRollbacks\phantomplay-unreal-v18r1-to-v22r24-20260820-122046\Windows`.
+- Desktop state: the installed PhantomPlay shell was relaunched successfully after verification and left running for use.
+
+## V22R24 camera, tools, and world-quality pass
+
+- CubeTown now opens with a wider, flatter behind-character adventure camera: 1,420 cm arm, -9.5 degree pitch, 74-degree field of view, elevated aim point, and a 720–1,750 cm player zoom range. Build view expands to 2,050 cm without replacing the normal exploration camera.
+- CubeTown exposes its usable actions in a two-line tool belt: combat, interaction, lock-on, sprint, jump, recenter, camera zoom, Create, Remember, Weave, Ride, Build, Kit, Map, and Journal.
+- CubeTown gained a deliberately composed adventure lane; Phantom Ages gained a war-camp dressing pass; Phantom Strike gained tactical cover and landmarks. The additions are curated around readable play lanes instead of increasing asset count for its own sake.
+- Phantom Legends gained a curated capital-life pass while preserving an open command lane. The known camera-blocking `LEG_Blue_Inner_0_1` actor and the experimental `LEG_V22_CapitalLife_Approach*` cluster are now removed and rejected by validation because actual cooked captures proved their legacy bounds could obstruct the camera.
+- Phantom Legends uses a wider command camera and a readable late-morning lighting treatment.
+
+## V22R24 verification
+
+- Portfolio V14 static gameplay validation: PASS, including the CubeTown Zelda-distance, flatter-pitch, readable-FOV, objective-facing, streamed-capture, and camera-reset checks.
+- Production world validation schema 22: PASS with zero failures. CubeTown: 489 actors / 21 V22 actors; Phantom Ages: 78 / 21; Phantom Legends: 523 / 17; Phantom Strike: 739 / 19. All four report zero basic shapes, rejected aliases, rejected composition actors, and oversized non-terrain actors; Strike also reports zero spawn blockers.
+- Python syntax checks: PASS. Git whitespace/error check: PASS.
+- Fresh Phantom Legends Windows Shipping cook/package after the final obstruction cleanup: PASS. All four V22R24 candidate executables exist and launched for capture.
+- Actual packaged-executable gameplay capture: 4/4 at 1,920 x 1,080.
+- Automated visual gate: 4/4 PASS. Detail/lower-frame ratios were CubeTown 0.861/0.944, Phantom Ages 0.861/0.889, Phantom Legends 0.840/0.785, and Phantom Strike 0.771/0.806.
+- Human frame review: CubeTown shows the requested wide, flatter adventure view with long street/horizon visibility; Phantom Legends no longer has the giant foreground obstruction; Ages and Strike retain readable combat spaces and tool/HUD context.
+- Installed tree verification: PASS. CubeTown 31 files / 1,047,770,975 bytes; Phantom Ages 31 / 1,047,779,180; Phantom Legends 30 / 1,047,774,796; Phantom Strike 31 / 1,047,779,188. All four launcher hashes match the reviewed manifest.
+- Fresh installed-executable capture: 4/4 PASS. The installed visual metrics were CubeTown detail/lower 0.854/0.938, Phantom Ages 0.868/0.903, Phantom Legends 0.847/0.778, and Phantom Strike 0.771/0.806.
+
+Evidence hashes:
+
+- `cubetown-GAMEPLAY.png` — SHA-256 `BA0329FA2B726E00D54D2032AD7B3C186EBCA7AD17B51DAB5FD3DEF2E87E4B9C`.
+- `phantom-ages-GAMEPLAY.png` — SHA-256 `4E779201D101DB38F5DF2F4C23ECED0F8CEE930DA206E376B491E72C8EF6D8AE`.
+- `phantom-legends-GAMEPLAY.png` — SHA-256 `95A0C7E95F143076A08E2E878DF5420E03C0706741CD1921DBA27FC9BAE2CD8A`.
+- `phantom-strike-GAMEPLAY.png` — SHA-256 `9ABDF5854EC4D8EBE4B7F9BFD9BD2B02A0C43DAFADBA0AACC46EB36CD3105EBF`.
+- `V11_VISUAL_GATE.csv` — SHA-256 `6A7A8346846458BD564E3691C0BD356879B7A2DAE097E311F5EA37ABFB621B50`.
+
+Installed evidence hashes:
+
+- `cubetown-GAMEPLAY.png` — SHA-256 `A42D6C0336E7F287ED3FEE076AA678683A19FCABE00AB5EA9071C6BAFD2B6820`.
+- `phantom-ages-GAMEPLAY.png` — SHA-256 `19CB5FD5926C78368254F16B92E9073CDCB53FB5185C1A7726D3B5A399C40E3A`.
+- `phantom-legends-GAMEPLAY.png` — SHA-256 `FCA95CBD1B5E7DB7F341AEC58FA15F8D4E20B0EFD6E2C813E2E246681F47BEDE`.
+- `phantom-strike-GAMEPLAY.png` — SHA-256 `A02B21EAB89354A025F9BE196DB83F802144C2D728B00377EE9053AB965A93D5`.
+- `V11_VISUAL_GATE.csv` — SHA-256 `30789323C698C2E0253FEC82CF98CE7699D016A371061D612F0F8325AE4E3580`.
+
+One incomplete generated V22R22 duplicate was moved intact to `D:\PhantomForceGeneratedArchive\2026-08-20-space-recovery\CandidateBuilds-V22R22-incomplete` to recover workspace capacity. No source, reviewed candidate, installed build, or live file was deleted.
+
+## V22R24 release status
+
+V22R24 is live and verified. Promotion first failed safely when C: lacked room for the second game; the tool automatically restored V18R1. The successful retry stored the rollback on D:, installed all four games atomically, and passed fresh installed capture and hash verification. `Tools/Promote-InstalledBuildSet.ps1` now reads versioned reviewed manifests from `Tools/PromotionManifests/` and can promote external candidate/proof roots without rewriting a release-pinned script. Exact destructive authorization remains enforced, but once supplied the workflow continues through installed verification instead of stopping at a candidate report.
+
+---
+
+# Prior checkpoint — 2026-08-20 V22R12 reviewed candidate
+
+## State
+
+- Branch: `agent/phantomplay-unreal-recovery-20260819`.
+- Exact Unreal project: `packages/phantom-games-unreal/PhantomGames.uproject`.
+- Engine: Unreal Engine 5.8.1 at `H:\UE_5.8`.
+- Candidate: `BuildArtifacts/V22R12`; all four Windows Shipping packages completed successfully.
+- Live state: unchanged at V18R1. V22R12 has not been installed because this project requires a separate exact `PROMOTE` authorization for live replacement.
+
+## V22R12 completed repairs
+
+- CubeTown now forces a readable opening gameplay view after world streaming completes: 940 cm spring arm, 76-degree field of view, centered town-lane focus, deterministic capture reassertion, and full streaming/async-load flush before the view is accepted.
+- The reviewed CubeTown frame clearly shows the player, central road, objective NPC, town depth, HUD, and 62 m objective distance without camera obstruction.
+- Phantom Legends removes the 16 contaminated grid actors whose `SM_Fab_Barracks` payload contained human-head geometry instead of architecture.
+- Phantom Legends normalizes 22 oversized legacy tree slots and rejects the contaminated mesh/slot composition in both the editor patcher and production validator.
+- Phantom Strike uses a less sky-heavy 82-degree combat view and a steeper insertion pitch so the road, weapon, enemies, and encounter space remain visible.
+- Runtime sanitizers and static validation protect the repaired Legends composition from returning when older maps or aliases are loaded.
+
+## Verification
+
+- Editor C++ compile: passed.
+- Production world validation schema 22: passed with zero failures.
+- Portfolio static validation: passed, 26 checks, including the streamed-capture camera reassertion guard.
+- Windows Shipping packaging: 4/4 passed, 30 files and approximately 1.047 GB per game.
+- Actual executable gameplay capture: 4/4 passed at 1920 x 1080.
+- Automated visual gate: 4/4 passed; CubeTown detail tile ratio 0.882 and lower-frame detail ratio 0.931.
+- Human frame review: 4/4 passed. CubeTown camera/readability confirmed; Legends contaminated heads removed; Strike ground combat composition confirmed.
+
+Evidence directory: `Saved/PhantomGameplayProofV22R12Candidates`.
+
+- `cubetown-GAMEPLAY.png` — SHA-256 `0ED0543C6E104FD4E67695894ED8DA644C71050D033F2FF98E3DAE919AA29ACF`.
+- `phantom-ages-GAMEPLAY.png` — SHA-256 `6FC5B19D656AF6DBB5FF08E88F603E284E23C785F18AE2E0A821982DAA8A7540`.
+- `phantom-legends-GAMEPLAY.png` — SHA-256 `A6D7BCA06A0558C16FFB3A35710A8D12E4F8BABD009EF3CA2D6B831452D99698`.
+- `phantom-strike-GAMEPLAY.png` — SHA-256 `F7B26795447503D5B311E58995C2AC2033F1A3344B7E766CF806FF97052AFFB2`.
+- Visual gate CSV — SHA-256 `2BB85E83D9460ADAA1F721C05C5D1E5A45AB44D1700184677BE4C7267751EE8E`.
+
+## Next release gate
+
+V22R12 is a reviewed candidate, not an installed release. Promotion must preserve the current V18R1 build set as a rollback snapshot, atomically install all four V22R12 games, recapture the four games from the installed location, rerun the automated visual gate, and verify the installed hashes. Do not describe V22R12 as live until those installed-build checks pass.
+
+---
+
 # Phantom Codex Checkpoint — 2026-08-19 V18R1 installed release
 
 ## State
@@ -76,3 +215,85 @@ Fresh post-promotion captures from the installed V18R1 executables in `Saved/Pha
 If V18R1 must be rolled back, close PhantomPlay and the four games, move the current installed `Windows` directory aside, restore `C:\Users\jorda\Documents\Codex\backups\phantomplay-unreal-v11r15-to-v18r1-20260819-065922\Windows` to `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows`, then rerun installed-build capture and the 4/4 visual gate before relaunching.
 
 Next production priorities are performance/soak telemetry, human playtesting, and continued game-bible dossier convergence. New revisions must package to a new candidate directory, pass all four visual gates, preserve a rollback snapshot, and only then replace the installed build set.
+
+---
+
+# Phantom Codex Checkpoint — 2026-08-20 CubeTown V24R1 Echo World candidate
+
+## Outcome
+
+- Rebuilt CubeTown as one seamless 960 m × 960 m authored world with a 940 m × 940 m playable area (0.8836 km²).
+- Populated the complete 10 × 10 world density grid. Every 100 m × 100 m cell contains at least six authored density anchors; there are no empty cells.
+- Authored 2,237 V24 world actors, 567 connected road pieces, 15 landmarks, and eight differentiated regions: Heartstone, Moonmoss Marsh, Sunpetal Coast, Deep Forest, Starfall Quarry, Frostbloom Heights, Crimson Grove, and Emberbloom Phantomite.
+- Rebuilt Starfall Quarry as a structured destination with three perimeter tiers, six extraction bays, an ore ring, 91 quarry-floor actors, a continuous service route, work shelters, carts, equipment, lights, safety edges, and a central extraction crystal.
+- Added 20 m macro population, 10 m micro population, and approximately 6.5 m fine ground cover so traversal no longer exposes large undecorated world cells.
+- Kept all V24 rotations explicit and added world-space surface materials so large terrain and district surfaces do not stretch or rotate incorrectly.
+- Removed the Shipping-only black road failure by replacing extreme-aspect district ribbons with bounded tiled surfaces and a fail-closed stretched-surface validator.
+- Updated CubeTown's adventure camera to a wider, shallower diorama composition with deterministic cold-load and capture reassertion.
+
+## Verification
+
+- CubeTown V24 authored-world validator: passed.
+- World result: 2,237 authored actors; 567 road pieces; 15 landmarks; 100/100 density cells populated; minimum six anchors per cell; zero forbidden basic shapes; zero rejected legacy visuals; zero rejected road surfaces; zero stretched district surfaces.
+- Portfolio gameplay static validation: passed.
+- Four-game production-world gate: passed.
+- Windows Shipping cook, stage, IoStore/Pak, and archive: passed (4,820 cooked runtime packages).
+- Packaged CubeTown executable launched and produced seven fresh gameplay captures: opening, farm, coast, forest, quarry, Phantomite, and lair.
+- The seven captures were individually reviewed; no Shipping-only black surface or missing-region load was present.
+- Change-integrity check: passed.
+
+Candidate archive: `D:\PhantomForceBuilds\V24R1\cubetown-pass8`
+
+Packaged executable SHA-256: `768AB6A108C22A09D59FF2D0301ADEF03C3CE9F2873999CFDB6CA7197862EDD6`
+
+Visual evidence: `D:\PhantomForceProof\V24R1-pass8`
+
+## Release state
+
+V24R1 pass 8 is a verified local CubeTown candidate. It has not been promoted. The installed four-game build set remains V22R24 under `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows`. Promotion requires explicit authorization and must preserve the existing V22R24 set as a new rollback before replacing the installed CubeTown package and re-running installed-location proof.
+
+---
+
+# Phantom Codex Checkpoint — 2026-08-21 V25R3 live portfolio promotion
+
+## Outcome
+
+- Promoted the complete four-game Unreal portfolio from V22R24 to V25R3 under `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows` after exact `PROMOTE` authorization.
+- Replaced PhantomStrike block enemies with Epic Manny skeletal hostiles driven by the production unarmed animation blueprint while preserving role-specific weapons and behavior.
+- Replaced Phantom Ages stick rigs with Epic Manny skeletal units and real idle, jog, and attack animation switching. Repaired the null authored-mesh bounds dereference that caused the first Shipping candidate to crash.
+- Replaced Phantom Legends primitive troops with Epic Manny skeletal workers, guards, rangers, and brutes while continuing to suppress malformed legacy skeletal imports.
+- Shipped CubeTown's V24R2 human locomotion, 360-degree orbit/look controls, wider adventure camera, and 2,237-actor seamless authored world in the same uniform build set.
+- Added regression checks that fail if the production character gates are disabled or the Ages null-dereference pattern returns.
+
+## Verification
+
+- Portfolio gameplay validator: passed.
+- Unreal Editor Development build: passed.
+- Phantom Ages Development runtime reproduction: passed with exit code 0 after the crash repair.
+- Unreal Engine 5.8.1 Shipping build, full cook, stage, IoStore/Pak, and archive: 4/4 passed with 4,872 cooked packages per title.
+- Candidate packaged-game launch and gameplay capture: 4/4 passed at 1920 × 1080.
+- Candidate automated visual gate: 4/4 passed; all four frames were also individually reviewed.
+- Promotion-manifest candidate trees, executable hashes, proof hashes, and visual-gate verification: passed.
+- Installed-location post-promotion launch and gameplay capture: 4/4 passed at 1920 × 1080.
+- Installed-location automated visual gate: 4/4 passed.
+- Installed `PHANTOMPLAY_BUILDSET.json`: revision V25R3 with exact 4/4 installed tree and launcher-hash verification.
+
+Candidate set: `D:\PhantomForceCandidates\V25R3`
+
+Candidate evidence: `D:\PhantomForceProof\V25R3`
+
+Installed evidence: `D:\PhantomForceProof\V25R3-installed`
+
+Rollback: `D:\PhantomForceRollbacks\phantomplay-unreal-v22r24-to-v25r3-20260821-000837\Windows`
+
+## Installed gameplay evidence
+
+- `cubetown-GAMEPLAY.png` — SHA-256 `3500579F7F365B9470D67B52DF746CFCB7ADCCE8AD1D1397F6944AB4A34B9DA5`.
+- `phantom-ages-GAMEPLAY.png` — SHA-256 `A85903502B44748ED8BCBD12B99F49067A7D588A57DD794B4D7A2682B549849B`.
+- `phantom-legends-GAMEPLAY.png` — SHA-256 `4A2F6CCE94E3DBFBBE2EA84BB54819D6233EBF010FCCC46A91C5FBBD4643C223`.
+- `phantom-strike-GAMEPLAY.png` — SHA-256 `0565526AB847C03230CD875F6F528A802A362C02B132B6C3C4A6078E3A1E98EB`.
+- Gate CSV — SHA-256 `256A71191B1EBE5372DE4C73DDCAF4D43C2C399C74F6C9DEB5A85891833316C8`.
+
+## Release state
+
+V25R3 is live locally and verified from the installed PhantomPlay location. V22R24 remains intact in the rollback checkpoint above. No commit or remote push is claimed by this checkpoint.

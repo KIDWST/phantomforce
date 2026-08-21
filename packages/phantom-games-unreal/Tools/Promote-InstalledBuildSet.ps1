@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
     [string]$ProjectRoot = '',
-    [string]$Revision = 'V18R1',
+    [string]$Revision = 'V22R24',
+    [string]$CandidateRoot = '',
+    [string]$ProofRoot = '',
+    [string]$ManifestPath = '',
     [string]$InstalledRoot = '',
     [string]$BackupRoot = '',
     [string]$Authorization = '',
@@ -71,11 +74,25 @@ if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
 $ProjectRoot = Get-NormalizedPath $ProjectRoot
 $InstalledRoot = Assert-ExactPath -Actual $InstalledRoot -Expected $approvedInstalledRoot -Label 'Installed root'
 $BackupRoot = Get-NormalizedPath $BackupRoot
-if ($Revision -cne 'V18R1') {
-    throw "This reviewed promotion manifest is pinned to V18R1; received '$Revision'. Create and review a new manifest before promoting another revision."
+if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
+    $ManifestPath = Join-Path $PSScriptRoot "PromotionManifests\$Revision.json"
 }
-$candidateRoot = Get-NormalizedPath (Join-Path $ProjectRoot "CandidateBuilds\$Revision")
-$proofRoot = Get-NormalizedPath (Join-Path $ProjectRoot 'Saved\PhantomGameplayProofV18R1Candidates')
+$ManifestPath = Get-NormalizedPath $ManifestPath
+if (-not (Test-Path -LiteralPath $ManifestPath -PathType Leaf)) {
+    throw "Reviewed promotion manifest is missing: $ManifestPath"
+}
+$manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+if ([string]$manifest.revision -cne $Revision) {
+    throw "Promotion manifest revision '$($manifest.revision)' does not match requested revision '$Revision'."
+}
+if ([string]::IsNullOrWhiteSpace($CandidateRoot)) {
+    $CandidateRoot = if ([string]::IsNullOrWhiteSpace([string]$manifest.candidate_root)) { Join-Path $ProjectRoot "CandidateBuilds\$Revision" } else { [string]$manifest.candidate_root }
+}
+if ([string]::IsNullOrWhiteSpace($ProofRoot)) {
+    $ProofRoot = if ([string]::IsNullOrWhiteSpace([string]$manifest.proof_root)) { Join-Path $ProjectRoot "Saved\PhantomGameplayProof${Revision}Candidates" } else { [string]$manifest.proof_root }
+}
+$candidateRoot = Get-NormalizedPath $CandidateRoot
+$proofRoot = Get-NormalizedPath $ProofRoot
 
 if (-not (Test-Path -LiteralPath $candidateRoot -PathType Container)) {
     throw "Candidate build set is missing: $candidateRoot"
@@ -84,20 +101,11 @@ if (-not (Test-Path -LiteralPath $proofRoot -PathType Container)) {
     throw "Candidate gameplay proof is missing: $proofRoot"
 }
 
-$games = @(
-    [pscustomobject]@{ id = 'cubetown'; exe = 'Cubetown.exe'; file_count = 31; total_bytes = 1043014022L; sha256 = '693F901BF7B4F9DF9E2FF7954E66BF0443F431A16EE5F6E265351C430A6FF2D5' },
-    [pscustomobject]@{ id = 'phantom-ages'; exe = 'PhantomAges.exe'; file_count = 31; total_bytes = 1043014035L; sha256 = '448E8C37DD4B0650D610303DD9FD22161E393DF0CFD4866858519E2C8319A588' },
-    [pscustomobject]@{ id = 'phantom-legends'; exe = 'PhantomLegends.exe'; file_count = 31; total_bytes = 1043014047L; sha256 = '779EC14423CB1C05A4117285A60C174D95C42FD2B7D94B6CA0B7096C198F4E3D' },
-    [pscustomobject]@{ id = 'phantom-strike'; exe = 'PhantomStrike.exe'; file_count = 31; total_bytes = 1043014043L; sha256 = '5458645F838E1E9BA22CF5F8BA9EFFD34987F40B8A2AC73907056921F96B1EA0' }
-)
-
-$proofs = @(
-    [pscustomobject]@{ file = 'cubetown-GAMEPLAY.png'; sha256 = 'CC7BDCA50C7E74EA4F4A7583F1365FDFD3B61908F976EDC381E8D21AD284702E' },
-    [pscustomobject]@{ file = 'phantom-ages-GAMEPLAY.png'; sha256 = '493F79D1D8D3BD94CCD1EFEEE0655523CBD2805263DBA72F83F17D3AF88CC180' },
-    [pscustomobject]@{ file = 'phantom-legends-GAMEPLAY.png'; sha256 = '9477D6342C6D1FACCAFBCD9828191A79B1A0A6A62191828FF702343D73415F2C' },
-    [pscustomobject]@{ file = 'phantom-strike-GAMEPLAY.png'; sha256 = 'EC6FE73D6B5E9E2A2B0580E61A524A5B96ABD9F5F132A0570503566F528D8D16' },
-    [pscustomobject]@{ file = 'V11_VISUAL_GATE.csv'; sha256 = 'C3137059E7D4D1E3C8195AE300180E5CDD136BCF7960E4A088D06990861D4066' }
-)
+$games = @($manifest.games)
+$proofs = @($manifest.proofs)
+if ($games.Count -ne 4 -or $proofs.Count -lt 5) {
+    throw 'Reviewed promotion manifest must contain exactly four games and all required gameplay evidence.'
+}
 
 $candidateResults = foreach ($game in $games) {
     $gameRoot = Join-Path $candidateRoot $game.id
@@ -234,7 +242,7 @@ try {
         schema_version = 1
         revision = $Revision
         promoted_utc = $promotedUtc
-        engine = 'Unreal Engine 5.8.1'
+        engine = [string]$manifest.engine
         source_candidate = $candidateRoot
         authorization = 'PROMOTE'
         games = $installedResults

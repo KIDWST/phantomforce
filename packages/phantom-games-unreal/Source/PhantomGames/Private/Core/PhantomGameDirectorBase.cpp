@@ -11,6 +11,7 @@
 #include "Engine/PointLight.h"
 #include "Engine/PostProcessVolume.h"
 #include "Engine/SkyLight.h"
+#include "EngineUtils.h"
 #include "Components/SkyAtmosphereComponent.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/PointLightComponent.h"
@@ -463,11 +464,11 @@ AStaticMeshActor* APhantomGameDirectorBase::SpawnStaticMeshAsset(
     if (PreferredAssetPath.IsEmpty())
     {
     if (AssetPath.Contains(TEXT("SM_StorybookTree_A")) || AssetPath.Contains(TEXT("SM_CubetownTree")))
-        PreferredAssetPath = TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A");
+        PreferredAssetPath = TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A");
     else if (AssetPath.Contains(TEXT("SM_StorybookTree_B")))
-        PreferredAssetPath = TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A");
+        PreferredAssetPath = TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A");
     else if (AssetPath.Contains(TEXT("SM_RockCluster_A")))
-        PreferredAssetPath = TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Rock.SM_CC0_Rock");
+        PreferredAssetPath = TEXT("/Game/Phantom/Generated/Common/SM_RockCluster_A.SM_RockCluster_A");
     else if (AssetPath.Contains(TEXT("SM_Fence_A")))
         PreferredAssetPath = TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Fence.SM_CC0_Fence");
     else if (AssetPath.Contains(TEXT("SM_FantasyWall")))
@@ -562,13 +563,16 @@ AStaticMeshActor* APhantomGameDirectorBase::SpawnStaticMeshAsset(
     else if (AssetPath.Contains(TEXT("Cube_Rock")))
         FabPreferredAssetPath = TEXT("/Game/Phantom/Curated/Fab/Cube/SM_Fab_StylizedRock.SM_Fab_StylizedRock");
     else if (AssetPath.Contains(TEXT("Cube_Bridge")) || AssetPath.Contains(TEXT("CubetownBridge")))
-        FabPreferredAssetPath = TEXT("/Game/Phantom/Curated/Fab/Cube/SM_Fab_StylizedBridge.SM_Fab_StylizedBridge");
+        FabPreferredAssetPath = TEXT("/Game/Phantom/External/KenneyNatureV26/SM_CT26_StoneBridge.SM_CT26_StoneBridge");
 
     bool bUsingExternalCC0 = false;
     UStaticMesh* Mesh = nullptr;
     const bool bAuthoredStrikeCore = AssetPath.StartsWith(TEXT("/Game/Phantom/Strike/"));
+    const bool bVerifiedCuratedTree = AssetPath.StartsWith(TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A"));
     const bool bCubeStyle = AssetPath.Contains(TEXT("Cube")) || AssetPath.Contains(TEXT("Cubetown")) || AssetPath.Contains(TEXT("Storybook"));
-    if (!bAuthoredStrikeCore && bCubeStyle && !UnityPreferredAssetPath.IsEmpty())
+    if (bVerifiedCuratedTree)
+        Mesh = LoadObject<UStaticMesh>(nullptr, *AssetPath);
+    if (!bAuthoredStrikeCore && !Mesh && bCubeStyle && !UnityPreferredAssetPath.IsEmpty())
     {
         Mesh = LoadObject<UStaticMesh>(nullptr, *UnityPreferredAssetPath);
         bUsingExternalCC0 = Mesh != nullptr;
@@ -598,8 +602,7 @@ AStaticMeshActor* APhantomGameDirectorBase::SpawnStaticMeshAsset(
     {
         FString Fallback;
         const FString P = PreferredAssetPath.IsEmpty() ? AssetPath : PreferredAssetPath;
-        if (P.Contains(TEXT("Tree_B"))) Fallback = TEXT("/Game/Phantom/Generated/Common/SM_StorybookTree_B.SM_StorybookTree_B");
-        else if (P.Contains(TEXT("Tree")) || P.Contains(TEXT("Bush"))) Fallback = TEXT("/Game/Phantom/Generated/Common/SM_StorybookTree_A.SM_StorybookTree_A");
+        if (P.Contains(TEXT("Tree")) || P.Contains(TEXT("Bush"))) Fallback = TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A");
         else if (P.Contains(TEXT("Rock"))) Fallback = TEXT("/Game/Phantom/Generated/Common/SM_RockCluster_A.SM_RockCluster_A");
         else if (P.Contains(TEXT("Flower"))) Fallback = TEXT("/Game/Phantom/Generated/Common/SM_FlowerPatch_A.SM_FlowerPatch_A");
         else if (P.Contains(TEXT("Mushroom"))) Fallback = TEXT("/Game/Phantom/Generated/Common/SM_MushroomCluster_A.SM_MushroomCluster_A");
@@ -674,7 +677,7 @@ UHierarchicalInstancedStaticMeshComponent* APhantomGameDirectorBase::SpawnInstan
     if (!Mesh)
     {
         if (AssetPath.Contains(TEXT("Tree")))
-            ResolvedAssetPath = TEXT("/Game/Phantom/Generated/Common/SM_StorybookTree_A.SM_StorybookTree_A");
+            ResolvedAssetPath = TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A");
         else if (AssetPath.Contains(TEXT("Rock")))
             ResolvedAssetPath = TEXT("/Game/Phantom/Generated/Common/SM_RockCluster_A.SM_RockCluster_A");
         else if (AssetPath.Contains(TEXT("Flower")))
@@ -870,5 +873,35 @@ void APhantomGameDirectorBase::SetWorldMood(
         PostProcess->Settings.AutoExposureBias = 0.10f;
         PostProcess->Settings.bOverride_MotionBlurAmount = true;
         PostProcess->Settings.MotionBlurAmount = 0.0f;
+    }
+}
+
+void APhantomGameDirectorBase::StyleWorldPostProcess(
+    float ExposureBias,
+    float Contrast,
+    float Saturation,
+    float BloomIntensity,
+    float VignetteIntensity
+)
+{
+    if (!GetWorld()) return;
+
+    // Each flagship has a deliberately different visual identity.  The old shared +0.10 exposure
+    // made Blackridge chalk-white and flattened the fantasy worlds into the same bright prototype
+    // look.  Style the already-created unbound volume instead of stacking competing volumes.
+    for (TActorIterator<APostProcessVolume> It(GetWorld()); It; ++It)
+    {
+        FPostProcessSettings& Settings = It->Settings;
+        Settings.bOverride_AutoExposureBias = true;
+        Settings.AutoExposureBias = ExposureBias;
+        Settings.bOverride_ColorContrast = true;
+        Settings.ColorContrast = FVector4(Contrast, Contrast, Contrast, 1.0f);
+        Settings.bOverride_ColorSaturation = true;
+        Settings.ColorSaturation = FVector4(Saturation, Saturation, Saturation, 1.0f);
+        Settings.bOverride_BloomIntensity = true;
+        Settings.BloomIntensity = BloomIntensity;
+        Settings.bOverride_VignetteIntensity = true;
+        Settings.VignetteIntensity = VignetteIntensity;
+        return;
     }
 }

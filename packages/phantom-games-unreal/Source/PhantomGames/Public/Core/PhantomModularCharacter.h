@@ -19,6 +19,7 @@ namespace PhantomModularCharacter
         const TCHAR* IdleAnimPath,
         float TargetHeightCm,
         float AnchorZ,
-        float YawOffset
+        float YawOffset,
+        bool bAllowMonolithic = false
     );
 }

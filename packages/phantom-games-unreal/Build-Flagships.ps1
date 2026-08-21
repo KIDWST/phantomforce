@@ -6,7 +6,7 @@ param(
     [switch]$SkipExternalCC0Assets,
     [switch]$SkipGameplayProof,
     [switch]$KeepExistingUnrealProcesses,
-    [ValidatePattern('^V[0-9]+R[0-9]+$')][string]$CandidateLabel = 'V18R1',
+    [ValidatePattern('^V[0-9]+R[0-9]+$')][string]$CandidateLabel = 'V22R1',
     [switch]$CandidateOnly,
     [switch]$SkipContentRefresh,
     [ValidateRange(2,16)][int]$MaxParallelActions = 8,
@@ -119,8 +119,8 @@ function Invoke-PortfolioStaticValidators {
 
 function Test-CuratedAssetLibrary {
     $Required=@(
-        'Content\Phantom\External\CC0\Aliases\SM_CC0_Tree_A.uasset','Content\Phantom\UnityHarvest\Legends\character\U_Legends_0009_PineTrees.uasset',
-        'Content\Phantom\External\CC0\Aliases\SM_CC0_Rock.uasset','Content\Phantom\External\CC0\Aliases\SM_CC0_Flower.uasset',
+        'Content\Phantom\Curated\Cube\SM_Cube_Tree_A.uasset','Content\Phantom\Generated\Cubetown\V9\Nature\SM_V9_CrimsonTree_0.uasset',
+        'Content\Phantom\Generated\Common\SM_RockCluster_A.uasset','Content\Phantom\External\CC0\Aliases\SM_CC0_Flower.uasset',
         'Content\Phantom\External\CC0\Aliases\SM_CC0_House_A.uasset','Content\Phantom\External\CC0\Aliases\SM_CC0_House_B.uasset',
         'Content\Phantom\External\CC0\Aliases\SM_CC0_CastleWall.uasset','Content\Phantom\External\CC0\Aliases\SM_CC0_CastleTower.uasset',
         'Content\Phantom\External\CC0\Aliases\SM_CC0_Bridge.uasset','Content\Phantom\External\CC0\Aliases\SM_CC0_Lantern.uasset',
@@ -172,17 +172,26 @@ function Assert-ImportedContent {
     if(-not(Test-Path $MaterialReport)){throw 'V11 Poly Haven PBR-material report missing.'}
     $MaterialData=Get-Content $MaterialReport -Raw | ConvertFrom-Json
     if($MaterialData.status -ne 'PASS'){throw "V11 PBR material import failed: status=$($MaterialData.status)"}
+    if([int]$MaterialData.schema -lt 22){throw "PBR material proof predates the V22 world-mapped surface correction: schema=$($MaterialData.schema)"}
+    foreach($Role in @('Grass','Dirt','Asphalt')){
+        $Entry=$MaterialData.results.$Role
+        if($null -eq $Entry -or $null -eq $Entry.world_uv_scale){throw "V22 production material $Role has no verified world-space UV scale."}
+        $WorldUvScale=[double]$Entry.world_uv_scale
+        if($WorldUvScale -lt 0.0005 -or $WorldUvScale -gt 0.01){throw "V22 production material $Role has an invalid world-space UV scale: $WorldUvScale"}
+    }
 
     $WorldReport=Join-Path $Saved 'PhantomProductionWorldsV11.json'
     $PortfolioWorldReport=Join-Path $Saved 'PhantomPortfolioWorldsV13.json'
     $CubeTownV17Report=Join-Path $Saved 'CubeTownV17DioramaPatch.json'
+    $PortfolioV22Report=Join-Path $Saved 'PhantomPortfolioWorldsV22.json'
     $WorldValidation=Join-Path $Saved 'PhantomProductionWorldValidationV11.json'
-    foreach($r in @($WorldReport,$PortfolioWorldReport,$CubeTownV17Report,$WorldValidation)){if(-not(Test-Path $r)){throw "Production-world proof missing: $r"}}
+    foreach($r in @($WorldReport,$PortfolioWorldReport,$CubeTownV17Report,$PortfolioV22Report,$WorldValidation)){if(-not(Test-Path $r)){throw "Production-world proof missing: $r"}}
     $WorldData=Get-Content $WorldReport -Raw | ConvertFrom-Json
     $PortfolioWorldData=Get-Content $PortfolioWorldReport -Raw | ConvertFrom-Json
     $CubeTownV17Data=Get-Content $CubeTownV17Report -Raw | ConvertFrom-Json
+    $PortfolioV22Data=Get-Content $PortfolioV22Report -Raw | ConvertFrom-Json
     $ValidationData=Get-Content $WorldValidation -Raw | ConvertFrom-Json
-    if($WorldData.status -ne 'PASS' -or $PortfolioWorldData.status -ne 'PASS' -or $CubeTownV17Data.status -ne 'PASS' -or $ValidationData.status -ne 'PASS'){throw 'Production-world build, V13 portfolio patch, CubeTown V17 diorama patch, or density/occlusion validation failed.'}
+    if($WorldData.status -ne 'PASS' -or $PortfolioWorldData.status -ne 'PASS' -or $CubeTownV17Data.status -ne 'PASS' -or $PortfolioV22Data.status -ne 'PASS' -or $ValidationData.status -ne 'PASS'){throw 'Production-world build, V13/V22 portfolio correction, CubeTown V17 diorama patch, or density/occlusion validation failed.'}
 
     $OneShot=Join-Path $Saved 'PhantomOneShotEditorPipelineV11.txt'
     if(-not(Test-Path $OneShot)){throw 'V11 one-shot Unreal content pipeline report missing.'}
@@ -202,10 +211,10 @@ function Assert-ImportedContent {
             throw "V11 one-shot Unreal content pipeline did not import or retain passing proof for $step"
         }
     }
-    foreach($step in @('ImportUnityBaselineAssets.py','HarvestOwnedFabAssets.py','BuildProductionWorlds.py','PatchProductionWorldsV11R7.py','PatchProductionWorldsV11R10.py','PatchCubetownFlagshipV12.py','PatchPortfolioWorldsV13.py','RepairCubeTownV17Materials.py','PatchCubeTownV17Diorama.py','ValidateProductionWorlds.py')){
+    foreach($step in @('ImportUnityBaselineAssets.py','HarvestOwnedFabAssets.py','BuildProductionWorlds.py','PatchProductionWorldsV11R7.py','PatchProductionWorldsV11R10.py','PatchCubetownFlagshipV12.py','PatchPortfolioWorldsV13.py','RepairCubeTownV17Materials.py','PatchCubeTownV17Diorama.py','PatchPortfolioWorldsV19.py','PatchPortfolioWorldsV20.py','PatchPortfolioWorldsV21.py','PatchPortfolioWorldsV22.py','ValidateProductionWorlds.py')){
         if($OneShotText -notmatch [regex]::Escape("PASS $step")){throw "V11 one-shot Unreal content pipeline did not PASS $step"}
     }
-    Write-Host "Four-game content gate PASS: all games received the V13 density/safety layer, and CubeTown retained its V17 diorama layer, rigged characters, PBR surfaces, and persistent worlds." -ForegroundColor Green
+    Write-Host "Four-game content gate PASS: all games received the V22 theme, world-mapped PBR surfaces, and first-frame correction; CubeTown retained its V17 authored content without the rejected plane quilts or runway." -ForegroundColor Green
 }
 
 function Assert-UnityBaselineHarvest {
@@ -234,7 +243,7 @@ if($SmokeWindows){ & (Join-Path $ProjectRoot 'Smoke-Flagships.ps1'); exit $LASTE
 
 Write-Host '=====================================================================' -ForegroundColor Cyan
 Write-Host " PHANTOM GAMES $CandidateLabel // RECOVERED PORTFOLIO // REAL CHARACTERS + REAL WORLDS + HUMAN APPROVAL" -ForegroundColor Cyan
-Write-Host ' NO GENERATED-ART DOMINANCE // SKELETAL GAMEPLAY // PBR SURFACES // CANDIDATE-ONLY UNTIL APPROVED' -ForegroundColor Cyan
+Write-Host ' THEME-CORRECT GAMEPLAY // BOUNDED CHARACTER RIGS // PBR SURFACES // CANDIDATE-ONLY UNTIL APPROVED' -ForegroundColor Cyan
 Write-Host '=====================================================================' -ForegroundColor Cyan
 Write-Host "Engine: $EngineRoot"
 Write-Host 'QA policy: package game -> auto-enter gameplay -> ONE 1920x1080 screenshot. No resolution matrix.' -ForegroundColor Yellow
@@ -255,7 +264,7 @@ if($SkipContentRefresh){
     $Acquire=Join-Path $ProjectRoot 'Tools\AcquireCC0Assets.ps1'
     Invoke-NativeChecked 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$Acquire,'-ProjectRoot',$ProjectRoot) 'CURRENT CREATOR ASSET ACQUISITION'
     $PolyAcquire=Join-Path $ProjectRoot 'Tools\AcquirePolyHavenProduction.ps1'
-    Invoke-NativeChecked 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$PolyAcquire,'-ProjectRoot',$ProjectRoot) 'POLY HAVEN PBR PRODUCTION ACQUISITION'
+    Invoke-NativeChecked 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File',$PolyAcquire,'-ProjectRoot',$ProjectRoot,'-Force') 'POLY HAVEN PBR PRODUCTION ACQUISITION'
 
     # 2) Recover what already existed in the Unity version instead of pretending the Unreal rewrite started from zero.
     $UnityHarvest=Join-Path $ProjectRoot 'Tools\HarvestUnityBaseline.ps1'
@@ -265,10 +274,10 @@ if($SkipContentRefresh){
     # 3) Acquire current Poly Haven CC0 PBR surfaces, then compile editor exactly once.
     Invoke-NativeChecked $BuildTool @('PhantomGamesEditor','Win64','Development',$Project,'-WaitMutex','-NoHotReload') 'UNREAL EDITOR MODULE COMPILE'
 
-    # 4) ONE UnrealEditor-Cmd session: baseline library -> creator packs -> skeletal characters -> PBR -> Unity -> owned Fab -> base worlds -> V11R7/V11R10 -> CubeTown V12 -> four-game V13 -> CubeTown V17 -> validation.
+    # 4) ONE UnrealEditor-Cmd session: baseline library -> creator packs -> skeletal characters -> tiled PBR -> Unity -> owned Fab -> base worlds -> older additive passes -> four-game V19/V20/V21/V22 correction -> validation.
     $Pipeline=Join-Path $ProjectRoot 'Tools\PhantomOneShotEditorPipeline.py'
     Remove-Item (Join-Path $Saved 'PhantomOneShotEditorPipelineV11.txt') -Force -ErrorAction SilentlyContinue
-    Invoke-NativeChecked $EditorCmd @($Project,"-ExecutePythonScript=$Pipeline",'-unattended','-nop4','-nosplash','-NoSound','-utf8output') 'ONE-SHOT CONTENT IMPORT'
+    Invoke-NativeChecked $EditorCmd @($Project,"-ExecutePythonScript=$Pipeline",'-unattended','-nop4','-nosplash','-NoSound','-utf8output','-DisablePlugin=SemanticSearch') 'ONE-SHOT CONTENT IMPORT'
     Assert-ImportedContent
 }
 

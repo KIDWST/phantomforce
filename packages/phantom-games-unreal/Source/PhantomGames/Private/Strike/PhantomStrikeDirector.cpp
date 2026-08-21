@@ -3,9 +3,11 @@
 #include "Core/PhantomModularCharacter.h"
 
 #include "Camera/CameraComponent.h"
+#include "Animation/AnimInstance.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Canvas.h"
 #include "Engine/DamageEvents.h"
@@ -17,6 +19,8 @@
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 namespace
 {
@@ -103,7 +107,7 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
     FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
     FirstPersonCamera->SetRelativeLocation(FVector(-10.0f, 0.0f, 64.0f));
     FirstPersonCamera->bUsePawnControlRotation = true;
-    FirstPersonCamera->FieldOfView = 90.0f;
+    FirstPersonCamera->FieldOfView = 82.0f;
 
     UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
     UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
@@ -203,13 +207,9 @@ void APhantomStrikeCharacter::BeginPlay()
     // so the first-person camera never starts embedded inside Street_Straight.
     SetActorLocation(FVector(-9000.0f,0.0f,260.0f));
     SetActorRotation(FRotator(0.0f,0.0f,0.0f));
-    // Keep first contact, road cover, and the weapon readable in the opening
-    // frame instead of devoting a third of the view to empty sky.
-    if (AController* C=GetController())
-    {
-        C->SetControlRotation(FRotator(-17.5f,0.0f,0.0f));
-        bInitialViewApplied = true;
-    }
+    bGameplayCapture = FParse::Param(FCommandLine::Get(), TEXT("PhantomGameplayCapture"));
+    GameplayCaptureViewLockRemaining = bGameplayCapture ? 8.0f : 0.0f;
+    ApplyInsertionView();
     if (!bUsingImportedRifle)
     {
         ApplyShapeColor(RifleBody, FLinearColor(0.025f, 0.055f, 0.08f));
@@ -225,12 +225,11 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
     // authored insertion view on the first controlled frame so release proof
     // and real launches share the same composition.
     if (!bInitialViewApplied)
+        ApplyInsertionView();
+    if (bGameplayCapture && GameplayCaptureViewLockRemaining > 0.0f)
     {
-        if (AController* C = GetController())
-        {
-            C->SetControlRotation(FRotator(-17.5f, 0.0f, 0.0f));
-            bInitialViewApplied = true;
-        }
+        GameplayCaptureViewLockRemaining = FMath::Max(0.0f, GameplayCaptureViewLockRemaining - DeltaSeconds);
+        ApplyInsertionView();
     }
     // Recovery guard for malformed or temporarily unloaded collision.  A packaged FPS must never
     // leave its camera below Blackridge's authored surface.
@@ -253,7 +252,7 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
     RecoilKick = FMath::FInterpTo(RecoilKick, 0.0f, DeltaSeconds, 15.0f);
     MuzzleLight->SetIntensity(MuzzleFlashRemaining > 0.0f ? 8500.0f : 0.0f);
 
-    const float DesiredFov = bAiming ? (bUsingSidearm ? 74.0f : 70.0f) : (bSprinting ? 96.0f : (SlideRemaining > 0.0f ? 94.0f : 90.0f));
+    const float DesiredFov = bAiming ? (bUsingSidearm ? 72.0f : 68.0f) : (bSprinting ? 90.0f : (SlideRemaining > 0.0f ? 88.0f : 82.0f));
     FirstPersonCamera->SetFieldOfView(FMath::FInterpTo(FirstPersonCamera->FieldOfView, DesiredFov, DeltaSeconds, 12.0f));
     const float CameraZ = bProne ? 28.0f : ((SlideRemaining > 0.0f || bCrouchedByInput) ? 46.0f : 64.0f);
     const FVector DesiredCameraLocation(-10.0f, 0.0f, CameraZ);
@@ -684,9 +683,21 @@ float APhantomStrikeCharacter::TakeDamage(
         GetCharacterMovement()->StopMovementImmediately();
         RefreshMovementSpeed();
         SetActorLocation(FVector(-9000.0f, 0.0f, 260.0f), false, nullptr, ETeleportType::TeleportPhysics);
-        if (AController* C=GetController()) C->SetControlRotation(FRotator(-12.0f,0.0f,0.0f));
+        ApplyInsertionView();
     }
     return Applied;
+}
+
+void APhantomStrikeCharacter::ApplyInsertionView()
+{
+    // Keep the first contact, near cover, skyline, and weapon in one readable frame without
+    // allowing the sky to consume the tactical play space on ultrawide/16:9 displays.
+    // Capture launches hold this briefly so OS cursor placement cannot corrupt release evidence.
+    if (AController* C = GetController())
+    {
+        C->SetControlRotation(FRotator(-6.0f, 0.0f, 0.0f));
+        bInitialViewApplied = true;
+    }
 }
 
 APhantomStrikeEnemy::APhantomStrikeEnemy()
@@ -752,26 +763,35 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
     Tier = FMath::Max(1, NewTier);
     const FLinearColor HostileRed(0.9f, 0.035f, 0.08f);
 
-    const TCHAR* ProductionBody = Role == EPhantomStrikeEnemyRole::Rusher
-        ? TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue")
-        : (Role == EPhantomStrikeEnemyRole::Heavy
-            ? TEXT("/Game/Phantom/Characters/Production/SK_Barbarian.SK_Barbarian")
-            : TEXT("/Game/Phantom/Characters/Production/SK_Knight.SK_Knight"));
-    const TCHAR* ProductionIdle = Role == EPhantomStrikeEnemyRole::Rusher
-        ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Idle.A_Rogue_Idle")
-        : (Role == EPhantomStrikeEnemyRole::Heavy
-            ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Barbarian_Idle.A_Barbarian_Idle")
-            : TEXT("/Game/Phantom/Characters/Production/Animations/A_Knight_Idle.A_Knight_Idle"));
+    // Epic's verified full-body mannequin gives every Helix role a real humanoid silhouette,
+    // physical locomotion, and stable Shipping bounds. Tactical role identity remains in the
+    // weapon color, speed, health, and encounter behavior instead of block-character geometry.
+    const float ProductionHeight = Role == EPhantomStrikeEnemyRole::Heavy ? 220.0f : 185.0f;
     const bool bProductionHumanoid = PhantomModularCharacter::Configure(
         this,
         GetMesh(),
         GetCapsuleComponent(),
-        ProductionBody,
-        ProductionIdle,
-        Role == EPhantomStrikeEnemyRole::Heavy ? 215.0f : 184.0f,
+        TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"),
+        TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"),
+        ProductionHeight,
         -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight(),
-        -90.0f
+        -90.0f,
+        true
     );
+    if (bProductionHumanoid)
+    {
+        if (UClass* LocomotionClass = LoadClass<UAnimInstance>(
+            nullptr,
+            TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C")
+        ))
+        {
+            GetMesh()->SetAnimInstanceClass(LocomotionClass);
+        }
+    }
+    else
+    {
+        GetMesh()->SetVisibility(false, true);
+    }
 
     const TCHAR* ExternalCharacter = Role == EPhantomStrikeEnemyRole::Marksman
         ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Strike_Marksman.SM_CC0_Strike_Marksman")
@@ -1154,8 +1174,9 @@ void APhantomStrikeDirector::SpawnWave()
 void APhantomStrikeDirector::BuildCommandComplex()
 {
     // CANONICAL BLACKRIDGE COAST: 480m x 360m. Dense, authored combat district; never a kilometer-scale walking map.
-    SpawnSun(3.35f, FRotator(-42.0f,-28.0f,0.0f), FLinearColor(1.0f,0.83f,0.68f));
-    SetWorldMood(FLinearColor(0.09f,0.13f,0.17f),0.0022f,FLinearColor(0.28f,0.36f,0.46f));
+    SpawnSun(1.82f, FRotator(-34.0f,-38.0f,0.0f), FLinearColor(0.72f,0.82f,0.98f));
+    SetWorldMood(FLinearColor(0.052f,0.092f,0.145f),0.0032f,FLinearColor(0.14f,0.22f,0.34f));
+    StyleWorldPostProcess(-0.52f, 1.10f, 0.88f, 0.48f, 0.22f);
 
     // V8 BLACKRIDGE SURFACE: invisible collision + 12 authored district ground meshes.
     // Road meshes are 150 cm high.  Put the invisible support surface at the same height so a
@@ -1178,6 +1199,64 @@ void APhantomStrikeDirector::BuildCommandComplex()
         // runtime work to lighting + collision so we do not double-spawn hundreds of static actors.
         SpawnPointLight(TEXT("V9CommandCoreLight"),FVector(9000,0,360),FLinearColor(0.08f,0.88f,1.0f),7000.0f,700.0f,true);
         SpawnPointLight(TEXT("V9MarinaWarmLight"),FVector(14500,-10000,420),FLinearColor(1.0f,0.48f,0.22f),4200.0f,520.0f,false);
+        SpawnPointLight(TEXT("V19InsertionColdLight"),FVector(-7600,-650,520),FLinearColor(0.08f,0.46f,1.0f),3600.0f,1050.0f,true);
+        SpawnPointLight(TEXT("V19InsertionWarmLight"),FVector(-5200,980,420),FLinearColor(1.0f,0.24f,0.08f),2500.0f,820.0f,true);
+
+        // The persistent map owns the district-scale architecture, but the playable insertion still
+        // needs a deliberately authored cover rhythm. These guaranteed bundled props fill the first
+        // combat block with readable silhouettes and useful side cover instead of a flat runway.
+        const TCHAR* InsertionProps[] = {
+            TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_TacticalBarricade.SM_V9_TacticalBarricade"),
+            TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_SandbagWall.SM_V9_SandbagWall"),
+            TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_CargoContainer_0.SM_V9_CargoContainer_0"),
+            TEXT("/Game/Phantom/Generated/Strike/Environment/SM_WreckCar_A.SM_WreckCar_A"),
+            TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Crate.SM_CC0_Crate"),
+            TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Barrel.SM_CC0_Barrel")
+        };
+        for (int32 I = 0; I < 18; ++I)
+        {
+            const float X = -8350.0f + (I % 9) * 430.0f;
+            const float Side = (I % 2 == 0) ? -1.0f : 1.0f;
+            const float Y = Side * (920.0f + (I % 3) * 270.0f);
+            const float Scale = (I % 6 == 2 || I % 6 == 3) ? 1.08f : 0.92f;
+            SpawnStaticMeshAsset(
+                FString::Printf(TEXT("V25InsertionCover_%02d"), I),
+                InsertionProps[I % UE_ARRAY_COUNT(InsertionProps)],
+                FVector(X, Y, 158.0f), FVector(Scale), FRotator(0.0f, (I * 37) % 180, 0.0f), true, true
+            );
+        }
+
+        // Build a readable Blackridge skyline around (not across) the combat lanes. The recovered
+        // persistent level has strong ground coverage but a low silhouette from the insertion angle;
+        // these district anchors give the city depth, navigation memory, and a finished horizon.
+        const TCHAR* SkylineMeshes[] = {
+            TEXT("/Game/Phantom/Strike/Flat.Flat"),
+            TEXT("/Game/Phantom/Strike/Flat2.Flat2"),
+            TEXT("/Game/Phantom/Strike/Hospital1.Hospital1"),
+            TEXT("/Game/Phantom/Strike/Bank1.Bank1")
+        };
+        for (int32 I = 0; I < 14; ++I)
+        {
+            const float X = -4200.0f + (I % 7) * 2350.0f;
+            const float Side = I < 7 ? -1.0f : 1.0f;
+            const float Y = Side * (3300.0f + (I % 3) * 620.0f);
+            const float Scale = 4.4f + (I % 4) * 0.55f;
+            SpawnStaticMeshAsset(
+                FString::Printf(TEXT("V25InsertionSkyline_%02d"), I),
+                SkylineMeshes[I % UE_ARRAY_COUNT(SkylineMeshes)],
+                FVector(X, Y, 150.0f), FVector(Scale), FRotator(0.0f, Side < 0.0f ? 90.0f : -90.0f, 0.0f), false, true
+            );
+        }
+        for (int32 I = 0; I < 20; ++I)
+        {
+            const float X = -8600.0f + I * 520.0f;
+            const float Y = (I % 2 == 0) ? -1850.0f : 1850.0f;
+            SpawnStaticMeshAsset(
+                FString::Printf(TEXT("V25InsertionStreetlight_%02d"), I),
+                TEXT("/Game/Phantom/Strike/Streetlight_Single.Streetlight_Single"),
+                FVector(X, Y, 150.0f), FVector(3.25f), FRotator(0.0f, I % 2 == 0 ? 0.0f : 180.0f, 0.0f), false, true
+            );
+        }
         return;
     }
     for(int32 TY=0;TY<3;++TY)

@@ -28,6 +28,10 @@
                         "Enabled":  true
                     },
                     {
+                        "Name":  "GameFeatures",
+                        "Enabled":  true
+                    },
+                    {
                         "Name":  "ModelContextProtocol",
                         "Enabled":  true
                     },
@@ -37,7 +41,15 @@
                     },
                     {
                         "Name":  "AllToolsets",
-                        "Enabled":  true
+                        "Enabled":  false
+                    },
+                    {
+                        "Name":  "SemanticSearchToolset",
+                        "Enabled":  false
+                    },
+                    {
+                        "Name":  "SemanticSearch",
+                        "Enabled":  false
                     },
                     {
                         "Name":  "PhantomPlayAITools",

@@ -29,7 +29,8 @@ bool PhantomModularCharacter::Configure(
     const TCHAR* IdleAnimPath,
     float TargetHeightCm,
     float AnchorZ,
-    float YawOffset
+    float YawOffset,
+    bool bAllowMonolithic
 )
 {
     if (!Owner || !Leader || !AttachParent || !BodyMeshPath) return false;
@@ -51,22 +52,37 @@ bool PhantomModularCharacter::Configure(
     const FBoxSphereBounds BodyBounds = Body->GetBounds();
     float MinZ = BodyBounds.Origin.Z - BodyBounds.BoxExtent.Z;
     float MaxZ = BodyBounds.Origin.Z + BodyBounds.BoxExtent.Z;
-    for (const TCHAR* Suffix : PartSuffixes)
+    if (!bAllowMonolithic)
     {
-        const FString AssetPath = FString::Printf(
-            TEXT("/Game/Phantom/Characters/Production/Parts/SK_%s_%s.SK_%s_%s"),
-            *Alias, Suffix, *Alias, Suffix
-        );
-        if (USkeletalMesh* PartMesh = LoadObject<USkeletalMesh>(nullptr, *AssetPath))
+        for (const TCHAR* Suffix : PartSuffixes)
         {
-            const FBoxSphereBounds Bounds = PartMesh->GetBounds();
-            MinZ = FMath::Min(MinZ, Bounds.Origin.Z - Bounds.BoxExtent.Z);
-            MaxZ = FMath::Max(MaxZ, Bounds.Origin.Z + Bounds.BoxExtent.Z);
-            Parts.Add({FString(Suffix), PartMesh});
+            // Human production sets intentionally omit skeleton-only facial/cloak parts. Avoid
+            // probing known-absent packages every launch; those probes produced alarming missing
+            // asset warnings even though the complete animated hero was present.
+            const bool bSkeletonAlias = Alias.StartsWith(TEXT("Skeleton"));
+            const FString SuffixName(Suffix);
+            if (!bSkeletonAlias && (
+                SuffixName == TEXT("Cloak") || SuffixName == TEXT("Eyes") ||
+                SuffixName == TEXT("Jaw") || SuffixName == TEXT("Skull")))
+            {
+                continue;
+            }
+            const FString AssetPath = FString::Printf(
+                TEXT("/Game/Phantom/Characters/Production/Parts/SK_%s_%s.SK_%s_%s"),
+                *Alias, Suffix, *Alias, Suffix
+            );
+            if (USkeletalMesh* PartMesh = LoadObject<USkeletalMesh>(nullptr, *AssetPath))
+            {
+                const FBoxSphereBounds Bounds = PartMesh->GetBounds();
+                MinZ = FMath::Min(MinZ, Bounds.Origin.Z - Bounds.BoxExtent.Z);
+                MaxZ = FMath::Max(MaxZ, Bounds.Origin.Z + Bounds.BoxExtent.Z);
+                Parts.Add({FString(Suffix), PartMesh});
+            }
         }
     }
-    // A production modular humanoid must include both limbs and a head/skull, not merely a body.
-    if (Parts.Num() < 4) return false;
+    // Imported modular characters must include their visible body parts. Verified full-body
+    // meshes (such as Epic's Manny) can opt into the same fit/animation path without clones.
+    if (Parts.Num() < 4 && !bAllowMonolithic) return false;
 
     const float RawHeight = FMath::Max(1.0f, MaxZ - MinZ);
     const float FitScale = FMath::Clamp(TargetHeightCm / RawHeight, 0.01f, 50.0f);

@@ -7,6 +7,15 @@ PROJECT=os.path.abspath(unreal.Paths.project_dir()); SAVED=os.path.abspath(unrea
 ROOT=os.path.join(PROJECT,'SourceArt','External','PolyHavenV11'); DEST='/Game/Phantom/Materials/Production'
 REPORT=os.path.join(SAVED,'PhantomPolyHavenMaterialImportV11.json')
 roles=['Grass','Cobble','Dirt','Rock','Asphalt','Concrete','Wood']
+world_uv_scale={
+    'Grass':1.0/450.0,
+    'Cobble':1.0/280.0,
+    'Dirt':1.0/500.0,
+    'Rock':1.0/320.0,
+    'Asphalt':1.0/600.0,
+    'Concrete':1.0/360.0,
+    'Wood':1.0/260.0,
+}
 # Installer/static gate marker: Grass material resolves to /Game/Phantom/Materials/Production/M_Phantom_Grass
 EXPECTED_GRASS_ALIAS='M_Phantom_Grass'
 asset_tools=unreal.AssetToolsHelpers.get_asset_tools()
@@ -20,7 +29,15 @@ def import_tex(role,kind,path):
     task=unreal.AssetImportTask();task.filename=path;task.destination_path=dest;task.destination_name=f'T_{role}_{kind}';task.automated=True;task.replace_existing=True;task.save=True
     asset_tools.import_asset_tasks([task])
     target=f'{dest}/T_{role}_{kind}'
-    return load(target)
+    texture=load(target)
+    if texture:
+        texture.set_editor_property('srgb',kind=='BaseColor')
+        if kind=='Normal':
+            texture.set_editor_property('compression_settings',unreal.TextureCompressionSettings.TC_NORMALMAP)
+        elif kind in ('Roughness','Displacement'):
+            texture.set_editor_property('compression_settings',unreal.TextureCompressionSettings.TC_MASKS)
+        unreal.EditorAssetLibrary.save_asset(target)
+    return texture
 
 def find_map(role,kind):
     d=os.path.join(ROOT,role)
@@ -37,18 +54,42 @@ def make_mat(role,textures):
     factory=unreal.MaterialFactoryNew();mat=asset_tools.create_asset(f'M_Phantom_{role}',DEST,unreal.Material,factory)
     if not mat:raise RuntimeError('Could not create '+path)
     MEL=unreal.MaterialEditingLibrary
+    world_position=MEL.create_material_expression(mat,unreal.MaterialExpressionWorldPosition,-980,80)
+    xy=MEL.create_material_expression(mat,unreal.MaterialExpressionComponentMask,-800,80)
+    xy.set_editor_property('r',True);xy.set_editor_property('g',True)
+    scale=MEL.create_material_expression(mat,unreal.MaterialExpressionConstant,-800,200)
+    scale.set_editor_property('r',world_uv_scale[role])
+    uv=MEL.create_material_expression(mat,unreal.MaterialExpressionMultiply,-620,80)
+    def connect(source,output,target,input_name):
+        if not MEL.connect_material_expressions(source,output,target,input_name):
+            raise RuntimeError('Could not connect material expression to input '+(input_name or '<first>'))
+    def connect_property(source,output,material_property):
+        if not MEL.connect_material_property(source,output,material_property):
+            raise RuntimeError('Could not connect material property '+str(material_property))
+    # ComponentMask's reflected input name is shortened differently between
+    # engine versions. An empty name intentionally selects its first input.
+    connect(world_position,'',xy,'')
+    connect(xy,'',uv,'A')
+    connect(scale,'',uv,'B')
+    def sample(kind,x,y):
+        node=MEL.create_material_expression(mat,unreal.MaterialExpressionTextureSample,x,y)
+        node.set_editor_property('texture',textures[kind])
+        if kind=='Normal':
+            node.set_editor_property('sampler_type',unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL)
+        elif kind in ('Roughness','Displacement'):
+            node.set_editor_property('sampler_type',unreal.MaterialSamplerType.SAMPLERTYPE_MASKS)
+        connect(uv,'',node,'UVs')
+        return node
     # Base color
     if textures.get('BaseColor'):
-        e=MEL.create_material_expression(mat,unreal.MaterialExpressionTextureSample,-520,-80);e.texture=textures['BaseColor'];MEL.connect_material_property(e,'RGB',unreal.MaterialProperty.MP_BASE_COLOR)
+        e=sample('BaseColor',-520,-80);connect_property(e,'RGB',unreal.MaterialProperty.MP_BASE_COLOR)
     if textures.get('Normal'):
-        e=MEL.create_material_expression(mat,unreal.MaterialExpressionTextureSample,-520,100);e.texture=textures['Normal']
-        try:e.sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL
-        except Exception:pass
-        MEL.connect_material_property(e,'RGB',unreal.MaterialProperty.MP_NORMAL)
+        e=sample('Normal',-520,100)
+        connect_property(e,'RGB',unreal.MaterialProperty.MP_NORMAL)
     if textures.get('Roughness'):
-        e=MEL.create_material_expression(mat,unreal.MaterialExpressionTextureSample,-520,280);e.texture=textures['Roughness'];MEL.connect_material_property(e,'R',unreal.MaterialProperty.MP_ROUGHNESS)
+        e=sample('Roughness',-520,280);connect_property(e,'R',unreal.MaterialProperty.MP_ROUGHNESS)
     else:
-        c=MEL.create_material_expression(mat,unreal.MaterialExpressionConstant,-520,280);c.r=0.72;MEL.connect_material_property(c,'',unreal.MaterialProperty.MP_ROUGHNESS)
+        c=MEL.create_material_expression(mat,unreal.MaterialExpressionConstant,-520,280);c.r=0.72;connect_property(c,'',unreal.MaterialProperty.MP_ROUGHNESS)
     MEL.recompile_material(mat);unreal.EditorAssetLibrary.save_asset(path);return path
 
 results={};ok=0
@@ -63,11 +104,11 @@ for role in roles:
             except Exception:pass
     try:
         if 'BaseColor' not in tex:raise RuntimeError('BaseColor missing')
-        mat=make_mat(role,tex);results[role]={'status':'ok','material':mat,'textures':list(tex.keys())};ok+=1
+        mat=make_mat(role,tex);results[role]={'status':'ok','material':mat,'textures':list(tex.keys()),'world_uv_scale':world_uv_scale[role]};ok+=1
     except Exception as e:results[role]={'status':'fail','error':str(e),'traceback':traceback.format_exc()}
 try:unreal.EditorLoadingAndSavingUtils.save_dirty_packages(True,True)
 except Exception:pass
-summary={'schema':11,'status':'PASS' if ok>=6 else 'FAIL','materials_ok':ok,'results':results}
+summary={'schema':22,'status':'PASS' if ok>=6 else 'FAIL','materials_ok':ok,'results':results}
 with open(REPORT,'w',encoding='utf-8') as f:json.dump(summary,f,indent=2)
 if summary['status']!='PASS':raise RuntimeError('Poly Haven PBR material import failed: %d/7'%ok)
 unreal.log('PHANTOM V11 POLY HAVEN MATERIALS PASS %d/7'%ok)

@@ -7,6 +7,7 @@
 #include "PhantomAgesDirector.generated.h"
 
 class UCameraComponent;
+class UAnimSequence;
 class USceneComponent;
 class UStaticMeshComponent;
 class USpringArmComponent;
@@ -192,6 +193,18 @@ private:
     USkeletalMeshComponent* SkeletalVisual;
 
     UPROPERTY()
+    UAnimSequence* ProductionIdleAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* ProductionMoveAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* ProductionAttackAnimation = nullptr;
+
+    UPROPERTY()
+    UAnimSequence* ActiveProductionAnimation = nullptr;
+
+    UPROPERTY()
     UStaticMeshComponent* WeaponMesh;
 
     UPROPERTY()
@@ -233,6 +246,7 @@ private:
     float DamageAgainst(AActor* Target) const;
     void LaunchProjectile(AActor* Target, float AppliedDamage);
     void RefreshHealthBar();
+    void SetProductionAnimation(UAnimSequence* Animation, bool bLoop);
 };
 
 UCLASS()

@@ -65,19 +65,34 @@ $roles=[ordered]@{
   Concrete=@('concrete','plaster','wall');
   Wood=@('wood','plank');
 }
+$preferred=[ordered]@{
+  Grass='leafy_grass';
+  Cobble='cobblestone_floor_04';
+  Dirt='brown_mud_dry';
+  Rock='rocky_terrain';
+  Asphalt='asphalt_02';
+  Concrete='concrete_floor_worn_001';
+  Wood='weathered_brown_planks';
+}
 $inventory=@()
 foreach($role in $roles.Keys){
   $best=$null;$bestScore=-1
+  $preferredId=$preferred[$role]
+  if($preferredId -and $assets.PSObject.Properties[$preferredId]){
+    $best=[pscustomobject]@{Id=$preferredId;A=$assets.$preferredId}
+    $bestScore=1000
+  }
   foreach($prop in $assets.PSObject.Properties){
     $id=$prop.Name;$a=$prop.Value
     if([int]$a.type -ne 1){continue}
     $score=Score-Asset $a $roles[$role]
-    if($score -gt $bestScore){$bestScore=$score;$best=[pscustomobject]@{Id=$id;A=$a}}
+    if((-not $preferredId -or -not $assets.PSObject.Properties[$preferredId]) -and $score -gt $bestScore){$bestScore=$score;$best=[pscustomobject]@{Id=$id;A=$a}}
   }
   if($null -eq $best -or $bestScore -lt 100){throw "Poly Haven could not resolve production material role $role"}
   $files=Get-Json ('https://api.polyhaven.com/files/'+$best.Id)
   $flat=@(Flatten-Urls $files)
   $dir=Join-Path $Root $role;New-Item -ItemType Directory -Force -Path $dir|Out-Null
+  if($Force){Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue | Remove-Item -Force}
   $maps=[ordered]@{
     BaseColor=Pick-File $flat @('diff','albedo','basecolor');
     Normal=Pick-File $flat @('nor_gl','normal');

@@ -1,6 +1,7 @@
 param(
     [string]$EngineRoot = 'H:\UE_5.8',
-    [ValidatePattern('^V[0-9]+R[0-9]+$')][string]$Revision = 'V11R3'
+    [ValidatePattern('^V[0-9]+R[0-9]+$')][string]$Revision = 'V11R3',
+    [string[]]$GameIds = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,22 +11,41 @@ $CandidateRoot = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "CandidateBuilds
 $ArtifactRoot = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "BuildArtifacts\$Revision"))
 $RunUat = Join-Path $EngineRoot 'Engine\Build\BatchFiles\RunUAT.bat'
 
-foreach($TargetPath in @($CandidateRoot,$ArtifactRoot)){
-    if(-not $TargetPath.StartsWith($ProjectRoot,[StringComparison]::OrdinalIgnoreCase)){
-        throw "Unsafe $Revision candidate target: $TargetPath"
-    }
-    if(Test-Path -LiteralPath $TargetPath){
-        Remove-Item -LiteralPath $TargetPath -Recurse -Force
-    }
-    New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
-}
-
 $Games = @(
     @{Id='phantom-strike';Target='PhantomStrike';Executable='PhantomStrike.exe'},
     @{Id='phantom-ages';Target='PhantomAges';Executable='PhantomAges.exe'},
     @{Id='phantom-legends';Target='PhantomLegends';Executable='PhantomLegends.exe'},
     @{Id='cubetown';Target='Cubetown';Executable='Cubetown.exe'}
 )
+if($GameIds.Count -gt 0){
+    $requested=@($GameIds | ForEach-Object { $_.ToLowerInvariant() })
+    $Games=@($Games | Where-Object { $requested -contains $_.Id })
+    if($Games.Count -ne $requested.Count){throw "Unknown or duplicate candidate game id: $($GameIds -join ', ')"}
+}
+
+foreach($TargetPath in @($CandidateRoot,$ArtifactRoot)){
+    if(-not $TargetPath.StartsWith($ProjectRoot,[StringComparison]::OrdinalIgnoreCase)){
+        throw "Unsafe $Revision candidate target: $TargetPath"
+    }
+    if($GameIds.Count -eq 0){
+        if(Test-Path -LiteralPath $TargetPath){
+            Remove-Item -LiteralPath $TargetPath -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
+        continue
+    }
+
+    New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
+    foreach($Game in $Games){
+        $GameTarget = [IO.Path]::GetFullPath((Join-Path $TargetPath $Game.Id))
+        if(-not $GameTarget.StartsWith($TargetPath,[StringComparison]::OrdinalIgnoreCase)){
+            throw "Unsafe selective $Revision candidate target: $GameTarget"
+        }
+        if(Test-Path -LiteralPath $GameTarget){
+            Remove-Item -LiteralPath $GameTarget -Recurse -Force
+        }
+    }
+}
 
 foreach($Game in $Games){
     $Archive = Join-Path $ArtifactRoot $Game.Id

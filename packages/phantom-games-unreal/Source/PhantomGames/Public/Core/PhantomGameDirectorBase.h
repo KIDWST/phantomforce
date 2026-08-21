@@ -96,6 +96,13 @@ protected:
     );
     ADirectionalLight* SpawnSun(float Intensity, const FRotator& Rotation, const FLinearColor& Color);
     void SetWorldMood(const FLinearColor& FogColor, float FogDensity, const FLinearColor& AmbientColor);
+    void StyleWorldPostProcess(
+        float ExposureBias,
+        float Contrast,
+        float Saturation,
+        float BloomIntensity,
+        float VignetteIntensity
+    );
     UHierarchicalInstancedStaticMeshComponent* SpawnInstancedMeshCluster(
         const FString& Name,
         const FString& AssetPath,

@@ -27,6 +27,22 @@ steps = [
     # V17 is additive after the shared portfolio pass. It uses committed Unreal assets and
     # remains reproducible without the missing external SourceArt directory.
     "PatchCubeTownV17Diorama.py",
+    # V19 removes the rejected plane quilts, rebuilds each opening composition, and adds the
+    # close authored set dressing after every older additive pass has finished.
+    "PatchPortfolioWorldsV19.py",
+    # V20 is a subtractive correction: delete the known road/plaza/band quilts and any legacy
+    # promotional horizon cards after every historical additive pass has run.
+    "PatchPortfolioWorldsV20.py",
+    # V21 removes the remaining prototype runway/prop-ring composition and binds the production
+    # PBR terrain and road surfaces that the older map passes left visually flat.
+    "PatchPortfolioWorldsV21.py",
+    # V22 replaces stale fantasy substitutions and oversized foreground clutter with bounded,
+    # game-specific first-frame composition after every historical additive pass has completed.
+    "PatchPortfolioWorldsV22.py",
+    # V25/V26 is the final CubeTown reference-composition layer. It must run after every historical
+    # patch so a clean package cannot silently restore the old sparse town or prototype lair.
+    "PatchCubeTownV25ReferenceOpening.py",
+    "ValidateCubeTownV25ReferenceOpening.py",
     "ValidateProductionWorlds.py",
 ]
 log=[]
@@ -61,9 +77,12 @@ if os.environ.get("PHANTOM_ONE_SHOT_RESUME") == "1":
         if report.get("status") != "PASS":
             raise RuntimeError("Cannot resume: retained %s report did not pass." % label)
         log.append("PASS retained %s report" % label)
+    # A clean candidate build removes Saved evidence. Re-run the curated CC0 alias import even
+    # when the expensive skeletal/PBR imports are resumed from passing reports, otherwise the
+    # package gate has no truthful proof that the environment library still resolves.
     resume_at = steps.index("ImportUnityBaselineAssets.py")
-    steps = steps[resume_at:]
-    unreal.log_warning("PHANTOM: Resuming one-shot after verified character/material reports with a headless RHI.")
+    steps = ["ImportExternalCC0Assets.py"] + steps[resume_at:]
+    unreal.log_warning("PHANTOM: Resuming one-shot after verified character/material reports; curated environment assets will be revalidated.")
 for name in steps:
     path=os.path.join(tools,name)
     if not os.path.isfile(path):
