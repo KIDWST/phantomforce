@@ -513,6 +513,7 @@ def choose_ollama_request_num_ctx(
     messages: list[Any] | None,
     *,
     tool_count: int = 0,
+    tools: list[Any] | None = None,
 ) -> int | None:
     """Use the smallest stable Ollama window that can hold this request.
 
@@ -524,9 +525,16 @@ def choose_ollama_request_num_ctx(
         return None
 
     ceiling = min(MAX_OLLAMA_CONTEXT, max(1024, max_ctx))
-    floor = 65536 if is_long_context_coding_model(model) else 8192
-    estimated_tokens = (_message_text_size(messages or []) // 4) + max(0, tool_count) * 700
-    needed = max(floor, estimated_tokens + 8192)
+    message_tokens = (_message_text_size(messages or []) + 3) // 4
+    if tools:
+        tool_tokens = (_message_text_size(tools) + 3) // 4
+    else:
+        # Callers that only know the tool count still get a conservative
+        # estimate without forcing every short Phantom turn into a 65K cache.
+        tool_tokens = max(0, tool_count) * 256
+    estimated_tokens = message_tokens + tool_tokens
+    reserve = max(4096, min(16384, estimated_tokens // 4))
+    needed = max(8192, estimated_tokens + reserve)
     for tier in (8192, 16384, 32768, 65536, 131072, 262144):
         if tier >= needed:
             return min(ceiling, tier)

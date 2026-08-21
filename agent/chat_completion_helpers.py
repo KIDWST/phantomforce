@@ -39,7 +39,7 @@ from agent.gemini_native_adapter import is_native_gemini_base_url
 from agent.model_metadata import is_local_endpoint
 from agent.message_content import flatten_message_text
 from agent.message_metadata import append_message, stamp_message_timestamp
-from agent.ollama_runtime import choose_ollama_request_num_ctx
+from agent.ollama_runtime import choose_ollama_request_num_ctx, is_local_ollama_endpoint
 from agent.message_sanitization import (
     _sanitize_surrogates,
     _repair_tool_call_arguments,
@@ -65,6 +65,40 @@ _PROVIDER_STREAM_ERROR_TEXT_LIMIT = 4096
 # billing reasons keep their own 60s cooldown (set above); this is the
 # narrower non-rate-limit case.  See issue #24996.
 _FALLBACK_EXHAUSTED_COOLDOWN_S = 5.0
+
+
+def _ollama_request_runtime(agent, messages, tools) -> tuple[int | None, dict[str, Any]]:
+    """Build local Ollama overrides without mutating the agent configuration."""
+    configured_ctx = getattr(agent, "_ollama_num_ctx", None)
+    overrides = dict(getattr(agent, "request_overrides", {}) or {})
+    if not is_local_ollama_endpoint(
+        getattr(agent, "base_url", None),
+        getattr(agent, "provider", None),
+    ):
+        return configured_ctx, overrides
+
+    request_ctx = choose_ollama_request_num_ctx(
+        getattr(agent, "model", None),
+        configured_ctx,
+        messages,
+        tool_count=len(tools or []),
+        tools=tools,
+    )
+    extra_body = dict(overrides.get("extra_body") or {})
+    options = dict(extra_body.get("options") or {})
+    for key, value in dict(getattr(agent, "_ollama_options", None) or {}).items():
+        options.setdefault(key, value)
+    if request_ctx:
+        # The live request size must win over a stale static provider value.
+        options["num_ctx"] = request_ctx
+    if options:
+        extra_body["options"] = options
+    keep_alive = getattr(agent, "_ollama_keep_alive", None)
+    if keep_alive is not None:
+        extra_body.setdefault("keep_alive", keep_alive)
+    if extra_body:
+        overrides["extra_body"] = extra_body
+    return request_ctx, overrides
 
 
 def _reasoning_route_key(agent) -> tuple[str, str, str]:
@@ -2073,6 +2107,12 @@ def build_api_kwargs(agent, api_messages: list, tools_for_api: list | None = Non
             "promptId": str(uuid.uuid4()),
         }
 
+    _ollama_request_ctx, _request_overrides = _ollama_request_runtime(
+        agent,
+        api_messages,
+        tools_for_api,
+    )
+
     # ── Provider profile path (registered providers) ───────────────────
     # Profiles handle per-provider quirks via hooks. When a profile is
     # found, delegate fully; otherwise fall through to the legacy flag path.
@@ -2102,11 +2142,11 @@ def build_api_kwargs(agent, api_messages: list, tools_for_api: list | None = Non
             ephemeral_max_output_tokens=_ephemeral_out,
             max_tokens_param_fn=agent._max_tokens_param,
             reasoning_config=agent.reasoning_config,
-            request_overrides=agent.request_overrides,
+            request_overrides=_request_overrides,
             session_id=getattr(agent, "session_id", None),
             cache_scope_id=_cache_scope_id,
             provider_profile=_profile,
-            ollama_num_ctx=agent._ollama_num_ctx,
+            ollama_num_ctx=_ollama_request_ctx,
             # Context forwarded to profile hooks:
             provider_preferences=_prefs or None,
             openrouter_min_coding_score=agent.openrouter_min_coding_score,
@@ -2135,7 +2175,7 @@ def build_api_kwargs(agent, api_messages: list, tools_for_api: list | None = Non
         ephemeral_max_output_tokens=_ephemeral_out,
         max_tokens_param_fn=agent._max_tokens_param,
         reasoning_config=agent.reasoning_config,
-        request_overrides=agent.request_overrides,
+        request_overrides=_request_overrides,
         session_id=getattr(agent, "session_id", None),
         cache_scope_id=_cache_scope_id,
         model_lower=(agent.model or "").lower(),
@@ -2148,7 +2188,7 @@ def build_api_kwargs(agent, api_messages: list, tools_for_api: list | None = Non
         is_tokenhub=_is_tokenhub,
         is_lmstudio=_is_lmstudio,
         is_custom_provider=agent.provider == "custom",
-        ollama_num_ctx=agent._ollama_num_ctx,
+        ollama_num_ctx=_ollama_request_ctx,
         provider_preferences=_prefs or None,
         openrouter_min_coding_score=agent.openrouter_min_coding_score,
         qwen_prepare_fn=agent._qwen_prepare_chat_messages if _is_qwen else None,

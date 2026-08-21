@@ -37,9 +37,8 @@ from agent.session_activity import ActivityProvenance
 from agent.model_metadata import (
     MINIMUM_CONTEXT_LENGTH,
     fetch_model_metadata,
-    is_local_endpoint,
-    query_ollama_num_ctx,
 )
+from agent.ollama_runtime import configure_agent_ollama_runtime
 from agent.process_bootstrap import _install_safe_stdio
 from agent.subdirectory_hints import SubdirectoryHintTracker
 from agent.think_scrubber import StreamingThinkScrubber
@@ -2897,52 +2896,17 @@ def init_agent(
     agent.session_cost_status = "unknown"
     agent.session_cost_source = "none"
     
-    # ── Ollama num_ctx injection ──
-    # Ollama defaults to 2048 context regardless of the model's capabilities.
-    # When running against an Ollama server, detect the model's max context
-    # and pass num_ctx on every chat request so the full window is used.
-    # User override: set model.ollama_num_ctx in config.yaml to cap VRAM use.
-    # If model.context_length is set, it caps num_ctx so the user's VRAM
-    # budget is respected even when GGUF metadata advertises a larger window.
-    agent._ollama_num_ctx: int | None = None
-    _ollama_num_ctx_override = None
-    if isinstance(_model_cfg, dict):
-        _ollama_num_ctx_override = _model_cfg.get("ollama_num_ctx")
-    if _ollama_num_ctx_override is not None:
-        try:
-            agent._ollama_num_ctx = int(_ollama_num_ctx_override)
-        except (TypeError, ValueError):
-            _ra().logger.debug("Invalid ollama_num_ctx config value: %r", _ollama_num_ctx_override)
-    if agent._ollama_num_ctx is None and agent.base_url and is_local_endpoint(agent.base_url):
-        try:
-            # ``agent.api_key`` may be a callable (Entra token provider).
-            # Ollama detection makes a manual HTTP request and expects a
-            # string — Azure Foundry isn't a local endpoint so this branch
-            # never fires for Entra, but guard defensively.
-            _key_for_ollama = agent.api_key if isinstance(agent.api_key, str) else ""
-            _detected = query_ollama_num_ctx(agent.model, agent.base_url, api_key=_key_for_ollama or "")
-            if _detected and _detected > 0:
-                agent._ollama_num_ctx = _detected
-        except Exception as exc:
-            _ra().logger.debug("Ollama num_ctx detection failed: %s", exc)
-    # Cap auto-detected ollama_num_ctx to the user's explicit context_length.
-    # Without this, GGUF metadata can advertise 256K+ which Ollama honours
-    # by allocating that much VRAM — blowing up small GPUs even though the
-    # user explicitly set a smaller context_length in config.yaml.
-    if (
-        agent._ollama_num_ctx
-        and _config_context_length
-        and _ollama_num_ctx_override is None  # don't override explicit ollama_num_ctx
-        and agent._ollama_num_ctx > _config_context_length
-    ):
-        _ra().logger.info(
-            "Ollama num_ctx capped: %d -> %d (model.context_length override)",
-            agent._ollama_num_ctx, _config_context_length,
-        )
-        agent._ollama_num_ctx = _config_context_length
+    # Keep the model's advertised context as a ceiling. The request builder
+    # chooses a smaller per-turn cache from the real messages and tool schemas.
+    configure_agent_ollama_runtime(
+        agent,
+        model_cfg=_model_cfg if isinstance(_model_cfg, dict) else None,
+        config_context_length=_config_context_length,
+        log=_ra().logger,
+    )
     if agent._ollama_num_ctx and not agent.quiet_mode:
         _ra().logger.info(
-            "Ollama num_ctx: will request %d tokens (model max from /api/show)",
+            "Ollama num_ctx ceiling: %d tokens (requests are sized adaptively)",
             agent._ollama_num_ctx,
         )
 

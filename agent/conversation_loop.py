@@ -2082,6 +2082,9 @@ def run_conversation(
     truncated_tool_call_retries = 0
     truncated_response_parts: List[str] = []
     compression_attempts = 0
+    # Carries a one-shot schema repair request between tool-loop calls. Keep it
+    # initialized even when no invalid tool call has occurred.
+    forced_tool_repair_pending: Optional[str] = None
     # One resolved per-turn compression attempt cap, shared by every site that
     # consumes ``compression_attempts``: the pre-API pressure gate, the
     # overflow/413 retry handlers, and the post-tool compaction gate. The
