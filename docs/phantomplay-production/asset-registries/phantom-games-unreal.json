@@ -16,6 +16,42 @@
       "license_token": ""
     },
     {
+      "id": "phantom-strike-v12-exterior-gameplay-target",
+      "kind": "visual_target",
+      "path": "SourceArt/VisualTargets/phantom-strike-v12-exterior-gameplay-target.png",
+      "source": "PhantomForce internal image generation guided by the owned PhantomStrike key art",
+      "source_url": "",
+      "license": "PhantomForce internal",
+      "commercial_use": true,
+      "ownership": "internal",
+      "license_evidence": [],
+      "license_token": ""
+    },
+    {
+      "id": "phantom-strike-v12-interior-breach-target",
+      "kind": "visual_target",
+      "path": "SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png",
+      "source": "PhantomForce internal image generation guided by the owned PhantomStrike key art",
+      "source_url": "",
+      "license": "PhantomForce internal",
+      "commercial_use": true,
+      "ownership": "internal",
+      "license_evidence": [],
+      "license_token": ""
+    },
+    {
+      "id": "phantom-strike-v12-hud-weapon-target",
+      "kind": "visual_target",
+      "path": "SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png",
+      "source": "PhantomForce internal image generation guided by the owned PhantomStrike key art",
+      "source_url": "",
+      "license": "PhantomForce internal",
+      "commercial_use": true,
+      "ownership": "internal",
+      "license_evidence": [],
+      "license_token": ""
+    },
+    {
       "id": "phantom-ages-keyart",
       "kind": "key_art",
       "path": "SourceArt/KeyArt/phantom-ages-keyart.png",

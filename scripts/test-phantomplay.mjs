@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const main = read("../app/js/main.js");
@@ -19,6 +19,7 @@ const cubeTown = read("../app/games/cubetown/cubetown.js");
 const cubeTownIndex = read("../app/games/cubetown/index.html");
 const phantomAges = read("../packages/phantom-games-unreal/Source/PhantomGames/Private/Ages/PhantomAgesDirector.cpp");
 const phantomStrike = read("../packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp");
+const phantomStrikeV12Prompt = read("../packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md");
 const flagshipCatalog = read("../server/src/phantom-ai/phantomplay-flagship.ts");
 const serverCatalog = read("../server/src/phantom-ai/phantomplay.ts");
 const serverV2Catalog = read("../server/src/phantom-ai/phantomplay-v2.ts");
@@ -380,6 +381,19 @@ assert.match(phantomStrike, /LineTraceSingleByChannel[\s\S]*ApplyPointDamage/u, 
 assert.match(phantomStrike, /SpawnWave[\s\S]*EPhantomStrikeEnemyRole::Heavy/u, "Phantom Strike must retain escalating enemy waves and archetypes.");
 assert.match(phantomStrike, /bTriggerHeld[\s\S]*bAiming[\s\S]*StrikeReloadDuration/u, "Phantom Strike must retain automatic fire, aiming, and reload handling.");
 assert.match(phantomStrike, /OBJECTIVE: BREAK THE HELIX LINE AND SECURE EXTRACTION/u, "Phantom Strike must retain a concrete extraction objective.");
+for (const target of [
+  "phantom-strike-v12-exterior-gameplay-target.png",
+  "phantom-strike-v12-interior-breach-target.png",
+  "phantom-strike-v12-hud-weapon-target.png",
+]) {
+  assert.ok(
+    existsSync(new URL(`../packages/phantom-games-unreal/SourceArt/VisualTargets/${target}`, import.meta.url)),
+    `Phantom Strike V12 visual target must exist: ${target}`,
+  );
+}
+assert.match(phantomStrikeV12Prompt, /Treat V11R6 as the minimum acceptable gameplay floor/u, "The V12 prompt must prohibit gameplay regressions.");
+assert.match(phantomStrikeV12Prompt, /Do not copy any existing franchise/u, "The V12 prompt must keep PhantomStrike original rather than cloning another shooter.");
+assert.match(phantomStrikeV12Prompt, /clean compile and cook[\s\S]*visual proof[\s\S]*performance evidence/u, "The V12 prompt must require real release proof rather than source-only completion.");
 assert.doesNotThrow(() => new Function(vespergateGame), "Vespergate game script must parse.");
 assert.doesNotThrow(() => new Function(vespergateRooms), "Vespergate room script must parse.");
 assert.doesNotThrow(() => new Function(vespergateEngine), "Vespergate engine script must parse.");

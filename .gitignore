@@ -30,6 +30,9 @@ packages/phantom-games-unreal/SourceArt/*
 !packages/phantom-games-unreal/SourceArt/KeyArt/
 packages/phantom-games-unreal/SourceArt/KeyArt/*
 !packages/phantom-games-unreal/SourceArt/KeyArt/*.png
+!packages/phantom-games-unreal/SourceArt/VisualTargets/
+packages/phantom-games-unreal/SourceArt/VisualTargets/*
+!packages/phantom-games-unreal/SourceArt/VisualTargets/*.png
 packages/phantom-games-unreal/MissionCheckpoints/
 packages/phantom-games-unreal/*Backups/
 packages/Source/

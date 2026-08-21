@@ -7,3 +7,14 @@
 - Packaged gameplay: PASS. Road, buildings, cover, enemies, HUD, and weapon appear in a normal gameplay frame.
 - Visual gate: FAIL — detail-tile ratio 0.535 and lower detail 0.556 remain below the acceptance thresholds despite the strongest frame of the four.
 - Disposition: retain as a V11R6 review candidate; do not promote.
+
+## V12 successor target
+
+V11R6 remains the newest verified gameplay floor. The next implementation pass is defined by:
+
+- `PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md`
+- `SourceArt/VisualTargets/phantom-strike-v12-exterior-gameplay-target.png`
+- `SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png`
+- `SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png`
+
+These references do not promote the build by themselves. V12 must still compile, package, pass real-input gameplay checks, meet the visual targets in captured gameplay, and provide measured performance evidence.

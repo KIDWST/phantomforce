@@ -13,6 +13,12 @@
       "executable": "Builds/Windows/phantom-strike/PhantomStrike.exe",
       "source": "Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
       "key_art": "SourceArt/KeyArt/phantom-strike-keyart.png",
+      "visual_targets": [
+        "SourceArt/VisualTargets/phantom-strike-v12-exterior-gameplay-target.png",
+        "SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png",
+        "SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png"
+      ],
+      "execution_prompt": "Docs/Production/PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md",
       "save_namespace": "phantomstrike.",
       "identity_invariants": [
         "Player weapons can damage enemies.",
