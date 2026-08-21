@@ -10,6 +10,9 @@ REQUIRED_ASSETS = {
     "/Game/ProductAssets/Mesh/SM_Building": "StaticMesh",
     "/Game/ProductAssets/Mesh/SM_Car": "StaticMesh",
     "/Game/ProductAssets/Materials/M_Concrete": "Material",
+    "/Game/ArchVis/SampleScene/Tree/HillTree_02": "StaticMesh",
+    "/Game/ArchVis/SampleScene/Building/Meshes/Exterior_Terrain": "StaticMesh",
+    "/Game/ArchVis/SampleScene/Building/Materials/Terrain": "Material",
     "/Game/Phantom/Materials/Production/M_Phantom_Asphalt": "Material",
     "/Game/Phantom/Materials/Production/M_Phantom_Concrete": "Material",
 }
@@ -19,7 +22,13 @@ def main():
     failures = []
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     registry.scan_paths_synchronous(
-        ["/Game/Characters", "/Game/Weapons", "/Game/Variant_Shooter", "/Game/ProductAssets"],
+        [
+            "/Game/Characters",
+            "/Game/Weapons",
+            "/Game/Variant_Shooter",
+            "/Game/ProductAssets",
+            "/Game/ArchVis/SampleScene",
+        ],
         True,
     )
 

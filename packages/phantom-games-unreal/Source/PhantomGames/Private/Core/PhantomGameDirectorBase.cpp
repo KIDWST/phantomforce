@@ -378,6 +378,7 @@ static FVector PhantomNormalizeSemanticMeshScale(
     else if (S.Contains(TEXT("windmill"))) { TargetCm = 1500.0f; bUseHeight = true; }
     else if (S.Contains(TEXT("tree"))) { TargetCm = 1650.0f; bUseHeight = true; }
     else if (S.Contains(TEXT("bridge"))) { TargetCm = 2600.0f; bUseHeight = false; }
+    else if (S.Contains(TEXT("car")) || S.Contains(TEXT("vehicle"))) { TargetCm = 460.0f; bUseHeight = false; }
     else if (S.Contains(TEXT("fountain")) || S.Contains(TEXT("well"))) { TargetCm = 300.0f; bUseHeight = false; }
     else if (S.Contains(TEXT("lantern")) || S.Contains(TEXT("sign"))) { TargetCm = 240.0f; bUseHeight = true; }
     else if (S.Contains(TEXT("fence"))) { TargetCm = 180.0f; bUseHeight = true; }

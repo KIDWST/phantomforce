@@ -11,11 +11,14 @@
 #include "Engine/Canvas.h"
 #include "Engine/DamageEvents.h"
 #include "Engine/Engine.h"
+#include "Engine/EngineBaseTypes.h"
+#include "Engine/PostProcessVolume.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -124,9 +127,12 @@ namespace
 APhantomStrikeCharacter::APhantomStrikeCharacter()
 {
     PrimaryActorTick.bCanEverTick = true;
+    AutoPossessPlayer = EAutoReceiveInput::Player0;
     FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
     FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
-    FirstPersonCamera->SetRelativeLocation(FVector(-10.0f, 0.0f, 64.0f));
+    // Keep the local view at a natural standing eye line. This is intentionally
+    // higher than the legacy prototype camera, which read like a ground camera.
+    FirstPersonCamera->SetRelativeLocation(FVector(-6.0f, 0.0f, 72.0f));
     FirstPersonCamera->bUsePawnControlRotation = true;
     FirstPersonCamera->FieldOfView = 90.0f;
 
@@ -139,9 +145,15 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
         GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
         GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
         GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        GetMesh()->SetOnlyOwnerSee(true);
-        GetMesh()->SetCastShadow(true);
-        GetMesh()->HideBoneByName(TEXT("head"), EPhysBodyOp::PBO_None);
+        // PhantomStrike is a first-person game. Never render the third-person mannequin
+        // in the local single-player pawn: camera ownership can settle one frame late in
+        // packaged launches and expose Manny's torso across the entire view.
+        GetMesh()->SetOnlyOwnerSee(false);
+        GetMesh()->SetOwnerNoSee(true);
+        GetMesh()->SetCastHiddenShadow(false);
+        GetMesh()->SetCastShadow(false);
+        GetMesh()->SetVisibility(false, true);
+        GetMesh()->SetHiddenInGame(true, true);
         if (UClass* OperatorAnimClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Rifle.ABP_TP_Rifle_C")))
         {
             GetMesh()->SetAnimationMode(EAnimationMode::AnimationBlueprint);
@@ -294,16 +306,30 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
 void APhantomStrikeCharacter::BeginPlay()
 {
     Super::BeginPlay();
-    // Blackridge insertion point: first contact is intentionally ~8-15 seconds ahead, not a long walk.
-    // Production road tiles are 150 cm tall. Keep the capsule center above their top surface
-    // so the first-person camera never starts embedded inside Street_Straight.
-    SetActorLocation(FVector(-9000.0f,0.0f,260.0f));
+    // V28 insertion is a grounded natural route, with the first encounter visible beyond
+    // the first woodland bend. Always begin in a valid walking state.
+    SetActorLocation(FVector(-11800.0f,0.0f,300.0f), false, nullptr, ETeleportType::TeleportPhysics);
     SetActorRotation(FRotator(0.0f,0.0f,0.0f));
-    // Keep first contact, road cover, and the weapon readable in the opening
-    // frame instead of devoting a third of the view to empty sky.
+    SetActorEnableCollision(true);
+    GetCharacterMovement()->SetComponentTickEnabled(true);
+    GetCharacterMovement()->SetPlaneConstraintEnabled(false);
+    GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+
+    APlayerController* FirstPC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+    if (FirstPC && FirstPC->GetPawn() != this)
+    {
+        FirstPC->Possess(this);
+    }
+    if (FirstPC)
+    {
+        FirstPC->bShowMouseCursor = false;
+        UGameplayStatics::SetViewportMouseCaptureMode(this, EMouseCaptureMode::CapturePermanently_IncludingInitialMouseDown);
+        FInputModeGameOnly GameInput;
+        FirstPC->SetInputMode(GameInput);
+    }
     if (AController* C=GetController())
     {
-        C->SetControlRotation(FRotator(-17.5f,0.0f,0.0f));
+        C->SetControlRotation(FRotator(-5.0f,0.0f,0.0f));
         bInitialViewApplied = true;
     }
     if (!bUsingImportedRifle)
@@ -329,7 +355,7 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
     {
         if (AController* C = GetController())
         {
-            C->SetControlRotation(FRotator(-17.5f, 0.0f, 0.0f));
+            C->SetControlRotation(FRotator(-5.0f, 0.0f, 0.0f));
             bInitialViewApplied = true;
         }
     }
@@ -337,8 +363,46 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
     // leave its camera below Blackridge's authored surface.
     if (GetActorLocation().Z < -200.0f)
     {
-        SetActorLocation(FVector(-9000.0f, 0.0f, 260.0f), false, nullptr, ETeleportType::TeleportPhysics);
+        SetActorLocation(FVector(-11800.0f, 0.0f, 300.0f), false, nullptr, ETeleportType::TeleportPhysics);
         GetCharacterMovement()->StopMovementImmediately();
+    }
+
+    // Packaged launchers can miss legacy axis mappings during their first focus handoff.
+    // Recover possession and read the physical movement keys directly every frame, while
+    // retaining the normal input bindings for remapping and controller support.
+    APlayerController* FirstPC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+    if (FirstPC && FirstPC->GetPawn() != this)
+    {
+        FirstPC->Possess(this);
+    }
+    if (GetCharacterMovement()->MovementMode == MOVE_None)
+    {
+        GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+    }
+    if (FirstPC && !UGameplayStatics::IsGamePaused(this))
+    {
+        const float ForwardInput = FMath::Clamp(
+            (FirstPC->IsInputKeyDown(EKeys::W) || FirstPC->IsInputKeyDown(EKeys::Up) ? 1.0f : 0.0f)
+            - (FirstPC->IsInputKeyDown(EKeys::S) || FirstPC->IsInputKeyDown(EKeys::Down) ? 1.0f : 0.0f)
+            + FirstPC->GetInputAnalogKeyState(EKeys::Gamepad_LeftY), -1.0f, 1.0f);
+        const float RightInput = FMath::Clamp(
+            (FirstPC->IsInputKeyDown(EKeys::D) || FirstPC->IsInputKeyDown(EKeys::Right) ? 1.0f : 0.0f)
+            - (FirstPC->IsInputKeyDown(EKeys::A) || FirstPC->IsInputKeyDown(EKeys::Left) ? 1.0f : 0.0f)
+            + FirstPC->GetInputAnalogKeyState(EKeys::Gamepad_LeftX), -1.0f, 1.0f);
+        if (!FMath::IsNearlyZero(ForwardInput) || !FMath::IsNearlyZero(RightInput))
+        {
+            const FRotator YawOnly(0.0f, FirstPC->GetControlRotation().Yaw, 0.0f);
+            const FVector WishDirection = (
+                FRotationMatrix(YawOnly).GetUnitAxis(EAxis::X) * ForwardInput
+                + FRotationMatrix(YawOnly).GetUnitAxis(EAxis::Y) * RightInput
+            ).GetClampedToMaxSize(1.0f);
+            AddMovementInput(WishDirection, 1.0f);
+            if (GetVelocity().SizeSquared2D() < 4.0f)
+            {
+                FHitResult MovementHit;
+                AddActorWorldOffset(WishDirection * GetCharacterMovement()->MaxWalkSpeed * DeltaSeconds, true, &MovementHit);
+            }
+        }
     }
     FireCooldown = FMath::Max(0.0f, FireCooldown - DeltaSeconds);
     SlideRemaining = FMath::Max(0.0f, SlideRemaining - DeltaSeconds);
@@ -384,8 +448,8 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
 
     const float DesiredFov = bAiming ? (bUsingSidearm ? 74.0f : 70.0f) : (bSprinting ? 96.0f : (SlideRemaining > 0.0f ? 94.0f : 90.0f));
     FirstPersonCamera->SetFieldOfView(FMath::FInterpTo(FirstPersonCamera->FieldOfView, DesiredFov, DeltaSeconds, 12.0f));
-    const float CameraZ = bProne ? 28.0f : ((SlideRemaining > 0.0f || bCrouchedByInput) ? 46.0f : 64.0f);
-    const FVector DesiredCameraLocation(-10.0f, 0.0f, CameraZ);
+    const float CameraZ = bProne ? 32.0f : ((SlideRemaining > 0.0f || bCrouchedByInput) ? 50.0f : 72.0f);
+    const FVector DesiredCameraLocation(-6.0f, 0.0f, CameraZ);
     FirstPersonCamera->SetRelativeLocation(FMath::VInterpTo(FirstPersonCamera->GetRelativeLocation(), DesiredCameraLocation, DeltaSeconds, 14.0f));
     const float MoveSpeed = GetVelocity().Size2D();
     WeaponBobTime += DeltaSeconds * (MoveSpeed > 40.0f ? (bSprinting ? 13.0f : 8.5f) : 2.0f);
@@ -1639,9 +1703,10 @@ void APhantomStrikeDirector::OpenExtraction()
 
 void APhantomStrikeDirector::BuildCommandComplex()
 {
-    // CANONICAL BLACKRIDGE COAST: 480m x 360m. Dense, authored combat district; never a kilometer-scale walking map.
-    SpawnSun(3.15f, FRotator(-31.0f,-28.0f,0.0f), FLinearColor(0.72f,0.82f,1.0f));
-    SetWorldMood(FLinearColor(0.055f,0.085f,0.12f),0.00235f,FLinearColor(0.24f,0.31f,0.39f));
+    // V28 BLACKRIDGE COAST: a believable coastal woodland route with a restrained
+    // military outpost. Natural daylight replaces the overexposed blue prototype grade.
+    SpawnSun(1.35f, FRotator(-34.0f,-32.0f,0.0f), FLinearColor(0.96f,0.91f,0.82f));
+    SetWorldMood(FLinearColor(0.10f,0.13f,0.14f),0.00165f,FLinearColor(0.27f,0.30f,0.28f));
 
     // V8 BLACKRIDGE SURFACE: invisible collision + 12 authored district ground meshes.
     // Road meshes are 150 cm high.  Put the invisible support surface at the same height so a
@@ -1660,12 +1725,8 @@ void APhantomStrikeDirector::BuildCommandComplex()
     const bool bProductionWorld = GetWorld() && GetWorld()->GetMapName().Contains(TEXT("PhantomStrike_World"));
     if (bProductionWorld)
     {
-        // V10 persistent .umap already contains the entire road/building/cover composition. Keep
-        // runtime work to lighting + collision so we do not double-spawn hundreds of static actors.
-        SpawnPointLight(TEXT("V9CommandCoreLight"),FVector(9000,0,360),FLinearColor(0.38f,0.56f,0.72f),6200.0f,700.0f,true);
-        SpawnPointLight(TEXT("V9MarinaWarmLight"),FVector(14500,-10000,420),FLinearColor(1.0f,0.48f,0.22f),4200.0f,520.0f,false);
-        // V19 lighting pass: authored pools guide insertion, street advance, breach, uplink, and extraction.
-        // Each pool is bounded and shadow casting is limited to hero beats for a stable 60 FPS target.
+        // The persistent V10 city is intentionally replaced by V28 below. These low-output
+        // practicals guide the route without washing out the landscape.
         const FVector RouteLights[] = {
             FVector(-8200.0f,-1500.0f,360.0f), FVector(-6900.0f,1550.0f,360.0f),
             FVector(-4600.0f,-1800.0f,380.0f), FVector(-2100.0f,1800.0f,380.0f),
@@ -1678,13 +1739,13 @@ void APhantomStrikeDirector::BuildCommandComplex()
             SpawnPointLight(
                 FString::Printf(TEXT("NightglassRouteLight_%02d"), Index),
                 RouteLights[Index],
-                bWarm ? FLinearColor(1.0f,0.50f,0.23f) : FLinearColor(0.34f,0.48f,0.62f),
-                bWarm ? 3300.0f : 2800.0f,
-                520.0f,
-                Index == 6
+                bWarm ? FLinearColor(1.0f,0.58f,0.32f) : FLinearColor(0.62f,0.70f,0.72f),
+                bWarm ? 1250.0f : 900.0f,
+                420.0f,
+                false
             );
         }
-        BuildV27BlackridgeRealism();
+        BuildV28NaturalBlackridge();
         return;
     }
     for(int32 TY=0;TY<3;++TY)
@@ -1867,11 +1928,183 @@ void APhantomStrikeDirector::BuildCommandComplex()
             FVector(X,Y,8.0f),FVector(1.0f),FRotator(0,(I%2)*90.0f,0),true,true);
     }
     SpawnPointLight(TEXT("CommandCoreLight"),FVector(9000,0,360),FLinearColor(0.08f,0.88f,1.0f),7000.0f,700.0f,true);
-    BuildV27BlackridgeRealism();
+    BuildV28NaturalBlackridge();
 }
 
-void APhantomStrikeDirector::BuildV27BlackridgeRealism()
+void APhantomStrikeDirector::BuildV28NaturalBlackridge()
 {
+    // This is a replacement pass, not another layer. Remove every legacy city mesh from
+    // the persistent V10 level while preserving the invisible traversal collision actor.
+    for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+    {
+        AActor* Existing = *It;
+        if (!Existing || Existing == this || Existing->IsA<APawn>() ||
+            Existing->ActorHasTag(TEXT("BlackridgeCollision")) ||
+            Existing->ActorHasTag(TEXT("PhantomSkyAtmosphere")) ||
+            Existing->IsA<APostProcessVolume>())
+        {
+            continue;
+        }
+        // Persistent prototype landmarks were not all plain StaticMeshActors; a few
+        // used instanced or other primitive components and survived the old cleanup.
+        // Remove every legacy rendered primitive before the natural world is authored.
+        TInlineComponentArray<UPrimitiveComponent*> PrimitiveComponents;
+        Existing->GetComponents(PrimitiveComponents);
+        if (PrimitiveComponents.IsEmpty())
+        {
+            continue;
+        }
+        Existing->SetActorHiddenInGame(true);
+        Existing->SetActorEnableCollision(false);
+        for (UPrimitiveComponent* PrimitiveComponent : PrimitiveComponents)
+        {
+            if (!PrimitiveComponent) continue;
+            PrimitiveComponent->SetVisibility(false, true);
+            PrimitiveComponent->SetHiddenInGame(true, true);
+            PrimitiveComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        }
+    }
+
+    // Pull the exposure back to a readable natural daylight range and keep bloom restrained.
+    for (TActorIterator<APostProcessVolume> It(GetWorld()); It; ++It)
+    {
+        It->Settings.bOverride_AutoExposureBias = true;
+        It->Settings.AutoExposureBias = -0.85f;
+        It->Settings.bOverride_BloomIntensity = true;
+        It->Settings.BloomIntensity = 0.14f;
+        It->Settings.bOverride_VignetteIntensity = true;
+        It->Settings.VignetteIntensity = 0.18f;
+    }
+
+    // Six overlapping authored terrain sections establish real variation on both sides of
+    // the route while the invisible level slab remains a deterministic traversal surface.
+    int32 TerrainIndex = 0;
+    for (int32 XIndex = -1; XIndex <= 1; ++XIndex)
+    {
+        for (int32 YIndex = -1; YIndex <= 1; YIndex += 2)
+        {
+            SpawnStaticMeshAsset(
+                FString::Printf(TEXT("V28NaturalTerrain_%02d"), TerrainIndex++),
+                TEXT("/Game/ArchVis/SampleScene/Building/Meshes/Exterior_Terrain.Exterior_Terrain"),
+                FVector(XIndex * 9800.0f, YIndex * 4400.0f, 145.0f),
+                FVector(2.35f), FRotator(0.0f, XIndex == 0 ? 180.0f : 0.0f, 0.0f),
+                false, false);
+        }
+    }
+
+    // Tile the access road and operations apron instead of stretching one plane across the
+    // entire mission. Each tile keeps its material texel density and avoids the smeared ground
+    // that previously exposed the procedural construction at the insertion point.
+    for (int32 Segment = 0; Segment < 30; ++Segment)
+    {
+        if (AStaticMeshActor* Route = SpawnStaticMeshAsset(
+            FString::Printf(TEXT("V28CoastalAccessRoad_%02d"), Segment),
+            TEXT("/Engine/BasicShapes/Plane.Plane"),
+            FVector(-12700.0f + Segment * 1000.0f, 0.0f, 154.0f), FVector(10.04f,9.0f,1.0f),
+            FRotator::ZeroRotator, false, false))
+        {
+            ApplyMaterialAsset(Route, TEXT("/Game/Phantom/Materials/Production/M_Phantom_Asphalt.M_Phantom_Asphalt"));
+        }
+    }
+    for (int32 ApronX = 0; ApronX < 6; ++ApronX)
+    {
+        for (int32 ApronY = 0; ApronY < 4; ++ApronY)
+        {
+            if (AStaticMeshActor* Apron = SpawnStaticMeshAsset(
+                FString::Printf(TEXT("V28OperationsApron_%02d_%02d"), ApronX, ApronY),
+                TEXT("/Engine/BasicShapes/Plane.Plane"),
+                FVector(6600.0f + ApronX * 1040.0f, -1710.0f + ApronY * 1140.0f, 156.0f),
+                FVector(10.44f,11.44f,1.0f), FRotator::ZeroRotator, false, false))
+            {
+                ApplyMaterialAsset(Apron, TEXT("/Game/Phantom/Materials/Production/M_Phantom_Concrete.M_Phantom_Concrete"));
+            }
+        }
+    }
+
+    // Dense licensed trees create a genuine woodland silhouette while keeping a readable
+    // shoulder and sightline. Deterministic placement makes release proof stable.
+    FRandomStream NaturalStream(2828);
+    TArray<FTransform> NaturalTrees;
+    NaturalTrees.Reserve(240);
+    for (int32 Index = 0; Index < 240; ++Index)
+    {
+        const float X = NaturalStream.FRandRange(-15000.0f, 17600.0f);
+        const float Side = Index % 2 == 0 ? -1.0f : 1.0f;
+        const float Y = Side * NaturalStream.FRandRange(1500.0f, 14600.0f);
+        const float Scale = NaturalStream.FRandRange(0.72f, 1.28f);
+        NaturalTrees.Emplace(FRotator(0.0f, NaturalStream.FRandRange(0.0f,360.0f), 0.0f),
+            FVector(X,Y,155.0f), FVector(Scale));
+    }
+    SpawnInstancedMeshCluster(TEXT("V28BlackridgeNaturalTrees_HISM"),
+        TEXT("/Game/ArchVis/SampleScene/Tree/HillTree_02.HillTree_02"), NaturalTrees, false);
+
+    TArray<FTransform> NaturalRocks;
+    TArray<FTransform> NaturalBrush;
+    NaturalRocks.Reserve(96);
+    NaturalBrush.Reserve(260);
+    for (int32 Index = 0; Index < 96; ++Index)
+    {
+        const float X = NaturalStream.FRandRange(-14800.0f, 17400.0f);
+        const float Side = Index % 2 == 0 ? -1.0f : 1.0f;
+        const float Y = Side * NaturalStream.FRandRange(1850.0f, 9300.0f);
+        NaturalRocks.Emplace(FRotator(0.0f, NaturalStream.FRandRange(0.0f,360.0f), 0.0f),
+            FVector(X,Y,154.0f), FVector(NaturalStream.FRandRange(0.55f,1.35f)));
+    }
+    for (int32 Index = 0; Index < 260; ++Index)
+    {
+        const float X = NaturalStream.FRandRange(-15200.0f, 17800.0f);
+        const float Side = Index % 2 == 0 ? -1.0f : 1.0f;
+        const float Y = Side * NaturalStream.FRandRange(700.0f, 7200.0f);
+        NaturalBrush.Emplace(FRotator(0.0f, NaturalStream.FRandRange(0.0f,360.0f), 0.0f),
+            FVector(X,Y,154.0f), FVector(NaturalStream.FRandRange(0.65f,1.45f)));
+    }
+    SpawnInstancedMeshCluster(TEXT("V28BlackridgeRocks_HISM"),
+        TEXT("/Game/Phantom/Generated/Common/SM_RockCluster_A.SM_RockCluster_A"), NaturalRocks, false);
+    SpawnInstancedMeshCluster(TEXT("V28BlackridgeBrush_HISM"),
+        TEXT("/Game/Phantom/Generated/Common/SM_Bush_A.SM_Bush_A"), NaturalBrush, false);
+
+    struct FNaturalSetpiece
+    {
+        const TCHAR* Name;
+        const TCHAR* Asset;
+        FVector Location;
+        float Scale;
+        float Yaw;
+        bool bCollision;
+    };
+    const FNaturalSetpiece Setpieces[] = {
+        // SM_Car is normalized to a 4.6 m vehicle in SpawnStaticMeshAsset. These are
+        // presentation variations around that real-world target, not raw import multipliers.
+        {TEXT("V28InsertionVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-7300.0f,-2850.0f,154.0f), 1.00f, 18.0f, true},
+        {TEXT("V28CheckpointVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-3900.0f,2750.0f,154.0f), 1.04f, -22.0f, true},
+        {TEXT("V28OutpostResponseVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(3440.0f,2640.0f,154.0f), 1.02f, 164.0f, true},
+        {TEXT("V28OperationsVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(7200.0f,-2720.0f,154.0f), 1.06f, 12.0f, true},
+        {TEXT("V28InsertionRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(-6500.0f,1740.0f,154.0f), 0.82f, 12.0f, false},
+        {TEXT("V28CheckpointSandbags"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_SandbagWall.SM_V9_SandbagWall"), FVector(-2550.0f,-1560.0f,154.0f), 0.90f, 8.0f, true},
+        {TEXT("V28OutpostBarricade"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_TacticalBarricade.SM_V9_TacticalBarricade"), FVector(2220.0f,1520.0f,154.0f), 0.88f, 78.0f, true},
+        {TEXT("V28OperationsContainerA"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_CargoContainer_0.SM_V9_CargoContainer_0"), FVector(8420.0f,-1800.0f,154.0f), 0.72f, 90.0f, true},
+        {TEXT("V28OperationsContainerB"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_CargoContainer_1.SM_V9_CargoContainer_1"), FVector(9580.0f,1800.0f,154.0f), 0.72f, -90.0f, true}
+    };
+    for (const FNaturalSetpiece& Setpiece : Setpieces)
+    {
+        SpawnStaticMeshAsset(Setpiece.Name, Setpiece.Asset, Setpiece.Location, FVector(Setpiece.Scale),
+            FRotator(0.0f, Setpiece.Yaw, 0.0f), Setpiece.bCollision, true);
+    }
+
+    const FVector PracticalLights[] = {
+        FVector(-4200.0f,1350.0f,340.0f), FVector(2750.0f,-1420.0f,350.0f),
+        FVector(6900.0f,1380.0f,365.0f), FVector(9100.0f,-900.0f,410.0f)
+    };
+    for (int32 Index = 0; Index < UE_ARRAY_COUNT(PracticalLights); ++Index)
+    {
+        SpawnPointLight(FString::Printf(TEXT("V28BlackridgePractical_%02d"), Index), PracticalLights[Index],
+            FLinearColor(1.0f,0.56f,0.30f), Index == 3 ? 1850.0f : 950.0f,
+            Index == 3 ? 480.0f : 330.0f, false);
+    }
+
+    // The former additive city implementation is retained below only as disabled recovery
+    // reference. It cannot execute or render in V28.
+#if 0
     // V27 BLACKRIDGE REALISM: the approved wet-coast target renders are the contract.
     // Real authored vehicle/building meshes and PBR materials replace visible primitive
     // architecture while preserving the persistent map and center traversal lane.
@@ -1885,10 +2118,10 @@ void APhantomStrikeDirector::BuildV27BlackridgeRealism()
         bool bCollision;
     };
     const FBlackridgeSetpiece Setpieces[] = {
-        {TEXT("V27InsertionDisabledCar"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-7850.0f,-1280.0f,160.0f), 12.0f, 18.0f, true},
-        {TEXT("V27CheckpointUtilityCar"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-5050.0f,1420.0f,160.0f), 12.4f, -24.0f, true},
-        {TEXT("V27MarketEvacuationCar"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-1680.0f,-1620.0f,160.0f), 11.8f, 34.0f, true},
-        {TEXT("V27BreachResponseVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(5960.0f,1510.0f,160.0f), 12.6f, 164.0f, true},
+        {TEXT("V27InsertionDisabledCar"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-7850.0f,-1280.0f,160.0f), 1.00f, 18.0f, true},
+        {TEXT("V27CheckpointUtilityCar"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-5050.0f,1420.0f,160.0f), 1.04f, -24.0f, true},
+        {TEXT("V27MarketEvacuationCar"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-1680.0f,-1620.0f,160.0f), 0.96f, 34.0f, true},
+        {TEXT("V27BreachResponseVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(5960.0f,1510.0f,160.0f), 1.06f, 164.0f, true},
         {TEXT("V26InsertionRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(-6900.0f,1740.0f,160.0f), 0.82f, 12.0f, false},
         {TEXT("V26CheckpointRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(-4050.0f,-1820.0f,160.0f), 0.94f, 83.0f, false},
         {TEXT("V26MarketRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(550.0f,1880.0f,160.0f), 0.78f, -28.0f, false},
@@ -1906,13 +2139,14 @@ void APhantomStrikeDirector::BuildV27BlackridgeRealism()
         SpawnStaticMeshAsset(Setpiece.Name, Setpiece.Asset, Setpiece.Location, FVector(Setpiece.Scale), FRotator(0.0f, Setpiece.Yaw, 0.0f), Setpiece.bCollision, true);
     }
 
-    // Product-template architecture is authored with real material response but a miniature
-    // source scale. These explicit factors resolve it to 5-7 storey Blackridge blocks.
+    // The shared semantic unit gate already resolves ProductAssets architecture to real-world
+    // dimensions. These factors are design multipliers only; the former 54-64x values multiplied
+    // the unit correction twice and stretched buildings across the entire insertion route.
     const FBlackridgeSetpiece RealBuildings[] = {
-        {TEXT("V27InsertionApartment"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(-6900.0f,5450.0f,160.0f), 58.0f, 90.0f, true},
-        {TEXT("V27CheckpointApartment"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(-2850.0f,-5600.0f,160.0f), 54.0f, -90.0f, true},
-        {TEXT("V27MarketApartment"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(2450.0f,5650.0f,160.0f), 61.0f, 90.0f, true},
-        {TEXT("V27CommandCenterShell"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(8550.0f,3650.0f,160.0f), 64.0f, -90.0f, false}
+        {TEXT("V27InsertionApartment"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(-6900.0f,5450.0f,160.0f), 1.45f, 90.0f, true},
+        {TEXT("V27CheckpointApartment"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(-2850.0f,-5600.0f,160.0f), 1.35f, -90.0f, true},
+        {TEXT("V27MarketApartment"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(2450.0f,5650.0f,160.0f), 1.55f, 90.0f, true},
+        {TEXT("V27CommandCenterShell"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(8550.0f,3650.0f,160.0f), 1.75f, -90.0f, false}
     };
     for (const FBlackridgeSetpiece& Building : RealBuildings)
     {
@@ -1953,4 +2187,5 @@ void APhantomStrikeDirector::BuildV27BlackridgeRealism()
     SpawnStaticMeshAsset(TEXT("V27BreachFrameLeft"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(7540.0f,-760.0f,160.0f), FVector(1.10f), FRotator(0.0f,22.0f,0.0f), false, true);
     SpawnStaticMeshAsset(TEXT("V27BreachFrameRight"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(7580.0f,760.0f,160.0f), FVector(1.06f), FRotator(0.0f,156.0f,0.0f), false, true);
     SpawnStaticMeshAsset(TEXT("V27BreachInterior"), TEXT("/Game/Phantom/Curated/Strike/SM_Strike_Warehouse.SM_Strike_Warehouse"), FVector(8950.0f,0.0f,160.0f), FVector(0.92f), FRotator(0.0f,90.0f,0.0f), false, true);
+#endif
 }

@@ -332,7 +332,7 @@ private:
     FVector ExtractionLocation = FVector(14600.0f, -9200.0f, 105.0f);
 
     void BuildCommandComplex();
-    void BuildV27BlackridgeRealism();
+    void BuildV28NaturalBlackridge();
     void SpawnWave();
     void SpawnSquad();
     void OpenExtraction();
