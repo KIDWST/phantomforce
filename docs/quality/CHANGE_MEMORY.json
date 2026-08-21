@@ -2252,15 +2252,15 @@
       ]
     },
     {
-      "id": "phantomstrike-v18-floor-and-v19-operation-nightglass",
+      "id": "phantomstrike-v25-floor-and-v26-blackridge",
       "status": "active",
-      "title": "PhantomStrike never rolls back below V18R1 and keeps Operation Nightglass",
-      "ownerDecision": "PhantomStrike's verified release floor is V18R1, never the historical V11R6 checkpoint. New work must preserve recovered V13–V17 world/gameplay upgrades and the V18 production gates. The V19 Operation Nightglass candidate adds staged insertion, street advance, command-center breach, a physical uplink interaction, marina extraction, visible friendly operators who cannot complete combat for the player, tactical enemy exposure/flank/reposition decisions, mission-aware HUD state, and an idempotent 122-actor persistent-world pass. Candidate packaging remains isolated and the installed set cannot change without exact PROMOTE authorization after visual, real-input, and performance gates pass.",
+      "title": "PhantomStrike keeps the V25R3 floor and the original V26 Blackridge grounded-combat identity",
+      "ownerDecision": "PhantomStrike's verified installed release floor is V25R3 inside the mixed V25R3+CUBETOWN-V19R1 PhantomPlay set. V26 Blackridge must preserve the staged Operation Nightglass mission and V19 persistent-world route while making the checked-in Helix military operator family authoritative; shared fantasy Rogue, Knight, and Barbarian bodies are forbidden. The first-person view retains visible tactical arms, camera and weapon inertia, warm physical muzzle presentation and casing ejection. Operators retain movement, recoil, hit, and collapse presentation. The HUD stays restrained and the world uses cool storm ambience, warm practicals, wrecks, rubble, and a readable breach/relay tableau. Generated images are original visual targets translated into real runtime systems. V26 packaging remains isolated and the installed set cannot change without a new exact PROMOTE authorization after rendered-frame, real-input, and performance gates pass.",
       "requiredPatterns": [
         {
           "file": "docs/phantomplay-production/creative-bibles/phantom-strike.json",
-          "pattern": "current_floor\": \"V18R1 verified installed Unreal release[\\s\\S]*next_target\": \"V19 Operation Nightglass",
-          "description": "The creative bible identifies the real installed release floor and current successor."
+          "pattern": "current_floor\": \"V25R3 verified installed PhantomStrike release[\\s\\S]*next_target\": \"V26R1 Blackridge grounded-combat candidate",
+          "description": "The creative bible identifies the installed V25R3 floor and candidate-only V26 successor."
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
@@ -2273,6 +2273,16 @@
           "description": "Enemy behavior retains explicit tactical exposure, flank, and decision windows."
         },
         {
+          "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
+          "pattern": "SpawnEjectedCasing[\\s\\S]*RightTacticalForearm[\\s\\S]*Helix operator is the authoritative modern-military squad silhouette[\\s\\S]*V26 sight picture[\\s\\S]*BuildV26BlackridgeAtmosphere",
+          "description": "The V26 military operators, first-person weapon presentation, restrained HUD, and Blackridge atmosphere remain in runtime source."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V26_VISUAL_TARGET_PROMPTS.md",
+          "pattern": "Blackridge exterior gameplay target[\\s\\S]*communications-center breach target[\\s\\S]*Runtime translation contract",
+          "description": "The V26 original visual targets and their runtime translation contract remain reproducible."
+        },
+        {
           "file": "packages/phantom-games-unreal/Tools/PatchPhantomStrikeV19.py",
           "pattern": "PATCH_TAG = \"PhantomStrikeV19\"[\\s\\S]*remove_previous_pass[\\s\\S]*actor_count",
           "description": "The V19 persistent-world pass remains idempotent and reports its authored contribution."
@@ -2283,16 +2293,26 @@
           "description": "The production validator rejects a missing or materially reduced V19 world pass."
         },
         {
-          "file": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V19_PRODUCTION_REPORT.md",
-          "pattern": "Release floor: installed V18R1[\\s\\S]*REVIEW CANDIDATE — NOT PROMOTED[\\s\\S]*exact literal `PROMOTE`",
-          "description": "The release record stays truthful about the baseline, evidence, and unpromoted disposition."
+          "file": "packages/phantom-games-unreal/Docs/Production/PHANTOMSTRIKE_V26_BLACKRIDGE_REPORT.md",
+          "pattern": "Release floor: installed PhantomStrike V25R3[\\s\\S]*ISOLATED REVIEW CANDIDATE — NOT PROMOTED[\\s\\S]*exact literal `PROMOTE`",
+          "description": "The V26 release record stays truthful about the floor, evidence, limitations, and unpromoted disposition."
+        },
+        {
+          "file": "scripts/test-phantomstrike-v26-blackridge.mjs",
+          "pattern": "PHANTOMSTRIKE_V26_BLACKRIDGE_PASS",
+          "description": "The focused V26 regression gate remains available."
         }
       ],
       "forbiddenPatterns": [
         {
           "file": "docs/phantomplay-production/creative-bibles/phantom-strike.json",
           "pattern": "current_floor\": \"V11R6",
-          "description": "The historical V11R6 checkpoint cannot replace the verified V18R1 floor."
+          "description": "The historical V11R6 checkpoint cannot replace the verified V25R3 floor."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Strike/PhantomStrikeDirector.cpp",
+          "pattern": "SK_(?:Rogue|Knight|Barbarian)\\.SK_(?:Rogue|Knight|Barbarian)",
+          "description": "Shared fantasy production bodies cannot re-enter PhantomStrike."
         }
       ]
     },

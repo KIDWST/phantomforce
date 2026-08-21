@@ -16,9 +16,11 @@
       "visual_targets": [
         "SourceArt/VisualTargets/phantom-strike-v12-exterior-gameplay-target.png",
         "SourceArt/VisualTargets/phantom-strike-v12-interior-breach-target.png",
-        "SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png"
+        "SourceArt/VisualTargets/phantom-strike-v12-hud-weapon-target.png",
+        "SourceArt/VisualTargets/phantom-strike-v26-blackridge-gameplay-target.png",
+        "SourceArt/VisualTargets/phantom-strike-v26-blackridge-breach-target.png"
       ],
-      "visual_target_prompts": "Docs/Production/PHANTOMSTRIKE_V12_VISUAL_TARGET_PROMPTS.md",
+      "visual_target_prompts": "Docs/Production/PHANTOMSTRIKE_V26_VISUAL_TARGET_PROMPTS.md",
       "execution_prompt": "Docs/Production/PHANTOMSTRIKE_V12_IMPLEMENTATION_PROMPT.md",
       "save_namespace": "phantomstrike.",
       "identity_invariants": [

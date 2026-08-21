@@ -1,6 +1,5 @@
 #include "Strike/PhantomStrikeDirector.h"
 #include "Core/PhantomGameShell.h"
-#include "Core/PhantomModularCharacter.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -94,6 +93,29 @@ namespace
         Impact->GetStaticMeshComponent()->SetMaterial(0, Material);
         Impact->SetLifeSpan(0.14f);
     }
+
+    void SpawnEjectedCasing(UWorld* World, const FVector& Location, const FVector& Forward, const FVector& Right)
+    {
+        if (!World) return;
+        UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+        UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+        if (!Cylinder || !Base) return;
+        AStaticMeshActor* Casing = World->SpawnActor<AStaticMeshActor>(Location, Forward.Rotation() + FRotator(0.0f, 0.0f, 90.0f));
+        if (!Casing) return;
+        UStaticMeshComponent* Mesh = Casing->GetStaticMeshComponent();
+        Mesh->SetStaticMesh(Cylinder);
+        Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+        Mesh->SetStaticMesh(Cylinder);
+        Casing->SetActorScale3D(FVector(0.018f, 0.018f, 0.050f));
+        UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Base, Casing);
+        Material->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.46f, 0.27f, 0.055f));
+        Mesh->SetMaterial(0, Material);
+        Mesh->SetSimulatePhysics(true);
+        Mesh->SetMassOverrideInKg(NAME_None, 0.014f, true);
+        Mesh->SetPhysicsLinearVelocity(Right * FMath::FRandRange(160.0f, 240.0f) + FVector(0.0f, 0.0f, FMath::FRandRange(80.0f, 140.0f)) + Forward * 25.0f);
+        Mesh->SetPhysicsAngularVelocityInDegrees(FVector(FMath::FRandRange(260.0f, 520.0f), FMath::FRandRange(-420.0f, 420.0f), FMath::FRandRange(180.0f, 460.0f)));
+        Casing->SetLifeSpan(1.6f);
+    }
 }
 
 APhantomStrikeCharacter::APhantomStrikeCharacter()
@@ -107,6 +129,7 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
 
     UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
     UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+    UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
     RifleBody = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("NightglassRifle"));
     RifleBody->SetupAttachment(FirstPersonCamera);
     UStaticMesh* ImportedRifle = LoadObject<UStaticMesh>(
@@ -180,12 +203,54 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
     SidearmBody->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     SidearmBody->SetOnlyOwnerSee(true); SidearmBody->SetCastShadow(false); SidearmBody->SetVisibility(false);
 
+    RightForearm = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RightTacticalForearm"));
+    RightForearm->SetupAttachment(FirstPersonCamera);
+    RightForearm->SetStaticMesh(Cylinder);
+    RightForearm->SetRelativeLocation(FVector(25.0f, 31.0f, -38.0f));
+    RightForearm->SetRelativeRotation(FRotator(67.0f, 0.0f, -8.0f));
+    RightForearm->SetRelativeScale3D(FVector(0.105f, 0.105f, 0.34f));
+    RightForearm->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    RightForearm->SetOnlyOwnerSee(true); RightForearm->SetCastShadow(false);
+
+    LeftForearm = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftTacticalForearm"));
+    LeftForearm->SetupAttachment(FirstPersonCamera);
+    LeftForearm->SetStaticMesh(Cylinder);
+    LeftForearm->SetRelativeLocation(FVector(31.0f, -8.0f, -40.0f));
+    LeftForearm->SetRelativeRotation(FRotator(64.0f, 8.0f, 13.0f));
+    LeftForearm->SetRelativeScale3D(FVector(0.10f, 0.10f, 0.32f));
+    LeftForearm->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    LeftForearm->SetOnlyOwnerSee(true); LeftForearm->SetCastShadow(false);
+
+    RightGlove = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RightTacticalGlove"));
+    RightGlove->SetupAttachment(FirstPersonCamera);
+    RightGlove->SetStaticMesh(Sphere);
+    RightGlove->SetRelativeLocation(FVector(49.0f, 25.0f, -29.0f));
+    RightGlove->SetRelativeScale3D(FVector(0.13f, 0.105f, 0.095f));
+    RightGlove->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    RightGlove->SetOnlyOwnerSee(true); RightGlove->SetCastShadow(false);
+
+    LeftGlove = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftTacticalGlove"));
+    LeftGlove->SetupAttachment(FirstPersonCamera);
+    LeftGlove->SetStaticMesh(Sphere);
+    LeftGlove->SetRelativeLocation(FVector(57.0f, 5.0f, -27.0f));
+    LeftGlove->SetRelativeScale3D(FVector(0.14f, 0.105f, 0.095f));
+    LeftGlove->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    LeftGlove->SetOnlyOwnerSee(true); LeftGlove->SetCastShadow(false);
+
+    MuzzleBloom = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MuzzleBloom"));
+    MuzzleBloom->SetupAttachment(FirstPersonCamera);
+    MuzzleBloom->SetStaticMesh(Sphere);
+    MuzzleBloom->SetRelativeLocation(FVector(128.0f, 15.0f, -17.0f));
+    MuzzleBloom->SetRelativeScale3D(FVector(0.12f, 0.06f, 0.06f));
+    MuzzleBloom->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    MuzzleBloom->SetOnlyOwnerSee(true); MuzzleBloom->SetCastShadow(false); MuzzleBloom->SetVisibility(false);
+
     MuzzleLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("MuzzleFlash"));
     MuzzleLight->SetupAttachment(FirstPersonCamera);
     MuzzleLight->SetRelativeLocation(FVector(130.0f, 15.0f, -17.0f));
     MuzzleLight->SetIntensity(0.0f);
     MuzzleLight->SetAttenuationRadius(360.0f);
-    MuzzleLight->SetLightColor(FLinearColor(0.15f, 0.85f, 1.0f));
+    MuzzleLight->SetLightColor(FLinearColor(1.0f, 0.58f, 0.20f));
     MuzzleLight->SetCastShadows(false);
 
     GetCharacterMovement()->MaxWalkSpeed = 470.0f;
@@ -216,6 +281,11 @@ void APhantomStrikeCharacter::BeginPlay()
         ApplyShapeColor(RifleBarrel, FLinearColor(0.08f, 0.85f, 0.95f));
         ApplyShapeColor(RifleSight, FLinearColor(0.9f, 0.12f, 0.28f));
     }
+    ApplyShapeColor(RightForearm, FLinearColor(0.18f, 0.16f, 0.12f));
+    ApplyShapeColor(LeftForearm, FLinearColor(0.18f, 0.16f, 0.12f));
+    ApplyShapeColor(RightGlove, FLinearColor(0.035f, 0.04f, 0.038f));
+    ApplyShapeColor(LeftGlove, FLinearColor(0.035f, 0.04f, 0.038f));
+    ApplyShapeColor(MuzzleBloom, FLinearColor(1.0f, 0.62f, 0.18f));
 }
 
 void APhantomStrikeCharacter::Tick(float DeltaSeconds)
@@ -251,7 +321,35 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
     MuzzleFlashRemaining = FMath::Max(0.0f, MuzzleFlashRemaining - DeltaSeconds);
     TimeSinceDamage += DeltaSeconds;
     RecoilKick = FMath::FInterpTo(RecoilKick, 0.0f, DeltaSeconds, 15.0f);
+    ShotImpulse = FMath::FInterpTo(ShotImpulse, 0.0f, DeltaSeconds, 20.0f);
     MuzzleLight->SetIntensity(MuzzleFlashRemaining > 0.0f ? 8500.0f : 0.0f);
+    if (MuzzleBloom)
+    {
+        MuzzleBloom->SetVisibility(MuzzleFlashRemaining > 0.0f);
+        const float BloomPulse = 0.72f + FMath::Clamp(MuzzleFlashRemaining / 0.055f, 0.0f, 1.0f) * 0.55f;
+        MuzzleBloom->SetRelativeScale3D(FVector(0.12f, 0.06f, 0.06f) * BloomPulse);
+    }
+
+    if (AController* ViewController = GetController())
+    {
+        const FRotator ViewRotation = ViewController->GetControlRotation();
+        if (bHasViewSample)
+        {
+            const float YawDelta = FMath::FindDeltaAngleDegrees(LastViewRotation.Yaw, ViewRotation.Yaw);
+            const float PitchDelta = FMath::FindDeltaAngleDegrees(LastViewRotation.Pitch, ViewRotation.Pitch);
+            const FVector2D TargetInertia(
+                FMath::Clamp(-YawDelta * 0.42f, -3.8f, 3.8f),
+                FMath::Clamp(-PitchDelta * 0.34f, -2.8f, 2.8f)
+            );
+            WeaponInertia.X = FMath::FInterpTo(WeaponInertia.X, TargetInertia.X, DeltaSeconds, 11.0f);
+            WeaponInertia.Y = FMath::FInterpTo(WeaponInertia.Y, TargetInertia.Y, DeltaSeconds, 11.0f);
+        }
+        else
+        {
+            bHasViewSample = true;
+        }
+        LastViewRotation = ViewRotation;
+    }
 
     const float DesiredFov = bAiming ? (bUsingSidearm ? 74.0f : 70.0f) : (bSprinting ? 96.0f : (SlideRemaining > 0.0f ? 94.0f : 90.0f));
     FirstPersonCamera->SetFieldOfView(FMath::FInterpTo(FirstPersonCamera->FieldOfView, DesiredFov, DeltaSeconds, 12.0f));
@@ -262,9 +360,9 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
     WeaponBobTime += DeltaSeconds * (MoveSpeed > 40.0f ? (bSprinting ? 13.0f : 8.5f) : 2.0f);
     const float BobStrength = bAiming ? 0.45f : (bSprinting ? 2.4f : 1.25f);
     const FVector WeaponBob(
-        -RecoilKick * 8.0f,
-        FMath::Sin(WeaponBobTime) * BobStrength,
-        FMath::Abs(FMath::Cos(WeaponBobTime * 0.5f)) * BobStrength - BobStrength * 0.5f
+        -RecoilKick * 8.0f - ShotImpulse * 2.0f,
+        FMath::Sin(WeaponBobTime) * BobStrength + WeaponInertia.X,
+        FMath::Abs(FMath::Cos(WeaponBobTime * 0.5f)) * BobStrength - BobStrength * 0.5f + WeaponInertia.Y
     );
     const FVector RiflePivotOffset = bUsingImportedRifle && RifleBody->GetStaticMesh()
         ? RifleBody->GetStaticMesh()->GetBounds().Origin * RifleBody->GetRelativeScale3D().X
@@ -286,18 +384,31 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
     UStaticMeshComponent* ActiveWeapon = bUsingSidearm ? SidearmBody : RifleBody;
     UStaticMeshComponent* InactiveWeapon = bUsingSidearm ? RifleBody : SidearmBody;
     if (InactiveWeapon) InactiveWeapon->SetRelativeRotation(FRotator::ZeroRotator);
+    const FRotator HandlingRotation(
+        RecoilKick * 3.8f - WeaponInertia.Y * 0.42f,
+        WeaponInertia.X * 0.52f,
+        bSprinting ? -11.0f : 0.0f
+    );
     if (bReloading)
     {
         ReloadRemaining -= DeltaSeconds;
-        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(FRotator(0.0f, 0.0f, FMath::Sin(ReloadRemaining * 7.0f) * 18.0f));
+        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(HandlingRotation + FRotator(5.0f, -4.0f, FMath::Sin(ReloadRemaining * 7.0f) * 24.0f));
         if (ReloadRemaining <= 0.0f) FinishReload();
     }
     else
     {
         const FRotator InspectRotation = InspectRemaining > 0.0f ? FRotator(8.0f, 32.0f, -18.0f) : FRotator::ZeroRotator;
-        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(FMath::RInterpTo(ActiveWeapon->GetRelativeRotation(), InspectRotation, DeltaSeconds, 12.0f));
+        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(FMath::RInterpTo(ActiveWeapon->GetRelativeRotation(), InspectRotation + HandlingRotation, DeltaSeconds, 14.0f));
         if (bTriggerHeld && FireCooldown <= 0.0f) FireOneRound();
     }
+
+    const FVector RightHandTarget = (bUsingSidearm ? FVector(46.0f, 21.0f, -29.0f) : FVector(49.0f, 25.0f, -29.0f)) + WeaponBob * 0.82f;
+    const FVector LeftHandTarget = (bUsingSidearm ? FVector(41.0f, 8.0f, -31.0f) : FVector(59.0f, 4.0f, -27.0f)) + WeaponBob * 0.72f;
+    const FVector ReloadHandOffset = bReloading ? FVector(-8.0f, -5.0f, -8.0f) : FVector::ZeroVector;
+    if (RightGlove) RightGlove->SetRelativeLocation(FMath::VInterpTo(RightGlove->GetRelativeLocation(), RightHandTarget, DeltaSeconds, 18.0f));
+    if (LeftGlove) LeftGlove->SetRelativeLocation(FMath::VInterpTo(LeftGlove->GetRelativeLocation(), LeftHandTarget + ReloadHandOffset, DeltaSeconds, 16.0f));
+    if (RightForearm) RightForearm->SetRelativeLocation(FMath::VInterpTo(RightForearm->GetRelativeLocation(), RightHandTarget + FVector(-22.0f, 7.0f, -9.0f), DeltaSeconds, 15.0f));
+    if (LeftForearm) LeftForearm->SetRelativeLocation(FMath::VInterpTo(LeftForearm->GetRelativeLocation(), LeftHandTarget + ReloadHandOffset + FVector(-25.0f, -10.0f, -11.0f), DeltaSeconds, 15.0f));
 
     if (SlideRemaining <= 0.0f && !bSprinting && !bAiming) RefreshMovementSpeed();
 
@@ -412,6 +523,7 @@ void APhantomStrikeCharacter::FireOneRound()
     FireCooldown = bUsingSidearm ? 0.17f : 0.085f;
     WeaponHeat = FMath::Min(1.0f, WeaponHeat + (bUsingSidearm ? 0.07f : 0.12f));
     RecoilKick = FMath::Min(1.0f, RecoilKick + (bUsingSidearm ? 0.36f : (bAiming ? 0.28f : 0.48f)));
+    ShotImpulse = FMath::Min(1.0f, ShotImpulse + (bUsingSidearm ? 0.48f : 0.72f));
     MuzzleFlashRemaining = 0.055f;
 
     APlayerController* PlayerController = Cast<APlayerController>(GetController());
@@ -426,7 +538,9 @@ void APhantomStrikeCharacter::FireOneRound()
     FCollisionQueryParams Query(SCENE_QUERY_STAT(PhantomStrikeFire), true, this);
     const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, ViewLocation, End, ECC_Visibility, Query);
     const FVector TraceEnd = bHit ? Hit.ImpactPoint : End;
-    SpawnBallisticTrace(GetWorld(), ViewLocation + ShotDirection * 75.0f, TraceEnd, FLinearColor(0.18f, 0.82f, 1.0f), 1.6f, 0.035f);
+    SpawnBallisticTrace(GetWorld(), ViewLocation + ShotDirection * 75.0f, TraceEnd, FLinearColor(1.0f, 0.72f, 0.30f), 0.72f, 0.024f);
+    const FVector ViewRight = FRotationMatrix(ViewRotation).GetScaledAxis(EAxis::Y);
+    SpawnEjectedCasing(GetWorld(), ViewLocation + ViewRotation.Vector() * 62.0f + ViewRight * 22.0f + FVector(0.0f, 0.0f, -13.0f), ViewRotation.Vector(), ViewRight);
     if (bHit)
     {
         const APhantomStrikeEnemy* Enemy = Cast<APhantomStrikeEnemy>(Hit.GetActor());
@@ -741,7 +855,7 @@ APhantomStrikeEnemy::APhantomStrikeEnemy()
     MuzzleLight->SetRelativeLocation(FVector(72.0f, 0.0f, 0.0f));
     MuzzleLight->SetIntensity(0.0f);
     MuzzleLight->SetAttenuationRadius(280.0f);
-    MuzzleLight->SetLightColor(FLinearColor(1.0f, 0.12f, 0.025f));
+    MuzzleLight->SetLightColor(FLinearColor(1.0f, 0.46f, 0.12f));
     MuzzleLight->SetCastShadows(false);
     GetCharacterMovement()->MaxWalkSpeed = 410.0f;
     GetCharacterMovement()->MaxAcceleration = 2200.0f;
@@ -751,28 +865,13 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
 {
     Role = NewRole;
     Tier = FMath::Max(1, NewTier);
-    const FLinearColor HostileRed(0.9f, 0.035f, 0.08f);
+    const FLinearColor HostileRed(0.31f, 0.055f, 0.045f);
 
-    const TCHAR* ProductionBody = Role == EPhantomStrikeEnemyRole::Rusher
-        ? TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue")
-        : (Role == EPhantomStrikeEnemyRole::Heavy
-            ? TEXT("/Game/Phantom/Characters/Production/SK_Barbarian.SK_Barbarian")
-            : TEXT("/Game/Phantom/Characters/Production/SK_Knight.SK_Knight"));
-    const TCHAR* ProductionIdle = Role == EPhantomStrikeEnemyRole::Rusher
-        ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Idle.A_Rogue_Idle")
-        : (Role == EPhantomStrikeEnemyRole::Heavy
-            ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Barbarian_Idle.A_Barbarian_Idle")
-            : TEXT("/Game/Phantom/Characters/Production/Animations/A_Knight_Idle.A_Knight_Idle"));
-    const bool bProductionHumanoid = PhantomModularCharacter::Configure(
-        this,
-        GetMesh(),
-        GetCapsuleComponent(),
-        ProductionBody,
-        ProductionIdle,
-        Role == EPhantomStrikeEnemyRole::Heavy ? 215.0f : 184.0f,
-        -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight(),
-        -90.0f
-    );
+    // PhantomStrike owns a modern-military silhouette family. Never resolve the shared
+    // fantasy Rogue/Knight/Barbarian production bodies here; that regression made some
+    // packaged encounters visibly belong to the wrong game.
+    GetMesh()->SetVisibility(false, true);
+    const bool bProductionHumanoid = false;
 
     const TCHAR* ExternalCharacter = Role == EPhantomStrikeEnemyRole::Marksman
         ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Strike_Marksman.SM_CC0_Strike_Marksman")
@@ -801,6 +900,7 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
         const float FitScale = FMath::Clamp(TargetHeight / RawHeight, 0.025f, 60.0f);
         const float LocalBottom = (VisualBounds.Origin.Z - VisualBounds.BoxExtent.Z) * FitScale;
         VisualModel->SetRelativeLocation(FVector(0.0f, 0.0f, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - LocalBottom));
+        VisualRestLocation = VisualModel->GetRelativeLocation();
         VisualModel->SetRelativeScale3D(FVector(FitScale));
         VisualModel->SetRelativeRotation(FRotator::ZeroRotator);
         VisualModel->SetVisibility(true);
@@ -808,6 +908,7 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
         ArmorMesh->SetVisibility(false);
         // The invisible head primitive remains a dedicated headshot trace target.
         HeadMesh->SetVisibility(false);
+        WeaponMesh->SetVisibility(false);
     }
     if (bProductionHumanoid)
     {
@@ -816,7 +917,7 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
         ArmorMesh->SetVisibility(false);
         HeadMesh->SetVisibility(false);
     }
-    const FLinearColor HostileAmber(1.0f, 0.28f, 0.035f);
+    const FLinearColor HostileAmber(0.48f, 0.22f, 0.055f);
     ApplyShapeColor(HeadMesh, FLinearColor(0.08f, 0.02f, 0.025f));
     ApplyShapeColor(WeaponMesh, HostileRed);
     if (Role == EPhantomStrikeEnemyRole::Rusher)
@@ -827,7 +928,7 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
         PreferredRange = 125.0f;
         GetCharacterMovement()->MaxWalkSpeed = 610.0f;
         BodyMesh->SetRelativeScale3D(FVector(0.4f, 0.4f, 0.66f));
-        ApplyShapeColor(BodyMesh, FLinearColor(0.38f, 0.025f, 0.055f));
+        ApplyShapeColor(BodyMesh, FLinearColor(0.12f, 0.095f, 0.075f));
         ApplyShapeColor(ArmorMesh, HostileRed);
     }
     else if (Role == EPhantomStrikeEnemyRole::Marksman)
@@ -838,9 +939,9 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
         PreferredRange = 1450.0f;
         GetCharacterMovement()->MaxWalkSpeed = 335.0f;
         BodyMesh->SetRelativeScale3D(FVector(0.43f, 0.43f, 0.72f));
-        ApplyShapeColor(BodyMesh, FLinearColor(0.065f, 0.035f, 0.12f));
-        ApplyShapeColor(ArmorMesh, FLinearColor(0.68f, 0.08f, 0.92f));
-        ApplyShapeColor(WeaponMesh, FLinearColor(0.8f, 0.12f, 1.0f));
+        ApplyShapeColor(BodyMesh, FLinearColor(0.07f, 0.085f, 0.065f));
+        ApplyShapeColor(ArmorMesh, FLinearColor(0.16f, 0.18f, 0.14f));
+        ApplyShapeColor(WeaponMesh, FLinearColor(0.045f, 0.05f, 0.045f));
     }
     else if (Role == EPhantomStrikeEnemyRole::Heavy)
     {
@@ -851,7 +952,7 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
         GetCharacterMovement()->MaxWalkSpeed = 265.0f;
         BodyMesh->SetRelativeScale3D(FVector(0.62f, 0.62f, 0.86f));
         ArmorMesh->SetRelativeScale3D(FVector(1.05f, 1.3f, 0.55f));
-        ApplyShapeColor(BodyMesh, FLinearColor(0.12f, 0.025f, 0.035f));
+        ApplyShapeColor(BodyMesh, FLinearColor(0.10f, 0.09f, 0.065f));
         ApplyShapeColor(ArmorMesh, HostileAmber);
     }
     else
@@ -861,7 +962,7 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
         AttackInterval = 0.72f;
         PreferredRange = 980.0f;
         GetCharacterMovement()->MaxWalkSpeed = 390.0f;
-        ApplyShapeColor(BodyMesh, FLinearColor(0.18f, 0.025f, 0.05f));
+        ApplyShapeColor(BodyMesh, FLinearColor(0.085f, 0.095f, 0.072f));
         ApplyShapeColor(ArmorMesh, HostileRed);
     }
     AttackCooldown = FMath::FRandRange(0.15f, AttackInterval);
@@ -889,6 +990,20 @@ bool APhantomStrikeEnemy::HasLineOfSightTo(AActor* Target) const
 void APhantomStrikeEnemy::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+    PresentationTime += DeltaSeconds;
+    RecoilRemaining = FMath::Max(0.0f, RecoilRemaining - DeltaSeconds);
+    HitReactionRemaining = FMath::Max(0.0f, HitReactionRemaining - DeltaSeconds);
+    if (bDying)
+    {
+        DeathRemaining = FMath::Max(0.0f, DeathRemaining - DeltaSeconds);
+        const float CollapseAlpha = 1.0f - FMath::Clamp(DeathRemaining / 0.72f, 0.0f, 1.0f);
+        if (VisualModel)
+        {
+            VisualModel->SetRelativeRotation(FMath::RInterpTo(VisualModel->GetRelativeRotation(), FRotator(-8.0f, 0.0f, 82.0f), DeltaSeconds, 4.8f));
+            VisualModel->SetRelativeLocation(FMath::VInterpTo(VisualModel->GetRelativeLocation(), VisualRestLocation + FVector(0.0f, 0.0f, -62.0f * CollapseAlpha), DeltaSeconds, 6.0f));
+        }
+        return;
+    }
     AttackCooldown = FMath::Max(0.0f, AttackCooldown - DeltaSeconds);
     DecisionRemaining = FMath::Max(0.0f, DecisionRemaining - DeltaSeconds);
     ExposureRemaining = FMath::Max(0.0f, ExposureRemaining - DeltaSeconds);
@@ -909,6 +1024,16 @@ void APhantomStrikeEnemy::Tick(float DeltaSeconds)
         ExposureRemaining = FMath::FRandRange(0.55f, 1.65f);
     }
     SetActorRotation(FMath::RInterpTo(GetActorRotation(), Direction.Rotation(), DeltaSeconds, bHasLineOfSight ? 10.0f : 6.0f));
+
+    if (VisualModel && VisualModel->IsVisible())
+    {
+        const float SpeedAlpha = FMath::Clamp(GetVelocity().Size2D() / FMath::Max(1.0f, GetCharacterMovement()->MaxWalkSpeed), 0.0f, 1.0f);
+        const float Step = FMath::Sin(PresentationTime * FMath::Lerp(3.4f, 8.6f, SpeedAlpha));
+        const float RecoilAlpha = FMath::Clamp(RecoilRemaining / 0.10f, 0.0f, 1.0f);
+        const float HitAlpha = FMath::Clamp(HitReactionRemaining / 0.16f, 0.0f, 1.0f);
+        VisualModel->SetRelativeLocation(VisualRestLocation + FVector(0.0f, 0.0f, FMath::Abs(Step) * SpeedAlpha * 2.2f - RecoilAlpha * 1.8f));
+        VisualModel->SetRelativeRotation(FRotator(-RecoilAlpha * 2.8f + HitAlpha * 5.0f, 0.0f, Step * SpeedAlpha * 2.4f + StrafeDirection * 1.2f));
+    }
 
     if (Role == EPhantomStrikeEnemyRole::Rusher)
     {
@@ -936,8 +1061,9 @@ void APhantomStrikeEnemy::Tick(float DeltaSeconds)
         FVector TargetPoint = Player->GetActorLocation() + FVector(0.0f, 0.0f, 48.0f);
         if (!bHitPlayer) TargetPoint += FVector(FMath::FRandRange(-115.0f, 115.0f), FMath::FRandRange(-115.0f, 115.0f), FMath::FRandRange(-55.0f, 95.0f));
         else UGameplayStatics::ApplyDamage(Player, Damage, GetController(), this, UDamageType::StaticClass());
-        SpawnBallisticTrace(GetWorld(), Muzzle, TargetPoint, Role == EPhantomStrikeEnemyRole::Marksman ? FLinearColor(0.85f, 0.12f, 1.0f) : FLinearColor(1.0f, 0.08f, 0.025f), 1.35f, 0.05f);
+        SpawnBallisticTrace(GetWorld(), Muzzle, TargetPoint, Role == EPhantomStrikeEnemyRole::Marksman ? FLinearColor(1.0f, 0.56f, 0.18f) : FLinearColor(1.0f, 0.36f, 0.10f), 0.82f, 0.035f);
         MuzzleFlashRemaining = 0.06f;
+        RecoilRemaining = 0.10f;
         AttackCooldown = AttackInterval;
         if (FMath::FRand() < 0.18f) StrafeDirection *= -1.0f;
     }
@@ -950,6 +1076,7 @@ float APhantomStrikeEnemy::TakeDamage(
     AActor* DamageCauser
 )
 {
+    if (bDying) return 0.0f;
     bool bHeadshot = false;
     if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
     {
@@ -963,6 +1090,7 @@ float APhantomStrikeEnemy::TakeDamage(
         DamageCauser
     );
     Health = FMath::Max(0.0f, Health - Applied);
+    HitReactionRemaining = 0.16f;
     if (Health <= 0.0f)
     {
         if (APhantomStrikeCharacter* Player = Cast<APhantomStrikeCharacter>(DamageCauser))
@@ -971,7 +1099,14 @@ float APhantomStrikeEnemy::TakeDamage(
             Player->RegisterKill(Value, bHeadshot);
         }
         if (APhantomStrikeDirector* Director = StrikeDirector(this)) Director->RegisterEnemyDown();
-        Destroy();
+        bDying = true;
+        DeathRemaining = 0.72f;
+        GetCharacterMovement()->StopMovementImmediately();
+        GetCharacterMovement()->DisableMovement();
+        GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        HeadMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        SetLifeSpan(3.0f);
     }
     return Applied;
 }
@@ -987,8 +1122,10 @@ APhantomStrikeSquadmate::APhantomStrikeSquadmate()
 
     VisualModel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("NightglassSquadVisual"));
     VisualModel->SetupAttachment(GetCapsuleComponent());
-    UStaticMesh* SquadMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Strike_Rifleman.SM_CC0_Strike_Rifleman"));
-    if (!SquadMesh) SquadMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Strike/Characters/SM_HelixRifleman.SM_HelixRifleman"));
+    // The checked-in Helix operator is the authoritative modern-military squad silhouette.
+    // The old alias could resolve to a shared fantasy body and is fallback-only.
+    UStaticMesh* SquadMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Strike/Characters/SM_HelixRifleman.SM_HelixRifleman"));
+    if (!SquadMesh) SquadMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Strike_Rifleman.SM_CC0_Strike_Rifleman"));
     VisualModel->SetStaticMesh(SquadMesh);
     VisualModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
@@ -996,12 +1133,13 @@ APhantomStrikeSquadmate::APhantomStrikeSquadmate()
     WeaponModel->SetupAttachment(VisualModel);
     WeaponModel->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Strike/AssaultRifle.AssaultRifle")));
     WeaponModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    WeaponModel->SetVisibility(false);
 
     StatusLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("NightglassSquadStatus"));
     StatusLight->SetupAttachment(GetCapsuleComponent());
     StatusLight->SetRelativeLocation(FVector(0.0f, 0.0f, 118.0f));
     StatusLight->SetLightColor(FLinearColor(0.10f, 0.88f, 0.82f));
-    StatusLight->SetIntensity(1150.0f);
+    StatusLight->SetIntensity(0.0f);
     StatusLight->SetAttenuationRadius(175.0f);
     StatusLight->SetCastShadows(false);
 }
@@ -1017,8 +1155,10 @@ void APhantomStrikeSquadmate::BeginPlay()
         const float LocalBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * FitScale;
         VisualModel->SetRelativeScale3D(FVector(FitScale));
         VisualModel->SetRelativeLocation(FVector(0.0f, 0.0f, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - LocalBottom));
+        VisualRestLocation = VisualModel->GetRelativeLocation();
     }
     FireRemaining = FMath::FRandRange(0.3f, 0.9f);
+    PresentationTime = FMath::FRandRange(0.0f, 6.0f);
 }
 
 void APhantomStrikeSquadmate::ConfigureSquadmate(int32 NewSquadIndex)
@@ -1026,7 +1166,7 @@ void APhantomStrikeSquadmate::ConfigureSquadmate(int32 NewSquadIndex)
     SquadIndex = FMath::Clamp(NewSquadIndex, 0, 3);
     if (StatusLight)
     {
-        StatusLight->SetLightColor(SquadIndex % 2 == 0 ? FLinearColor(0.08f, 0.92f, 0.78f) : FLinearColor(0.18f, 0.66f, 1.0f));
+        StatusLight->SetIntensity(0.0f);
     }
 }
 
@@ -1034,6 +1174,8 @@ void APhantomStrikeSquadmate::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     if (!bOperational || !GetWorld()) return;
+    PresentationTime += DeltaSeconds;
+    RecoilRemaining = FMath::Max(0.0f, RecoilRemaining - DeltaSeconds);
     FireRemaining = FMath::Max(0.0f, FireRemaining - DeltaSeconds);
     RepathRemaining = FMath::Max(0.0f, RepathRemaining - DeltaSeconds);
     ACharacter* Player = UGameplayStatics::GetPlayerCharacter(this, 0);
@@ -1060,8 +1202,9 @@ void APhantomStrikeSquadmate::Tick(float DeltaSeconds)
             const FVector Muzzle = GetActorLocation() + GetActorForwardVector() * 82.0f + FVector(0.0f, 0.0f, 66.0f);
             const FVector SuppressionPoint = ClosestEnemy->GetActorLocation() + FVector(FMath::FRandRange(-45.0f, 45.0f), FMath::FRandRange(-45.0f, 45.0f), FMath::FRandRange(25.0f, 82.0f));
             // Squad fire is suppression/readability only. It never applies damage or finishes the encounter for the player.
-            SpawnBallisticTrace(GetWorld(), Muzzle, SuppressionPoint, FLinearColor(0.08f, 0.90f, 0.82f), 1.15f, 0.045f);
+            SpawnBallisticTrace(GetWorld(), Muzzle, SuppressionPoint, FLinearColor(1.0f, 0.68f, 0.28f), 0.74f, 0.032f);
             FireRemaining = FMath::FRandRange(0.38f, 0.82f);
+            RecoilRemaining = 0.10f;
         }
     }
 
@@ -1072,6 +1215,15 @@ void APhantomStrikeSquadmate::Tick(float DeltaSeconds)
     if (FormationOffset.Size2D() > 175.0f)
     {
         AddMovementInput(FormationOffset.GetSafeNormal2D(), ClosestEnemy ? 0.62f : 0.92f);
+    }
+
+    if (VisualModel && VisualModel->IsVisible())
+    {
+        const float SpeedAlpha = FMath::Clamp(GetVelocity().Size2D() / FMath::Max(1.0f, GetCharacterMovement()->MaxWalkSpeed), 0.0f, 1.0f);
+        const float Step = FMath::Sin(PresentationTime * FMath::Lerp(3.0f, 8.2f, SpeedAlpha));
+        const float RecoilAlpha = FMath::Clamp(RecoilRemaining / 0.10f, 0.0f, 1.0f);
+        VisualModel->SetRelativeLocation(VisualRestLocation + FVector(0.0f, 0.0f, FMath::Abs(Step) * SpeedAlpha * 2.0f - RecoilAlpha));
+        VisualModel->SetRelativeRotation(FRotator(-RecoilAlpha * 2.2f, 0.0f, Step * SpeedAlpha * 2.0f + (SquadIndex == 0 ? -1.2f : 1.2f)));
     }
 }
 
@@ -1085,19 +1237,38 @@ void APhantomStrikeHUD::DrawHUD()
 
     const float Width = Canvas->SizeX;
     const float Height = Canvas->SizeY;
-    if (DrawPhantomGameShell(this, Director, Width, Height, TEXT("PHANTOMSTRIKE"), TEXT("OPERATION NIGHTGLASS // BLACKRIDGE COAST"), TEXT("WASD move    MOUSE look    LMB fire    RMB ADS    R reload    SHIFT sprint\nCTRL/C crouch or slide    Z prone    SPACE jump/mantle    E melee    F interact    G frag    Q tactical\n1/2/WHEEL weapons    V fire mode    B inspect    TAB scoreboard    M tactical map    ESC pause"), FLinearColor(0.12f,0.88f,1.0f))) return;
+    if (DrawPhantomGameShell(this, Director, Width, Height, TEXT("PHANTOMSTRIKE"), TEXT("OPERATION NIGHTGLASS // BLACKRIDGE"), TEXT("WASD MOVE   MOUSE AIM   LMB FIRE   RMB ADS   R RELOAD   SHIFT SPRINT\nF INTERACT   G FRAG   Q TACTICAL   TAB ROSTER   M MAP   ESC PAUSE"), FLinearColor(0.82f,0.66f,0.34f))) return;
     const FVector2D Center(Width * 0.5f, Height * 0.5f);
     const float UIScale = FMath::Clamp(FMath::Min(Width / 1920.0f, Height / 1080.0f), 0.78f, 1.35f);
-    const float Gap = (Player->IsAiming() ? 5.0f : 9.0f + Player->GetWeaponHeat() * 8.0f) * UIScale;
-    const FLinearColor CrosshairColor(0.28f, 1.0f, 0.92f, 0.9f);
-    DrawLine(Center.X - Gap - 8.0f * UIScale, Center.Y, Center.X - Gap, Center.Y, CrosshairColor, 1.7f * UIScale);
-    DrawLine(Center.X + Gap, Center.Y, Center.X + Gap + 8.0f * UIScale, Center.Y, CrosshairColor, 1.7f * UIScale);
-    DrawLine(Center.X, Center.Y - Gap - 8.0f * UIScale, Center.X, Center.Y - Gap, CrosshairColor, 1.7f * UIScale);
-    DrawLine(Center.X, Center.Y + Gap, Center.X, Center.Y + Gap + 8.0f * UIScale, CrosshairColor, 1.7f * UIScale);
+    const FLinearColor PaperWhite(0.86f, 0.88f, 0.84f, 0.92f);
+    const FLinearColor MutedWhite(0.61f, 0.65f, 0.62f, 0.88f);
+    const FLinearColor TacticalAmber(0.93f, 0.68f, 0.28f, 0.96f);
+    const FLinearColor GlassBlack(0.006f, 0.010f, 0.012f, 0.68f);
+
+    // V26 sight picture: a near-white combat reticle that disappears into a true optic dot
+    // while aiming. No neon crosshair and no arcade bloom.
+    if (Player->IsAiming())
+    {
+        DrawRect(FLinearColor(0.96f, 0.74f, 0.36f, 0.95f), Center.X - 1.25f * UIScale, Center.Y - 1.25f * UIScale, 2.5f * UIScale, 2.5f * UIScale);
+    }
+    else
+    {
+        const float Gap = (7.0f + Player->GetWeaponHeat() * 6.0f) * UIScale;
+        DrawLine(Center.X - Gap - 5.0f * UIScale, Center.Y, Center.X - Gap, Center.Y, PaperWhite, 1.15f * UIScale);
+        DrawLine(Center.X + Gap, Center.Y, Center.X + Gap + 5.0f * UIScale, Center.Y, PaperWhite, 1.15f * UIScale);
+        DrawLine(Center.X, Center.Y - Gap - 5.0f * UIScale, Center.X, Center.Y - Gap, PaperWhite, 1.15f * UIScale);
+        DrawLine(Center.X, Center.Y + Gap, Center.X, Center.Y + Gap + 5.0f * UIScale, PaperWhite, 1.15f * UIScale);
+    }
 
     const float CompassYaw = GetOwningPlayerController() ? FMath::Fmod(GetOwningPlayerController()->GetControlRotation().Yaw + 360.0f, 360.0f) : 0.0f;
     const TCHAR* CompassCardinal = CompassYaw < 45.0f || CompassYaw >= 315.0f ? TEXT("N") : (CompassYaw < 135.0f ? TEXT("E") : (CompassYaw < 225.0f ? TEXT("S") : TEXT("W")));
-    DrawText(FString::Printf(TEXT("W      %s  %03.0f      E"), CompassCardinal, CompassYaw), FLinearColor(0.74f, 0.86f, 0.88f, 0.92f), Center.X - 92.0f * UIScale, 10.0f * UIScale, nullptr, 0.58f * UIScale);
+    DrawText(FString::Printf(TEXT("%s   %03.0f"), CompassCardinal, CompassYaw), PaperWhite, Center.X - 31.0f * UIScale, 12.0f * UIScale, nullptr, 0.52f * UIScale);
+    for (int32 TickIndex = -5; TickIndex <= 5; ++TickIndex)
+    {
+        const float TickX = Center.X + TickIndex * 24.0f * UIScale;
+        const float TickHeight = TickIndex == 0 ? 8.0f : (TickIndex % 2 == 0 ? 5.0f : 3.0f);
+        DrawLine(TickX, 34.0f * UIScale, TickX, (34.0f + TickHeight) * UIScale, MutedWhite, 1.0f * UIScale);
+    }
 
     if (Player->GetHitMarkerRemaining() > 0.0f)
     {
@@ -1108,67 +1279,44 @@ void APhantomStrikeHUD::DrawHUD()
         DrawLine(Center.X + 12.0f, Center.Y + 12.0f, Center.X + 5.0f, Center.Y + 5.0f, HitColor, 2.2f);
     }
 
-    DrawRect(FLinearColor(0.008f, 0.014f, 0.019f, 0.84f), 24.0f * UIScale, 22.0f * UIScale, 438.0f * UIScale, 78.0f * UIScale);
-    DrawRect(FLinearColor(0.18f, 0.82f, 0.72f), 24.0f * UIScale, 22.0f * UIScale, 5.0f * UIScale, 78.0f * UIScale);
-    DrawText(TEXT("PHANTOMSTRIKE"), FLinearColor::White, 42.0f * UIScale, 31.0f * UIScale, nullptr, 0.98f * UIScale);
-    DrawText(TEXT("OPERATION NIGHTGLASS"), FLinearColor(0.36f, 0.95f, 0.82f), 250.0f * UIScale, 34.0f * UIScale, nullptr, 0.58f * UIScale);
-    DrawText(Director->GetObjectiveText(), FLinearColor(0.72f, 0.84f, 0.82f), 42.0f * UIScale, 65.0f * UIScale, nullptr, 0.64f * UIScale);
-    const FString WaveText = Director->IsMissionComplete()
-        ? TEXT("MISSION COMPLETE // BLACKRIDGE SECURED")
-        : (Director->IsExtractionOpen() ? TEXT("EXTRACTION OPEN // MOVE TO GREEN ZONE") : (Director->IsAwaitingUplink() ? TEXT("UPLINK EXPOSED // INTERACTION REQUIRED") : FString::Printf(TEXT("CONTACT %d / %d    HOSTILES %02d"), Director->GetWave(), Director->GetTotalWaves(), Director->GetRemainingEnemies())));
-    DrawText(WaveText, (Director->IsMissionComplete() || Director->IsExtractionOpen()) ? FLinearColor(0.2f, 1.0f, 0.55f) : FLinearColor(1.0f, 0.66f, 0.16f), Width - 470.0f * UIScale, 32.0f * UIScale, nullptr, 0.90f * UIScale);
-    DrawText(FString::Printf(TEXT("SCORE %06d   K/D %02d/%02d   STREAK %d"), Player->Score, Player->Kills, Player->Deaths, Player->GetStreak()), FLinearColor::White, Width - 470.0f * UIScale, 66.0f * UIScale, nullptr, 0.68f * UIScale);
-    const FString CombatState = Director->IsMissionComplete()
-        ? TEXT("MISSION COMPLETE")
-        : Director->GetMissionPhaseLabel();
-    DrawText(CombatState, (Director->IsMissionComplete() || Director->IsExtractionOpen()) ? FLinearColor(0.2f, 1.0f, 0.55f) : FLinearColor(1.0f, 0.25f, 0.18f), Width * 0.5f - 95.0f * UIScale, 28.0f * UIScale, nullptr, 0.72f * UIScale);
+    // Compact objective card, modelled after a real tactical briefing plate rather than a banner.
+    DrawRect(GlassBlack, 28.0f * UIScale, 30.0f * UIScale, 390.0f * UIScale, 66.0f * UIScale);
+    DrawRect(TacticalAmber, 28.0f * UIScale, 30.0f * UIScale, 3.0f * UIScale, 66.0f * UIScale);
+    DrawText(FString::Printf(TEXT("BLACKRIDGE  //  %s"), *Director->GetMissionPhaseLabel()), MutedWhite, 42.0f * UIScale, 40.0f * UIScale, nullptr, 0.49f * UIScale);
+    DrawText(Director->GetObjectiveText().Replace(TEXT("OBJECTIVE: "), TEXT("")), PaperWhite, 42.0f * UIScale, 66.0f * UIScale, nullptr, 0.58f * UIScale);
 
-    DrawRect(FLinearColor(0.008f, 0.02f, 0.035f, 0.9f), 26.0f * UIScale, Height - 118.0f * UIScale, 340.0f * UIScale, 88.0f * UIScale);
-    DrawText(FString::Printf(TEXT("NIGHTGLASS SQUAD  %d/2 OPERATIONAL"), Director->GetOperationalSquadmates()), FLinearColor(0.28f, 0.95f, 0.82f), 30.0f * UIScale, Height - 145.0f * UIScale, nullptr, 0.58f * UIScale);
-    DrawText(TEXT("VITALS"), FLinearColor(0.55f, 0.7f, 0.8f), 44.0f * UIScale, Height - 103.0f * UIScale, nullptr, 0.78f * UIScale);
-    DrawRect(FLinearColor(0.04f, 0.09f, 0.12f), 44.0f * UIScale, Height - 76.0f * UIScale, 286.0f * UIScale, 13.0f * UIScale);
-    DrawRect(FLinearColor(0.16f, 0.95f, 0.72f), 44.0f * UIScale, Height - 76.0f * UIScale, 286.0f * UIScale * Player->Health / 100.0f, 13.0f * UIScale);
-    DrawRect(FLinearColor(0.04f, 0.09f, 0.12f), 44.0f * UIScale, Height - 53.0f * UIScale, 286.0f * UIScale, 8.0f * UIScale);
-    DrawRect(FLinearColor(0.12f, 0.58f, 1.0f), 44.0f * UIScale, Height - 53.0f * UIScale, 286.0f * UIScale * Player->Armor / 50.0f, 8.0f * UIScale);
+    DrawText(FString::Printf(TEXT("HOSTILES  %02d"), Director->GetRemainingEnemies()), Director->GetRemainingEnemies() > 0 ? TacticalAmber : MutedWhite, Width - 146.0f * UIScale, 38.0f * UIScale, nullptr, 0.55f * UIScale);
 
-    DrawRect(FLinearColor(0.008f, 0.02f, 0.035f, 0.9f), Width - 330.0f * UIScale, Height - 118.0f * UIScale, 304.0f * UIScale, 88.0f * UIScale);
-    DrawText(FString::Printf(TEXT("%02d"), Player->Ammo), FLinearColor::White, Width - 304.0f * UIScale, Height - 105.0f * UIScale, nullptr, 2.0f * UIScale);
-    DrawText(FString::Printf(TEXT("/ %03d   %s"), Player->ReserveAmmo, Player->GetWeaponName()), FLinearColor(0.45f, 0.72f, 0.82f), Width - 220.0f * UIScale, Height - 75.0f * UIScale, nullptr, 0.78f * UIScale);
+    // Vitals occupy two quiet meter lines. Damage communicates through the world-edge vignette.
+    DrawText(FString::Printf(TEXT("TEAM %d/2"), Director->GetOperationalSquadmates()), MutedWhite, 30.0f * UIScale, Height - 82.0f * UIScale, nullptr, 0.48f * UIScale);
+    DrawRect(FLinearColor(0.02f, 0.025f, 0.025f, 0.72f), 30.0f * UIScale, Height - 55.0f * UIScale, 210.0f * UIScale, 5.0f * UIScale);
+    DrawRect(FLinearColor(0.70f, 0.74f, 0.65f, 0.96f), 30.0f * UIScale, Height - 55.0f * UIScale, 210.0f * UIScale * Player->Health / 100.0f, 5.0f * UIScale);
+    DrawRect(FLinearColor(0.02f, 0.025f, 0.025f, 0.72f), 30.0f * UIScale, Height - 43.0f * UIScale, 210.0f * UIScale, 3.0f * UIScale);
+    DrawRect(FLinearColor(0.34f, 0.45f, 0.50f, 0.95f), 30.0f * UIScale, Height - 43.0f * UIScale, 210.0f * UIScale * Player->Armor / 50.0f, 3.0f * UIScale);
+
+    DrawText(FString::Printf(TEXT("%02d"), Player->Ammo), PaperWhite, Width - 142.0f * UIScale, Height - 84.0f * UIScale, nullptr, 1.62f * UIScale);
+    DrawText(FString::Printf(TEXT("/ %03d"), Player->ReserveAmmo), MutedWhite, Width - 76.0f * UIScale, Height - 59.0f * UIScale, nullptr, 0.58f * UIScale);
+    DrawText(FString::Printf(TEXT("%s  |  G %d  Q %d"), Player->IsSemiAuto()?TEXT("SEMI"):TEXT("AUTO"), Player->GetGrenades(), Player->GetTacticals()), MutedWhite, Width - 192.0f * UIScale, Height - 31.0f * UIScale, nullptr, 0.48f * UIScale);
     if (Player->IsReloading())
     {
-        DrawRect(FLinearColor(0.04f, 0.09f, 0.12f), Width - 304.0f * UIScale, Height - 48.0f * UIScale, 250.0f * UIScale, 7.0f * UIScale);
-        DrawRect(FLinearColor(1.0f, 0.55f, 0.12f), Width - 304.0f * UIScale, Height - 48.0f * UIScale, 250.0f * UIScale * Player->GetReloadProgress(), 7.0f * UIScale);
+        DrawRect(FLinearColor(0.03f, 0.035f, 0.035f, 0.78f), Width - 192.0f * UIScale, Height - 98.0f * UIScale, 162.0f * UIScale, 3.0f * UIScale);
+        DrawRect(TacticalAmber, Width - 192.0f * UIScale, Height - 98.0f * UIScale, 162.0f * UIScale * Player->GetReloadProgress(), 3.0f * UIScale);
     }
-    DrawText(FString::Printf(TEXT("%s   FRAG %d   TACTICAL %d"), Player->IsSemiAuto()?TEXT("SEMI"):TEXT("AUTO"), Player->GetGrenades(), Player->GetTacticals()), FLinearColor(0.55f, 0.78f, 0.88f), Width * 0.5f - 95.0f * UIScale, Height - 34.0f * UIScale, nullptr, 0.64f * UIScale);
 
-    // TACTICAL MINIMAP: compact, upper-left, matching the interaction spec rather than an oversized debug panel.
-    const float MapSize = 220.0f * UIScale;
-    const float MapX = 26.0f * UIScale;
-    const float MapY = 132.0f * UIScale;
-    DrawRect(FLinearColor(0.006f,0.014f,0.022f,0.82f), MapX, MapY, MapSize, MapSize);
-    DrawText(TEXT("TACTICAL"), FLinearColor(0.48f,0.72f,0.82f), MapX+8.0f*UIScale, MapY+7.0f*UIScale, nullptr, 0.55f*UIScale);
-    auto WorldToMap=[&](const FVector& P)->FVector2D
+    if (Director->IsAwaitingUplink())
     {
-        const float NX=FMath::Clamp((P.X+24000.0f)/48000.0f,0.0f,1.0f);
-        const float NY=FMath::Clamp((P.Y+18000.0f)/36000.0f,0.0f,1.0f);
-        return FVector2D(MapX+NX*MapSize,MapY+(1.0f-NY)*MapSize);
-    };
-    const FVector2D PlayerDot=WorldToMap(Player->GetActorLocation());
-    DrawRect(FLinearColor(0.18f,1.0f,0.82f),PlayerDot.X-3.0f*UIScale,PlayerDot.Y-3.0f*UIScale,6.0f*UIScale,6.0f*UIScale);
-    if (Director->IsExtractionOpen())
-    {
-        const FVector2D E=WorldToMap(Director->GetExtractionLocation());
-        DrawRect(FLinearColor(0.14f,1.0f,0.35f),E.X-5.0f*UIScale,E.Y-5.0f*UIScale,10.0f*UIScale,10.0f*UIScale);
-    }
-    else if (Director->IsAwaitingUplink())
-    {
-        const FVector2D U=WorldToMap(Director->GetUplinkLocation());
-        DrawRect(FLinearColor(1.0f,0.70f,0.12f),U.X-5.0f*UIScale,U.Y-5.0f*UIScale,10.0f*UIScale,10.0f*UIScale);
         if (FVector::DistSquared2D(Player->GetActorLocation(), Director->GetUplinkLocation()) < FMath::Square(480.0f))
         {
-            DrawRect(FLinearColor(0.004f,0.012f,0.018f,0.92f),Center.X-155.0f*UIScale,Center.Y+84.0f*UIScale,310.0f*UIScale,44.0f*UIScale);
-            DrawText(TEXT("[F] SECURE THE UPLINK"),FLinearColor(1.0f,0.78f,0.24f),Center.X-112.0f*UIScale,Center.Y+94.0f*UIScale,nullptr,0.72f*UIScale);
+            DrawRect(GlassBlack,Center.X-122.0f*UIScale,Center.Y+70.0f*UIScale,244.0f*UIScale,36.0f*UIScale);
+            DrawText(TEXT("[F]  SECURE THE RELAY"),TacticalAmber,Center.X-88.0f*UIScale,Center.Y+80.0f*UIScale,nullptr,0.58f*UIScale);
         }
+    }
+
+    if (Director->GetMissionElapsed() < 5.5f)
+    {
+        const float IntroAlpha = FMath::Clamp(FMath::Min(Director->GetMissionElapsed() / 0.8f, (5.5f - Director->GetMissionElapsed()) / 1.1f), 0.0f, 1.0f);
+        DrawText(TEXT("OPERATION NIGHTGLASS"), FLinearColor(0.92f, 0.92f, 0.86f, IntroAlpha), Center.X - 146.0f * UIScale, Height * 0.68f, nullptr, 1.05f * UIScale);
+        DrawText(TEXT("BLACKRIDGE COAST  //  02:17 LOCAL"), FLinearColor(0.68f, 0.66f, 0.58f, IntroAlpha), Center.X - 120.0f * UIScale, Height * 0.68f + 39.0f * UIScale, nullptr, 0.52f * UIScale);
     }
 
     if (Player->IsScoreboardVisible())
@@ -1176,7 +1324,7 @@ void APhantomStrikeHUD::DrawHUD()
         const float SW=FMath::Min(Width*0.62f,900.0f*UIScale), SH=FMath::Min(Height*0.58f,560.0f*UIScale);
         const float SX=(Width-SW)*0.5f,SY=(Height-SH)*0.5f;
         DrawRect(FLinearColor(0.005f,0.012f,0.020f,0.96f),SX,SY,SW,SH);
-        DrawText(TEXT("BLACKRIDGE // SCOREBOARD"),FLinearColor(0.25f,0.95f,1.0f),SX+28.0f*UIScale,SY+24.0f*UIScale,nullptr,1.05f*UIScale);
+        DrawText(TEXT("BLACKRIDGE // ROSTER"),TacticalAmber,SX+28.0f*UIScale,SY+24.0f*UIScale,nullptr,1.05f*UIScale);
         DrawText(TEXT("PLAYER                         SCORE      K      D      STREAK"),FLinearColor(0.62f,0.72f,0.80f),SX+28.0f*UIScale,SY+82.0f*UIScale,nullptr,0.72f*UIScale);
         DrawText(FString::Printf(TEXT("PHANTOM                         %06d     %02d     %02d       %02d"),Player->Score,Player->Kills,Player->Deaths,Player->GetStreak()),FLinearColor::White,SX+28.0f*UIScale,SY+126.0f*UIScale,nullptr,0.88f*UIScale);
         DrawText(TEXT("HOLD TAB TO VIEW // RELEASE TO RETURN"),FLinearColor(0.44f,0.62f,0.72f),SX+28.0f*UIScale,SY+SH-48.0f*UIScale,nullptr,0.64f*UIScale);
@@ -1186,17 +1334,19 @@ void APhantomStrikeHUD::DrawHUD()
     {
         const float MW=Width*0.72f,MH=Height*0.72f,MX=(Width-MW)*0.5f,MY=(Height-MH)*0.5f;
         DrawRect(FLinearColor(0.004f,0.010f,0.018f,0.94f),MX,MY,MW,MH);
-        DrawText(TEXT("BLACKRIDGE TACTICAL MAP"),FLinearColor(0.25f,0.95f,1.0f),MX+30.0f*UIScale,MY+24.0f*UIScale,nullptr,1.0f*UIScale);
+        DrawText(TEXT("BLACKRIDGE TACTICAL MAP"),TacticalAmber,MX+30.0f*UIScale,MY+24.0f*UIScale,nullptr,1.0f*UIScale);
         const FVector2D P=FVector2D(MX+MW*0.5f,MY+MH*0.5f);
-        DrawRect(FLinearColor(0.18f,1.0f,0.82f),P.X-5.0f,P.Y-5.0f,10.0f,10.0f);
+        DrawRect(PaperWhite,P.X-5.0f,P.Y-5.0f,10.0f,10.0f);
         DrawText(TEXT("[M] CLOSE"),FLinearColor::White,MX+MW-100.0f*UIScale,MY+MH-42.0f*UIScale,nullptr,0.7f*UIScale);
     }
 
     if (Player->GetDamageFlash() > 0.0f)
     {
-        const float Alpha = Player->GetDamageFlash() * 0.18f;
-        DrawRect(FLinearColor(1.0f, 0.0f, 0.04f, Alpha), 0.0f, 0.0f, Width, 18.0f);
-        DrawRect(FLinearColor(1.0f, 0.0f, 0.04f, Alpha), 0.0f, Height - 18.0f, Width, 18.0f);
+        const float Alpha = Player->GetDamageFlash() * 0.24f;
+        DrawRect(FLinearColor(0.62f, 0.015f, 0.01f, Alpha), 0.0f, 0.0f, Width, 28.0f * UIScale);
+        DrawRect(FLinearColor(0.62f, 0.015f, 0.01f, Alpha), 0.0f, Height - 28.0f * UIScale, Width, 28.0f * UIScale);
+        DrawRect(FLinearColor(0.62f, 0.015f, 0.01f, Alpha * 0.72f), 0.0f, 0.0f, 22.0f * UIScale, Height);
+        DrawRect(FLinearColor(0.62f, 0.015f, 0.01f, Alpha * 0.72f), Width - 22.0f * UIScale, 0.0f, 22.0f * UIScale, Height);
     }
 }
 
@@ -1382,8 +1532,8 @@ void APhantomStrikeDirector::OpenExtraction()
 void APhantomStrikeDirector::BuildCommandComplex()
 {
     // CANONICAL BLACKRIDGE COAST: 480m x 360m. Dense, authored combat district; never a kilometer-scale walking map.
-    SpawnSun(4.45f, FRotator(-38.0f,-24.0f,0.0f), FLinearColor(1.0f,0.88f,0.74f));
-    SetWorldMood(FLinearColor(0.13f,0.18f,0.23f),0.00145f,FLinearColor(0.38f,0.48f,0.58f));
+    SpawnSun(3.15f, FRotator(-31.0f,-28.0f,0.0f), FLinearColor(0.72f,0.82f,1.0f));
+    SetWorldMood(FLinearColor(0.055f,0.085f,0.12f),0.00235f,FLinearColor(0.24f,0.31f,0.39f));
 
     // V8 BLACKRIDGE SURFACE: invisible collision + 12 authored district ground meshes.
     // Road meshes are 150 cm high.  Put the invisible support surface at the same height so a
@@ -1404,7 +1554,7 @@ void APhantomStrikeDirector::BuildCommandComplex()
     {
         // V10 persistent .umap already contains the entire road/building/cover composition. Keep
         // runtime work to lighting + collision so we do not double-spawn hundreds of static actors.
-        SpawnPointLight(TEXT("V9CommandCoreLight"),FVector(9000,0,360),FLinearColor(0.08f,0.88f,1.0f),7000.0f,700.0f,true);
+        SpawnPointLight(TEXT("V9CommandCoreLight"),FVector(9000,0,360),FLinearColor(0.38f,0.56f,0.72f),6200.0f,700.0f,true);
         SpawnPointLight(TEXT("V9MarinaWarmLight"),FVector(14500,-10000,420),FLinearColor(1.0f,0.48f,0.22f),4200.0f,520.0f,false);
         // V19 lighting pass: authored pools guide insertion, street advance, breach, uplink, and extraction.
         // Each pool is bounded and shadow casting is limited to hero beats for a stable 60 FPS target.
@@ -1420,12 +1570,13 @@ void APhantomStrikeDirector::BuildCommandComplex()
             SpawnPointLight(
                 FString::Printf(TEXT("NightglassRouteLight_%02d"), Index),
                 RouteLights[Index],
-                bWarm ? FLinearColor(1.0f,0.54f,0.28f) : FLinearColor(0.16f,0.72f,1.0f),
+                bWarm ? FLinearColor(1.0f,0.50f,0.23f) : FLinearColor(0.34f,0.48f,0.62f),
                 bWarm ? 3300.0f : 2800.0f,
                 520.0f,
                 Index == 6
             );
         }
+        BuildV26BlackridgeAtmosphere();
         return;
     }
     for(int32 TY=0;TY<3;++TY)
@@ -1608,4 +1759,67 @@ void APhantomStrikeDirector::BuildCommandComplex()
             FVector(X,Y,8.0f),FVector(1.0f),FRotator(0,(I%2)*90.0f,0),true,true);
     }
     SpawnPointLight(TEXT("CommandCoreLight"),FVector(9000,0,360),FLinearColor(0.08f,0.88f,1.0f),7000.0f,700.0f,true);
+    BuildV26BlackridgeAtmosphere();
+}
+
+void APhantomStrikeDirector::BuildV26BlackridgeAtmosphere()
+{
+    // V26 BLACKRIDGE: a bounded, deterministic dressing layer derived from the approved
+    // wet-coast visual targets. It adds narrative combat tableaux without changing the
+    // persistent map or obstructing the center traversal lane.
+    struct FBlackridgeSetpiece
+    {
+        const TCHAR* Name;
+        const TCHAR* Asset;
+        FVector Location;
+        float Scale;
+        float Yaw;
+        bool bCollision;
+    };
+    const FBlackridgeSetpiece Setpieces[] = {
+        {TEXT("V26InsertionDisabledCar"), TEXT("/Game/Phantom/Generated/Strike/Environment/SM_WreckCar_A.SM_WreckCar_A"), FVector(-7850.0f,-1280.0f,160.0f), 1.08f, 18.0f, true},
+        {TEXT("V26CheckpointUtilityWreck"), TEXT("/Game/Phantom/Generated/Strike/Environment/SM_WreckCar_B.SM_WreckCar_B"), FVector(-5050.0f,1420.0f,160.0f), 1.14f, -24.0f, true},
+        {TEXT("V26MarketBurnout"), TEXT("/Game/Phantom/Generated/Strike/Environment/SM_WreckCar_A.SM_WreckCar_A"), FVector(-1680.0f,-1620.0f,160.0f), 1.02f, 34.0f, true},
+        {TEXT("V26BreachResponseVehicle"), TEXT("/Game/Phantom/Generated/Strike/Environment/SM_WreckCar_B.SM_WreckCar_B"), FVector(5960.0f,1510.0f,160.0f), 1.16f, 164.0f, true},
+        {TEXT("V26InsertionRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(-6900.0f,1740.0f,160.0f), 0.82f, 12.0f, false},
+        {TEXT("V26CheckpointRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(-4050.0f,-1820.0f,160.0f), 0.94f, 83.0f, false},
+        {TEXT("V26MarketRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(550.0f,1880.0f,160.0f), 0.78f, -28.0f, false},
+        {TEXT("V26BreachRubbleLeft"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(7350.0f,-1180.0f,160.0f), 0.88f, 17.0f, false},
+        {TEXT("V26BreachRubbleRight"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(7480.0f,1260.0f,160.0f), 0.84f, 151.0f, false},
+        {TEXT("V26InsertionBarrier"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_TacticalBarricade.SM_V9_TacticalBarricade"), FVector(-6100.0f,-1880.0f,160.0f), 0.86f, 90.0f, true},
+        {TEXT("V26StreetBarrierA"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_SandbagWall.SM_V9_SandbagWall"), FVector(-2850.0f,1610.0f,160.0f), 0.90f, 8.0f, true},
+        {TEXT("V26StreetBarrierB"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_SandbagWall.SM_V9_SandbagWall"), FVector(2380.0f,-1690.0f,160.0f), 0.92f, 172.0f, true},
+        {TEXT("V26BreachBarricade"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_TacticalBarricade.SM_V9_TacticalBarricade"), FVector(6660.0f,-1520.0f,160.0f), 0.88f, 78.0f, true},
+        {TEXT("V26RelayContainerA"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_CargoContainer_0.SM_V9_CargoContainer_0"), FVector(8650.0f,-1700.0f,160.0f), 0.72f, 90.0f, true},
+        {TEXT("V26RelayContainerB"), TEXT("/Game/Phantom/Generated/Strike/V9/Props/SM_V9_CargoContainer_1.SM_V9_CargoContainer_1"), FVector(9400.0f,1740.0f,160.0f), 0.72f, -90.0f, true}
+    };
+    for (const FBlackridgeSetpiece& Setpiece : Setpieces)
+    {
+        SpawnStaticMeshAsset(Setpiece.Name, Setpiece.Asset, Setpiece.Location, FVector(Setpiece.Scale), FRotator(0.0f, Setpiece.Yaw, 0.0f), Setpiece.bCollision, true);
+    }
+
+    // Warm practicals against the cool storm ambience create the target's photographic depth.
+    const FVector PracticalLights[] = {
+        FVector(-8200.0f,1380.0f,330.0f), FVector(-5220.0f,-1480.0f,340.0f),
+        FVector(-1900.0f,1580.0f,345.0f), FVector(1850.0f,-1550.0f,350.0f),
+        FVector(5250.0f,1520.0f,365.0f), FVector(7460.0f,-1180.0f,390.0f),
+        FVector(9050.0f,760.0f,410.0f), FVector(14500.0f,-9200.0f,370.0f)
+    };
+    for (int32 Index = 0; Index < UE_ARRAY_COUNT(PracticalLights); ++Index)
+    {
+        SpawnPointLight(FString::Printf(TEXT("V26BlackridgePractical_%02d"), Index), PracticalLights[Index], FLinearColor(1.0f,0.48f,0.20f), Index == 5 ? 4100.0f : 2450.0f, Index == 5 ? 560.0f : 390.0f, Index == 5);
+    }
+
+    // Relay-room silhouettes: server banks and a broken security aperture make the final
+    // objective read as a place rather than an exposed glowing prop.
+    for (int32 Side = -1; Side <= 1; Side += 2)
+    {
+        for (int32 Rank = 0; Rank < 3; ++Rank)
+        {
+            SpawnShape(EPhantomPrimitive::Cube, FString::Printf(TEXT("V26RelayServer_%d_%d"), Side, Rank), FVector(8350.0f + Rank * 520.0f, Side * 930.0f, 310.0f), FVector(230.0f, 105.0f, 300.0f), FLinearColor(0.025f,0.03f,0.032f), FRotator::ZeroRotator, true);
+        }
+    }
+    SpawnShape(EPhantomPrimitive::Cube, TEXT("V26BreachLintel"), FVector(7600.0f,0.0f,560.0f), FVector(110.0f,1280.0f,110.0f), FLinearColor(0.10f,0.095f,0.085f), FRotator::ZeroRotator, false);
+    SpawnShape(EPhantomPrimitive::Cube, TEXT("V26BreachJambLeft"), FVector(7600.0f,-690.0f,350.0f), FVector(120.0f,120.0f,520.0f), FLinearColor(0.10f,0.095f,0.085f), FRotator::ZeroRotator, false);
+    SpawnShape(EPhantomPrimitive::Cube, TEXT("V26BreachJambRight"), FVector(7600.0f,690.0f,350.0f), FVector(120.0f,120.0f,520.0f), FLinearColor(0.10f,0.095f,0.085f), FRotator::ZeroRotator, false);
 }

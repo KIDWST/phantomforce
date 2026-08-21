@@ -104,6 +104,21 @@ private:
     UStaticMeshComponent* SidearmBody;
 
     UPROPERTY()
+    UStaticMeshComponent* RightForearm;
+
+    UPROPERTY()
+    UStaticMeshComponent* LeftForearm;
+
+    UPROPERTY()
+    UStaticMeshComponent* RightGlove;
+
+    UPROPERTY()
+    UStaticMeshComponent* LeftGlove;
+
+    UPROPERTY()
+    UStaticMeshComponent* MuzzleBloom;
+
+    UPROPERTY()
     UPointLightComponent* MuzzleLight;
 
     bool bTriggerHeld = false;
@@ -133,6 +148,10 @@ private:
     float GrenadeRemaining = 0.0f;
     float TacticalRemaining = 0.0f;
     float InspectRemaining = 0.0f;
+    float ShotImpulse = 0.0f;
+    FVector2D WeaponInertia = FVector2D::ZeroVector;
+    FRotator LastViewRotation = FRotator::ZeroRotator;
+    bool bHasViewSample = false;
     int32 Grenades = 2;
     int32 Tacticals = 2;
     int32 CurrentStreak = 0;
@@ -218,6 +237,12 @@ private:
     float DecisionRemaining = 0.0f;
     float ExposureRemaining = 0.0f;
     float FlankWeight = 0.0f;
+    float PresentationTime = 0.0f;
+    float RecoilRemaining = 0.0f;
+    float HitReactionRemaining = 0.0f;
+    float DeathRemaining = 0.0f;
+    FVector VisualRestLocation = FVector::ZeroVector;
+    bool bDying = false;
 
     bool HasLineOfSightTo(AActor* Target) const;
 };
@@ -247,6 +272,9 @@ private:
     int32 SquadIndex = 0;
     float FireRemaining = 0.0f;
     float RepathRemaining = 0.0f;
+    float PresentationTime = 0.0f;
+    float RecoilRemaining = 0.0f;
+    FVector VisualRestLocation = FVector::ZeroVector;
     bool bOperational = true;
 };
 
@@ -282,6 +310,7 @@ public:
     FString GetMissionPhaseLabel() const;
     FString GetObjectiveText() const;
     float GetMissionProgress() const;
+    float GetMissionElapsed() const { return MissionElapsed; }
     int32 GetOperationalSquadmates() const;
     void TryActivateUplink(APhantomStrikeCharacter* Player);
 
@@ -298,6 +327,7 @@ private:
     FVector ExtractionLocation = FVector(14600.0f, -9200.0f, 105.0f);
 
     void BuildCommandComplex();
+    void BuildV26BlackridgeAtmosphere();
     void SpawnWave();
     void SpawnSquad();
     void OpenExtraction();
