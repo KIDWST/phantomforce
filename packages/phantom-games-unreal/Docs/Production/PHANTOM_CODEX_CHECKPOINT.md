@@ -1,4 +1,15 @@
-# Phantom Codex Checkpoint — 2026-08-20 PhantomStrike V19R1 review candidate
+# Phantom Codex Checkpoint — 2026-08-21 Cubetown V19R1 installed
+
+## Cubetown V19R1 promotion
+
+- The owner supplied exact literal `PROMOTE` authorization.
+- Cubetown V19R1 Maker's Journey was transactionally installed at `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows\cubetown`; Phantom Ages, Phantom Legends, and PhantomStrike remain the verified V25R3 installs.
+- The live build-set marker truthfully reports `V25R3+CUBETOWN-V19R1` rather than claiming a four-game V19 set.
+- Installed Cubetown: 31 files / 1,043,239,280 bytes; Shipping SHA-256 `7C1B796B67980BB1D7A1B6179E73DB1BFAEACE7DE37E74C1D791F09E2C3F11D9`; content SHA-256 `18D41EECD1950390A6E36E33EBD6AA823DBC8B76E5CBED8463C9E7B91709130D`.
+- Previous V25R3 Cubetown rollback: `C:\Users\jorda\Documents\Codex\backups\phantomplay-cubetown-v25r3-to-v19r1-20260821-071804\cubetown`.
+- Promotion was source-only and non-interactive: no visible game or desktop window was opened or controlled. Post-promotion visual/input/performance review remains honest follow-up evidence, not a claim made by the installer.
+
+## Prior checkpoint — 2026-08-20 PhantomStrike V19R1 review candidate
 
 ## V19R1 candidate state
 

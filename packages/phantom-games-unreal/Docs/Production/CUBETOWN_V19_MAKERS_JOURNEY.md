@@ -2,11 +2,11 @@
 
 ## Disposition
 
-Release floor: installed V18R1.
+Release floor: installed V19R1 Maker's Journey Cubetown inside the retained V25R3 PhantomPlay set.
 
-Current work: V19 Maker's Journey review candidate — not promoted.
+Current work: V19 Maker's Journey — promoted and installed.
 
-Promotion remains blocked until compile, cook, source validation, packaged visual proof, real-input playtest, and performance evidence all pass, followed by the owner's exact literal `PROMOTE` authorization.
+The owner supplied the exact literal `PROMOTE` authorization. Promotion replaced only Cubetown, retained the other V25R3 games, verified the installed Shipping/content hashes, and preserved the previous Cubetown at `C:\Users\jorda\Documents\Codex\backups\phantomplay-cubetown-v25r3-to-v19r1-20260821-071804\cubetown`.
 
 ## V19 upgrade
 
@@ -28,6 +28,7 @@ Promotion remains blocked until compile, cook, source validation, packaged visua
 - Unreal compile: PASS — Cubetown Win64 Development and Cubetown Win64 Shipping both compile successfully on Unreal Engine 5.8.1.
 - Shipping cook/package: PASS — 4,811 packages cooked with zero errors; staged, IoStore-packed, archived, and copied to isolated `CandidateBuilds/V19R1/cubetown`.
 - Candidate contents: 31 files / 1,043,239,268 bytes. Launcher SHA-256 `693F901BF7B4F9DF9E2FF7954E66BF0443F431A16EE5F6E265351C430A6FF2D5`; Shipping binary SHA-256 `7C1B796B67980BB1D7A1B6179E73DB1BFAEACE7DE37E74C1D791F09E2C3F11D9`; content container SHA-256 `18D41EECD1950390A6E36E33EBD6AA823DBC8B76E5CBED8463C9E7B91709130D`; container index SHA-256 `A25CB0003452F5066E884640D3D6A0FE539FF8A048B9943186069A3762F97006`.
+- Installed promotion: PASS — 31 files / 1,043,239,280 bytes; all four critical hashes match the approved candidate; live marker revision `V25R3+CUBETOWN-V19R1`.
 - Packaged visual proof: pending; no visible app was launched while the owner was using the machine. A hidden packaged-process smoke launch was not retried after the desktop execution policy rejected it.
 - Real-input and performance gates: pending human review.
-- Installed build: unchanged V18R1.
+- Installed build: Cubetown V19R1; all other V25R3 games unchanged.

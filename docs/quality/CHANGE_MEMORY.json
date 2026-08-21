@@ -2391,15 +2391,15 @@
       ]
     },
     {
-      "id": "cubetown-v18-floor-and-v19-makers-journey",
+      "id": "cubetown-v19-installed-makers-journey-floor",
       "status": "active",
-      "title": "Cubetown keeps V18R1 and the Maker is a real animated adventure hero",
-      "ownerDecision": "Cubetown's verified installed release floor is V18R1 and cannot be replaced by an older backup. The V19 Maker's Journey candidate must keep the original crimson-canopy storybook identity and replace the boring default hero with a profession-readable Maker: Mage-based modular character, crimson/teal/cream visual direction, cyan echo rod, reactive memory shards, and explicit idle, walk, run, airborne, attack, and hit presentation. The opening road must lead through authored cyan/crimson detail into Heartstone with a visible companion. Generated images are reference targets that the runtime translates into real systems; the installed build cannot change without exact PROMOTE authorization after release gates pass.",
+      "title": "Cubetown V19R1 is installed and the Maker remains a real animated adventure hero",
+      "ownerDecision": "Cubetown's verified installed release floor is V19R1 Maker's Journey inside the retained V25R3 PhantomPlay set. The owner supplied exact PROMOTE authorization and the previous V25R3 Cubetown was preserved as a rollback checkpoint. Future work must keep the original crimson-canopy storybook identity and the profession-readable Maker: Mage-based modular character, crimson/teal/cream visual direction, cyan echo rod, reactive memory shards, mantle, satchel, belt, gauntlet, and explicit idle, walk, run, airborne, attack, and hit presentation. The opening road must retain authored cyan/crimson detail into Heartstone with a visible companion. Generated images are reference targets translated into real runtime systems. No future revision may silently replace this installed floor or bypass a new exact PROMOTE authorization.",
       "requiredPatterns": [
         {
           "file": "docs/phantomplay-production/creative-bibles/cubetown.json",
-          "pattern": "current_floor\": \"V18R1 verified installed Unreal release[\\s\\S]*next_target\": \"V19 Maker's Journey review candidate — not promoted[\\s\\S]*crimson mantle[\\s\\S]*cyan echo rod",
-          "description": "Cubetown's creative bible retains the real installed floor and the accepted Maker identity."
+          "pattern": "current_floor\": \"V19R1 Maker's Journey verified installed Cubetown release[\\s\\S]*next_target\": \"Post-promotion visual/input review and V20 polish; V19R1 is the no-regression floor[\\s\\S]*crimson mantle[\\s\\S]*cyan echo rod",
+          "description": "Cubetown's creative bible retains the installed V19R1 floor and accepted Maker identity."
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp",
@@ -2420,6 +2420,11 @@
           "file": "scripts/test-cubetown-v19-maker.mjs",
           "pattern": "CUBETOWN_V19_MAKER_PASS",
           "description": "The focused V19 regression gate remains available."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Tools/Promote-CubetownV19R1.ps1",
+          "pattern": "Authorization -cne 'PROMOTE'[\\s\\S]*phantomplay-cubetown-[\\s\\S]*Installed Shipping binary[\\s\\S]*prior install was restored",
+          "description": "Cubetown promotion remains exact-authorized, transactional, hash-verified, and recoverable."
         }
       ],
       "forbiddenPatterns": [

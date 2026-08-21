@@ -3,8 +3,8 @@
   "game_id": "cubetown",
   "title": "Cubetown: Echoes of the Maker",
   "production_status": "Unreal Engine 5 native vertical slice",
-  "current_floor": "V18R1 verified installed Unreal release; preserve its recovered V13-V17 world, gameplay, material, camera, and safety upgrades",
-  "next_target": "V19 Maker's Journey review candidate — not promoted",
+  "current_floor": "V19R1 Maker's Journey verified installed Cubetown release inside the retained V25R3 PhantomPlay set; preserve its recovered V13-V18 systems plus the V19 hero, villager, echo, world, HUD, and safety upgrades",
+  "next_target": "Post-promotion visual/input review and V20 polish; V19R1 is the no-regression floor",
   "core_fantasy": "A handcrafted storybook adventure where the Maker remembers creatures and world objects as living echoes, then combines them to fight, traverse, solve, and build a home in an impossible seasonal valley.",
   "design_pillars": [
     "The Maker is a profession-readable adventure hero with a crimson mantle, teal field gear, a cyan echo rod, and complete locomotion/combat animation states — never a default pawn or permanently idling mesh.",
@@ -46,5 +46,5 @@
     "interact": "F",
     "inventory_map_journal": "Tab / M / J"
   },
-  "release_policy": "All V19 work packages to an isolated candidate. The installed build cannot change without exact literal PROMOTE authorization after compile, cook, visual, real-input, and performance gates pass."
+  "release_policy": "V19R1 was transactionally promoted after the owner's exact literal PROMOTE authorization, with the previous V25R3 Cubetown preserved as a rollback checkpoint. Future revisions must package to a new isolated candidate and require a new exact PROMOTE authorization."
 }

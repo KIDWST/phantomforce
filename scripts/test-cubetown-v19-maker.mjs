@@ -9,6 +9,7 @@ const bible = read("docs/phantomplay-production/creative-bibles/cubetown.json");
 const prompts = read("packages/phantom-games-unreal/Docs/Production/CUBETOWN_V19_VISUAL_TARGET_PROMPTS.md");
 const report = read("packages/phantom-games-unreal/Docs/Production/CUBETOWN_V19_MAKERS_JOURNEY.md");
 const packager = read("packages/phantom-games-unreal/Tools/PackageCubetownV19R1.ps1");
+const promoter = read("packages/phantom-games-unreal/Tools/Promote-CubetownV19R1.ps1");
 
 for (const target of [
   "cubetown-v19-maker-character-reference.png",
@@ -20,8 +21,8 @@ for (const target of [
   );
 }
 
-assert.match(bible, /current_floor": "V18R1 verified installed Unreal release[\s\S]*next_target": "V19 Maker's Journey review candidate — not promoted/u,
-  "Cubetown must preserve the real V18R1 floor and identify the V19 successor truthfully.");
+assert.match(bible, /current_floor": "V19R1 Maker's Journey verified installed Cubetown release[\s\S]*next_target": "Post-promotion visual\/input review and V20 polish; V19R1 is the no-regression floor/u,
+  "Cubetown must preserve the installed V19R1 floor and identify its next review target truthfully.");
 assert.match(bible, /crimson mantle[\s\S]*cyan echo rod[\s\S]*never a default pawn or permanently idling mesh/u,
   "The Maker identity and motion floor must remain explicit.");
 assert.doesNotMatch(bible, /Voxel mining and placement must be immediate/u,
@@ -52,9 +53,15 @@ assert.match(prompts, /Maker character reference[\s\S]*Heartstone gameplay targe
   "The exact visual targets and runtime translation contract must remain reproducible.");
 assert.match(prompts, /do not resemble or reference Nintendo[\s\S]*no default mannequin/u,
   "The visual contract must stay original and reject generic character regression.");
-assert.match(report, /Release floor: installed V18R1[\s\S]*review candidate — not promoted[\s\S]*exact literal `PROMOTE`/u,
-  "The V19 report must not claim installation or promotion before review.");
+assert.match(report, /Release floor: installed V19R1 Maker's Journey[\s\S]*promoted and installed[\s\S]*exact literal `PROMOTE` authorization[\s\S]*V25R3\+CUBETOWN-V19R1/u,
+  "The V19 report must retain the exact installed promotion disposition and mixed-set identity.");
 assert.match(packager, /CandidateBuilds\\\$Revision\\cubetown[\s\S]*visual_profile=makers-journey-v19[\s\S]*promotion=blocked_until_explicit_human_PROMOTE/u,
   "Cubetown packaging must remain isolated and explicitly non-promoted.");
+assert.match(promoter, /Authorization -cne 'PROMOTE'[\s\S]*already-promoted/u,
+  "Cubetown promotion must require exact authorization and remain idempotent after installation.");
+assert.match(promoter, /Candidate Shipping binary[\s\S]*Installed Shipping binary/u,
+  "Cubetown promotion must verify the approved and installed Shipping binaries.");
+assert.match(promoter, /Move-Item -LiteralPath \$InstalledRoot -Destination \$backupCubetown[\s\S]*prior install was restored/u,
+  "Cubetown promotion must retain a transactional rollback path.");
 
 console.log("CUBETOWN_V19_MAKER_PASS");
