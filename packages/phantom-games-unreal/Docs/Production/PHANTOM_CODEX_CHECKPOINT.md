@@ -1,4 +1,22 @@
-# Phantom Codex Checkpoint — 2026-08-21 PhantomStrike V26R1 installed
+# Phantom Codex Checkpoint — 2026-08-21 PhantomStrike V27R1 installed
+
+## PhantomStrike V27R1 Blackridge realism installed
+
+- PhantomStrike V27R1 is installed inside the truthful mixed `V25R9+PHANTOMSTRIKE-V27R1` PhantomPlay set.
+- The existing V26 Blackridge gameplay and breach images remain the binding visual target. V27 translates them further into the runtime instead of replacing the world with flat image scenery.
+- The player, allies, and hostiles now use realistic-proportion Unreal skeletal rigs, rifle locomotion, authored rifle/pistol assets, and skeletal collapse behavior. Primitive representations are hidden when the production rigs resolve.
+- Key Blackridge cars and buildings now use PBR ProductAssets, and the hero breach/server cube-primitives were removed from the V27 construction path.
+- Imported production assets are the minimal licensed subset of Unreal Engine 5.8 First Person/Shooter templates and Epic AEC/MFG ProductAssets; unrelated sample maps, UI, and weapons were excluded.
+- Development and Shipping compilation, Unreal asset-load validation, focused source regression, clean 4,980-package/4,973-cooked Shipping build, 9,161-chunk IoStore assembly, hidden 25-second keep-alive, exact candidate/install hashes, retained-game hashes, and rollback readiness all passed.
+- Installed V27R1: `%LOCALAPPDATA%\PhantomPlay\Games\Unreal\Windows\phantom-strike` — 32 files / 1,066,285,223 bytes.
+- Installed Shipping SHA-256: `3D7289846B5B09386B1DA2F1093DAFBAA23AD73D7195ED9A87965338D2C58DEE`; pak `451DF5D7798315F53643945A1C98C5E2BA2D5BEE1FB187DB00E02E764FCA2D34`; ucas `FB09680169A81E5E4A09205712B574DBA252D0505A222A9F6D0B894582BF5427`; utoc `8303F0443DB0AB58A112F7AA4646BA5BB9202DA1DD2B68AC3E03ECB5591007D0`.
+- Prior V25R9 rollback: `C:\Users\jorda\Documents\Codex\backups\phantomplay-phantom-strike-v25r9-to-v27r1-20260821-090238\phantom-strike`.
+- No visible window, browser, mouse, keyboard, or active desktop session was controlled.
+- Honest limitation: the imported bodies are realistic-proportion animated Unreal mannequins, not photo-scanned tactical uniforms. Rendered-frame comparison, real-input playthrough, and performance/soak acceptance remain open because visible desktop takeover was prohibited.
+- Full evidence: `Docs/Production/PHANTOMSTRIKE_V27_REALISM_REPORT.md`.
+- Disposition: **PROMOTED AND VERIFIED INSTALLED**.
+
+## Prior checkpoint — PhantomStrike V26R1 installed
 
 ## PhantomStrike V26R1 Blackridge installed
 

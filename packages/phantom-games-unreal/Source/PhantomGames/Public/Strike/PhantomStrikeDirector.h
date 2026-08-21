@@ -126,6 +126,9 @@ private:
     bool bSprinting = false;
     bool bReloading = false;
     bool bUsingImportedRifle = false;
+    bool bUsingRealisticBodyRig = false;
+    bool bUsingTemplateWeapons = false;
+    bool bUsingTemplateSidearm = false;
     bool bUsingSidearm = false;
     bool bLastHitHeadshot = false;
     bool bProne = false;
@@ -243,6 +246,7 @@ private:
     float DeathRemaining = 0.0f;
     FVector VisualRestLocation = FVector::ZeroVector;
     bool bDying = false;
+    bool bUsingRealisticRig = false;
 
     bool HasLineOfSightTo(AActor* Target) const;
 };
@@ -276,6 +280,7 @@ private:
     float RecoilRemaining = 0.0f;
     FVector VisualRestLocation = FVector::ZeroVector;
     bool bOperational = true;
+    bool bUsingRealisticRig = false;
 };
 
 UCLASS()
@@ -327,7 +332,7 @@ private:
     FVector ExtractionLocation = FVector(14600.0f, -9200.0f, 105.0f);
 
     void BuildCommandComplex();
-    void BuildV26BlackridgeAtmosphere();
+    void BuildV27BlackridgeRealism();
     void SpawnWave();
     void SpawnSquad();
     void OpenExtraction();

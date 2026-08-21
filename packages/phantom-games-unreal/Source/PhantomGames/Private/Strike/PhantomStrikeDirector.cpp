@@ -1,14 +1,17 @@
 #include "Strike/PhantomStrikeDirector.h"
 #include "Core/PhantomGameShell.h"
 
+#include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Canvas.h"
 #include "Engine/DamageEvents.h"
 #include "Engine/Engine.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
@@ -127,15 +130,34 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
     FirstPersonCamera->bUsePawnControlRotation = true;
     FirstPersonCamera->FieldOfView = 90.0f;
 
+    // V27 BLACKRIDGE REALISM: the player's visible body is the licensed Unreal
+    // mannequin skeletal rig, driven by the Shooter template locomotion graph. The
+    // old cylinders and spheres remain hidden emergency fallbacks only.
+    if (USkeletalMesh* OperatorBody = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple")))
+    {
+        GetMesh()->SetSkeletalMeshAsset(OperatorBody);
+        GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
+        GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
+        GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        GetMesh()->SetOnlyOwnerSee(true);
+        GetMesh()->SetCastShadow(true);
+        GetMesh()->HideBoneByName(TEXT("head"), EPhysBodyOp::PBO_None);
+        if (UClass* OperatorAnimClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Rifle.ABP_TP_Rifle_C")))
+        {
+            GetMesh()->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+            GetMesh()->SetAnimInstanceClass(OperatorAnimClass);
+        }
+        bUsingRealisticBodyRig = true;
+    }
+
     UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
     UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
     UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
     RifleBody = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("NightglassRifle"));
     RifleBody->SetupAttachment(FirstPersonCamera);
-    UStaticMesh* ImportedRifle = LoadObject<UStaticMesh>(
-        nullptr,
-        TEXT("/Game/Phantom/Strike/AssaultRifle.AssaultRifle")
-    );
+    UStaticMesh* ImportedRifle = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Weapons/Rifle/Meshes/SM_Rifle.SM_Rifle"));
+    bUsingTemplateWeapons = ImportedRifle != nullptr;
+    if (!ImportedRifle) ImportedRifle = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Strike/AssaultRifle.AssaultRifle"));
     bUsingImportedRifle = ImportedRifle != nullptr;
     RifleBody->SetStaticMesh(bUsingImportedRifle ? ImportedRifle : Cube);
     RifleBody->SetRelativeLocation(bUsingImportedRifle ? FVector(65.0f, 25.0f, -29.0f) : FVector(52.0f, 24.0f, -23.0f));
@@ -160,6 +182,7 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
     RifleBody->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     RifleBody->SetOnlyOwnerSee(true);
     RifleBody->SetCastShadow(false);
+    RifleBody->SetRelativeRotation(bUsingTemplateWeapons ? FRotator(0.0f, -90.0f, 0.0f) : FRotator::ZeroRotator);
 
     RifleBarrel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RifleBarrel"));
     RifleBarrel->SetupAttachment(RifleBody);
@@ -184,7 +207,10 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
 
     SidearmBody = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("P9Sidearm"));
     SidearmBody->SetupAttachment(FirstPersonCamera);
-    if (UStaticMesh* Pistol=LoadObject<UStaticMesh>(nullptr,TEXT("/Game/Phantom/Strike/Pistol.Pistol")))
+    UStaticMesh* Pistol = LoadObject<UStaticMesh>(nullptr,TEXT("/Game/Weapons/Pistol/Meshes/SM_Pistol.SM_Pistol"));
+    bUsingTemplateSidearm = Pistol != nullptr;
+    if (!Pistol) Pistol = LoadObject<UStaticMesh>(nullptr,TEXT("/Game/Phantom/Strike/Pistol.Pistol"));
+    if (Pistol)
     {
         SidearmBody->SetStaticMesh(Pistol);
         const FVector FullSize = Pistol->GetBounds().BoxExtent * 2.0f;
@@ -202,6 +228,7 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
         SidearmBody->SetRelativeLocation(FVector(55.0f,20.0f,-29.0f));
     SidearmBody->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     SidearmBody->SetOnlyOwnerSee(true); SidearmBody->SetCastShadow(false); SidearmBody->SetVisibility(false);
+    SidearmBody->SetRelativeRotation(bUsingTemplateSidearm ? FRotator(0.0f, -90.0f, 0.0f) : FRotator::ZeroRotator);
 
     RightForearm = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RightTacticalForearm"));
     RightForearm->SetupAttachment(FirstPersonCamera);
@@ -211,6 +238,7 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
     RightForearm->SetRelativeScale3D(FVector(0.105f, 0.105f, 0.34f));
     RightForearm->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     RightForearm->SetOnlyOwnerSee(true); RightForearm->SetCastShadow(false);
+    RightForearm->SetVisibility(!bUsingRealisticBodyRig);
 
     LeftForearm = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftTacticalForearm"));
     LeftForearm->SetupAttachment(FirstPersonCamera);
@@ -220,6 +248,7 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
     LeftForearm->SetRelativeScale3D(FVector(0.10f, 0.10f, 0.32f));
     LeftForearm->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     LeftForearm->SetOnlyOwnerSee(true); LeftForearm->SetCastShadow(false);
+    LeftForearm->SetVisibility(!bUsingRealisticBodyRig);
 
     RightGlove = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RightTacticalGlove"));
     RightGlove->SetupAttachment(FirstPersonCamera);
@@ -228,6 +257,7 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
     RightGlove->SetRelativeScale3D(FVector(0.13f, 0.105f, 0.095f));
     RightGlove->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     RightGlove->SetOnlyOwnerSee(true); RightGlove->SetCastShadow(false);
+    RightGlove->SetVisibility(!bUsingRealisticBodyRig);
 
     LeftGlove = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftTacticalGlove"));
     LeftGlove->SetupAttachment(FirstPersonCamera);
@@ -236,6 +266,7 @@ APhantomStrikeCharacter::APhantomStrikeCharacter()
     LeftGlove->SetRelativeScale3D(FVector(0.14f, 0.105f, 0.095f));
     LeftGlove->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     LeftGlove->SetOnlyOwnerSee(true); LeftGlove->SetCastShadow(false);
+    LeftGlove->SetVisibility(!bUsingRealisticBodyRig);
 
     MuzzleBloom = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MuzzleBloom"));
     MuzzleBloom->SetupAttachment(FirstPersonCamera);
@@ -383,7 +414,11 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
 
     UStaticMeshComponent* ActiveWeapon = bUsingSidearm ? SidearmBody : RifleBody;
     UStaticMeshComponent* InactiveWeapon = bUsingSidearm ? RifleBody : SidearmBody;
-    if (InactiveWeapon) InactiveWeapon->SetRelativeRotation(FRotator::ZeroRotator);
+    const FRotator RifleBaseRotation = bUsingTemplateWeapons ? FRotator(0.0f, -90.0f, 0.0f) : FRotator::ZeroRotator;
+    const FRotator SidearmBaseRotation = bUsingTemplateSidearm ? FRotator(0.0f, -90.0f, 0.0f) : FRotator::ZeroRotator;
+    const FRotator ActiveBaseRotation = bUsingSidearm ? SidearmBaseRotation : RifleBaseRotation;
+    const FRotator InactiveBaseRotation = bUsingSidearm ? RifleBaseRotation : SidearmBaseRotation;
+    if (InactiveWeapon) InactiveWeapon->SetRelativeRotation(InactiveBaseRotation);
     const FRotator HandlingRotation(
         RecoilKick * 3.8f - WeaponInertia.Y * 0.42f,
         WeaponInertia.X * 0.52f,
@@ -392,13 +427,13 @@ void APhantomStrikeCharacter::Tick(float DeltaSeconds)
     if (bReloading)
     {
         ReloadRemaining -= DeltaSeconds;
-        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(HandlingRotation + FRotator(5.0f, -4.0f, FMath::Sin(ReloadRemaining * 7.0f) * 24.0f));
+        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(ActiveBaseRotation + HandlingRotation + FRotator(5.0f, -4.0f, FMath::Sin(ReloadRemaining * 7.0f) * 24.0f));
         if (ReloadRemaining <= 0.0f) FinishReload();
     }
     else
     {
         const FRotator InspectRotation = InspectRemaining > 0.0f ? FRotator(8.0f, 32.0f, -18.0f) : FRotator::ZeroRotator;
-        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(FMath::RInterpTo(ActiveWeapon->GetRelativeRotation(), InspectRotation + HandlingRotation, DeltaSeconds, 14.0f));
+        if (ActiveWeapon) ActiveWeapon->SetRelativeRotation(FMath::RInterpTo(ActiveWeapon->GetRelativeRotation(), ActiveBaseRotation + InspectRotation + HandlingRotation, DeltaSeconds, 14.0f));
         if (bTriggerHeld && FireCooldown <= 0.0f) FireOneRound();
     }
 
@@ -840,7 +875,8 @@ APhantomStrikeEnemy::APhantomStrikeEnemy()
 
     WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Weapon"));
     WeaponMesh->SetupAttachment(BodyMesh);
-    WeaponMesh->SetStaticMesh(Cube);
+    UStaticMesh* EnemyRifle = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Weapons/Rifle/Meshes/SM_Rifle.SM_Rifle"));
+    WeaponMesh->SetStaticMesh(EnemyRifle ? EnemyRifle : Cube);
     WeaponMesh->SetRelativeLocation(FVector(45.0f, 26.0f, 8.0f));
     WeaponMesh->SetRelativeScale3D(FVector(0.68f, 0.12f, 0.12f));
     WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -867,11 +903,40 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
     Tier = FMath::Max(1, NewTier);
     const FLinearColor HostileRed(0.31f, 0.055f, 0.045f);
 
-    // PhantomStrike owns a modern-military silhouette family. Never resolve the shared
-    // fantasy Rogue/Knight/Barbarian production bodies here; that regression made some
-    // packaged encounters visibly belong to the wrong game.
-    GetMesh()->SetVisibility(false, true);
-    const bool bProductionHumanoid = false;
+    // The Shooter template skeletal rig is the V27 production silhouette. Primitive and
+    // generated-static bodies remain collision-safe fallbacks, but are never visible when
+    // the realistic rig loads.
+    USkeletalMesh* OperatorMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
+    if (OperatorMesh)
+    {
+        GetMesh()->SetSkeletalMeshAsset(OperatorMesh);
+        GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
+        GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
+        GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        GetMesh()->SetVisibility(true, true);
+        GetMesh()->SetCastShadow(true);
+        if (UClass* OperatorAnimClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Rifle.ABP_TP_Rifle_C")))
+        {
+            GetMesh()->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+            GetMesh()->SetAnimInstanceClass(OperatorAnimClass);
+        }
+        if (UMaterialInterface* DarkOperatorMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Characters/Mannequins/Materials/Manny/MI_Manny_02_New.MI_Manny_02_New")))
+        {
+            GetMesh()->SetMaterial(0, DarkOperatorMaterial);
+            GetMesh()->SetMaterial(1, DarkOperatorMaterial);
+        }
+        WeaponMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, TEXT("weapon_r"));
+        WeaponMesh->SetRelativeLocation(FVector::ZeroVector);
+        WeaponMesh->SetRelativeRotation(FRotator::ZeroRotator);
+        WeaponMesh->SetRelativeScale3D(FVector(1.0f));
+        WeaponMesh->SetVisibility(true);
+        VisualRestLocation = GetMesh()->GetRelativeLocation();
+        bUsingRealisticRig = true;
+    }
+    else
+    {
+        GetMesh()->SetVisibility(false, true);
+    }
 
     const TCHAR* ExternalCharacter = Role == EPhantomStrikeEnemyRole::Marksman
         ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Strike_Marksman.SM_CC0_Strike_Marksman")
@@ -887,11 +952,9 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
             : (Role == EPhantomStrikeEnemyRole::Marksman
                 ? TEXT("/Game/Phantom/Generated/Strike/Characters/SM_HelixMarksman.SM_HelixMarksman")
                 : TEXT("/Game/Phantom/Generated/Strike/Characters/SM_HelixRifleman.SM_HelixRifleman")));
-    // V7: generated Helix meshes are known-upright and deterministic; arbitrary external static
-    // character aliases are fallback-only until a proper skeletal import has been verified.
-    UStaticMesh* AuthoredCharacter = bProductionHumanoid ? nullptr : LoadObject<UStaticMesh>(nullptr, GeneratedCharacter);
-    if (!AuthoredCharacter && !bProductionHumanoid) AuthoredCharacter = LoadObject<UStaticMesh>(nullptr, ExternalCharacter);
-    if (AuthoredCharacter)
+    UStaticMesh* AuthoredCharacter = bUsingRealisticRig ? nullptr : LoadObject<UStaticMesh>(nullptr, GeneratedCharacter);
+    if (!AuthoredCharacter && !bUsingRealisticRig) AuthoredCharacter = LoadObject<UStaticMesh>(nullptr, ExternalCharacter);
+    if (AuthoredCharacter && !bUsingRealisticRig)
     {
         VisualModel->SetStaticMesh(AuthoredCharacter);
         const FBoxSphereBounds VisualBounds = AuthoredCharacter->GetBounds();
@@ -910,16 +973,17 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
         HeadMesh->SetVisibility(false);
         WeaponMesh->SetVisibility(false);
     }
-    if (bProductionHumanoid)
+    if (bUsingRealisticRig)
     {
         VisualModel->SetVisibility(false);
         BodyMesh->SetVisibility(false);
         ArmorMesh->SetVisibility(false);
+        // Invisible sphere is retained solely as the dedicated headshot trace target.
         HeadMesh->SetVisibility(false);
     }
     const FLinearColor HostileAmber(0.48f, 0.22f, 0.055f);
     ApplyShapeColor(HeadMesh, FLinearColor(0.08f, 0.02f, 0.025f));
-    ApplyShapeColor(WeaponMesh, HostileRed);
+    if (!bUsingRealisticRig) ApplyShapeColor(WeaponMesh, HostileRed);
     if (Role == EPhantomStrikeEnemyRole::Rusher)
     {
         Health = 68.0f + Tier * 7.0f;
@@ -941,7 +1005,7 @@ void APhantomStrikeEnemy::Configure(EPhantomStrikeEnemyRole NewRole, int32 NewTi
         BodyMesh->SetRelativeScale3D(FVector(0.43f, 0.43f, 0.72f));
         ApplyShapeColor(BodyMesh, FLinearColor(0.07f, 0.085f, 0.065f));
         ApplyShapeColor(ArmorMesh, FLinearColor(0.16f, 0.18f, 0.14f));
-        ApplyShapeColor(WeaponMesh, FLinearColor(0.045f, 0.05f, 0.045f));
+        if (!bUsingRealisticRig) ApplyShapeColor(WeaponMesh, FLinearColor(0.045f, 0.05f, 0.045f));
     }
     else if (Role == EPhantomStrikeEnemyRole::Heavy)
     {
@@ -997,7 +1061,12 @@ void APhantomStrikeEnemy::Tick(float DeltaSeconds)
     {
         DeathRemaining = FMath::Max(0.0f, DeathRemaining - DeltaSeconds);
         const float CollapseAlpha = 1.0f - FMath::Clamp(DeathRemaining / 0.72f, 0.0f, 1.0f);
-        if (VisualModel)
+        if (bUsingRealisticRig && GetMesh())
+        {
+            GetMesh()->SetRelativeRotation(FMath::RInterpTo(GetMesh()->GetRelativeRotation(), FRotator(-8.0f, -90.0f, 82.0f), DeltaSeconds, 4.8f));
+            GetMesh()->SetRelativeLocation(FMath::VInterpTo(GetMesh()->GetRelativeLocation(), VisualRestLocation + FVector(0.0f, 0.0f, -62.0f * CollapseAlpha), DeltaSeconds, 6.0f));
+        }
+        else if (VisualModel)
         {
             VisualModel->SetRelativeRotation(FMath::RInterpTo(VisualModel->GetRelativeRotation(), FRotator(-8.0f, 0.0f, 82.0f), DeltaSeconds, 4.8f));
             VisualModel->SetRelativeLocation(FMath::VInterpTo(VisualModel->GetRelativeLocation(), VisualRestLocation + FVector(0.0f, 0.0f, -62.0f * CollapseAlpha), DeltaSeconds, 6.0f));
@@ -1106,6 +1175,7 @@ float APhantomStrikeEnemy::TakeDamage(
         GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         HeadMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        if (bUsingRealisticRig && GetMesh()) GetMesh()->SetComponentTickEnabled(false);
         SetLifeSpan(3.0f);
     }
     return Applied;
@@ -1120,6 +1190,34 @@ APhantomStrikeSquadmate::APhantomStrikeSquadmate()
     GetCharacterMovement()->MaxWalkSpeed = 520.0f;
     GetCharacterMovement()->MaxAcceleration = 2800.0f;
 
+    // Use the alternate Quinn proportions for squadmates so the team reads as people,
+    // not repeated copies of one generated statue.
+    if (USkeletalMesh* SquadBody = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple")))
+    {
+        GetMesh()->SetSkeletalMeshAsset(SquadBody);
+        GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
+        GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
+        GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        GetMesh()->SetVisibility(true, true);
+        GetMesh()->SetCastShadow(true);
+        if (UClass* SquadAnimClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Rifle.ABP_TP_Rifle_C")))
+        {
+            GetMesh()->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+            GetMesh()->SetAnimInstanceClass(SquadAnimClass);
+        }
+        if (UMaterialInterface* SquadMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Characters/Mannequins/Materials/Quinn/MI_Quinn_02.MI_Quinn_02")))
+        {
+            GetMesh()->SetMaterial(0, SquadMaterial);
+            GetMesh()->SetMaterial(1, SquadMaterial);
+        }
+        VisualRestLocation = GetMesh()->GetRelativeLocation();
+        bUsingRealisticRig = true;
+    }
+    else
+    {
+        GetMesh()->SetVisibility(false, true);
+    }
+
     VisualModel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("NightglassSquadVisual"));
     VisualModel->SetupAttachment(GetCapsuleComponent());
     // The checked-in Helix operator is the authoritative modern-military squad silhouette.
@@ -1128,12 +1226,18 @@ APhantomStrikeSquadmate::APhantomStrikeSquadmate()
     if (!SquadMesh) SquadMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Strike_Rifleman.SM_CC0_Strike_Rifleman"));
     VisualModel->SetStaticMesh(SquadMesh);
     VisualModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    VisualModel->SetVisibility(!bUsingRealisticRig);
 
     WeaponModel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("NightglassSquadWeapon"));
-    WeaponModel->SetupAttachment(VisualModel);
-    WeaponModel->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Strike/AssaultRifle.AssaultRifle")));
+    USceneComponent* WeaponParent = bUsingRealisticRig
+        ? static_cast<USceneComponent*>(GetMesh())
+        : static_cast<USceneComponent*>(VisualModel);
+    WeaponModel->SetupAttachment(WeaponParent, bUsingRealisticRig ? FName(TEXT("weapon_r")) : NAME_None);
+    UStaticMesh* SquadRifle = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Weapons/Rifle/Meshes/SM_Rifle.SM_Rifle"));
+    if (!SquadRifle) SquadRifle = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Strike/AssaultRifle.AssaultRifle"));
+    WeaponModel->SetStaticMesh(SquadRifle);
     WeaponModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    WeaponModel->SetVisibility(false);
+    WeaponModel->SetVisibility(bUsingRealisticRig);
 
     StatusLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("NightglassSquadStatus"));
     StatusLight->SetupAttachment(GetCapsuleComponent());
@@ -1147,15 +1251,19 @@ APhantomStrikeSquadmate::APhantomStrikeSquadmate()
 void APhantomStrikeSquadmate::BeginPlay()
 {
     Super::BeginPlay();
-    if (UStaticMesh* SquadVisualMesh = VisualModel ? VisualModel->GetStaticMesh() : nullptr)
+    if (!bUsingRealisticRig)
     {
-        const FBoxSphereBounds Bounds = SquadVisualMesh->GetBounds();
-        const float RawHeight = FMath::Max(1.0f, Bounds.BoxExtent.Z * 2.0f);
-        const float FitScale = FMath::Clamp(184.0f / RawHeight, 0.025f, 60.0f);
-        const float LocalBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * FitScale;
-        VisualModel->SetRelativeScale3D(FVector(FitScale));
-        VisualModel->SetRelativeLocation(FVector(0.0f, 0.0f, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - LocalBottom));
-        VisualRestLocation = VisualModel->GetRelativeLocation();
+        UStaticMesh* SquadVisualMesh = VisualModel ? VisualModel->GetStaticMesh() : nullptr;
+        if (SquadVisualMesh)
+        {
+            const FBoxSphereBounds Bounds = SquadVisualMesh->GetBounds();
+            const float RawHeight = FMath::Max(1.0f, Bounds.BoxExtent.Z * 2.0f);
+            const float FitScale = FMath::Clamp(184.0f / RawHeight, 0.025f, 60.0f);
+            const float LocalBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * FitScale;
+            VisualModel->SetRelativeScale3D(FVector(FitScale));
+            VisualModel->SetRelativeLocation(FVector(0.0f, 0.0f, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - LocalBottom));
+            VisualRestLocation = VisualModel->GetRelativeLocation();
+        }
     }
     FireRemaining = FMath::FRandRange(0.3f, 0.9f);
     PresentationTime = FMath::FRandRange(0.0f, 6.0f);
@@ -1576,7 +1684,7 @@ void APhantomStrikeDirector::BuildCommandComplex()
                 Index == 6
             );
         }
-        BuildV26BlackridgeAtmosphere();
+        BuildV27BlackridgeRealism();
         return;
     }
     for(int32 TY=0;TY<3;++TY)
@@ -1759,14 +1867,14 @@ void APhantomStrikeDirector::BuildCommandComplex()
             FVector(X,Y,8.0f),FVector(1.0f),FRotator(0,(I%2)*90.0f,0),true,true);
     }
     SpawnPointLight(TEXT("CommandCoreLight"),FVector(9000,0,360),FLinearColor(0.08f,0.88f,1.0f),7000.0f,700.0f,true);
-    BuildV26BlackridgeAtmosphere();
+    BuildV27BlackridgeRealism();
 }
 
-void APhantomStrikeDirector::BuildV26BlackridgeAtmosphere()
+void APhantomStrikeDirector::BuildV27BlackridgeRealism()
 {
-    // V26 BLACKRIDGE: a bounded, deterministic dressing layer derived from the approved
-    // wet-coast visual targets. It adds narrative combat tableaux without changing the
-    // persistent map or obstructing the center traversal lane.
+    // V27 BLACKRIDGE REALISM: the approved wet-coast target renders are the contract.
+    // Real authored vehicle/building meshes and PBR materials replace visible primitive
+    // architecture while preserving the persistent map and center traversal lane.
     struct FBlackridgeSetpiece
     {
         const TCHAR* Name;
@@ -1777,10 +1885,10 @@ void APhantomStrikeDirector::BuildV26BlackridgeAtmosphere()
         bool bCollision;
     };
     const FBlackridgeSetpiece Setpieces[] = {
-        {TEXT("V26InsertionDisabledCar"), TEXT("/Game/Phantom/Generated/Strike/Environment/SM_WreckCar_A.SM_WreckCar_A"), FVector(-7850.0f,-1280.0f,160.0f), 1.08f, 18.0f, true},
-        {TEXT("V26CheckpointUtilityWreck"), TEXT("/Game/Phantom/Generated/Strike/Environment/SM_WreckCar_B.SM_WreckCar_B"), FVector(-5050.0f,1420.0f,160.0f), 1.14f, -24.0f, true},
-        {TEXT("V26MarketBurnout"), TEXT("/Game/Phantom/Generated/Strike/Environment/SM_WreckCar_A.SM_WreckCar_A"), FVector(-1680.0f,-1620.0f,160.0f), 1.02f, 34.0f, true},
-        {TEXT("V26BreachResponseVehicle"), TEXT("/Game/Phantom/Generated/Strike/Environment/SM_WreckCar_B.SM_WreckCar_B"), FVector(5960.0f,1510.0f,160.0f), 1.16f, 164.0f, true},
+        {TEXT("V27InsertionDisabledCar"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-7850.0f,-1280.0f,160.0f), 12.0f, 18.0f, true},
+        {TEXT("V27CheckpointUtilityCar"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-5050.0f,1420.0f,160.0f), 12.4f, -24.0f, true},
+        {TEXT("V27MarketEvacuationCar"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(-1680.0f,-1620.0f,160.0f), 11.8f, 34.0f, true},
+        {TEXT("V27BreachResponseVehicle"), TEXT("/Game/ProductAssets/Mesh/SM_Car.SM_Car"), FVector(5960.0f,1510.0f,160.0f), 12.6f, 164.0f, true},
         {TEXT("V26InsertionRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(-6900.0f,1740.0f,160.0f), 0.82f, 12.0f, false},
         {TEXT("V26CheckpointRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(-4050.0f,-1820.0f,160.0f), 0.94f, 83.0f, false},
         {TEXT("V26MarketRubble"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(550.0f,1880.0f,160.0f), 0.78f, -28.0f, false},
@@ -1798,6 +1906,19 @@ void APhantomStrikeDirector::BuildV26BlackridgeAtmosphere()
         SpawnStaticMeshAsset(Setpiece.Name, Setpiece.Asset, Setpiece.Location, FVector(Setpiece.Scale), FRotator(0.0f, Setpiece.Yaw, 0.0f), Setpiece.bCollision, true);
     }
 
+    // Product-template architecture is authored with real material response but a miniature
+    // source scale. These explicit factors resolve it to 5-7 storey Blackridge blocks.
+    const FBlackridgeSetpiece RealBuildings[] = {
+        {TEXT("V27InsertionApartment"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(-6900.0f,5450.0f,160.0f), 58.0f, 90.0f, true},
+        {TEXT("V27CheckpointApartment"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(-2850.0f,-5600.0f,160.0f), 54.0f, -90.0f, true},
+        {TEXT("V27MarketApartment"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(2450.0f,5650.0f,160.0f), 61.0f, 90.0f, true},
+        {TEXT("V27CommandCenterShell"), TEXT("/Game/ProductAssets/Mesh/SM_Building.SM_Building"), FVector(8550.0f,3650.0f,160.0f), 64.0f, -90.0f, false}
+    };
+    for (const FBlackridgeSetpiece& Building : RealBuildings)
+    {
+        SpawnStaticMeshAsset(Building.Name, Building.Asset, Building.Location, FVector(Building.Scale), FRotator(0.0f, Building.Yaw, 0.0f), Building.bCollision, true);
+    }
+
     // Warm practicals against the cool storm ambience create the target's photographic depth.
     const FVector PracticalLights[] = {
         FVector(-8200.0f,1380.0f,330.0f), FVector(-5220.0f,-1480.0f,340.0f),
@@ -1810,16 +1931,26 @@ void APhantomStrikeDirector::BuildV26BlackridgeAtmosphere()
         SpawnPointLight(FString::Printf(TEXT("V26BlackridgePractical_%02d"), Index), PracticalLights[Index], FLinearColor(1.0f,0.48f,0.20f), Index == 5 ? 4100.0f : 2450.0f, Index == 5 ? 560.0f : 390.0f, Index == 5);
     }
 
-    // Relay-room silhouettes: server banks and a broken security aperture make the final
-    // objective read as a place rather than an exposed glowing prop.
+    // Relay-room silhouettes use authored industrial props. No engine cubes are allowed in
+    // the hero breach composition.
     for (int32 Side = -1; Side <= 1; Side += 2)
     {
         for (int32 Rank = 0; Rank < 3; ++Rank)
         {
-            SpawnShape(EPhantomPrimitive::Cube, FString::Printf(TEXT("V26RelayServer_%d_%d"), Side, Rank), FVector(8350.0f + Rank * 520.0f, Side * 930.0f, 310.0f), FVector(230.0f, 105.0f, 300.0f), FLinearColor(0.025f,0.03f,0.032f), FRotator::ZeroRotator, true);
+            SpawnStaticMeshAsset(
+                FString::Printf(TEXT("V27RelayBank_%d_%d"), Side, Rank),
+                Rank % 2 == 0
+                    ? TEXT("/Game/Phantom/Curated/Strike/SM_Strike_Industrial.SM_Strike_Industrial")
+                    : TEXT("/Game/Phantom/Curated/Strike/SM_Strike_StreetProp.SM_Strike_StreetProp"),
+                FVector(8350.0f + Rank * 520.0f, Side * 930.0f, 160.0f),
+                FVector(Rank % 2 == 0 ? 0.42f : 0.58f),
+                FRotator(0.0f, Side < 0 ? 90.0f : -90.0f, 0.0f),
+                true,
+                true
+            );
         }
     }
-    SpawnShape(EPhantomPrimitive::Cube, TEXT("V26BreachLintel"), FVector(7600.0f,0.0f,560.0f), FVector(110.0f,1280.0f,110.0f), FLinearColor(0.10f,0.095f,0.085f), FRotator::ZeroRotator, false);
-    SpawnShape(EPhantomPrimitive::Cube, TEXT("V26BreachJambLeft"), FVector(7600.0f,-690.0f,350.0f), FVector(120.0f,120.0f,520.0f), FLinearColor(0.10f,0.095f,0.085f), FRotator::ZeroRotator, false);
-    SpawnShape(EPhantomPrimitive::Cube, TEXT("V26BreachJambRight"), FVector(7600.0f,690.0f,350.0f), FVector(120.0f,120.0f,520.0f), FLinearColor(0.10f,0.095f,0.085f), FRotator::ZeroRotator, false);
+    SpawnStaticMeshAsset(TEXT("V27BreachFrameLeft"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(7540.0f,-760.0f,160.0f), FVector(1.10f), FRotator(0.0f,22.0f,0.0f), false, true);
+    SpawnStaticMeshAsset(TEXT("V27BreachFrameRight"), TEXT("/Game/Phantom/Generated/Strike/V10/Props/SM_V10_RubblePile.SM_V10_RubblePile"), FVector(7580.0f,760.0f,160.0f), FVector(1.06f), FRotator(0.0f,156.0f,0.0f), false, true);
+    SpawnStaticMeshAsset(TEXT("V27BreachInterior"), TEXT("/Game/Phantom/Curated/Strike/SM_Strike_Warehouse.SM_Strike_Warehouse"), FVector(8950.0f,0.0f,160.0f), FVector(0.92f), FRotator(0.0f,90.0f,0.0f), false, true);
 }
