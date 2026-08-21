@@ -302,6 +302,34 @@ class TestBuildApiKwargsChatCompletionsServiceTier:
 
 
 
+class TestBuildApiKwargsLocalPhantom:
+    def test_adaptive_context_replaces_static_provider_context(self, monkeypatch):
+        monkeypatch.setattr("agent.ollama_runtime._probe_ollama", lambda *args, **kwargs: False)
+        agent = _make_agent(
+            monkeypatch,
+            "custom",
+            base_url="http://127.0.0.1:11434/v1",
+            model="phantom-unleashed:latest",
+        )
+        agent._ollama_num_ctx = 65536
+        agent._ollama_options = {"num_thread": 8, "num_batch": 512}
+        agent._ollama_keep_alive = "-1"
+        agent.request_overrides = {
+            "extra_body": {
+                "options": {"num_ctx": 65536, "num_gpu": 12},
+            },
+        }
+
+        kwargs = agent._build_api_kwargs([{"role": "user", "content": "Say READY."}])
+
+        options = kwargs["extra_body"]["options"]
+        assert options["num_ctx"] == 8192
+        assert options["num_gpu"] == 12
+        assert options["num_thread"] == 8
+        assert options["num_batch"] == 512
+        assert kwargs["extra_body"]["keep_alive"] == "-1"
+
+
 class TestBuildApiKwargsKimiNoTemperatureOverride:
     def test_kimi_for_coding_omits_temperature(self, monkeypatch):
         """Temperature should NOT be set client-side for Kimi models.
@@ -919,6 +947,5 @@ class TestReasoningEffortDefaults:
                             base_url="https://chatgpt.com/backend-api/codex")
         kwargs = agent._build_api_kwargs([{"role": "user", "content": "hi"}])
         assert kwargs["reasoning"]["effort"] == "medium"
-
 
 

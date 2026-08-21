@@ -34,7 +34,30 @@ def test_short_phantom_request_uses_fast_tool_window():
             [{"role": "user", "content": "run matrix rain"}],
             tool_count=12,
         )
-        == 65536
+        == 8192
+    )
+
+
+def test_tool_schema_size_expands_phantom_request_only_as_needed():
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": f"tool_{index}",
+                "description": "x" * 1200,
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+        for index in range(30)
+    ]
+    assert (
+        choose_ollama_request_num_ctx(
+            "phantom-unleashed:latest",
+            65536,
+            [{"role": "user", "content": "inspect the workspace"}],
+            tools=tools,
+        )
+        == 16384
     )
 
 
