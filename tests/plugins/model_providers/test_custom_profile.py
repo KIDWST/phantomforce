@@ -107,3 +107,16 @@ class TestCustomReasoningWithNumCtx:
         assert eb == {"options": {"num_ctx": 8192}}
         assert tl == {}
 
+    @pytest.mark.parametrize(
+        "model", ["phantom", "phantom:latest", "phantom-unleashed:latest", "phantom-v1"]
+    )
+    def test_phantom_never_sends_thinking_controls(self, custom_profile, model):
+        """A stale UI effort cannot make a Phantom request fail before generation."""
+        eb, tl = custom_profile.build_api_kwargs_extras(
+            reasoning_config={"enabled": True, "effort": "medium"},
+            ollama_num_ctx=8192,
+            model=model,
+        )
+
+        assert eb == {"options": {"num_ctx": 8192}}
+        assert tl == {}

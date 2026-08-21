@@ -34,7 +34,7 @@ Substrate facts (verified May 2026):
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional
+from typing import Any, Optional
 
 
 # ─── Public types ───────────────────────────────────────────────────────
@@ -410,14 +410,35 @@ def format_aux_picker_entries(
     return entries
 
 
-def _apply_capabilities(rows: list[dict], *, allow_network: bool = True) -> None:
-    """Attach a ``{model: {fast, reasoning}}`` map to each provider row.
+def _reasoning_catalog_reader(slug: str):
+    """Return a cache-only per-model reasoning reader for an aggregator."""
+    try:
+        from hermes_cli.models import (
+            nous_model_reasoning_capabilities,
+            openrouter_model_reasoning_capabilities,
+            warm_nous_reasoning_caps_async,
+            warm_openrouter_reasoning_caps_async,
+        )
+    except Exception:
+        return None
 
-    `fast` mirrors ``model_supports_fast_mode`` (the same gate the runtime
-    enforces). `reasoning` comes from the models.dev catalog when known and
-    defaults to True otherwise. Ollama is the exception: its OpenAI-compatible
-    endpoint rejects unsupported reasoning controls with HTTP 400, so the
-    native ``/api/show`` capability is authoritative for local Ollama rows.
+    if slug == "nous":
+        warm_nous_reasoning_caps_async()
+        return nous_model_reasoning_capabilities
+    if slug == "openrouter":
+        warm_openrouter_reasoning_caps_async()
+        return openrouter_model_reasoning_capabilities
+    return None
+
+
+def _apply_capabilities(rows: list[dict], *, allow_network: bool = True) -> None:
+    """Attach a ``{model: {fast, reasoning, ...}}`` map to provider rows.
+
+    models.dev supplies the general capability map. Nous and OpenRouter add
+    provider-specific disable/mandatory metadata from their cached catalogs.
+    Local Ollama is probed because unsupported thinking controls are a hard
+    error there; Phantom aliases are deterministically non-reasoning because
+    their local profiles reject every thinking parameter before generation.
     """
     from hermes_cli.models import model_supports_fast_mode
 
@@ -435,8 +456,10 @@ def _apply_capabilities(rows: list[dict], *, allow_network: bool = True) -> None
 
     for row in rows:
         slug = row.get("slug") or ""
+        normalized_slug = str(slug).strip().lower()
+        read_reasoning_catalog = _reasoning_catalog_reader(normalized_slug)
         api_url = str(row.get("api_url") or "").strip()
-        explicit_ollama_slug = str(slug).strip().lower() in {
+        explicit_ollama_slug = normalized_slug in {
             "ollama",
             "ollama-launch",
             "local-ollama",
@@ -453,11 +476,26 @@ def _apply_capabilities(rows: list[dict], *, allow_network: bool = True) -> None
             and is_local_ollama_endpoint is not None
             and is_local_ollama_endpoint(ollama_url, slug)
         )
-        caps: dict[str, dict[str, bool]] = {}
+        caps: dict[str, dict[str, Any]] = {}
 
         for model in row.get("models") or []:
+            model_id = str(model or "").strip().lower()
+            is_phantom_model = (
+                normalized_slug in {"phantom", "custom:phantom"}
+                or model_id == "phantom"
+                or model_id.startswith("phantom:")
+                or model_id.startswith("phantom-unleashed")
+                or model_id.startswith("phantom-v1")
+            )
             reasoning = True
-            if get_model_capabilities is not None and slug:
+            if is_phantom_model:
+                # Phantom's local Ollama profiles are instruction-tuned, not
+                # thinking models. Sending any reasoning control makes Ollama
+                # reject the request before generation starts. Keep this
+                # deterministic so picker behavior does not depend on a live
+                # /api/show probe, aliases, or a warm model cache.
+                reasoning = False
+            elif get_model_capabilities is not None and slug:
                 try:
                     meta = get_model_capabilities(
                         slug,
@@ -469,7 +507,7 @@ def _apply_capabilities(rows: list[dict], *, allow_network: bool = True) -> None
                 except Exception:
                     reasoning = True
 
-            if is_ollama_row and allow_network:
+            if is_ollama_row and allow_network and not is_phantom_model:
                 # Unknown is treated as unsupported for Ollama. Unlike most
                 # compatible APIs, sending reasoning_effort to a non-thinking
                 # Ollama model is a hard failure rather than a harmless no-op.
@@ -485,10 +523,22 @@ def _apply_capabilities(rows: list[dict], *, allow_network: bool = True) -> None
                 except Exception:
                     reasoning = False
 
-            caps[model] = {
+            entry: dict[str, Any] = {
                 "fast": bool(model_supports_fast_mode(model)),
                 "reasoning": reasoning,
             }
+
+            if reasoning and read_reasoning_catalog is not None:
+                try:
+                    detail = read_reasoning_catalog(model)
+                except Exception:
+                    detail = None
+                if detail and not detail.get("supports_reasoning"):
+                    entry["reasoning"] = False
+                elif detail:
+                    entry["can_disable_reasoning"] = not detail.get("mandatory")
+
+            caps[model] = entry
 
         row["capabilities"] = caps
 

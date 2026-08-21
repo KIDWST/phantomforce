@@ -155,3 +155,22 @@ def test_catalog_failure_never_breaks_the_picker(monkeypatch):
     caps = rows[0]["capabilities"]["deepseek/deepseek-v4-pro"]
     assert "supported_efforts" not in caps
     assert caps["reasoning"] is True
+
+
+def test_phantom_models_never_advertise_reasoning(monkeypatch):
+    """Phantom's local profiles must not invite a request Ollama rejects."""
+    monkeypatch.setattr(models_mod, "model_supports_fast_mode", lambda model: False)
+    rows = [
+        {
+            "slug": "phantom",
+            "api_url": "http://127.0.0.1:11434/v1",
+            "models": ["phantom", "phantom-unleashed"],
+        }
+    ]
+
+    inv._apply_capabilities(rows, allow_network=False)
+
+    assert rows[0]["capabilities"] == {
+        "phantom": {"fast": False, "reasoning": False},
+        "phantom-unleashed": {"fast": False, "reasoning": False},
+    }
