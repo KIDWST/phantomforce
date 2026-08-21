@@ -4330,11 +4330,14 @@ def cached_provider_model_ids(
     *,
     force_refresh: bool = False,
     ttl_seconds: int = _PROVIDER_MODELS_CACHE_TTL,
+    no_network: bool = False,
 ) -> list[str]:
     """Disk-cached wrapper around :func:`provider_model_ids`.
 
     Hits the cache when fresh; otherwise calls the live function and
-    persists a non-empty result. Always returns a list (never None).
+    persists a non-empty result. ``no_network`` makes even an expired cache
+    authoritative and never starts a background refresh. Always returns a
+    list (never None).
     """
     requested = str(provider or "").strip().lower()
     normalized = requested if requested == "ollama" else (normalize_provider(provider) or (provider or ""))
@@ -4349,6 +4352,11 @@ def cached_provider_model_ids(
     now = time.time()
 
     allow_empty_ollama = normalized == "ollama"
+    if no_network:
+        if _cache_entry_valid(entry, fp, allow_empty=allow_empty_ollama):
+            return list(entry["models"])
+        return []
+
     if not force_refresh and _cache_entry_valid(entry, fp, allow_empty=allow_empty_ollama):
         age = now - entry["at"]
         if age < ttl_seconds:

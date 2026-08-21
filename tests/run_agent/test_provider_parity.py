@@ -303,6 +303,24 @@ class TestBuildApiKwargsChatCompletionsServiceTier:
 
 
 class TestBuildApiKwargsLocalPhantom:
+    def test_stale_reasoning_setting_never_reaches_phantom(self, monkeypatch):
+        monkeypatch.setattr("agent.ollama_runtime._probe_ollama", lambda *args, **kwargs: False)
+        agent = _make_agent(
+            monkeypatch,
+            "custom",
+            base_url="http://127.0.0.1:11434/v1",
+            model="phantom-unleashed:latest",
+        )
+        agent.reasoning_config = {"enabled": True, "effort": "medium"}
+        agent._ollama_num_ctx = 8192
+
+        kwargs = agent._build_api_kwargs([{"role": "user", "content": "Say READY."}])
+
+        assert "reasoning_effort" not in kwargs
+        assert "reasoning" not in kwargs
+        assert "think" not in kwargs.get("extra_body", {})
+        assert kwargs["extra_body"]["options"]["num_ctx"] == 8192
+
     def test_adaptive_context_replaces_static_provider_context(self, monkeypatch):
         monkeypatch.setattr("agent.ollama_runtime._probe_ollama", lambda *args, **kwargs: False)
         agent = _make_agent(
@@ -947,5 +965,4 @@ class TestReasoningEffortDefaults:
                             base_url="https://chatgpt.com/backend-api/codex")
         kwargs = agent._build_api_kwargs([{"role": "user", "content": "hi"}])
         assert kwargs["reasoning"]["effort"] == "medium"
-
 

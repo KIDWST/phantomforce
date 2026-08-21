@@ -18,6 +18,16 @@ from providers import register_provider
 from providers.base import ProviderProfile
 
 
+def _is_phantom_runtime(model: Any) -> bool:
+    model_id = str(model or "").strip().lower()
+    return (
+        model_id == "phantom"
+        or model_id.startswith("phantom:")
+        or model_id.startswith("phantom-unleashed")
+        or model_id.startswith("phantom-v1")
+    )
+
+
 class CustomProfile(ProviderProfile):
     """Custom/Ollama local provider — think=false and num_ctx support."""
 
@@ -36,6 +46,12 @@ class CustomProfile(ProviderProfile):
             options = extra_body.get("options", {})
             options["num_ctx"] = ollama_num_ctx
             extra_body["options"] = options
+
+        # Phantom's local profiles do not expose Ollama's thinking capability.
+        # A saved UI effort can outlive a model switch, so enforce this again at
+        # the wire boundary instead of relying only on picker metadata.
+        if _is_phantom_runtime(ctx.get("model")):
+            return extra_body, top_level
 
         # Reasoning / thinking control for custom OpenAI-compatible endpoints
         # (GLM-5.2 on Volcengine ARK, vLLM, Ollama, llama.cpp, …).

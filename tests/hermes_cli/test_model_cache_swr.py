@@ -57,6 +57,20 @@ class TestProviderModelsSWR:
         spawn.assert_called_once_with("openrouter")
         live.assert_not_called()  # the caller thread never hit the network
 
+    def test_no_network_serves_any_matching_cache_without_refresh(self):
+        import hermes_cli.models as mod
+
+        age = mod._PROVIDER_MODELS_STALE_SERVE_MAX + 60
+        cache = {"openrouter": self._cache_entry(["offline-model"], age_seconds=age)}
+        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
+             patch.object(mod, "_credential_fingerprint", return_value="fp"), \
+             patch.object(mod, "_spawn_swr_refresh") as spawn, \
+             patch.object(mod, "provider_model_ids") as live:
+            out = mod.cached_provider_model_ids("openrouter", no_network=True)
+        assert out == ["offline-model"]
+        spawn.assert_not_called()
+        live.assert_not_called()
+
     def test_too_old_entry_blocks_on_live_fetch(self):
         import hermes_cli.models as mod
 
