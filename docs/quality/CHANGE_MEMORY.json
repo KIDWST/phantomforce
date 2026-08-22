@@ -1977,6 +1977,46 @@
       ]
     },
     {
+      "id": "phantomplay-control-center-and-native-workspace-floor",
+      "status": "active",
+      "title": "PhantomPlay keeps every native workspace mode usable and explains AI blockers",
+      "ownerDecision": "Play, Code, and Split must remain clickable for native Unreal projects even when they have no embedded web entry. The desktop app owns a real green-and-black settings control center for connections, exact models, fallback routing, workspace behavior, runtime origin, and diagnostics. Apply stays actionable whenever it is not already running so missing files, instructions, API service, invalid keys, credits, permissions, and provider failures are explained instead of hidden behind a gray button. Provider keys are validated and stored only through the encrypted local PhantomForce vault.",
+      "requiredPatterns": [
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "PHANTOMPLAY CONTROL CENTER[\\s\\S]{0,5000}Connections[\\s\\S]{0,5000}Models & routing[\\s\\S]{0,5000}Workspace[\\s\\S]{0,5000}Runtime[\\s\\S]{0,5000}Diagnostics",
+          "description": "The desktop app keeps one app-wide settings center instead of a narrow duplicate model picker."
+        },
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "disabled: ai_busy\\(\\),[\\s\\S]{0,1600}API offline — click Apply to open connection repair",
+          "description": "Apply remains clickable when setup is incomplete and explains the exact next action."
+        },
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "Native runtime ready[\\s\\S]{0,1200}Launch native game[\\s\\S]{0,2400}Native game window[\\s\\S]{0,1200}Launch / relaunch",
+          "description": "Native projects keep usable Play and Split surfaces with explicit launch controls."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "\\/api\\/phantomplay\\/connections\\/openrouter[\\s\\S]{0,2200}saveAiProviderCredential\\([\\s\\S]{0,2200}secretReturned: false",
+          "description": "OpenRouter setup validates and stores the secret in the encrypted server vault without returning it."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "disabled: playing_entry\\(\\)\\.is_none\\(\\)",
+          "description": "A missing embedded web entry cannot disable native Play, Split, or reload controls."
+        },
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "Edit failed\\. Adjust route or retry",
+          "description": "AI failures must name the real cause instead of falling back to a generic retry message."
+        }
+      ]
+    },
+    {
       "id": "phantomplay-direct-model-control-floor",
       "status": "active",
       "title": "PhantomPlay exposes direct model control where AI edits run",
@@ -1984,12 +2024,12 @@
       "requiredPatterns": [
         {
           "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
-          "pattern": "span \\{ \"AI ROUTE\" \\}[\\s\\S]{0,2600}aria_label: \"AI model\"[\\s\\S]{0,1200}save_studio_settings\\(&ai_provider\\(\\), &model\\)",
+          "pattern": "span \\{ \"AI ROUTE\" \\}[\\s\\S]{0,2600}aria_label: \"AI model\"[\\s\\S]{0,1200}save_studio_routing\\(&ai_provider\\(\\), &model\\)",
           "description": "The AI pane presents the route and model controls together and persists the exact model selection."
         },
         {
           "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
-          "pattern": "request_ai_edit\\([\\s\\S]{0,600}provider,[\\s\\S]{0,120}model",
+          "pattern": "request_ai_edit_at\\([\\s\\S]{0,800}provider,[\\s\\S]{0,160}model",
           "description": "The active-file edit request receives the provider and model currently selected in the AI pane."
         },
         {

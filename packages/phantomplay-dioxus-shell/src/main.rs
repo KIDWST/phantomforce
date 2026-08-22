@@ -1707,6 +1707,12 @@ struct AiEditRequestBody {
     project_files: Vec<String>,
     provider: String,
     model: String,
+    #[serde(rename = "fallbackProvider")]
+    fallback_provider: String,
+    #[serde(rename = "allowFallbacks")]
+    allow_fallbacks: bool,
+    #[serde(rename = "timeoutMs")]
+    timeout_ms: u64,
 }
 
 #[derive(Deserialize, Default)]
@@ -1717,6 +1723,9 @@ struct AiEditResponseBody {
     provider: Option<String>,
     model: Option<String>,
     error: Option<String>,
+    code: Option<String>,
+    summary: Option<String>,
+    failures: Option<serde_json::Value>,
     #[serde(default)]
     changed: bool,
 }
@@ -1728,18 +1737,25 @@ struct AiEditOutput {
     changed: bool,
 }
 
-async fn request_ai_edit(body: AiEditRequestBody) -> Result<AiEditOutput, String> {
-    let client = reqwest::Client::new();
+async fn request_ai_edit_at(
+    api_origin: &str,
+    body: AiEditRequestBody,
+) -> Result<AiEditOutput, String> {
+    let request_timeout = body.timeout_ms.clamp(15_000, 240_000);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(request_timeout + 12_000))
+        .build()
+        .map_err(|error| format!("Could not prepare the PhantomForce API connection: {error}"))?;
     let resp = client
-        .post(format!(
-            "{}/api/phantomplay/ai-edit",
-            phantomplay_api_origin()
-        ))
+        .post(format!("{}/api/phantomplay/ai-edit", api_origin.trim_end_matches('/')))
         .json(&body)
         .send()
         .await
         .map_err(|e| {
-            format!("Couldn't reach the PhantomForce API on :5190 ({e}). Is it running?")
+            format!(
+                "Could not reach the PhantomForce API at {} ({e}). Open Settings → Connections, start the API, then run the connection test.",
+                api_origin.trim_end_matches('/')
+            )
         })?;
     let response_status = resp.status();
     let response_text = resp
@@ -1765,16 +1781,23 @@ async fn request_ai_edit(body: AiEditRequestBody) -> Result<AiEditOutput, String
     } else {
         let message = parsed
             .error
+            .or(parsed.summary)
             .unwrap_or_else(|| "AI edit failed for an unknown reason.".to_string());
-        Err(if response_status.as_u16() == 401 {
-            "The local PhantomPlay AI bridge rejected the desktop session. Restart the PhantomForce API and PhantomPlay, then retry.".to_string()
-        } else {
-            message
-        })
+        let code = parsed.code.unwrap_or_else(|| "unknown_error".to_string());
+        let failure_count = parsed
+            .failures
+            .as_ref()
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0);
+        Err(format!(
+            "{message} [reason: {code}; HTTP {}; attempted routes: {failure_count}]",
+            response_status.as_u16()
+        ))
     }
 }
 
-async fn check_api_health() -> bool {
+async fn check_api_health_at(api_origin: &str) -> bool {
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
         .build()
@@ -1783,7 +1806,7 @@ async fn check_api_health() -> bool {
         Err(_) => return false,
     };
     client
-        .get(format!("{}/health", phantomplay_api_origin()))
+        .get(format!("{}/health", api_origin.trim_end_matches('/')))
         .send()
         .await
         .is_ok_and(|response| response.status().is_success())
@@ -2638,21 +2661,27 @@ fn App() -> Element {
         let mut ai_busy = ai_busy;
         let mut dirty = dirty;
         spawn(async move {
-            match request_ai_edit(AiEditRequestBody {
-                game_id: game.id.clone(),
-                file_path: file_label.clone(),
-                file_content: content,
-                instruction,
-                cwd: game.path.display().to_string(),
-                engine: game.runtime.renderer.clone(),
-                project_files: files()
-                    .iter()
-                    .map(|(_, label)| label.clone())
-                    .take(160)
-                    .collect(),
-                provider: "auto".to_string(),
-                model: String::new(),
-            })
+            match request_ai_edit_at(
+                &phantomplay_api_origin(),
+                AiEditRequestBody {
+                    game_id: game.id.clone(),
+                    file_path: file_label.clone(),
+                    file_content: content,
+                    instruction,
+                    cwd: game.path.display().to_string(),
+                    engine: game.runtime.renderer.clone(),
+                    project_files: files()
+                        .iter()
+                        .map(|(_, label)| label.clone())
+                        .take(160)
+                        .collect(),
+                    provider: "auto".to_string(),
+                    model: String::new(),
+                    fallback_provider: "codex".to_string(),
+                    allow_fallbacks: true,
+                    timeout_ms: 120_000,
+                },
+            )
             .await
             {
                 Ok(result) => {

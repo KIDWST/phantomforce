@@ -1,13 +1,14 @@
 use super::studio_icons::{
-    Activity, Bot, Bug, Check, CircleAlert, CirclePlay, CodeXml, Columns2, Cpu, Eye, EyeOff,
-    FileCode, Files, FolderOpen, FolderPlus, Gauge, HardDrive, Import, Keyboard, Maximize2,
-    Minimize2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Puzzle, Radio,
-    RefreshCw, Save, Search, Settings2, Star, WandSparkles, Wifi, WifiOff,
+    Activity, Bot, Bug, Check, CircleAlert, CirclePlay, CodeXml, Columns2, Cpu, Database, Eye,
+    EyeOff, FileCode, Files, FolderOpen, FolderPlus, Gauge, HardDrive, Import, Keyboard, Maximize2,
+    Minimize2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, PlugZap,
+    Puzzle, Radio, RefreshCw, Save, Search, Settings2, ShieldCheck, SlidersHorizontal, Star,
+    WandSparkles, Wifi, WifiOff, X,
 };
 use super::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum WorkspaceView {
     Play,
     Code,
@@ -23,10 +24,28 @@ enum ToolTab {
     Settings,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum SettingsSection {
+    Connections,
+    Models,
+    Workspace,
+    Runtime,
+    Diagnostics,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 struct StudioSettings {
     ai_provider: String,
     ai_model: String,
+    fallback_provider: String,
+    allow_fallbacks: bool,
+    request_timeout_seconds: u64,
+    api_origin: String,
+    default_view: String,
+    auto_reload_after_ai: bool,
+    compact_interface: bool,
+    reduce_motion: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,11 +70,40 @@ struct AiModelsOutput {
     error: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ConnectionCheck {
+    id: String,
+    name: String,
+    configured: Option<bool>,
+    detail: String,
+}
+
+#[derive(Serialize)]
+struct DesktopConnectionRequestBody {
+    #[serde(rename = "apiKey")]
+    api_key: String,
+}
+
+#[derive(Deserialize, Default)]
+struct DesktopConnectionResponseBody {
+    ok: bool,
+    error: Option<String>,
+    detail: Option<String>,
+}
+
 impl Default for StudioSettings {
     fn default() -> Self {
         Self {
             ai_provider: "auto".to_string(),
             ai_model: String::new(),
+            fallback_provider: "codex".to_string(),
+            allow_fallbacks: true,
+            request_timeout_seconds: 120,
+            api_origin: phantomplay_api_origin(),
+            default_view: "play".to_string(),
+            auto_reload_after_ai: true,
+            compact_interface: false,
+            reduce_motion: false,
         }
     }
 }
@@ -76,6 +124,14 @@ fn normalize_studio_settings(settings: StudioSettings) -> StudioSettings {
     StudioSettings {
         ai_model: settings.ai_model.trim().to_string(),
         ai_provider,
+        fallback_provider: normalize_ai_provider(&settings.fallback_provider),
+        allow_fallbacks: settings.allow_fallbacks,
+        request_timeout_seconds: settings.request_timeout_seconds.clamp(15, 240),
+        api_origin: normalize_api_origin(&settings.api_origin),
+        default_view: normalize_default_view(&settings.default_view),
+        auto_reload_after_ai: settings.auto_reload_after_ai,
+        compact_interface: settings.compact_interface,
+        reduce_motion: settings.reduce_motion,
     }
 }
 
@@ -87,16 +143,62 @@ fn load_studio_settings() -> StudioSettings {
         .unwrap_or_default()
 }
 
-fn save_studio_settings(provider: &str, model: &str) {
-    let settings = StudioSettings {
-        ai_provider: normalize_ai_provider(provider),
-        ai_model: model.trim().to_string(),
-    };
+fn save_studio_settings(settings: &StudioSettings) {
+    let settings = normalize_studio_settings(settings.clone());
     let root = phantomplay_data_root();
     let _ = fs::create_dir_all(&root);
     if let Ok(bytes) = serde_json::to_vec_pretty(&settings) {
         let _ = fs::write(root.join("studio-settings.json"), bytes);
     }
+}
+
+fn save_studio_routing(provider: &str, model: &str) {
+    let mut settings = load_studio_settings();
+    settings.ai_provider = normalize_ai_provider(provider);
+    settings.ai_model = model.trim().to_string();
+    save_studio_settings(&settings);
+}
+
+fn normalize_api_origin(value: &str) -> String {
+    let trimmed = value.trim().trim_end_matches('/');
+    if trimmed.starts_with("http://127.0.0.1:") || trimmed.starts_with("http://localhost:") {
+        trimmed.to_string()
+    } else {
+        phantomplay_api_origin()
+    }
+}
+
+fn normalize_default_view(value: &str) -> String {
+    match value {
+        "code" | "split" => value.to_string(),
+        _ => "play".to_string(),
+    }
+}
+
+fn workspace_view_from_setting(value: &str) -> WorkspaceView {
+    match normalize_default_view(value).as_str() {
+        "code" => WorkspaceView::Code,
+        "split" => WorkspaceView::Split,
+        _ => WorkspaceView::Play,
+    }
+}
+
+fn baseline_connection_checks() -> Vec<ConnectionCheck> {
+    [
+        ("api", "PhantomForce API"),
+        ("codex", "Codex desktop"),
+        ("claude", "Claude desktop"),
+        ("openrouter", "OpenRouter"),
+        ("local", "Local Ollama"),
+    ]
+    .into_iter()
+    .map(|(id, name)| ConnectionCheck {
+        id: id.to_string(),
+        name: name.to_string(),
+        configured: None,
+        detail: "Not checked yet".to_string(),
+    })
+    .collect()
 }
 
 fn model_option(id: &str, name: &str) -> AiModelOption {
@@ -199,7 +301,7 @@ fn ai_route_status_text(
     format!("Selected model: {}", ai_model_label(options, model))
 }
 
-async fn request_ai_models(provider: String) -> AiModelsOutput {
+async fn request_ai_models(provider: String, api_origin: String) -> AiModelsOutput {
     let fallback = fallback_ai_model_options(&provider);
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(6))
@@ -218,7 +320,7 @@ async fn request_ai_models(provider: String) -> AiModelsOutput {
     let response = client
         .get(format!(
             "{}/api/phantomplay/ai-models?provider={provider}",
-            phantomplay_api_origin()
+            normalize_api_origin(&api_origin)
         ))
         .send()
         .await;
@@ -249,6 +351,118 @@ async fn request_ai_models(provider: String) -> AiModelsOutput {
         dynamic: parsed.dynamic.unwrap_or(false),
         error: parsed.error,
     }
+}
+
+async fn save_openrouter_connection(api_origin: String, api_key: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let response = client
+        .put(format!(
+            "{}/api/phantomplay/connections/openrouter",
+            normalize_api_origin(&api_origin)
+        ))
+        .json(&DesktopConnectionRequestBody { api_key })
+        .send()
+        .await
+        .map_err(|error| format!("Could not reach the local connection vault: {error}"))?;
+    let status = response.status();
+    let parsed = response
+        .json::<DesktopConnectionResponseBody>()
+        .await
+        .map_err(|error| format!("The connection vault returned unreadable data: {error}"))?;
+    if status.is_success() && parsed.ok {
+        Ok(parsed.detail.unwrap_or_else(|| {
+            "OpenRouter connected and stored in the encrypted vault.".to_string()
+        }))
+    } else {
+        Err(parsed
+            .error
+            .unwrap_or_else(|| format!("OpenRouter connection failed (HTTP {}).", status.as_u16())))
+    }
+}
+
+async fn delete_openrouter_connection(api_origin: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let response = client
+        .delete(format!(
+            "{}/api/phantomplay/connections/openrouter",
+            normalize_api_origin(&api_origin)
+        ))
+        .send()
+        .await
+        .map_err(|error| format!("Could not reach the local connection vault: {error}"))?;
+    let status = response.status();
+    let parsed = response
+        .json::<DesktopConnectionResponseBody>()
+        .await
+        .map_err(|error| format!("The connection vault returned unreadable data: {error}"))?;
+    if status.is_success() && parsed.ok {
+        Ok(parsed
+            .detail
+            .unwrap_or_else(|| "Stored OpenRouter connection removed.".to_string()))
+    } else {
+        Err(parsed
+            .error
+            .unwrap_or_else(|| format!("OpenRouter disconnect failed (HTTP {}).", status.as_u16())))
+    }
+}
+
+async fn run_connection_checks(api_origin: String) -> Vec<ConnectionCheck> {
+    let mut checks = Vec::new();
+    let api_ready = check_api_health_at(&api_origin).await;
+    checks.push(ConnectionCheck {
+        id: "api".to_string(),
+        name: "PhantomForce API".to_string(),
+        configured: Some(api_ready),
+        detail: if api_ready {
+            format!(
+                "Connected securely at {}",
+                normalize_api_origin(&api_origin)
+            )
+        } else {
+            format!(
+                "Offline at {}. Start or repair the PhantomForce API.",
+                normalize_api_origin(&api_origin)
+            )
+        },
+    });
+    for (id, name) in [
+        ("codex", "Codex desktop"),
+        ("claude", "Claude desktop"),
+        ("openrouter", "OpenRouter"),
+        ("local", "Local Ollama"),
+    ] {
+        if !api_ready {
+            checks.push(ConnectionCheck {
+                id: id.to_string(),
+                name: name.to_string(),
+                configured: Some(false),
+                detail: "Cannot test until the PhantomForce API is online.".to_string(),
+            });
+            continue;
+        }
+        let output = request_ai_models(id.to_string(), api_origin.clone()).await;
+        checks.push(ConnectionCheck {
+            id: id.to_string(),
+            name: name.to_string(),
+            configured: Some(output.configured),
+            detail: output.error.unwrap_or_else(|| {
+                if output.dynamic {
+                    format!("Connected — {} live models available.", output.models.len())
+                } else if output.configured {
+                    "Route registered and ready for desktop edits.".to_string()
+                } else {
+                    "Not configured.".to_string()
+                }
+            }),
+        });
+    }
+    checks
 }
 
 fn preferred_file_index(files: &[(PathBuf, String)]) -> Option<usize> {
@@ -598,6 +812,10 @@ pub(crate) fn Studio() -> Element {
     let initial_settings = load_studio_settings();
     let initial_ai_provider = normalize_ai_provider(&initial_settings.ai_provider);
     let initial_ai_model = initial_settings.ai_model.trim().to_string();
+    let initial_workspace_view = workspace_view_from_setting(&initial_settings.default_view);
+    let initial_api_origin = normalize_api_origin(&initial_settings.api_origin);
+    let initial_fallback_provider = normalize_ai_provider(&initial_settings.fallback_provider);
+    let initial_request_timeout = initial_settings.request_timeout_seconds.clamp(15, 240);
     let mut games = use_signal(list_games);
     let mut selected_game = use_signal(|| None::<usize>);
     let mut files = use_signal(Vec::<(PathBuf, String)>::new);
@@ -606,8 +824,10 @@ pub(crate) fn Studio() -> Element {
     let mut dirty = use_signal(|| false);
     let mut playing_entry = use_signal(|| None::<String>);
     let mut reload_token = use_signal(|| 0_u64);
-    let mut workspace_view = use_signal(|| WorkspaceView::Play);
+    let mut workspace_view = use_signal(move || initial_workspace_view);
     let mut tool_tab = use_signal(|| ToolTab::Ai);
+    let mut settings_open = use_signal(|| false);
+    let mut settings_section = use_signal(|| SettingsSection::Connections);
     let mut focus_mode = use_signal(|| false);
     let mut project_rail_open = use_signal(|| true);
     let mut tool_dock_open = use_signal(|| true);
@@ -636,6 +856,20 @@ pub(crate) fn Studio() -> Element {
     let mut ai_models_dynamic = use_signal(|| false);
     let mut ai_models_error = use_signal(|| None::<String>);
     let mut api_online = use_signal(|| None::<bool>);
+    let mut api_origin = use_signal(move || initial_api_origin.clone());
+    let mut fallback_provider = use_signal(move || initial_fallback_provider.clone());
+    let mut allow_fallbacks = use_signal(move || initial_settings.allow_fallbacks);
+    let mut request_timeout_seconds = use_signal(move || initial_request_timeout);
+    let mut default_view = use_signal(move || initial_settings.default_view.clone());
+    let mut auto_reload_after_ai = use_signal(move || initial_settings.auto_reload_after_ai);
+    let mut compact_interface = use_signal(move || initial_settings.compact_interface);
+    let mut reduce_motion = use_signal(move || initial_settings.reduce_motion);
+    let mut connection_checks = use_signal(baseline_connection_checks);
+    let mut connection_checking = use_signal(|| false);
+    let mut openrouter_key = use_signal(String::new);
+    let mut settings_feedback = use_signal(|| {
+        "Settings are stored locally. Provider keys are stored only in the encrypted PhantomForce vault.".to_string()
+    });
 
     let mut mods_game_id = use_signal(String::new);
     let mut mods_list = use_signal(Vec::<ModEntry>::new);
@@ -644,13 +878,15 @@ pub(crate) fn Studio() -> Element {
     let mut new_mod_desc = use_signal(String::new);
 
     use_effect(move || {
+        let origin = api_origin();
         spawn(async move {
-            api_online.set(Some(check_api_health().await));
+            api_online.set(Some(check_api_health_at(&origin).await));
         });
     });
 
     use_effect(move || {
         let provider = ai_provider();
+        let origin = api_origin();
         ai_model_options.set(fallback_ai_model_options(&provider));
         ai_models_loading.set(true);
         ai_models_configured.set(None);
@@ -658,7 +894,7 @@ pub(crate) fn Studio() -> Element {
         ai_models_error.set(None);
         let requested_provider = provider.clone();
         spawn(async move {
-            let output = request_ai_models(provider).await;
+            let output = request_ai_models(provider, origin).await;
             if ai_provider() != requested_provider {
                 return;
             }
@@ -877,6 +1113,14 @@ pub(crate) fn Studio() -> Element {
     };
 
     let ask_ai = move |_| {
+        if api_online() == Some(false) {
+            status.set("Phantom AI cannot apply changes because the local PhantomForce API is offline. Opened Settings → Connections for repair.".to_string());
+            ai_activity.set("Blocked: local API offline. Run the connection test.".to_string());
+            settings_feedback.set("The local API is offline, so no AI route can receive this edit. Start or repair the API, then run the full connection test.".to_string());
+            settings_section.set(SettingsSection::Connections);
+            settings_open.set(true);
+            return;
+        }
         let Some(game) = current_game(games, selected_game) else {
             status.set("Choose a project before asking Phantom AI.".to_string());
             ai_activity.set("Select a project first.".to_string());
@@ -910,6 +1154,11 @@ pub(crate) fn Studio() -> Element {
         let disk_content_before = fs::read_to_string(&path).ok();
         let provider = ai_provider();
         let model = ai_model();
+        let fallback = fallback_provider();
+        let fallbacks_enabled = allow_fallbacks();
+        let timeout_ms = request_timeout_seconds().clamp(15, 240) * 1_000;
+        let origin = api_origin();
+        let reload_after_edit = auto_reload_after_ai();
         ai_busy.set(true);
         ai_activity.set(format!("Reviewing {file_label}..."));
         status.set(format!("Phantom AI is reviewing {file_label}."));
@@ -919,18 +1168,25 @@ pub(crate) fn Studio() -> Element {
         let mut ai_busy = ai_busy;
         let mut ai_activity = ai_activity;
         let mut reload_token = reload_token;
+        let mut settings_feedback = settings_feedback;
         spawn(async move {
-            match request_ai_edit(AiEditRequestBody {
-                game_id: game.id,
-                file_path: file_label.clone(),
-                file_content: content.clone(),
-                instruction,
-                cwd,
-                engine,
-                project_files,
-                provider,
-                model,
-            })
+            match request_ai_edit_at(
+                &origin,
+                AiEditRequestBody {
+                    game_id: game.id,
+                    file_path: file_label.clone(),
+                    file_content: content.clone(),
+                    instruction,
+                    cwd,
+                    engine,
+                    project_files,
+                    provider,
+                    model,
+                    fallback_provider: fallback,
+                    allow_fallbacks: fallbacks_enabled,
+                    timeout_ms,
+                },
+            )
             .await
             {
                 Ok(result) if !result.changed || result.new_content == content => {
@@ -960,7 +1216,9 @@ pub(crate) fn Studio() -> Element {
                         Ok(summary) => {
                             editor_content.set(result.new_content);
                             dirty.set(false);
-                            reload_token.set(reload_token().wrapping_add(1));
+                            if reload_after_edit {
+                                reload_token.set(reload_token().wrapping_add(1));
+                            }
                             let runtime_receipt = if native_runtime {
                                 ai_activity
                                     .set("Saved. Native rebuild or relaunch is ready.".to_string());
@@ -986,6 +1244,7 @@ pub(crate) fn Studio() -> Element {
                 }
                 Err(error) => {
                     ai_activity.set(ai_failure_activity(&error));
+                    settings_feedback.set(format!("Last AI failure: {error}"));
                     status.set(format!("Phantom AI could not edit {file_label}: {error}"))
                 }
             }
@@ -1039,7 +1298,7 @@ pub(crate) fn Studio() -> Element {
         })
         .count();
     let shell_class = format!(
-        "studio-shell{}{}{}",
+        "studio-shell{}{}{}{}{}",
         if focus_mode() { " focus-mode" } else { "" },
         if project_rail_open() {
             ""
@@ -1050,7 +1309,17 @@ pub(crate) fn Studio() -> Element {
             ""
         } else {
             " tool-dock-collapsed"
-        }
+        },
+        if compact_interface() {
+            " compact-interface"
+        } else {
+            ""
+        },
+        if reduce_motion() {
+            " reduce-motion"
+        } else {
+            ""
+        },
     );
 
     rsx! {
@@ -1085,21 +1354,41 @@ pub(crate) fn Studio() -> Element {
                 nav { class: "view-switcher", aria_label: "Workspace view",
                     button {
                         class: if workspace_view() == WorkspaceView::Play { "is-active" } else { "" },
-                        disabled: playing_entry().is_none(),
-                        onclick: move |_| workspace_view.set(WorkspaceView::Play),
+                        title: "Play the selected project",
+                        onclick: move |_| {
+                            workspace_view.set(WorkspaceView::Play);
+                            if let Some(index) = selected_game() {
+                                if games().get(index).is_some_and(|game| game.runtime.native) {
+                                    launch_game(index);
+                                }
+                            } else {
+                                status.set("Choose a project to play.".to_string());
+                            }
+                        },
                         CirclePlay { size: 15 }
                         span { "Play" }
                     }
                     button {
                         class: if workspace_view() == WorkspaceView::Code { "is-active" } else { "" },
-                        onclick: move |_| workspace_view.set(WorkspaceView::Code),
+                        title: "Open the source editor",
+                        onclick: move |_| {
+                            workspace_view.set(WorkspaceView::Code);
+                            if selected_game().is_none() {
+                                status.set("Choose a project to open its source files.".to_string());
+                            }
+                        },
                         CodeXml { size: 15 }
                         span { "Code" }
                     }
                     button {
                         class: if workspace_view() == WorkspaceView::Split { "is-active" } else { "" },
-                        disabled: playing_entry().is_none(),
-                        onclick: move |_| workspace_view.set(WorkspaceView::Split),
+                        title: "Open runtime and source side by side",
+                        onclick: move |_| {
+                            workspace_view.set(WorkspaceView::Split);
+                            if selected_game().is_none() {
+                                status.set("Choose a project to open split view.".to_string());
+                            }
+                        },
                         Columns2 { size: 15 }
                         span { "Split" }
                     }
@@ -1127,14 +1416,31 @@ pub(crate) fn Studio() -> Element {
                     }
                     button {
                         class: "icon-button",
-                        title: "Reload game",
-                        aria_label: "Reload game",
+                        title: if project.as_ref().is_some_and(|game| game.runtime.native) { "Relaunch native game" } else { "Reload embedded game" },
+                        aria_label: if project.as_ref().is_some_and(|game| game.runtime.native) { "Relaunch native game" } else { "Reload embedded game" },
                         onclick: move |_| {
-                            reload_token.set(reload_token().wrapping_add(1));
-                            status.set("Game viewport reloaded.".to_string());
+                            if let Some(index) = selected_game() {
+                                if games().get(index).is_some_and(|game| game.runtime.native) {
+                                    launch_game(index);
+                                } else {
+                                    reload_token.set(reload_token().wrapping_add(1));
+                                    status.set("Game viewport reloaded.".to_string());
+                                }
+                            } else {
+                                status.set("Choose a project before reloading.".to_string());
+                            }
                         },
-                        disabled: playing_entry().is_none(),
                         RefreshCw { size: 16 }
+                    }
+                    button {
+                        class: "icon-button settings-launcher",
+                        title: "Open PhantomPlay Control Center",
+                        aria_label: "Open PhantomPlay Control Center",
+                        onclick: move |_| {
+                            settings_section.set(SettingsSection::Connections);
+                            settings_open.set(true);
+                        },
+                        Settings2 { size: 16 }
                     }
                     button {
                         class: if focus_mode() { "icon-button is-active" } else { "icon-button" },
@@ -1484,6 +1790,22 @@ pub(crate) fn Studio() -> Element {
                                 Player {
                                     entry: format!("{entry}?shell_reload={}", reload_token())
                                 }
+                            } else if project.as_ref().is_some_and(|game| game.runtime.native) {
+                                div { class: "viewport-empty native-runtime-ready",
+                                    CirclePlay { size: 34 }
+                                    strong { "Native runtime ready" }
+                                    span { "This Unreal project plays in its own high-performance window. Play, Code, and Split stay available here." }
+                                    button {
+                                        class: "native-launch-button",
+                                        onclick: move |_| {
+                                            if let Some(index) = selected_game() {
+                                                launch_game(index);
+                                            }
+                                        },
+                                        Play { size: 15 }
+                                        span { "Launch native game" }
+                                    }
+                                }
                             } else {
                                 div { class: "viewport-empty",
                                     CirclePlay { size: 30 }
@@ -1520,6 +1842,28 @@ pub(crate) fn Studio() -> Element {
                                 if let Some(entry) = playing_entry() {
                                     Player {
                                         entry: format!("{entry}?shell_reload={}", reload_token())
+                                    }
+                                } else if project.as_ref().is_some_and(|game| game.runtime.native) {
+                                    div { class: "viewport-empty native-runtime-ready is-split",
+                                        CirclePlay { size: 28 }
+                                        strong { "Native game window" }
+                                        span { "Edit beside the runtime, then relaunch to load compiled changes." }
+                                        button {
+                                            class: "native-launch-button",
+                                            onclick: move |_| {
+                                                if let Some(index) = selected_game() {
+                                                    launch_game(index);
+                                                }
+                                            },
+                                            Play { size: 14 }
+                                            span { "Launch / relaunch" }
+                                        }
+                                    }
+                                } else {
+                                    div { class: "viewport-empty is-split",
+                                        CirclePlay { size: 28 }
+                                        strong { "No preview selected" }
+                                        span { "Choose a project to use split view." }
                                     }
                                 }
                             }
@@ -1578,10 +1922,14 @@ pub(crate) fn Studio() -> Element {
                             Radio { size: 15 }
                             span { "Room" }
                         }
-                        button {
-                            class: if tool_tab() == ToolTab::Settings { "is-active" } else { "" },
-                            title: "Settings",
-                            onclick: move |_| tool_tab.set(ToolTab::Settings),
+                            button {
+                                class: if tool_tab() == ToolTab::Settings { "is-active" } else { "" },
+                                title: "Settings",
+                                onclick: move |_| {
+                                    tool_tab.set(ToolTab::Settings);
+                                    settings_section.set(SettingsSection::Connections);
+                                    settings_open.set(true);
+                                },
                             Settings2 { size: 15 }
                             span { "Settings" }
                         }
@@ -1635,7 +1983,7 @@ pub(crate) fn Studio() -> Element {
                                         let model = default_ai_model_for_provider(&provider);
                                         ai_provider.set(provider.clone());
                                         ai_model.set(model.clone());
-                                        save_studio_settings(&provider, &model);
+                                        save_studio_routing(&provider, &model);
                                     },
                                     option { value: "auto", "Auto — best available" }
                                     option { value: "codex", "Codex" }
@@ -1652,7 +2000,7 @@ pub(crate) fn Studio() -> Element {
                                     onchange: move |event| {
                                         let model = event.value();
                                         ai_model.set(model.clone());
-                                        save_studio_settings(&ai_provider(), &model);
+                                        save_studio_routing(&ai_provider(), &model);
                                     },
                                     for option in ai_model_dropdown_options(ai_model_options(), &ai_model()) {
                                         option { value: "{option.id}", "{option.name}" }
@@ -1725,14 +2073,32 @@ pub(crate) fn Studio() -> Element {
                         }
                         button {
                             class: "ai-apply",
-                            disabled: ai_busy()
-                                || selected_file().is_none()
-                                || ai_instruction().trim().is_empty()
-                                || api_online() == Some(false),
+                            disabled: ai_busy(),
                             onclick: ask_ai,
                             WandSparkles { size: 15 }
                             span {
                                 if ai_busy() { "Applying to game..." } else { "Apply to game" }
+                            }
+                        }
+                        div {
+                            class: if api_online() == Some(false)
+                                || selected_file().is_none()
+                                || ai_instruction().trim().is_empty() {
+                                "ai-readiness needs-action"
+                            } else {
+                                "ai-readiness is-ready"
+                            },
+                            span { class: "state-dot" }
+                            small {
+                                {if api_online() == Some(false) {
+                                    "API offline — click Apply to open connection repair."
+                                } else if selected_file().is_none() {
+                                    "Choose a source file. Apply will explain anything still missing."
+                                } else if ai_instruction().trim().is_empty() {
+                                    "Enter an instruction or choose a quick directive."
+                                } else {
+                                    "Ready — the edit will be validated, saved with undo history, and reloaded."
+                                }}
                             }
                         }
                         div { class: "target-path",
@@ -1971,8 +2337,9 @@ pub(crate) fn Studio() -> Element {
                                 title: "Reconnect services",
                                 onclick: move |_| {
                                     api_online.set(None);
+                                    let origin = api_origin();
                                     spawn(async move {
-                                        api_online.set(Some(check_api_health().await));
+                                        api_online.set(Some(check_api_health_at(&origin).await));
                                     });
                                 },
                                 RefreshCw { size: 13 }
@@ -2021,7 +2388,7 @@ pub(crate) fn Studio() -> Element {
                                     let model = default_ai_model_for_provider(&provider);
                                     ai_provider.set(provider.clone());
                                     ai_model.set(model.clone());
-                                    save_studio_settings(&provider, &model);
+                                    save_studio_routing(&provider, &model);
                                 },
                                 option { value: "auto", "Auto — best available" }
                                 option { value: "codex", "Codex" }
@@ -2037,7 +2404,7 @@ pub(crate) fn Studio() -> Element {
                                 onchange: move |event| {
                                     let model = event.value();
                                     ai_model.set(model.clone());
-                                    save_studio_settings(&ai_provider(), &model);
+                                    save_studio_routing(&ai_provider(), &model);
                                 },
                                 for option in ai_model_dropdown_options(ai_model_options(), &ai_model()) {
                                     option { value: "{option.id}", "{option.name}" }
@@ -2075,6 +2442,454 @@ pub(crate) fn Studio() -> Element {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            if settings_open() {
+                div {
+                    class: "settings-overlay",
+                    role: "dialog",
+                    aria_modal: "true",
+                    aria_label: "PhantomPlay Control Center",
+                    onclick: move |_| settings_open.set(false),
+                    section {
+                        class: "settings-center",
+                        onclick: move |event| event.stop_propagation(),
+                        header { class: "settings-center-header",
+                            div { class: "settings-center-title",
+                                div { class: "settings-center-mark",
+                                    SlidersHorizontal { size: 22 }
+                                }
+                                div {
+                                    span { "PHANTOMPLAY CONTROL CENTER" }
+                                    strong { "Everything that powers your studio" }
+                                    p { "Connections, models, workspace behavior, runtime, and diagnostics in one place." }
+                                }
+                            }
+                            button {
+                                class: "settings-close",
+                                title: "Close settings",
+                                aria_label: "Close settings",
+                                onclick: move |_| settings_open.set(false),
+                                X { size: 19 }
+                            }
+                        }
+                        div { class: "settings-center-body",
+                            nav { class: "settings-nav", aria_label: "Settings sections",
+                                button {
+                                    class: if settings_section() == SettingsSection::Connections { "is-active" } else { "" },
+                                    onclick: move |_| settings_section.set(SettingsSection::Connections),
+                                    PlugZap { size: 16 }
+                                    div { strong { "Connections" } span { "API and providers" } }
+                                }
+                                button {
+                                    class: if settings_section() == SettingsSection::Models { "is-active" } else { "" },
+                                    onclick: move |_| settings_section.set(SettingsSection::Models),
+                                    Bot { size: 16 }
+                                    div { strong { "Models & routing" } span { "Primary and recovery" } }
+                                }
+                                button {
+                                    class: if settings_section() == SettingsSection::Workspace { "is-active" } else { "" },
+                                    onclick: move |_| settings_section.set(SettingsSection::Workspace),
+                                    Columns2 { size: 16 }
+                                    div { strong { "Workspace" } span { "Editor behavior" } }
+                                }
+                                button {
+                                    class: if settings_section() == SettingsSection::Runtime { "is-active" } else { "" },
+                                    onclick: move |_| settings_section.set(SettingsSection::Runtime),
+                                    Cpu { size: 16 }
+                                    div { strong { "Runtime" } span { "Local services" } }
+                                }
+                                button {
+                                    class: if settings_section() == SettingsSection::Diagnostics { "is-active" } else { "" },
+                                    onclick: move |_| settings_section.set(SettingsSection::Diagnostics),
+                                    Activity { size: 16 }
+                                    div { strong { "Diagnostics" } span { "Exact system state" } }
+                                }
+                                div { class: "settings-security-note",
+                                    ShieldCheck { size: 16 }
+                                    div {
+                                        strong { "Secrets stay protected" }
+                                        span { "Provider keys go to the encrypted local vault, never the desktop settings file." }
+                                    }
+                                }
+                            }
+                            main { class: "settings-content",
+                                if settings_section() == SettingsSection::Connections {
+                                    div { class: "settings-section-heading",
+                                        div {
+                                            span { "CONNECTIONS" }
+                                            strong { "Know what works before you press Apply" }
+                                            p { "Test every edit route, connect OpenRouter securely, and see exact failures here." }
+                                        }
+                                        button {
+                                            class: "settings-primary-button",
+                                            disabled: connection_checking(),
+                                            onclick: move |_| {
+                                                connection_checking.set(true);
+                                                settings_feedback.set("Testing the local API and every AI route...".to_string());
+                                                let origin = api_origin();
+                                                spawn(async move {
+                                                    let checks = run_connection_checks(origin).await;
+                                                    let ready = checks.first().and_then(|check| check.configured).unwrap_or(false);
+                                                    api_online.set(Some(ready));
+                                                    connection_checks.set(checks);
+                                                    connection_checking.set(false);
+                                                    settings_feedback.set(if ready {
+                                                        "Connection test complete. Every result below is current.".to_string()
+                                                    } else {
+                                                        "Connection test complete: the local API must be repaired before AI edits can run.".to_string()
+                                                    });
+                                                });
+                                            },
+                                            RefreshCw { size: 14, class: if connection_checking() { "is-spinning" } else { "" } }
+                                            span { if connection_checking() { "Testing..." } else { "Test all connections" } }
+                                        }
+                                    }
+                                    div { class: "connection-grid",
+                                        for check in connection_checks().iter().cloned() {
+                                            article {
+                                                class: match check.configured {
+                                                    Some(true) => "connection-card is-ready",
+                                                    Some(false) => "connection-card has-error",
+                                                    None => "connection-card",
+                                                },
+                                                div { class: "connection-card-top",
+                                                    span { class: "connection-icon",
+                                                        if check.id == "api" { Database { size: 16 } }
+                                                        else if check.id == "openrouter" { Wifi { size: 16 } }
+                                                        else { Bot { size: 16 } }
+                                                    }
+                                                    div {
+                                                        strong { "{check.name}" }
+                                                        small {
+                                                            {match check.configured {
+                                                                Some(true) => "READY",
+                                                                Some(false) => "ACTION NEEDED",
+                                                                None => "NOT TESTED",
+                                                            }}
+                                                        }
+                                                    }
+                                                    span { class: "state-dot" }
+                                                }
+                                                p { "{check.detail}" }
+                                            }
+                                        }
+                                    }
+                                    article { class: "settings-panel openrouter-panel",
+                                        div { class: "settings-panel-heading",
+                                            div {
+                                                span { "SECURE PROVIDER" }
+                                                strong { "OpenRouter connection" }
+                                            }
+                                            ShieldCheck { size: 19 }
+                                        }
+                                        p { "Paste a key once. PhantomForce validates it, encrypts it at rest, and never returns it to the desktop." }
+                                        div { class: "secret-connect-row",
+                                            input {
+                                                r#type: "password",
+                                                aria_label: "OpenRouter API key",
+                                                placeholder: "sk-or-v1-...",
+                                                value: "{openrouter_key}",
+                                                oninput: move |event| openrouter_key.set(event.value()),
+                                            }
+                                            button {
+                                                class: "settings-primary-button",
+                                                disabled: connection_checking(),
+                                                onclick: move |_| {
+                                                    let key = openrouter_key().trim().to_string();
+                                                    if key.is_empty() {
+                                                        settings_feedback.set("Enter an OpenRouter key before connecting.".to_string());
+                                                        return;
+                                                    }
+                                                    connection_checking.set(true);
+                                                    settings_feedback.set("Validating OpenRouter and saving it to the encrypted vault...".to_string());
+                                                    let origin = api_origin();
+                                                    spawn(async move {
+                                                        match save_openrouter_connection(origin.clone(), key).await {
+                                                            Ok(detail) => {
+                                                                openrouter_key.set(String::new());
+                                                                settings_feedback.set(detail);
+                                                                let checks = run_connection_checks(origin).await;
+                                                                connection_checks.set(checks);
+                                                            }
+                                                            Err(error) => settings_feedback.set(error),
+                                                        }
+                                                        connection_checking.set(false);
+                                                    });
+                                                },
+                                                PlugZap { size: 14 }
+                                                span { "Connect / update" }
+                                            }
+                                            button {
+                                                class: "settings-secondary-button",
+                                                disabled: connection_checking(),
+                                                onclick: move |_| {
+                                                    connection_checking.set(true);
+                                                    let origin = api_origin();
+                                                    spawn(async move {
+                                                        match delete_openrouter_connection(origin.clone()).await {
+                                                            Ok(detail) => settings_feedback.set(detail),
+                                                            Err(error) => settings_feedback.set(error),
+                                                        }
+                                                        connection_checks.set(run_connection_checks(origin).await);
+                                                        connection_checking.set(false);
+                                                    });
+                                                },
+                                                span { "Disconnect" }
+                                            }
+                                        }
+                                    }
+                                } else if settings_section() == SettingsSection::Models {
+                                    div { class: "settings-section-heading",
+                                        div {
+                                            span { "MODELS & ROUTING" }
+                                            strong { "You choose the brain—and the recovery plan" }
+                                            p { "The selected route runs first. Fallback behavior is explicit and saved for every project." }
+                                        }
+                                    }
+                                    div { class: "settings-form-grid",
+                                        label { class: "settings-control",
+                                            span { "PRIMARY ROUTE" }
+                                            select {
+                                                value: "{ai_provider}",
+                                                onchange: move |event| {
+                                                    let provider = normalize_ai_provider(&event.value());
+                                                    let model = default_ai_model_for_provider(&provider);
+                                                    ai_provider.set(provider.clone());
+                                                    ai_model.set(model.clone());
+                                                    save_studio_routing(&provider, &model);
+                                                },
+                                                option { value: "auto", "Auto — best available" }
+                                                option { value: "codex", "Codex desktop" }
+                                                option { value: "claude", "Claude desktop" }
+                                                option { value: "openrouter", "OpenRouter" }
+                                                option { value: "local", "Local Ollama" }
+                                            }
+                                            small { "The first route PhantomPlay will attempt." }
+                                        }
+                                        label { class: "settings-control",
+                                            span { "EXACT MODEL" }
+                                            select {
+                                                value: "{ai_model}",
+                                                onchange: move |event| {
+                                                    let model = event.value();
+                                                    ai_model.set(model.clone());
+                                                    save_studio_routing(&ai_provider(), &model);
+                                                },
+                                                for option in ai_model_dropdown_options(ai_model_options(), &ai_model()) {
+                                                    option { value: "{option.id}", "{option.name}" }
+                                                }
+                                            }
+                                            small { "Loaded from the live catalog when the provider supports it." }
+                                        }
+                                        label { class: "settings-control",
+                                            span { "FIRST FALLBACK" }
+                                            select {
+                                                value: "{fallback_provider}",
+                                                onchange: move |event| {
+                                                    let value = normalize_ai_provider(&event.value());
+                                                    fallback_provider.set(value.clone());
+                                                    let mut settings = load_studio_settings();
+                                                    settings.fallback_provider = value;
+                                                    save_studio_settings(&settings);
+                                                },
+                                                option { value: "codex", "Codex desktop" }
+                                                option { value: "claude", "Claude desktop" }
+                                                option { value: "openrouter", "OpenRouter" }
+                                                option { value: "local", "Local Ollama" }
+                                            }
+                                            small { "Tried next when automatic recovery is enabled." }
+                                        }
+                                        label { class: "settings-control",
+                                            span { "EDIT TIMEOUT" }
+                                            select {
+                                                value: "{request_timeout_seconds}",
+                                                onchange: move |event| {
+                                                    let value = event.value().parse::<u64>().unwrap_or(120).clamp(15, 240);
+                                                    request_timeout_seconds.set(value);
+                                                    let mut settings = load_studio_settings();
+                                                    settings.request_timeout_seconds = value;
+                                                    save_studio_settings(&settings);
+                                                },
+                                                option { value: "30", "30 seconds" }
+                                                option { value: "60", "60 seconds" }
+                                                option { value: "120", "2 minutes" }
+                                                option { value: "180", "3 minutes" }
+                                                option { value: "240", "4 minutes" }
+                                            }
+                                            small { "Long enough for complete-file edits, never infinite." }
+                                        }
+                                    }
+                                    label { class: "settings-toggle-card",
+                                        div {
+                                            strong { "Automatic route recovery" }
+                                            span { "If the selected route is unavailable, try the configured fallback and then other desktop routes." }
+                                        }
+                                        input {
+                                            r#type: "checkbox",
+                                            checked: allow_fallbacks(),
+                                            onchange: move |_| {
+                                                let value = !allow_fallbacks();
+                                                allow_fallbacks.set(value);
+                                                let mut settings = load_studio_settings();
+                                                settings.allow_fallbacks = value;
+                                                save_studio_settings(&settings);
+                                            }
+                                        }
+                                    }
+                                    div { class: "settings-live-summary",
+                                        Activity { size: 15 }
+                                        div {
+                                            strong { "{ai_route_status_text(&ai_provider(), &ai_model(), &ai_model_options(), ai_models_configured(), ai_models_loading(), &ai_models_error())}" }
+                                            small { "Every failed Apply reports the exact provider reason, HTTP status, and number of attempted routes." }
+                                        }
+                                    }
+                                } else if settings_section() == SettingsSection::Workspace {
+                                    div { class: "settings-section-heading",
+                                        div {
+                                            span { "WORKSPACE" }
+                                            strong { "Make the studio behave your way" }
+                                            p { "These choices apply across every PhantomPlay project." }
+                                        }
+                                    }
+                                    label { class: "settings-control full-width",
+                                        span { "DEFAULT VIEW" }
+                                        select {
+                                            value: "{default_view}",
+                                            onchange: move |event| {
+                                                let value = normalize_default_view(&event.value());
+                                                default_view.set(value.clone());
+                                                let mut settings = load_studio_settings();
+                                                settings.default_view = value;
+                                                save_studio_settings(&settings);
+                                            },
+                                            option { value: "play", "Play" }
+                                            option { value: "code", "Code" }
+                                            option { value: "split", "Split" }
+                                        }
+                                    }
+                                    for (label, description, enabled, setting_id) in [
+                                        ("Reload after AI edits", "Refresh embedded previews automatically after a validated save.", auto_reload_after_ai(), "reload"),
+                                        ("Compact interface", "Fit more projects and controls on smaller screens.", compact_interface(), "compact"),
+                                        ("Reduce motion", "Disable decorative transitions and animated status effects.", reduce_motion(), "motion"),
+                                    ] {
+                                        label { class: "settings-toggle-card",
+                                            div { strong { "{label}" } span { "{description}" } }
+                                            input {
+                                                r#type: "checkbox",
+                                                checked: enabled,
+                                                onchange: move |_| {
+                                                    let mut settings = load_studio_settings();
+                                                    if setting_id == "reload" {
+                                                        let value = !auto_reload_after_ai();
+                                                        auto_reload_after_ai.set(value);
+                                                        settings.auto_reload_after_ai = value;
+                                                    } else if setting_id == "compact" {
+                                                        let value = !compact_interface();
+                                                        compact_interface.set(value);
+                                                        settings.compact_interface = value;
+                                                    } else {
+                                                        let value = !reduce_motion();
+                                                        reduce_motion.set(value);
+                                                        settings.reduce_motion = value;
+                                                    }
+                                                    save_studio_settings(&settings);
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else if settings_section() == SettingsSection::Runtime {
+                                    div { class: "settings-section-heading",
+                                        div {
+                                            span { "RUNTIME" }
+                                            strong { "Local-first, controlled, and inspectable" }
+                                            p { "PhantomPlay only accepts loopback API origins so desktop edit access never leaves this machine." }
+                                        }
+                                    }
+                                    article { class: "settings-panel",
+                                        div { class: "settings-panel-heading",
+                                            div { span { "LOCAL SERVICE" } strong { "PhantomForce API origin" } }
+                                            Database { size: 18 }
+                                        }
+                                        div { class: "runtime-origin-row",
+                                            input {
+                                                value: "{api_origin}",
+                                                aria_label: "PhantomForce API origin",
+                                                oninput: move |event| api_origin.set(event.value()),
+                                            }
+                                            button {
+                                                class: "settings-primary-button",
+                                                onclick: move |_| {
+                                                    let normalized = normalize_api_origin(&api_origin());
+                                                    api_origin.set(normalized.clone());
+                                                    let mut settings = load_studio_settings();
+                                                    settings.api_origin = normalized.clone();
+                                                    save_studio_settings(&settings);
+                                                    connection_checking.set(true);
+                                                    spawn(async move {
+                                                        let checks = run_connection_checks(normalized).await;
+                                                        let ready = checks.first().and_then(|check| check.configured).unwrap_or(false);
+                                                        api_online.set(Some(ready));
+                                                        connection_checks.set(checks);
+                                                        connection_checking.set(false);
+                                                        settings_feedback.set("Runtime origin saved and retested.".to_string());
+                                                    });
+                                                },
+                                                span { "Save & retest" }
+                                            }
+                                        }
+                                        small { "Allowed: http://127.0.0.1:PORT or http://localhost:PORT" }
+                                    }
+                                    div { class: "runtime-fact-grid",
+                                        article { span { "LIVE PROJECT ROOT" } strong { "{phantomplay_live_root().display()}" } }
+                                        article { span { "CURRENT PROJECT" } strong { if let Some(game) = project.as_ref() { "{game.id}" } else { "None selected" } } }
+                                        article { span { "RENDERER" } strong { if let Some(game) = project.as_ref() { "{game.runtime.renderer}" } else { "Waiting" } } }
+                                        article { span { "API STATE" } strong { {match api_online() { Some(true) => "Online", Some(false) => "Offline", None => "Checking" }} } }
+                                    }
+                                } else {
+                                    div { class: "settings-section-heading",
+                                        div {
+                                            span { "DIAGNOSTICS" }
+                                            strong { "No mystery statuses" }
+                                            p { "This is the exact state PhantomPlay is using right now." }
+                                        }
+                                        button {
+                                            class: "settings-secondary-button",
+                                            onclick: move |_| {
+                                                connection_checking.set(true);
+                                                let origin = api_origin();
+                                                spawn(async move {
+                                                    connection_checks.set(run_connection_checks(origin).await);
+                                                    connection_checking.set(false);
+                                                    settings_feedback.set("Diagnostics refreshed.".to_string());
+                                                });
+                                            },
+                                            RefreshCw { size: 14 }
+                                            span { "Refresh" }
+                                        }
+                                    }
+                                    div { class: "diagnostic-list",
+                                        div { span { "PhantomPlay" } strong { "Desktop 0.3.4" } }
+                                        div { span { "Local API" } strong { "{api_origin}" } }
+                                        div { span { "API status" } strong { {match api_online() { Some(true) => "ONLINE", Some(false) => "OFFLINE", None => "CHECKING" }} } }
+                                        div { span { "Primary route" } strong { "{ai_provider}" } }
+                                        div { span { "Selected model" } strong { "{ai_model_label(&ai_model_options(), &ai_model())}" } }
+                                        div { span { "Fallback" } strong { if allow_fallbacks() { "{fallback_provider}" } else { "Disabled" } } }
+                                        div { span { "Active source" } strong { "{selected_label}" } }
+                                        div { span { "Loaded sources" } strong { "{files().len()}" } }
+                                        div { span { "Last AI state" } strong { "{ai_activity}" } }
+                                        div { span { "Settings file" } strong { "{studio_settings_path().display()}" } }
+                                    }
+                                }
+                            }
+                        }
+                        footer { class: "settings-center-footer",
+                            span { class: "state-dot" }
+                            p { "{settings_feedback}" }
+                            button { class: "settings-done", onclick: move |_| settings_open.set(false), "Done" }
                         }
                     }
                 }
@@ -2162,7 +2977,7 @@ const STUDIO_STYLE: &str = r#"
         outline: 2px solid var(--cyan);
         outline-offset: 1px;
     }
-    button:disabled { opacity: 0.36; cursor: not-allowed; }
+    button:disabled { opacity: 0.58; cursor: not-allowed; }
     .studio-shell {
         width: 100%;
         height: 100%;
@@ -2261,9 +3076,9 @@ const STUDIO_STYLE: &str = r#"
         display: grid;
         grid-template-columns: repeat(3, minmax(82px, 1fr));
         min-width: 276px;
-        height: 38px;
+        height: 44px;
         padding: 3px;
-        border: 1px solid var(--line-soft);
+        border: 1px solid #354250;
         border-radius: 7px;
         background: #07090d;
     }
@@ -2273,19 +3088,20 @@ const STUDIO_STYLE: &str = r#"
         border: 0;
         border-radius: 5px;
         background: transparent;
-        color: #7e8996;
+        color: #c3ccd5;
         cursor: pointer;
-        font-size: 12px;
-        font-weight: 700;
+        font-size: 13px;
+        font-weight: 760;
+        transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease;
     }
     .view-switcher button:hover {
-        background: var(--bg-elevated);
-        color: var(--text-soft);
+        background: rgba(89, 242, 170, 0.09);
+        color: #effff7;
     }
     .view-switcher button.is-active {
-        background: #1a222d;
+        background: #18251f;
         color: var(--text);
-        box-shadow: inset 0 0 0 1px #313c49, 0 4px 12px rgba(0, 0, 0, 0.22);
+        box-shadow: inset 0 0 0 1px rgba(89, 242, 170, 0.38), 0 4px 14px rgba(0, 0, 0, 0.25);
     }
     .view-switcher button.is-active svg { color: var(--mint); }
     .topbar-actions {
@@ -3564,6 +4380,305 @@ const STUDIO_STYLE: &str = r#"
         text-overflow: ellipsis;
     }
 
+    .native-runtime-ready {
+        max-width: 460px;
+        padding: 34px;
+        border: 1px solid rgba(89, 242, 170, 0.22);
+        border-radius: 14px;
+        background: radial-gradient(circle at 50% 0%, rgba(89, 242, 170, 0.1), transparent 58%), #0b100e;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+    }
+    .native-runtime-ready.is-split { margin: auto; padding: 22px; }
+    .native-launch-button,
+    .settings-primary-button,
+    .settings-secondary-button,
+    .settings-done {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 38px;
+        padding: 0 15px;
+        border-radius: 7px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 780;
+    }
+    .native-launch-button,
+    .settings-primary-button,
+    .settings-done {
+        border: 1px solid rgba(89, 242, 170, 0.7);
+        background: linear-gradient(135deg, #59f2aa, #32d88d);
+        color: #04110b;
+        box-shadow: 0 10px 28px rgba(89, 242, 170, 0.12);
+    }
+    .native-launch-button { margin-top: 14px; }
+    .native-launch-button:hover,
+    .settings-primary-button:hover,
+    .settings-done:hover { filter: brightness(1.08); }
+    .settings-secondary-button {
+        border: 1px solid #33404d;
+        background: #111820;
+        color: #d9e2ea;
+    }
+    .settings-secondary-button:hover { border-color: rgba(89, 242, 170, 0.42); color: #effff7; }
+    .settings-launcher { border-color: rgba(89, 242, 170, 0.18); }
+
+    .ai-apply {
+        border-color: rgba(89, 242, 170, 0.68);
+        background: linear-gradient(135deg, #3ee39a, #22bd79);
+        color: #03110a;
+        box-shadow: 0 8px 22px rgba(47, 220, 143, 0.16);
+    }
+    .ai-apply:hover { background: linear-gradient(135deg, #66f6b7, #38d98e); }
+    .ai-readiness {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 8px;
+        padding: 9px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: 7px;
+        background: #0a0f13;
+        color: #91a0ad;
+        line-height: 1.4;
+    }
+    .ai-readiness .state-dot { margin-top: 3px; }
+    .ai-readiness.is-ready { border-color: rgba(89, 242, 170, 0.2); color: #b8e7ce; }
+    .ai-readiness.is-ready .state-dot { background: var(--mint); box-shadow: 0 0 8px rgba(89, 242, 170, 0.4); }
+    .ai-readiness.needs-action { border-color: rgba(255, 190, 104, 0.24); color: #eac99a; }
+    .ai-readiness.needs-action .state-dot { background: var(--amber); }
+
+    .settings-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: grid;
+        place-items: center;
+        padding: 30px;
+        background: rgba(2, 5, 4, 0.78);
+        backdrop-filter: blur(18px) saturate(0.8);
+    }
+    .settings-center {
+        width: min(1120px, 96vw);
+        height: min(790px, 92vh);
+        min-height: 560px;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        overflow: hidden;
+        border: 1px solid rgba(89, 242, 170, 0.26);
+        border-radius: 16px;
+        background: linear-gradient(145deg, rgba(14, 21, 18, 0.98), rgba(7, 11, 10, 0.99));
+        box-shadow: 0 38px 120px rgba(0, 0, 0, 0.68), 0 0 0 1px rgba(255,255,255,0.025) inset;
+    }
+    .settings-center-header {
+        min-height: 88px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 18px 22px;
+        border-bottom: 1px solid rgba(89, 242, 170, 0.13);
+        background: linear-gradient(90deg, rgba(89, 242, 170, 0.065), transparent 52%);
+    }
+    .settings-center-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .settings-center-mark {
+        width: 48px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        border: 1px solid rgba(89, 242, 170, 0.34);
+        border-radius: 12px;
+        background: rgba(89, 242, 170, 0.08);
+        color: var(--mint);
+        box-shadow: 0 0 28px rgba(89, 242, 170, 0.1);
+    }
+    .settings-center-title > div:last-child { min-width: 0; }
+    .settings-center-title span,
+    .settings-section-heading span,
+    .settings-panel-heading span,
+    .settings-control > span,
+    .runtime-fact-grid span {
+        display: block;
+        color: #6f8b7d;
+        font: 700 9px/1.2 "Cascadia Code", Consolas, monospace;
+        letter-spacing: 0.12em;
+    }
+    .settings-center-title strong { display: block; margin-top: 4px; color: #f4fbf7; font-size: 20px; }
+    .settings-center-title p { margin: 4px 0 0; color: #84928b; font-size: 11px; }
+    .settings-close {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #2c3732;
+        border-radius: 8px;
+        background: #0c120f;
+        color: #89968f;
+        cursor: pointer;
+    }
+    .settings-close:hover { border-color: rgba(89, 242, 170, 0.4); color: #fff; }
+    .settings-center-body { min-width: 0; min-height: 0; display: grid; grid-template-columns: 230px minmax(0, 1fr); }
+    .settings-nav {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding: 18px 12px;
+        border-right: 1px solid #1e2924;
+        background: rgba(3, 7, 5, 0.38);
+    }
+    .settings-nav > button {
+        width: 100%;
+        min-height: 54px;
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+        align-items: center;
+        gap: 9px;
+        padding: 8px 11px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: #8b9992;
+        text-align: left;
+        cursor: pointer;
+    }
+    .settings-nav > button:hover { border-color: #2b3832; background: #111813; color: #d9e5df; }
+    .settings-nav > button.is-active {
+        border-color: rgba(89, 242, 170, 0.34);
+        background: linear-gradient(90deg, rgba(89, 242, 170, 0.12), rgba(89, 242, 170, 0.025));
+        color: var(--mint);
+        box-shadow: inset 3px 0 0 var(--mint);
+    }
+    .settings-nav button div { min-width: 0; }
+    .settings-nav button strong { display: block; color: inherit; font-size: 11px; }
+    .settings-nav button span { display: block; margin-top: 3px; color: #637168; font-size: 9px; }
+    .settings-security-note {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        gap: 8px;
+        margin-top: auto;
+        padding: 12px;
+        border: 1px solid rgba(89, 242, 170, 0.13);
+        border-radius: 8px;
+        background: rgba(89, 242, 170, 0.035);
+        color: var(--mint);
+    }
+    .settings-security-note strong { display: block; font-size: 9px; }
+    .settings-security-note span { display: block; margin-top: 4px; color: #6e7f76; font-size: 8px; line-height: 1.45; }
+    .settings-content { min-width: 0; min-height: 0; overflow-y: auto; padding: 24px 26px 34px; }
+    .settings-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; margin-bottom: 20px; }
+    .settings-section-heading > div { min-width: 0; }
+    .settings-section-heading strong { display: block; margin-top: 6px; color: #f3faf6; font-size: 22px; line-height: 1.18; }
+    .settings-section-heading p { max-width: 650px; margin: 7px 0 0; color: #7f8e86; font-size: 11px; line-height: 1.5; }
+    .connection-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+    .connection-card {
+        min-width: 0;
+        padding: 13px;
+        border: 1px solid #27322d;
+        border-radius: 9px;
+        background: #0b100e;
+    }
+    .connection-card.is-ready { border-color: rgba(89, 242, 170, 0.22); }
+    .connection-card.has-error { border-color: rgba(255, 190, 104, 0.3); background: rgba(255, 190, 104, 0.025); }
+    .connection-card-top { display: grid; grid-template-columns: 31px minmax(0, 1fr) 8px; align-items: center; gap: 8px; }
+    .connection-icon { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 7px; background: #131c17; color: #92a49b; }
+    .connection-card strong { display: block; color: #dfe8e3; font-size: 10px; }
+    .connection-card small { display: block; margin-top: 3px; color: #617169; font: 700 7px "Cascadia Code", monospace; }
+    .connection-card p { min-height: 28px; margin: 11px 0 0; color: #75837c; font-size: 9px; line-height: 1.45; }
+    .connection-card.is-ready .state-dot { background: var(--mint); box-shadow: 0 0 9px rgba(89, 242, 170, 0.48); }
+    .connection-card.has-error .state-dot { background: var(--amber); }
+    .settings-panel {
+        margin-top: 14px;
+        padding: 16px;
+        border: 1px solid #27342e;
+        border-radius: 10px;
+        background: #0a100d;
+    }
+    .settings-panel-heading { display: flex; align-items: center; justify-content: space-between; color: var(--mint); }
+    .settings-panel-heading strong { display: block; margin-top: 4px; color: #e9f2ed; font-size: 14px; }
+    .settings-panel > p { margin: 10px 0; color: #7d8a83; font-size: 10px; line-height: 1.5; }
+    .secret-connect-row,
+    .runtime-origin-row { display: flex; align-items: center; gap: 8px; }
+    .secret-connect-row input,
+    .runtime-origin-row input {
+        min-width: 0;
+        height: 39px;
+        flex: 1;
+        border: 1px solid #2e3a34;
+        border-radius: 7px;
+        padding: 0 12px;
+        background: #060a08;
+        color: #dfe8e3;
+        font: 10px "Cascadia Code", Consolas, monospace;
+    }
+    .settings-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .settings-control { display: block; min-width: 0; }
+    .settings-control.full-width { max-width: 440px; }
+    .settings-control select,
+    .settings-control input {
+        width: 100%;
+        height: 42px;
+        margin-top: 7px;
+        border: 1px solid #2d3933;
+        border-radius: 8px;
+        padding: 0 11px;
+        background: #080d0b;
+        color: #e1e9e5;
+        font-size: 11px;
+    }
+    .settings-control small,
+    .settings-panel > small { display: block; margin-top: 6px; color: #617168; font-size: 8px; line-height: 1.4; }
+    .settings-toggle-card {
+        min-height: 68px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        margin-top: 12px;
+        padding: 13px 15px;
+        border: 1px solid #27342e;
+        border-radius: 9px;
+        background: #0a100d;
+        cursor: pointer;
+    }
+    .settings-toggle-card strong { display: block; color: #e0e9e4; font-size: 11px; }
+    .settings-toggle-card span { display: block; max-width: 660px; margin-top: 4px; color: #74817a; font-size: 9px; line-height: 1.4; }
+    .settings-toggle-card input { width: 36px; height: 19px; flex: 0 0 auto; accent-color: var(--mint); }
+    .settings-live-summary {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+        gap: 8px;
+        margin-top: 14px;
+        padding: 13px;
+        border: 1px solid rgba(89, 242, 170, 0.18);
+        border-radius: 9px;
+        background: rgba(89, 242, 170, 0.035);
+        color: var(--mint);
+    }
+    .settings-live-summary strong { display: block; color: #cceddd; font-size: 10px; }
+    .settings-live-summary small { display: block; margin-top: 4px; color: #6e8177; font-size: 8px; }
+    .runtime-fact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
+    .runtime-fact-grid article { min-width: 0; padding: 13px; border: 1px solid #26322c; border-radius: 8px; background: #090e0c; }
+    .runtime-fact-grid strong { display: block; overflow: hidden; margin-top: 6px; color: #dce6e0; font: 10px "Cascadia Code", monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .diagnostic-list { border: 1px solid #27332d; border-radius: 10px; overflow: hidden; background: #080d0a; }
+    .diagnostic-list > div { min-height: 42px; display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; gap: 18px; padding: 8px 13px; border-bottom: 1px solid #1d2722; }
+    .diagnostic-list > div:last-child { border-bottom: 0; }
+    .diagnostic-list span { color: #718077; font-size: 9px; }
+    .diagnostic-list strong { overflow: hidden; color: #dce6e0; font: 9px "Cascadia Code", monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .settings-center-footer { min-height: 50px; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px 16px; border-top: 1px solid #202b26; background: rgba(4, 8, 6, 0.78); }
+    .settings-center-footer .state-dot { background: var(--mint); box-shadow: 0 0 8px rgba(89, 242, 170, 0.4); }
+    .settings-center-footer p { overflow: hidden; margin: 0; color: #819087; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    .settings-done { min-height: 32px; padding: 0 18px; }
+    .is-spinning { animation: spin 800ms linear infinite; }
+    .compact-interface .project-rail { grid-template-rows: 188px minmax(150px, 1fr) minmax(150px, 37%); }
+    .compact-interface .project-card { min-height: 70px; }
+    .compact-interface .tool-pane { padding: 14px; }
+    .reduce-motion *,
+    .reduce-motion *::before,
+    .reduce-motion *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+
     .project-rail-collapsed .project-rail,
     .tool-dock-collapsed .tool-dock,
     .focus-mode .project-rail,
@@ -3713,6 +4828,40 @@ mod tests {
         );
 
         assert_eq!(status, expected);
+    }
+
+    #[test]
+    fn legacy_studio_settings_receive_safe_app_wide_defaults() {
+        let settings: StudioSettings =
+            serde_json::from_str(r#"{"ai_provider":"openrouter","ai_model":"z-ai/glm-5.2"}"#)
+                .expect("legacy settings should remain readable");
+        let normalized = normalize_studio_settings(settings);
+
+        assert_eq!(normalized.ai_provider, "openrouter");
+        assert_eq!(normalized.ai_model, "z-ai/glm-5.2");
+        assert_eq!(normalized.fallback_provider, "codex");
+        assert!(normalized.allow_fallbacks);
+        assert_eq!(normalized.default_view, "play");
+        assert!(normalized.auto_reload_after_ai);
+    }
+
+    #[test]
+    fn desktop_api_origin_is_locked_to_loopback() {
+        assert_eq!(
+            normalize_api_origin("http://localhost:5190/"),
+            "http://localhost:5190"
+        );
+        assert_eq!(
+            normalize_api_origin("https://untrusted.example"),
+            phantomplay_api_origin()
+        );
+    }
+
+    #[test]
+    fn workspace_default_view_normalizes_unknown_values() {
+        assert_eq!(workspace_view_from_setting("code"), WorkspaceView::Code);
+        assert_eq!(workspace_view_from_setting("split"), WorkspaceView::Split);
+        assert_eq!(workspace_view_from_setting("unknown"), WorkspaceView::Play);
     }
 
     #[test]

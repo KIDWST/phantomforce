@@ -7714,14 +7714,13 @@ function phantomPlayDesktopLocalAllowed(requestIp: string) {
   return desktopEditEnabled && ["127.0.0.1", "::1"].includes(requestIp);
 }
 
-function openRouterDesktopConfigured() {
-  return process.env.PHANTOM_LIVE_PROVIDERS_ENABLED === "true"
-    && process.env.PHANTOM_OPENROUTER_TRANSPORT_ENABLED === "true"
-    && Boolean(process.env.OPENROUTER_API_KEY?.trim());
+const PHANTOMPLAY_DESKTOP_TENANT_ID = "phantomplay-desktop";
+
+async function phantomPlayDesktopOpenRouterCredential() {
+  return (await getAiProviderCredential(PHANTOMPLAY_DESKTOP_TENANT_ID, "openrouter_glm"))?.trim() || null;
 }
 
-async function validateOpenRouterDesktopCredential() {
-  const credential = process.env.OPENROUTER_API_KEY?.trim();
+async function validateOpenRouterDesktopCredential(credential: string | null) {
   if (!credential) {
     return { valid: false, error: "OpenRouter API key is missing." };
   }
@@ -7751,6 +7750,66 @@ async function validateOpenRouterDesktopCredential() {
   }
 }
 
+app.put("/api/phantomplay/connections/openrouter", async (request, reply) => {
+  const requestIp = request.ip.replace(/^::ffff:/u, "");
+  if (!phantomPlayDesktopLocalAllowed(requestIp)) {
+    return reply.code(404).send({ ok: false, error: "phantomplay_desktop_connection_vault_unavailable" });
+  }
+  const body = (request.body ?? {}) as { apiKey?: unknown };
+  const credential = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+  if (!credential) return reply.code(400).send({ ok: false, error: "Enter an OpenRouter API key." });
+  const validation = await validateOpenRouterDesktopCredential(credential);
+  if (!validation.valid) {
+    return reply.code(401).send({ ok: false, error: validation.error, code: "api_key_invalid" });
+  }
+  try {
+    const saved = await saveAiProviderCredential({
+      tenantId: PHANTOMPLAY_DESKTOP_TENANT_ID,
+      providerId: "openrouter_glm",
+      credential,
+      actor: "phantomplay-desktop",
+    });
+    return {
+      ok: true,
+      configured: saved.configured,
+      keyHint: saved.key_hint,
+      secretReturned: false,
+      detail: validation.error || `OpenRouter connected securely (${saved.key_hint || "configured"}).`,
+    };
+  } catch (error) {
+    const statusCode = Number((error as { statusCode?: number }).statusCode || 500);
+    return reply.code(statusCode).send({
+      ok: false,
+      error: error instanceof Error ? error.message : "OpenRouter credential could not be stored securely.",
+      code: (error as { code?: string }).code || "credential_vault_error",
+    });
+  }
+});
+
+app.delete("/api/phantomplay/connections/openrouter", async (request, reply) => {
+  const requestIp = request.ip.replace(/^::ffff:/u, "");
+  if (!phantomPlayDesktopLocalAllowed(requestIp)) {
+    return reply.code(404).send({ ok: false, error: "phantomplay_desktop_connection_vault_unavailable" });
+  }
+  try {
+    const status = await deleteAiProviderCredential(PHANTOMPLAY_DESKTOP_TENANT_ID, "openrouter_glm");
+    return {
+      ok: true,
+      configured: status.configured,
+      secretReturned: false,
+      detail: status.configured
+        ? "The encrypted desktop key was removed; a server environment key remains active."
+        : "OpenRouter disconnected and its encrypted desktop key was removed.",
+    };
+  } catch (error) {
+    return reply.code(500).send({
+      ok: false,
+      error: error instanceof Error ? error.message : "OpenRouter credential could not be removed.",
+      code: "credential_vault_error",
+    });
+  }
+});
+
 app.get("/api/phantomplay/ai-models", async (request, reply) => {
   const requestIp = request.ip.replace(/^::ffff:/u, "");
   if (!phantomPlayDesktopLocalAllowed(requestIp)) {
@@ -7774,17 +7833,30 @@ app.get("/api/phantomplay/ai-models", async (request, reply) => {
   if (provider !== "openrouter") {
     return { ok: true, provider, configured: true, dynamic: false, models: fallback };
   }
-  if (!openRouterDesktopConfigured()) {
+  let credential: string | null = null;
+  try {
+    credential = await phantomPlayDesktopOpenRouterCredential();
+  } catch (error) {
     return {
       ok: true,
       provider,
       configured: false,
       dynamic: false,
       models: fallback,
-      error: "Needs OpenRouter API key and live transport enabled.",
+      error: error instanceof Error ? error.message : "The encrypted OpenRouter vault could not be read.",
     };
   }
-  const credentialStatus = await validateOpenRouterDesktopCredential();
+  if (!credential) {
+    return {
+      ok: true,
+      provider,
+      configured: false,
+      dynamic: false,
+      models: fallback,
+      error: "OpenRouter API key is missing. Open PhantomPlay Settings → Connections to connect it securely.",
+    };
+  }
+  const credentialStatus = await validateOpenRouterDesktopCredential(credential);
   if (!credentialStatus.valid) {
     return {
       ok: true,
@@ -7796,7 +7868,7 @@ app.get("/api/phantomplay/ai-models", async (request, reply) => {
     };
   }
   try {
-    const models = await fetchOpenRouterModels({ credential: process.env.OPENROUTER_API_KEY });
+    const models = await fetchOpenRouterModels({ credential });
     return {
       ok: true,
       provider,
@@ -7836,8 +7908,33 @@ app.post("/api/phantomplay/ai-edit", { bodyLimit: 4 * 1024 * 1024 }, async (requ
     ? body.provider
     : "auto";
   const model = typeof body.model === "string" ? body.model.trim().slice(0, 180) : "";
+  const fallbackProvider = body.fallbackProvider === "codex" || body.fallbackProvider === "claude" || body.fallbackProvider === "openrouter" || body.fallbackProvider === "local"
+    ? body.fallbackProvider
+    : "codex";
+  const allowFallbacks = body.allowFallbacks !== false;
+  const timeoutMs = Math.min(Math.max(Number(body.timeoutMs) || 120_000, 15_000), 240_000);
   if (!gameId || !filePath) return reply.code(400).send({ ok: false, error: "gameId and filePath are required." });
-  const result = await requestPhantomPlayAiEdit({ gameId, filePath, fileContent, instruction, cwd, engine, projectFiles, provider, model });
+  let openRouterCredential: string | null = null;
+  try {
+    openRouterCredential = await phantomPlayDesktopOpenRouterCredential();
+  } catch {
+    // The provider will return an exact configuration failure if OpenRouter is selected.
+  }
+  const result = await requestPhantomPlayAiEdit({
+    gameId,
+    filePath,
+    fileContent,
+    instruction,
+    cwd,
+    engine,
+    projectFiles,
+    provider,
+    model,
+    fallbackProvider,
+    allowFallbacks,
+    timeoutMs,
+    openRouterCredential: openRouterCredential || undefined,
+  });
   if (!result.ok) {
     return reply.code(422).send({
       ok: false,

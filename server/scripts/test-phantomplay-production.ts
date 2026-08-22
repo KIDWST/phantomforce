@@ -68,7 +68,7 @@ try {
   assert(baseline.providers.some((provider) => provider.id === "unreal-project" && provider.health === "ready"), "The Unreal flagship project provider must be ready.");
   assert(baseline.providers.some((provider) => provider.id === "unity-project" && provider.health === "ready"), "The Unity compatibility provider must remain discoverable.");
   assert(baseline.providers.some((provider) => provider.id === "phantomflow" && provider.health === "blocked"), "Offline installed PhantomFlow must report blocked, not ready.");
-  assert(baseline.assets.accepted_count === 7 && baseline.assets.blocked_count === 0, "Every Unreal asset record, including the three PhantomStrike V12 visual targets, must exist with valid ownership evidence.");
+  assert(baseline.assets.accepted_count === 9 && baseline.assets.blocked_count === 0, "Every Unreal asset record, including the PhantomStrike V12 and V26 visual targets, must exist with valid ownership evidence.");
   assert(baseline.assets.duplicate_paths.length === 0, "Asset registry must not contain duplicate paths.");
   assert(baseline.dependencies.engine === "unreal", "The dependency adapter must match the project engine.");
   assert(baseline.dependencies.packages.some((dependency) => dependency.id === "plugin:EnhancedInput"), "The Unreal descriptor plugins must be audited.");

@@ -22,6 +22,7 @@ const windowsInstaller = fs.readFileSync(
   "utf8",
 );
 const aiEditSource = fs.readFileSync(path.join(repoRoot, "server", "src", "phantomplay-ai-edit.ts"), "utf8");
+const serverIndexSource = fs.readFileSync(path.join(repoRoot, "server", "src", "index.ts"), "utf8");
 
 for (const [label, source, contract] of [
   ["history module", mainSource, "mod project_history;"],
@@ -36,6 +37,13 @@ for (const [label, source, contract] of [
   ["OpenRouter edit route", aiEditSource, "callOpenRouterGlm52"],
   ["local Ollama edit route", aiEditSource, "callLocalOllamaChat"],
   ["desktop model selector", studioSource, 'option { value: "local", "Local Ollama" }'],
+  ["app-wide control center", studioSource, "PHANTOMPLAY CONTROL CENTER"],
+  ["connection diagnostics", studioSource, "Test all connections"],
+  ["explicit Apply readiness", studioSource, "API offline — click Apply to open connection repair."],
+  ["secure password field", studioSource, 'r#type: "password"'],
+  ["encrypted desktop provider vault route", serverIndexSource, '/api/phantomplay/connections/openrouter'],
+  ["encrypted provider vault persistence", serverIndexSource, "saveAiProviderCredential({"],
+  ["fallback routing preference", aiEditSource, "fallbackProvider?: PhantomPlayAiProvider"],
   ["Windows executable icon", buildSource, 'resource.set_icon("assets/phantomplay.ico")'],
   ["Windows taskbar icon", mainSource, "window.with_taskbar_icon(icon.clone())"],
   ["Windows NSIS bundle config", bundleConfig, "[bundle.windows.nsis]"],
@@ -47,6 +55,14 @@ for (const [label, source, contract] of [
   if (!source.includes(contract)) {
     throw new Error(`PhantomPlay desktop shell is missing ${label}: ${contract}`);
   }
+}
+
+if (studioSource.includes("disabled: playing_entry().is_none()")) {
+  throw new Error("PhantomPlay must not disable Play, Split, or reload merely because a native project has no embedded web entry.");
+}
+
+if (!studioSource.includes('disabled: ai_busy(),')) {
+  throw new Error("PhantomPlay Apply must remain clickable when configuration is missing so it can explain the exact blocker.");
 }
 
 for (const argumentsList of [

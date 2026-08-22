@@ -70,6 +70,18 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **PhantomPlay 0.3.4 control center candidate (2026-08-21)** — keeps Play,
+  Code, and Split available for Unreal and browser projects; adds native launch
+  and side-by-side source workflows; and replaces the shallow settings panel
+  with an app-wide green-and-black control center for secure OpenRouter vault
+  setup, exact model/fallback routing, timeouts, workspace behavior, runtime
+  origin, connection checks, and diagnostics. AI Apply now stays actionable,
+  reports exact key, credit, permission, provider, timeout, API, project, file,
+  and instruction failures, and can recover through an owner-selected fallback.
+  Rust passed 41/41 tests and warning-free clippy; server typecheck, AI routing,
+  shell contract, change-memory, bundle, and Windows identity gates passed. The
+  verified 0.3.4 installer is ready; replacing an open 0.3.2 desktop process is
+  intentionally left pending until PhantomPlay is closed.
 - **PhantomStrike V19R1 Operation Nightglass candidate (2026-08-20)** —
   additive source and persistent-world upgrade on the verified V18R1 installed
   floor. PhantomStrike now has staged insertion, street advance, command-center

@@ -35,6 +35,9 @@ export type PhantomPlayAiEditInput = {
   projectFiles?: string[];
   provider?: PhantomPlayAiProvider;
   model?: string;
+  fallbackProvider?: PhantomPlayAiProvider;
+  allowFallbacks?: boolean;
+  openRouterCredential?: string;
   timeoutMs?: number;
 };
 
@@ -316,6 +319,9 @@ async function callEditProvider(
     }, {
       env: {
         ...process.env,
+        PHANTOM_LIVE_PROVIDERS_ENABLED: input.openRouterCredential ? "true" : process.env.PHANTOM_LIVE_PROVIDERS_ENABLED,
+        PHANTOM_OPENROUTER_TRANSPORT_ENABLED: input.openRouterCredential ? "true" : process.env.PHANTOM_OPENROUTER_TRANSPORT_ENABLED,
+        OPENROUTER_API_KEY: input.openRouterCredential || process.env.OPENROUTER_API_KEY,
         OPENROUTER_MODEL: model && model !== "auto" ? model : process.env.OPENROUTER_MODEL,
       },
     });
@@ -386,14 +392,23 @@ export async function requestPhantomPlayAiEdit(
   ].join("\n");
 
   const selectedProvider = normalizedProvider(input.provider);
+  const selectedFallback = normalizedProvider(input.fallbackProvider);
+  const allowFallbacks = input.allowFallbacks !== false;
   const automaticProviders: Array<Exclude<PhantomPlayAiProvider, "auto">> = ["codex", "local", "claude", "openrouter"];
   // A manual choice is a priority, not a single point of failure. PhantomPlay
   // tries the selected route/model first, then recovers through the remaining
   // desktop-capable routes. A provider-specific model id is intentionally not
   // forwarded to fallback providers.
+  const fallbackFirst = selectedFallback === "auto" ? [] : [selectedFallback];
+  const orderedFallbacks = [
+    ...fallbackFirst,
+    ...automaticProviders,
+  ].filter((provider, index, values) => values.indexOf(provider) === index);
   const providers: Array<Exclude<PhantomPlayAiProvider, "auto">> = selectedProvider === "auto"
-    ? automaticProviders
-    : [selectedProvider, ...automaticProviders.filter((provider) => provider !== selectedProvider)];
+    ? (allowFallbacks ? orderedFallbacks : [orderedFallbacks[0] ?? "codex"])
+    : allowFallbacks
+      ? [selectedProvider, ...orderedFallbacks.filter((provider) => provider !== selectedProvider)]
+      : [selectedProvider];
   const failures: PhantomPlayAiProviderFailure[] = [];
   const providerCall = options.callProvider ?? callEditProvider;
   for (const provider of providers) {

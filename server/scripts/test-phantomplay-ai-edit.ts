@@ -103,6 +103,41 @@ assert.deepEqual(selectedFallbackCalls, [
   { provider: "codex", model: "" },
 ]);
 
+const configuredFallbackCalls: string[] = [];
+const configuredFallback = await requestPhantomPlayAiEdit(
+  {
+    ...baseInput,
+    provider: "openrouter",
+    model: "z-ai/glm-5.2",
+    fallbackProvider: "claude",
+    allowFallbacks: true,
+  },
+  {
+    callProvider: async (provider) => {
+      configuredFallbackCalls.push(provider);
+      if (provider === "openrouter") throw new Error("HTTP 503");
+      return { raw: marked(revised), provider, model: "configured-fallback" };
+    },
+  },
+);
+assert.equal(configuredFallback.ok, true);
+if (!configuredFallback.ok) throw new Error(configuredFallback.error);
+assert.equal(configuredFallback.provider, "claude");
+assert.deepEqual(configuredFallbackCalls, ["openrouter", "claude"]);
+
+const noFallbackCalls: string[] = [];
+const noFallback = await requestPhantomPlayAiEdit(
+  { ...baseInput, provider: "codex", allowFallbacks: false },
+  {
+    callProvider: async (provider) => {
+      noFallbackCalls.push(provider);
+      throw new Error("Command failed: provider executable failed");
+    },
+  },
+);
+assert.equal(noFallback.ok, false);
+assert.deepEqual(noFallbackCalls, ["codex"]);
+
 const malformed = await requestPhantomPlayAiEdit(
   { ...baseInput, provider: "local" },
   {
