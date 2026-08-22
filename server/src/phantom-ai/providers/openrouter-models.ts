@@ -1,4 +1,7 @@
+import { openRouterFetch } from "./openrouter-http.js";
+
 export const OPENROUTER_MODELS_ENDPOINT = "https://openrouter.ai/api/v1/models";
+export const OPENROUTER_MODELS_TIMEOUT_MS = 20_000;
 
 export type OpenRouterModelOption = {
   id: string;
@@ -61,13 +64,14 @@ export async function fetchOpenRouterModels(options: {
   fetchImpl?: OpenRouterModelsFetch;
   timeoutMs?: number;
 } = {}) {
-  const fetchImpl = options.fetchImpl ?? (globalThis.fetch as unknown as OpenRouterModelsFetch | undefined);
-  if (!fetchImpl) throw new Error("No server fetch implementation is available for OpenRouter model discovery.");
+  const fetchImpl = options.fetchImpl ?? (openRouterFetch as unknown as OpenRouterModelsFetch);
   const headers: Record<string, string> = {};
   const credential = options.credential?.trim();
   if (credential) headers.Authorization = `Bearer ${credential}`;
   const controller = new AbortController();
-  const timeoutMs = Number.isFinite(options.timeoutMs) ? Math.max(1000, Number(options.timeoutMs)) : 6500;
+  const timeoutMs = Number.isFinite(options.timeoutMs)
+    ? Math.max(1000, Number(options.timeoutMs))
+    : OPENROUTER_MODELS_TIMEOUT_MS;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetchImpl(OPENROUTER_MODELS_ENDPOINT, { headers, signal: controller.signal });

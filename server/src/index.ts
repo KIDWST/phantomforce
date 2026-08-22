@@ -530,6 +530,7 @@ import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js"
 import { callDeepSeekV4Flash } from "./phantom-ai/providers/deepseek-v4-transport.js";
 import { callLocalOllamaChat, getLocalOllamaStatus } from "./phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
+import { validateOpenRouterCredential } from "./phantom-ai/providers/openrouter-credential-validation.js";
 import { fetchOpenRouterModels } from "./phantom-ai/providers/openrouter-models.js";
 import { sanitizeProviderDetail } from "./phantom-ai/provider-error.js";
 import {
@@ -7858,36 +7859,6 @@ async function phantomPlayDesktopOpenRouterCredential() {
   return (await getAiProviderCredential(PHANTOMPLAY_DESKTOP_TENANT_ID, "openrouter_glm"))?.trim() || null;
 }
 
-async function validateOpenRouterDesktopCredential(credential: string | null) {
-  if (!credential) {
-    return { valid: false, error: "OpenRouter API key is missing." };
-  }
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/key", {
-      headers: { Authorization: `Bearer ${credential}` },
-      signal: AbortSignal.timeout(6_000),
-    });
-    if (response.status === 401) {
-      return {
-        valid: false,
-        error: "OpenRouter API key invalid or expired (HTTP 401). Replace it in PhantomForce Settings → Bridges & Connectors.",
-      };
-    }
-    if (!response.ok) {
-      return {
-        valid: true,
-        error: `OpenRouter key validation is temporarily unavailable (HTTP ${response.status}).`,
-      };
-    }
-    return { valid: true, error: undefined as string | undefined };
-  } catch {
-    return {
-      valid: true,
-      error: "OpenRouter key validation could not reach OpenRouter. The saved key was not marked invalid.",
-    };
-  }
-}
-
 app.put("/api/phantomplay/connections/openrouter", async (request, reply) => {
   const requestIp = request.ip.replace(/^::ffff:/u, "");
   if (!phantomPlayDesktopLocalAllowed(requestIp)) {
@@ -7896,9 +7867,9 @@ app.put("/api/phantomplay/connections/openrouter", async (request, reply) => {
   const body = (request.body ?? {}) as { apiKey?: unknown };
   const credential = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
   if (!credential) return reply.code(400).send({ ok: false, error: "Enter an OpenRouter API key." });
-  const validation = await validateOpenRouterDesktopCredential(credential);
+  const validation = await validateOpenRouterCredential(credential);
   if (!validation.valid) {
-    return reply.code(401).send({ ok: false, error: validation.error, code: "api_key_invalid" });
+    return reply.code(validation.statusCode).send({ ok: false, error: validation.error, code: validation.code });
   }
   try {
     const saved = await saveAiProviderCredential({
@@ -7912,7 +7883,7 @@ app.put("/api/phantomplay/connections/openrouter", async (request, reply) => {
       configured: saved.configured,
       keyHint: saved.key_hint,
       secretReturned: false,
-      detail: validation.error || `OpenRouter connected securely (${saved.key_hint || "configured"}).`,
+      detail: `OpenRouter connected securely (${saved.key_hint || "configured"}).`,
     };
   } catch (error) {
     const statusCode = Number((error as { statusCode?: number }).statusCode || 500);
@@ -7994,7 +7965,7 @@ app.get("/api/phantomplay/ai-models", async (request, reply) => {
       error: "OpenRouter API key is missing. Open PhantomPlay Settings → Connections to connect it securely.",
     };
   }
-  const credentialStatus = await validateOpenRouterDesktopCredential(credential);
+  const credentialStatus = await validateOpenRouterCredential(credential);
   if (!credentialStatus.valid) {
     return {
       ok: true,

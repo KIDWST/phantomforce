@@ -5,6 +5,7 @@ import {
   OPENROUTER_GLM_52_MODEL_ID,
   OPENROUTER_GLM_PROVIDER_ID,
 } from "./openrouter-adapter.js";
+import { openRouterFetch } from "./openrouter-http.js";
 
 type OpenRouterFetchResponse = {
   ok: boolean;
@@ -184,10 +185,7 @@ export async function callOpenRouterGlm52(
     return blockedResult(input, "Approval-required requests cannot run through the OpenRouter worker lane.", modelId);
   }
 
-  const fetchImpl = options.fetchImpl ?? (globalThis.fetch as unknown as OpenRouterFetch | undefined);
-  if (!fetchImpl) {
-    return blockedResult(input, "No server fetch implementation is available for OpenRouter transport.", modelId);
-  }
+  const fetchImpl = options.fetchImpl ?? (openRouterFetch as unknown as OpenRouterFetch);
 
   const redactedContext = redactSensitiveText(input.compactContext).slice(0, MAX_CONTEXT_CHARS);
   const redactedMessage = redactSensitiveText(input.userMessage).slice(0, MAX_MESSAGE_CHARS);

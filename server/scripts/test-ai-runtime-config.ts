@@ -18,8 +18,16 @@ import {
 import { claudeModelArgs, resolveClaudeModel } from "../src/phantom-ai/providers/claude-cli-transport.js";
 import { callDeepSeekV4Flash } from "../src/phantom-ai/providers/deepseek-v4-transport.js";
 import { callLocalOllamaChat } from "../src/phantom-ai/providers/local-ollama-transport.js";
+import {
+  OPENROUTER_KEY_VALIDATION_TIMEOUT_MS,
+  validateOpenRouterCredential,
+} from "../src/phantom-ai/providers/openrouter-credential-validation.js";
 import { callOpenRouterGlm52 } from "../src/phantom-ai/providers/openrouter-live-transport.js";
-import { fetchOpenRouterModels, parseOpenRouterModels } from "../src/phantom-ai/providers/openrouter-models.js";
+import {
+  fetchOpenRouterModels,
+  OPENROUTER_MODELS_TIMEOUT_MS,
+  parseOpenRouterModels,
+} from "../src/phantom-ai/providers/openrouter-models.js";
 
 const root = await mkdtemp(join(tmpdir(), "phantom-ai-runtime-test-"));
 const credentialRoot = await mkdtemp(join(tmpdir(), "phantom-ai-credentials-test-"));
@@ -195,6 +203,38 @@ try {
   });
   assert.equal(modelCatalogueAuthorization, `Bearer ${rawOpenRouterCredential}`);
   assert.equal(openRouterModels[0]?.id, "deepseek/deepseek-v4-flash");
+  assert.equal(OPENROUTER_KEY_VALIDATION_TIMEOUT_MS, 20_000);
+  assert.equal(OPENROUTER_MODELS_TIMEOUT_MS, 20_000);
+
+  const validOpenRouterCredential = await validateOpenRouterCredential(rawOpenRouterCredential, {
+    fetchImpl: async () => ({ ok: true, status: 200 }),
+  });
+  assert.equal(validOpenRouterCredential.valid, true);
+
+  const rejectedOpenRouterCredential = await validateOpenRouterCredential(rawOpenRouterCredential, {
+    fetchImpl: async () => ({ ok: false, status: 401 }),
+  });
+  assert.equal(rejectedOpenRouterCredential.valid, false);
+  assert.equal(rejectedOpenRouterCredential.statusCode, 401);
+  assert.equal(rejectedOpenRouterCredential.code, "api_key_invalid");
+
+  const unavailableOpenRouterCredential = await validateOpenRouterCredential(rawOpenRouterCredential, {
+    fetchImpl: async () => ({ ok: false, status: 503 }),
+  });
+  assert.equal(unavailableOpenRouterCredential.valid, false);
+  assert.equal(unavailableOpenRouterCredential.statusCode, 502);
+  assert.equal(unavailableOpenRouterCredential.code, "api_key_validation_unavailable");
+
+  const abortedOpenRouterCredential = await validateOpenRouterCredential(rawOpenRouterCredential, {
+    fetchImpl: async () => {
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      throw error;
+    },
+  });
+  assert.equal(abortedOpenRouterCredential.valid, false);
+  assert.equal(abortedOpenRouterCredential.statusCode, 502);
+  assert.match(abortedOpenRouterCredential.error || "", /timed out/iu);
 
   let deepSeekRequest: Record<string, unknown> = {};
   let deepSeekAuthorization = "";
