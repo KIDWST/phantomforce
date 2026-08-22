@@ -24,6 +24,7 @@ const windowsInstaller = fs.readFileSync(
 );
 const aiEditSource = fs.readFileSync(path.join(repoRoot, "server", "src", "phantomplay-ai-edit.ts"), "utf8");
 const serverIndexSource = fs.readFileSync(path.join(repoRoot, "server", "src", "index.ts"), "utf8");
+const paywallGuardSource = fs.readFileSync(path.join(repoRoot, "server", "src", "access", "paywall-guard.ts"), "utf8");
 
 for (const [label, source, contract] of [
   ["history module", mainSource, "mod project_history;"],
@@ -44,6 +45,7 @@ for (const [label, source, contract] of [
   ["secure password field", studioSource, 'r#type: "password"'],
   ["encrypted desktop provider vault route", serverIndexSource, '/api/phantomplay/connections/openrouter'],
   ["encrypted provider vault persistence", serverIndexSource, "saveAiProviderCredential({"],
+  ["desktop provider vault paywall exemption", paywallGuardSource, 'path === "/api/phantomplay/connections/openrouter"'],
   ["fallback routing preference", aiEditSource, "fallbackProvider?: PhantomPlayAiProvider"],
   ["Windows executable icon", buildSource, 'resource.set_icon("assets/phantomplay.ico")'],
   ["Windows taskbar icon", mainSource, "window.with_taskbar_icon(icon.clone())"],

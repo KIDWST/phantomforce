@@ -27,6 +27,9 @@ assert(requiresWrite("POST", "/falcon/jobs/validate") === false, "falcon validat
 assert(requiresWrite("POST", "/phantom-ai/chat") === false, "chat view is free");
 assert(requiresWrite("POST", "/api/phantomplay/ai-edit") === false, "loopback-gated PhantomPlay desktop edit bypasses account paywall");
 assert(requiresWrite("POST", "/api/phantomplay/ai-edit?provider=codex") === false, "PhantomPlay desktop edit query variants bypass account paywall");
+assert(requiresWrite("PUT", "/api/phantomplay/connections/openrouter") === false, "loopback-gated PhantomPlay key vault bypasses account paywall");
+assert(requiresWrite("DELETE", "/api/phantomplay/connections/openrouter") === false, "PhantomPlay key-vault disconnect bypasses account paywall");
+assert(requiresWrite("PUT", "/api/phantomplay/connections/openrouter?replace=true") === false, "PhantomPlay key-vault query variants bypass account paywall");
 
 // ---- classifier: real mutations require write ----
 assert(requiresWrite("POST", "/client-access/abc/status/propose") === true, "propose needs write");
@@ -40,6 +43,8 @@ assert(requiresWrite("DELETE", "/anything") === true, "DELETE needs write");
 assert(requiresWrite("POST", "/some/brand-new/write-route") === true, "unknown mutation needs write (fail closed)");
 assert(requiresWrite("POST", "/api/phantomplay/ai-edit/anything") === true, "only the exact PhantomPlay desktop edit route is exempt");
 assert(requiresWrite("POST", "/api/phantomplay/ai-edit-anything") === true, "desktop exemption is exact and fail closed");
+assert(requiresWrite("PUT", "/api/phantomplay/connections/openrouter/anything") === true, "only the exact PhantomPlay key-vault route is exempt");
+assert(requiresWrite("PUT", "/api/phantomplay/connections/openrouter-anything") === true, "key-vault exemption is exact and fail closed");
 
 // ---- preHandler behaviour ----
 const freeSession = { id: "gateway:member@acme.com" };            // signed in, view only
@@ -80,6 +85,14 @@ r = fakeReply();
 await asAnon({ method: "POST", url: "/api/phantomplay/ai-edit", headers: {} } as never, r as never);
 assert(r.statusCode === 0, "anonymous local desktop edit is NOT rejected before its route-level loopback gate");
 
+r = fakeReply();
+await asAnon({ method: "PUT", url: "/api/phantomplay/connections/openrouter", headers: {} } as never, r as never);
+assert(r.statusCode === 0, "anonymous local desktop key save is NOT rejected before its route-level loopback gate");
+
+r = fakeReply();
+await asAnon({ method: "DELETE", url: "/api/phantomplay/connections/openrouter", headers: {} } as never, r as never);
+assert(r.statusCode === 0, "anonymous local desktop key removal is NOT rejected before its route-level loopback gate");
+
 // owner may write
 r = fakeReply();
 await asOwner({ method: "POST", url: "/client-access/abc/status/propose", headers: {} } as never, r as never);
@@ -101,6 +114,7 @@ console.log(
       anonWriteBlocked: true,
       anonWriteStatus: 401,
       phantomPlayDesktopBridgeReachesRouteGate: true,
+      phantomPlayDesktopVaultReachesRouteGate: true,
       directApiBypassBlocked: true,
     },
     null,
