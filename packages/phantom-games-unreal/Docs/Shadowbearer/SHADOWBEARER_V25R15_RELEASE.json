@@ -1,0 +1,45 @@
+{
+  "release": "V25R15",
+  "public_title": "Shadowbearer: Dawn's Return",
+  "public_version": "1.0.1-dawns-return",
+  "internal_compatibility_id": "cubetown",
+  "engine": "Unreal Engine 5.8",
+  "promoted_at": "2026-08-21",
+  "promotion_scope": "shadowbearer-only",
+  "installed_path": "%LOCALAPPDATA%\\PhantomPlay\\Games\\Unreal\\Windows\\cubetown",
+  "rollback_path": "%LOCALAPPDATA%\\PhantomPlay\\Games\\Unreal\\Windows\\cubetown-v25r14-before-shadowbearer-v25r15",
+  "candidate": {
+    "relative_path": "CandidateBuilds/Shadowbearer-Dawns-Return-V25R15",
+    "file_count": 25,
+    "byte_count": 837537679,
+    "unexpected_foreign_game_binaries": 0
+  },
+  "authority": {
+    "story_attachment_sha256": "5182BAFAA1D62890BD4C14BDAABF5CF43CC3412870C661033961425DF60D64EE",
+    "story_canon_sha256": "DD42D42B19C5202D946C6FA2CF1B3A78FF764050573C480A3C2B5F5878EE17B8",
+    "director_cpp_sha256": "70322328D887CE3894384D4D08D69EA9A7DFEB1999F38184CE73DE8E97366BBE",
+    "director_header_sha256": "8755167B13B6E8E736EB62E6438A104D20A94C1336313C5BBEA0C954D4C1274C"
+  },
+  "package_sha256": {
+    "Cubetown.exe": "D65B2EFEA49F8F1F168C0553F6FCC99F50A066156D20FBB2C17DE3F774798FF2",
+    "Cubetown-Win64-Shipping.exe": "672D1CA70B7637DC039C7ABA14E5A94A1D167F98B63B573744DA018F565E5EDA",
+    "PhantomGames-Windows.pak": "DAD3E8C61404B429286F43766E9A491D6AEB2913A908737947C2C5AA36513DBB",
+    "PhantomGames-Windows.ucas": "3656F574313FEDCD289E45D1944911332EA70ED9705548AB65D3D5E186C62ED6",
+    "PhantomGames-Windows.utoc": "3EB70716B04073BA4CB4F8726B32479B1E175E024887D671C94129846EE8FB03"
+  },
+  "live_proof_sha256": {
+    "prologue": "3A94E7C0D8D05BC21692C88E4BF4B7690C8F3DA9D1090383F7D05CCB1D418CBD",
+    "restored_world": "BDFFC087AB161FBC774864EEEFAA20468816C78C8B3169E1D0A4D8D9AE7DD84E"
+  },
+  "verification": {
+    "canonical_story_validator": "pass",
+    "shipping_build": "pass",
+    "candidate_launch": "pass",
+    "pre_game_prologue_capture": "pass",
+    "finale_capture": "pass",
+    "eclipse_capture": "pass",
+    "restored_world_capture": "pass",
+    "installed_live_launch": "pass",
+    "rollback_preserved": true
+  }
+}

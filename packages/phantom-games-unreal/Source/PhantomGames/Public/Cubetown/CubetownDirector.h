@@ -16,6 +16,7 @@ class UStaticMeshComponent;
 class AStaticMeshActor;
 class ADirectionalLight;
 class APointLight;
+class ASkyLight;
 
 UENUM(BlueprintType)
 enum class ECubetownBlockType : uint8
@@ -48,15 +49,48 @@ enum class ECubetownEnemyType : uint8
     Gloomling,
     Roller,
     BloomWisp,
-    RiftGuardian
+    RiftGuardian,
+    PaleWarden,
+    CathedralStag,
+    MarionetteMayor,
+    BurrowMaw,
+    SkyfallMatron,
+    EclipseSeraph,
+    Aktarus
 };
 
 UENUM(BlueprintType)
 enum class ECubetownFriend : uint8
 {
-    Mira,
-    Rowan,
-    Pip
+    Sera,
+    Mara,
+    Tess,
+    Vara,
+    Brann,
+    Orin
+};
+
+UENUM(BlueprintType)
+enum class EShadowbearerWorldState : uint8
+{
+    Dawn,
+    Omen,
+    Shadowfall,
+    Restoring,
+    Restored
+};
+
+UENUM(BlueprintType)
+enum class EShadowbearerCinematic : uint8
+{
+    None,
+    Prologue,
+    ReturnedSoul,
+    MemoryReveal,
+    AktarusDefeat,
+    Ascension,
+    DawnsReturn,
+    Festival
 };
 
 UCLASS()
@@ -128,6 +162,69 @@ public:
 
     UPROPERTY()
     float TimeOfDayHours = 9.25f;
+
+    // Shadowbearer V1 extends the existing save non-destructively. Old CubeTown saves load into
+    // the Dawn prologue with their inventory/build data intact.
+    UPROPERTY()
+    FString PlayerName = TEXT("Zane");
+
+    UPROPERTY()
+    int32 ShadowbearerSaveVersion = 2;
+
+    UPROPERTY()
+    uint8 ShadowbearerWorldState = static_cast<uint8>(EShadowbearerWorldState::Dawn);
+
+    UPROPERTY()
+    int32 OpeningQuestStep = 0;
+
+    UPROPERTY()
+    bool bLanternComponentDelivered = false;
+
+    UPROPERTY()
+    bool bPaleWardenEncountered = false;
+
+    UPROPERTY()
+    bool bFirstShadowSolidified = false;
+
+    UPROPERTY()
+    bool bBramblewickLampRestored = false;
+
+    // Complete-story progression is additive so legacy CubeTown/Shadowbearer saves remain valid.
+    UPROPERTY()
+    int32 CanonicalChapter = 1;
+
+    UPROPERTY()
+    bool bPrologueSeen = false;
+
+    UPROPERTY()
+    uint32 ReturnedSoulMask = 0;
+
+    UPROPERTY()
+    uint32 ArmamentMask = 0;
+
+    UPROPERTY()
+    uint32 MemoryMask = 0;
+
+    UPROPERTY()
+    int32 EquippedArmament = -1;
+
+    UPROPERTY()
+    bool bNightspineOwned = false;
+
+    UPROPERTY()
+    bool bVestigeOwned = false;
+
+    UPROPERTY()
+    bool bVestigeEquipped = false;
+
+    UPROPERTY()
+    bool bFirstEclipseUnlocked = false;
+
+    UPROPERTY()
+    bool bEclipsedDawnlantern = false;
+
+    UPROPERTY()
+    bool bPostgameUnlocked = false;
 };
 
 UCLASS()
@@ -217,10 +314,13 @@ private:
 
     ECubetownEnemyType EnemyType = ECubetownEnemyType::Gloomling;
     float Health = 70.0f;
+    float MaxHealth = 70.0f;
     float Damage = 9.0f;
     float AttackRange = 125.0f;
     float AttackInterval = 0.8f;
     float AttackRemaining = 0.0f;
+    float SpecialAttackRemaining = 0.0f;
+    int32 AktarusPhase = 1;
 };
 
 UCLASS()
@@ -297,7 +397,7 @@ private:
     UPROPERTY()
     UStaticMeshComponent* VisualModel;
 
-    ECubetownFriend FriendType = ECubetownFriend::Mira;
+    ECubetownFriend FriendType = ECubetownFriend::Sera;
     FVector HomeLocation = FVector::ZeroVector;
     float WanderPhase = 0.0f;
 };
@@ -322,6 +422,7 @@ public:
     AActor* GetLockedTarget() const { return LockedTarget.Get(); }
     void SetBuildCameraMode(bool bEnabled);
     void FocusOpeningView(const FVector& WorldTarget);
+    void ApplyShadowbearerForm(bool bVestige, bool bFirstEclipse);
 
 private:
     UPROPERTY()
@@ -496,6 +597,8 @@ private:
     void ToggleCrouch();
     void RecenterCamera();
     void JumpOrClimb();
+    void UseArmament();
+    void ToggleVestige();
 };
 
 UCLASS()
@@ -550,7 +653,8 @@ public:
     void ClearCreations();
     void ActivateNearbyShrine(const FVector& HeroLocation);
     void InteractNearby(const FVector& HeroLocation);
-    void RegisterEnemyDefeat(ECubetownEnemyType Type);
+    void RegisterEnemyDefeat(ECubetownEnemyType Type, const FVector& DefeatLocation = FVector::ZeroVector);
+    void AdvanceAktarusPhase(int32 Phase, const FVector& ArenaLocation);
     void NotifyHeroDefeated();
     void PulseNearbyEnemies(const FVector& Origin, float Radius, float Damage, AActor* DamageCauser);
     int32 GetInventory(ECubetownBlockType Type) const;
@@ -573,6 +677,27 @@ public:
     int32 GetTotalFriendship() const { int32 Total = 0; for (int32 Value : Friendship) Total += Value; return Total; }
     int32 GetStoryChapter() const { return StoryChapter; }
     int32 GetForgeTier() const { return ForgeTier; }
+    const FString& GetPlayerName() const { return PlayerName; }
+    EShadowbearerWorldState GetShadowbearerWorldState() const { return ShadowbearerWorldState; }
+    FString GetShadowbearerWorldStateLabel() const;
+    bool IsShadowfallActive() const;
+    bool IsOpeningStoryDefeatActive() const;
+    bool IsFirstShadowSolidified() const { return bFirstShadowSolidified; }
+    bool IsBramblewickLampRestored() const { return bBramblewickLampRestored; }
+    bool IsStoryCinematicActive() const { return ActiveCinematic != EShadowbearerCinematic::None; }
+    EShadowbearerCinematic GetStoryCinematic() const { return ActiveCinematic; }
+    int32 GetStoryCinematicBeat() const { return CinematicBeat; }
+    float GetStoryCinematicProgress() const;
+    FString GetStoryCinematicKicker() const;
+    FString GetStoryCinematicTitle() const;
+    FString GetStoryCinematicLine() const;
+    FString GetEquippedArmamentName() const;
+    int32 GetCanonicalChapter() const { return CanonicalChapter; }
+    int32 GetReturnedSoulCount() const;
+    bool HasFirstEclipse() const { return bFirstEclipseUnlocked; }
+    void AdvanceStoryCinematic();
+    void UseEquippedArmament(const FVector& Origin, AActor* DamageCauser);
+    void ToggleVestigeForm();
 
 private:
     TArray<int32> Inventory = { 28, 18, 10, 6, 18, 0 };
@@ -635,10 +760,64 @@ private:
     float WeatherRemaining = 95.0f;
     int32 WeatherIndex = 0; // clear, petal wind, magic drizzle, mist
     TWeakObjectPtr<ADirectionalLight> DreamSun;
+    TWeakObjectPtr<ADirectionalLight> DreamShadowFill;
+    TWeakObjectPtr<ASkyLight> DreamSky;
     TArray<TWeakObjectPtr<APointLight>> DreamNightLights;
-    FString QuestStatus = TEXT("WELCOME TO CUBETOWN // MEET MIRA, ROWAN, AND PIP IN HEARTSTONE VILLAGE");
+    TArray<TWeakObjectPtr<AActor>> DawnOnlyActors;
+    TArray<TWeakObjectPtr<AActor>> ShadowOnlyActors;
+    TArray<TWeakObjectPtr<AActor>> RestoredOnlyActors;
+    TArray<TWeakObjectPtr<APointLight>> DawnLanternLights;
+    TWeakObjectPtr<AStaticMeshActor> FirstShadowBridge;
+    TWeakObjectPtr<ACubetownEnemy> PaleWarden;
+    FString PlayerName = TEXT("Zane");
+    EShadowbearerWorldState ShadowbearerWorldState = EShadowbearerWorldState::Dawn;
+    int32 OpeningQuestStep = 0;
+    bool bLanternComponentDelivered = false;
+    bool bPaleWardenEncountered = false;
+    bool bFirstShadowSolidified = false;
+    bool bBramblewickLampRestored = false;
+    bool bShadowbearerCaptureOverride = false;
+    float ShadowfallTransitionSeconds = 0.0f;
+    int32 CanonicalChapter = 1;
+    bool bPrologueSeen = false;
+    uint32 ReturnedSoulMask = 0;
+    uint32 ArmamentMask = 0;
+    uint32 MemoryMask = 0;
+    int32 EquippedArmament = -1;
+    bool bNightspineOwned = false;
+    bool bVestigeOwned = false;
+    bool bVestigeEquipped = false;
+    bool bFirstEclipseUnlocked = false;
+    bool bEclipsedDawnlantern = false;
+    bool bPostgameUnlocked = false;
+    EShadowbearerCinematic ActiveCinematic = EShadowbearerCinematic::None;
+    ECubetownEnemyType CinematicBoss = ECubetownEnemyType::Gloomling;
+    int32 CinematicBeat = 0;
+    float CinematicBeatSeconds = 0.0f;
+    FVector CinematicLocation = FVector::ZeroVector;
+    TWeakObjectPtr<AStaticMeshActor> RitualWeapon;
+    TWeakObjectPtr<AStaticMeshActor> RitualSoul;
+    TArray<TWeakObjectPtr<AStaticMeshActor>> RitualFragments;
+    TWeakObjectPtr<ACubetownEnemy> ActiveStoryBoss;
+    FString QuestStatus = TEXT("BRAMBLEWICK MORNING // FIND SERA AT THE VILLAGE LANTERNS");
 
     void BuildDreamWorld();
+    void BuildShadowbearerOpening();
+    void ApplyShadowbearerWorldState(bool bForce = false);
+    void SetShadowbearerWorldState(EShadowbearerWorldState NewState, const FString& Reason);
+    void UpdateOpeningStory(float DeltaSeconds);
+    void UpdateCanonicalStory(float DeltaSeconds);
+    void UpdateStoryCinematic(float DeltaSeconds);
+    void BeginStoryCinematic(EShadowbearerCinematic Cinematic, ECubetownEnemyType Boss, const FVector& Location);
+    void CompleteStoryCinematic();
+    void SpawnRitualWeapon();
+    void SpawnRitualSoul();
+    void SpawnNextCanonicalBoss();
+    void ApplyPostgameForm();
+    void SpawnPaleWarden();
+    void SolidifyFirstShadow();
+    void RestoreBramblewickLamp();
+    void RegisterWorldStateActor(AActor* Actor, EShadowbearerWorldState VisibleState);
     void SpawnProductionWorldPopulation();
     void SpawnDreamTree(const FString& Name, const FVector& Location, float Scale, int32 PaletteVariant, bool bCollision = true);
     void SpawnDreamWorldDetails();
