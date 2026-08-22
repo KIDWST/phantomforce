@@ -10,6 +10,7 @@ const orgs = read("../app/js/orgs.js");
 const css = read("../app/phantom.css");
 const server = read("../server/src/index.ts");
 const accounts = read("../server/src/access/user-accounts.ts");
+const workGraph = read("../server/src/workforce/work-graph.ts");
 const release = read("./test-release-critical.mjs");
 const databaseAuthTest = read("../server/scripts/test-database-auth.mjs");
 const primaryNav = index.match(/<nav class="os-primary-nav"[\s\S]*?<\/nav>/u)?.[0] || "";
@@ -99,6 +100,10 @@ gate("EXPORT-01", /function downloadRedactedAudit/u.test(workspaces) && !/const 
 gate("A11Y-01", /role="status"[\s\S]*aria-live="polite"/u.test(workspaces) && /@media \(max-width: 720px\)[\s\S]*\.audit-hero/u.test(css), "Audit states must remain semantic and responsive.");
 gate("BILLING-01", /plan_change_requires_billing/u.test(server) && /Only the verified Stripe event/u.test(server), "Paid plans must not be self-assigned outside verified billing.");
 gate("IDEMPOTENCY-01", /idempotency_key/u.test(server) && /publish:\$\{orgId\}:\$\{siteId\}/u.test(server), "Consequential writes must retain idempotency controls.");
+gate("WORKGRAPH-01", /test:work-graph/u.test(release) && /test:workforce-heartbeat-ui/u.test(release), "The authoritative workforce lifecycle must stay in release-critical coverage.");
+gate("WORKGRAPH-02", /\/api\/workforce\/heartbeat/u.test(server) && /idempotencyKey === idempotencyKey/u.test(workGraph), "The owner heartbeat must be server backed and idempotent.");
+gate("WORKGRAPH-03", /const prevHash = document\.audit\.at\(-1\)\?\.hash \?\? null[\s\S]*hash: createHash\("sha256"\)/u.test(workGraph) && /if \(!verified\) throw new Error/u.test(workGraph), "Work completion must require read-back evidence in a hash-chained audit.");
+gate("EXTERNAL-TRUTH-01", /No verified email delivery connector is active for this organization/u.test(workGraph) && /Connect and verify Gmail or Outlook/u.test(workGraph), "Unavailable external execution must surface an exact reason and remediation.");
 
 console.log(JSON.stringify({
   ok: true,

@@ -1,8 +1,52 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-08-21",
+  "lastUpdated": "2026-08-22",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
+    {
+      "id": "phantom-workforce-authoritative-heartbeat",
+      "status": "active",
+      "title": "Your Phantom Workforce executes safe work and proves completion",
+      "ownerDecision": "The Overview begins with one authoritative workforce heartbeat: What Needs Me to owner review, Phantom execution, verified completion, and Nothing Slips follow-through. Decision approval creates real tenant-scoped internal work, uses an idempotency key, reads the resulting artifact back, and exposes a durable receipt. Safe internal actions can be approved together. External email and calendar actions remain approval-gated and must report BLOCKED with the exact missing connector and remediation until a verified provider exists. No unavailable service, optimistic client state, or navigation-only approval may claim completion.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "YOUR PHANTOM WORKFORCE[\\s\\S]*What Needs Me[\\s\\S]*Review[\\s\\S]*Phantom executes[\\s\\S]*Verified complete[\\s\\S]*Nothing slips",
+          "description": "The owner sees the complete monitor-review-execute-verify-follow-through heartbeat."
+        },
+        {
+          "file": "server/src/workforce/work-graph.ts",
+          "pattern": "idempotencyKey === idempotencyKey",
+          "description": "Repeated work proposals replay through the same action rather than duplicating it."
+        },
+        {
+          "file": "server/src/workforce/work-graph.ts",
+          "pattern": "if \\(!verified\\) throw new Error",
+          "description": "Internal execution reads the created artifact back before completion."
+        },
+        {
+          "file": "server/src/workforce/work-graph.ts",
+          "pattern": "No verified email delivery connector is active for this organization[\\s\\S]*Connect and verify Gmail or Outlook",
+          "description": "Unavailable email execution remains blocked with an exact reason and remediation."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "\\/api\\/workforce\\/heartbeat[\\s\\S]*\\/api\\/workforce\\/actions\\/:actionId\\/decision[\\s\\S]*\\/api\\/workforce\\/actions\\/decide-all-safe",
+          "description": "The workforce heartbeat and owner decisions remain authenticated server operations."
+        },
+        {
+          "file": "server/src/phantom-ai/decisions.ts",
+          "pattern": "proposeWorkAction[\\s\\S]*decision:\\$\\{record.id\\}:\\$\\{record.evidenceHash\\}[\\s\\S]*executionStatus",
+          "description": "Decision approval creates durable verified follow-through instead of only navigating."
+        },
+        {
+          "file": "scripts/test-release-critical.mjs",
+          "pattern": "test:work-graph[\\s\\S]*test:workforce-http[\\s\\S]*test:workforce-heartbeat-ui",
+          "description": "The execution model and owner UI remain release-critical gates."
+        }
+      ],
+      "forbiddenPatterns": []
+    },
     {
       "id": "native-dropdowns-remain-readable",
       "status": "active",
@@ -1994,7 +2038,7 @@
         },
         {
           "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
-          "pattern": "Native runtime ready[\\s\\S]{0,1200}Launch native game[\\s\\S]{0,2400}Native game window[\\s\\S]{0,1200}Launch / relaunch",
+          "pattern": "Native runtime ready[\\s\\S]{0,1600}Launch native game[\\s\\S]{0,5000}Native game window[\\s\\S]{0,1600}Launch / relaunch",
           "description": "Native projects keep usable Play and Split surfaces with explicit launch controls."
         },
         {
@@ -2521,52 +2565,52 @@
       ]
     },
     {
-      "id": "cubetown-v19-installed-makers-journey-floor",
+      "id": "shadowbearer-dawns-return-promoted-floor",
       "status": "active",
-      "title": "Cubetown V19R1 is installed and the Maker remains a real animated adventure hero",
-      "ownerDecision": "Cubetown's verified installed release floor is V19R1 Maker's Journey inside the retained V25R3 PhantomPlay set. The owner supplied exact PROMOTE authorization and the previous V25R3 Cubetown was preserved as a rollback checkpoint. Future work must keep the original crimson-canopy storybook identity and the profession-readable Maker: Mage-based modular character, crimson/teal/cream visual direction, cyan echo rod, reactive memory shards, mantle, satchel, belt, gauntlet, and explicit idle, walk, run, airborne, attack, and hit presentation. The opening road must retain authored cyan/crimson detail into Heartstone with a visible companion. Generated images are reference targets translated into real runtime systems. No future revision may silently replace this installed floor or bypass a new exact PROMOTE authorization.",
+      "title": "Shadowbearer: Dawn's Return V25R15 remains the promoted native adventure",
+      "ownerDecision": "The former Cubetown compatibility slot now publicly ships as Shadowbearer: Dawn's Return. V25R15 is its documented promoted floor, using the stable internal cubetown identifier only for saves, launcher compatibility, and the installed path. The complete Dawn, Omen, Shadowfall, Restoring, and Restored arc; Bramblewick residents; Pale Warden opening; five Returned guardians; Aktarus history; Black Meridian finale; First Eclipse postgame; production adventure character; reference art; and truthful web/desktop/server identity must remain together. The older public CubeTown/Maker identity cannot silently replace the promoted Shadowbearer release.",
       "requiredPatterns": [
         {
+          "file": "packages/phantom-games-unreal/Docs/Shadowbearer/SHADOWBEARER_V25R15_RELEASE.json",
+          "pattern": "\"release\": \"V25R15\"[\\s\\S]*\"public_title\": \"Shadowbearer: Dawn's Return\"[\\s\\S]*\"internal_compatibility_id\": \"cubetown\"[\\s\\S]*\"promoted_at\": \"2026-08-21\"[\\s\\S]*\"rollback_path\"",
+          "description": "The authoritative release record retains the promoted floor, stable compatibility id, and rollback evidence."
+        },
+        {
           "file": "docs/phantomplay-production/creative-bibles/cubetown.json",
-          "pattern": "current_floor\": \"V19R1 Maker's Journey verified installed Cubetown release[\\s\\S]*next_target\": \"Post-promotion visual/input review and V20 polish; V19R1 is the no-regression floor[\\s\\S]*crimson mantle[\\s\\S]*cyan echo rod",
-          "description": "Cubetown's creative bible retains the installed V19R1 floor and accepted Maker identity."
+          "pattern": "Shadowbearer: Dawn's Return[\\s\\S]*internal compatibility id[\\s\\S]*V25R15[\\s\\S]*Dawn[\\s\\S]*Shadowfall[\\s\\S]*First Eclipse",
+          "description": "The compatibility-slot creative bible reflects the current public game and complete story floor."
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp",
-          "pattern": "SK_Mage\\.SK_Mage[\\s\\S]*A_Mage_Walk[\\s\\S]*A_Mage_Run[\\s\\S]*A_Mage_Attack[\\s\\S]*A_Mage_Hit[\\s\\S]*UpdateMakerPresentation",
-          "description": "The runtime retains the production Maker base and complete animation-state presentation."
+          "pattern": "AdvanceAktarusPhase[\\s\\S]*SK_Rogue\\.SK_Rogue[\\s\\S]*bFirstEclipseUnlocked[\\s\\S]*BuildShadowbearerOpening[\\s\\S]*SpawnPaleWarden",
+          "description": "The promoted native runtime retains the production adventure character and complete Shadowbearer progression."
         },
         {
-          "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp",
-          "pattern": "MakerEchoOrbitA[\\s\\S]*MakerEchoOrbitB[\\s\\S]*MakerEchoOrbitC[\\s\\S]*MakerEchoLight[\\s\\S]*SpawnMakerArrivalTrail[\\s\\S]*MakerTrailCrimsonTree",
-          "description": "The Maker's reactive echo signature and authored opening route stay in the game."
+          "file": "app/js/phantomplay.js",
+          "pattern": "id: \"cubetown\"[\\s\\S]{0,1800}title: \"Shadowbearer: Dawn's Return\"[\\s\\S]{0,1800}version: \"1.0.1-dawns-return\"",
+          "description": "The web catalog exposes the current public title and version through the stable native route."
         },
         {
-          "file": "packages/phantom-games-unreal/Docs/Production/CUBETOWN_V19_VISUAL_TARGET_PROMPTS.md",
-          "pattern": "Maker character reference[\\s\\S]*Heartstone gameplay target[\\s\\S]*Runtime translation contract",
-          "description": "The original visual target prompts and their runtime translation contract remain reproducible."
+          "file": "server/src/phantom-ai/phantomplay-flagship.ts",
+          "pattern": "id: \"cubetown\"[\\s\\S]{0,1800}title: \"Shadowbearer: Dawn's Return\"[\\s\\S]{0,1800}version: \"1.0.1-dawns-return\"",
+          "description": "The authenticated server catalog matches the promoted Shadowbearer identity."
         },
         {
-          "file": "scripts/test-cubetown-v19-maker.mjs",
-          "pattern": "CUBETOWN_V19_MAKER_PASS",
-          "description": "The focused V19 regression gate remains available."
-        },
-        {
-          "file": "packages/phantom-games-unreal/Tools/Promote-CubetownV19R1.ps1",
-          "pattern": "Authorization -cne 'PROMOTE'[\\s\\S]*phantomplay-cubetown-[\\s\\S]*Installed Shipping binary[\\s\\S]*prior install was restored",
-          "description": "Cubetown promotion remains exact-authorized, transactional, hash-verified, and recoverable."
+          "file": "packages/phantom-games-unreal/Tools/ValidateShadowbearerDawnsReturnV1.py",
+          "pattern": "COMPLETE_STORY_CANON[\\s\\S]*required_runtime[\\s\\S]*PASS: Shadowbearer: Dawn's Return V1 static validation",
+          "description": "The complete story, identity, and runtime retain a focused executable validator."
         }
       ],
       "forbiddenPatterns": [
         {
-          "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp",
-          "pattern": "ConfigureProductionSkeletalCharacter\\([\\s\\S]{0,220}SK_Rogue\\.SK_Rogue[\\s\\S]{0,220}A_Rogue_Idle\\.A_Rogue_Idle",
-          "description": "Cubetown cannot regress to the generic Rogue launch hero."
+          "file": "app/js/phantomplay.js",
+          "pattern": "title: \"CubeTown\"",
+          "description": "The retired public CubeTown title cannot replace Shadowbearer in the live catalog."
         },
         {
-          "file": "docs/phantomplay-production/creative-bibles/cubetown.json",
-          "pattern": "Voxel mining and placement must be immediate",
-          "description": "The stale voxel-first pillar cannot replace the current Memorycraft and adventure identity."
+          "file": "server/src/phantom-ai/phantomplay-flagship.ts",
+          "pattern": "title: \"CubeTown\"",
+          "description": "The retired public CubeTown title cannot return through the server catalog."
         }
       ]
     }

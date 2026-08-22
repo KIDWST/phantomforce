@@ -10,13 +10,11 @@
      materialized FROM the live Signal feed on read. A Decision adds owner
      state (open / approved / modified / dismissed) on top of a Signal; it
      never invents a finding the Signal layer didn't produce.
-   - Execution stays where it lives today. Every current Signal's
-     recommendation is a navigation step by construction (see signals.ts),
-     so approving a Decision honestly records the owner's choice, writes the
-     evidence trail to the Hermes ledger, and returns the route for the UI
-     to open. Nothing here claims an external action was executed — when
-     Signals gain run-capable actions, follow-through routes through the ONE
-     agent-run engine, not through this file.
+   - Execution stays in one work graph. Every current Signal's recommendation
+     still owns a navigation route (see signals.ts), but approving a Decision
+     now records the owner's choice and creates one idempotent, verified
+     internal follow-up task. It never performs an external send, purchase,
+     publication, or calendar commit.
 
    Lifecycle honesty:
    - A decided (approved/modified/dismissed) card suppresses re-surfacing of
@@ -32,6 +30,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { AccessSession } from "../access/session.js";
+import { proposeWorkAction } from "../workforce/work-graph.js";
 import { appendHermesLedgerRecord } from "./hermes-ledger.js";
 import { getBrainContract, type BrainContract, type Signal, type SignalDepartment } from "./signals.js";
 import type { PulseAccess } from "./organization-pulse.js";
@@ -67,9 +66,17 @@ export type DecisionRecord = {
   decidedBy: string | null;
   /* Owner's modification note — only set when status is "modified". */
   ownerNote: string | null;
-  /* Honest record of what deciding actually did. Today every follow-through
-     is navigation; nothing external executes from this layer. */
-  followThrough: { type: "navigation"; route: string | null; detail: string } | null;
+  /* Honest record of what deciding actually did. Approved recommendations
+     become verified internal follow-up tasks; the route remains a convenience
+     for opening the underlying business surface. */
+  followThrough: {
+    type: "execution";
+    route: string | null;
+    actionId: string;
+    executionStatus: string;
+    receiptId: string | null;
+    detail: string;
+  } | null;
 };
 
 type DecisionStore = { version: 1; tenants: Record<string, Record<string, DecisionRecord>> };
@@ -236,16 +243,41 @@ export async function decide(
   record.decidedAt = now();
   record.decidedBy = session.id || session.email || "owner";
   record.ownerNote = action === "modify" ? String(note || "").slice(0, 500) || null : null;
-  record.followThrough =
-    action === "dismiss"
-      ? null
-      : {
-          type: "navigation",
-          route: record.recommendation?.route ?? null,
-          detail: record.recommendation
-            ? `Owner ${action === "approve" ? "approved" : "modified"} the recommendation; PhantomForce opens ${record.recommendation.label}. No external action was executed by this decision.`
-            : "Owner acknowledged the finding. No external action was executed by this decision.",
-        };
+  if (action === "dismiss") {
+    record.followThrough = null;
+  } else {
+    const title = record.recommendation?.label || `Follow through: ${record.title}`;
+    const due = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+    const execution = await proposeWorkAction({
+      tenantId: record.tenantId,
+      actor: record.decidedBy,
+      idempotencyKey: `decision:${record.id}:${record.evidenceHash}`,
+      correlationId: record.id,
+      action: {
+        type: "task.create",
+        proposedBy: "system",
+        rationale: action === "modify" && record.ownerNote
+          ? `Owner adjusted the recommendation: ${record.ownerNote}`
+          : `Owner approved the recommendation created from ${record.evidence.source}.`,
+        policy: { surface: "internal", reversible: true, requiresApproval: false },
+        payload: {
+          title,
+          due,
+          priority: record.impact === "high" ? "high" : record.impact === "low" ? "low" : "medium",
+          project: record.department,
+        },
+      },
+    });
+    const executed = execution.result.action;
+    record.followThrough = {
+      type: "execution",
+      route: record.recommendation?.route ?? null,
+      actionId: executed.id,
+      executionStatus: executed.status,
+      receiptId: executed.receipt?.id ?? null,
+      detail: executed.receipt?.summary || `Follow-up action ${executed.status}.`,
+    };
+  }
 
   await writeStore(store);
 

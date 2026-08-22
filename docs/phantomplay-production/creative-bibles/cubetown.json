@@ -1,32 +1,32 @@
 {
   "schema_version": "1.1",
   "game_id": "cubetown",
-  "title": "Cubetown: Echoes of the Maker",
-  "production_status": "Unreal Engine 5 native vertical slice",
-  "current_floor": "V19R1 Maker's Journey verified installed Cubetown release inside the retained V25R3 PhantomPlay set; preserve its recovered V13-V18 systems plus the V19 hero, villager, echo, world, HUD, and safety upgrades",
-  "next_target": "Post-promotion visual/input review and V20 polish; V19R1 is the no-regression floor",
-  "core_fantasy": "A handcrafted storybook adventure where the Maker remembers creatures and world objects as living echoes, then combines them to fight, traverse, solve, and build a home in an impossible seasonal valley.",
+  "title": "Shadowbearer: Dawn's Return",
+  "production_status": "Promoted Unreal Engine 5.8 native adventure; the internal compatibility id remains cubetown for saves and the installed route",
+  "current_floor": "V25R15 Shadowbearer: Dawn's Return promoted release; preserve the complete Dawn-to-First-Eclipse story, native runtime, public identity, reference art, package evidence, and rollback record",
+  "next_target": "Future successors build from the promoted V25R15 floor in an isolated candidate; V25R15 remains the no-regression floor until a newer candidate is verified and promoted",
+  "core_fantasy": "A handcrafted storybook action-adventure where Zane survives Shadowfall, projects light to make shadow physically real, restores five fallen guardians and their armaments, confronts Aktarus at the Black Meridian, and carries light and darkness into Dawn's Return.",
   "design_pillars": [
-    "The Maker is a profession-readable adventure hero with a crimson mantle, teal field gear, a cyan echo rod, and complete locomotion/combat animation states — never a default pawn or permanently idling mesh.",
-    "Creature and object echoes are visible companions and physical tools, not passive inventory text.",
-    "Heartstone village, shrines, friendships, the Guardian, and sky-island landmarks create an authored adventure spine inside a freely explored world.",
-    "Combat, traversal, Memorycraft, Weave, Build Mode, puzzles, and town life combine rather than live in disconnected modes.",
-    "Every opening frame must show a readable path, crimson canopy, turquoise water or magic, warm architecture, friends or creatures, and a destination across foreground, midground, and background."
+    "Zane is a readable production adventure character with complete locomotion, guard, dodge, attack, hit, and traversal presentation — never a default pawn or permanently idling mesh.",
+    "Projected light, held shadow, Memorycraft, returned souls, and guardian armaments are physical world and combat systems, not passive inventory text.",
+    "Bramblewick before and after Shadowfall anchors the emotional arc through Sera, Mara, Tess, Vara, Brann, Orin, and the Pale Warden.",
+    "The five Returned guardians and Aktarus history lead into the Black Meridian finale, Dawn's Return, and persistent First Eclipse postgame.",
+    "Every opening frame must show authored natural depth, readable traversal, warm light against held shadow, and a clear destination across foreground, midground, and background."
   ],
   "visual_identity": {
-    "hero": "The Maker — compact athletic adventurer, asymmetric crimson hooded mantle, deep-teal layered tunic, cream trousers, rugged boots, brass and leather maker kit, rune gauntlet, cyan crystal echo rod, lavender charm.",
-    "world": "Warm storybook PBR with signature crimson canopy, teal ecology, cream and lavender stone, turquoise water and magic, warm timber, brass craft details, and composed diorama depth.",
-    "hud": "Minimal near-black glass with cyan and crimson accents: life/stamina lower left, three Maker tools lower center, objective and distance upper right. No generic sci-fi shell and no purple-blue gradient UI.",
+    "hero": "Zane the Shadowbearer — athletic hooded adventurer with a production Rogue-based silhouette, readable blade and guard language, grounded field gear, and complete movement and combat states.",
+    "world": "Natural storybook PBR: Bramblewick warmth, restrained teal shadow, projected dawnlight, moss, timber, stone, forests, markets, warrens, skyfall heights, Vesperhold, and Black Meridian depth.",
+    "hud": "Minimal near-black glass with teal, cream, and controlled gold accents; story, combat tells, objectives, health, and resources stay readable without generic sci-fi chrome or purple-blue gradients.",
     "visual_targets": [
-      "packages/phantom-games-unreal/SourceArt/VisualTargets/cubetown-v19-maker-character-reference.png",
-      "packages/phantom-games-unreal/SourceArt/VisualTargets/cubetown-v19-heartstone-gameplay-target.png"
+      "app/assets/phantomplay/shadowbearer-cover.png",
+      "packages/phantom-games-unreal/Content/Phantom/VisualTargets/Shadowbearer_TARGET.uasset"
     ]
   },
   "forbidden_crossovers": [
     "Do not copy or imitate Nintendo, Zelda, Minecraft, Fortnite, Genshin, Pixar, or any other existing franchise.",
     "Do not import Phantom Ages lane-battle controls or age progression.",
     "Do not import Phantom Legends RTS selection or settlement economy.",
-    "Do not resurrect voxel block placement as the primary loop; architecture uses Build Mode and world manipulation uses Memorycraft.",
+    "Do not resurrect voxel block placement or the retired Maker identity as the primary public game; world manipulation uses Memorycraft and projected shadow.",
     "Do not replace the existing multi-engine Cubetown web source; keep it as compatibility reference."
   ],
   "controls": {
@@ -39,12 +39,10 @@
     "dash": "left control",
     "lock_on": "middle mouse",
     "create_memory": "hold Q",
-    "remember_world_example": "C",
-    "weave_memory": "hold X",
-    "ride_weave": "G",
-    "build_mode": "B",
-    "interact": "F",
+    "returned_armament": "T",
+    "vestige_postgame": "H",
+    "interact": "E",
     "inventory_map_journal": "Tab / M / J"
   },
-  "release_policy": "V19R1 was transactionally promoted after the owner's exact literal PROMOTE authorization, with the previous V25R3 Cubetown preserved as a rollback checkpoint. Future revisions must package to a new isolated candidate and require a new exact PROMOTE authorization."
+  "release_policy": "V25R15 is documented as promoted on 2026-08-21 with a Shadowbearer-only candidate, package hashes, stable compatibility path, and rollback path. Future revisions must package to a new isolated candidate, pass focused gates, and preserve rollback readiness before replacing this floor."
 }

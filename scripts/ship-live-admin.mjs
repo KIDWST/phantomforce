@@ -19,6 +19,7 @@ const ALLOWED_STAGE_PATHS = [
   "packages",
   "docs",
   "CLAUDE.md",
+  "PHANTOMFORCE_CURRENT_STATE.md",
   "package.json",
   "package-lock.json",
   "README.md"

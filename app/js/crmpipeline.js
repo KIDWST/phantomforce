@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260820-190";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20260822-193";
 
 export const CRM_REFRESH_SIGNAL_KEY = "pf.crm.refresh.v1";
 

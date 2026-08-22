@@ -137,6 +137,7 @@ function shouldProxy(urlPath) {
     || urlPath.startsWith("/api/crm")
     || urlPath.startsWith("/api/proposals")
     || urlPath.startsWith("/api/workspace-approvals")
+    || urlPath.startsWith("/api/workforce")
     || urlPath.startsWith("/api/managed-growth")
     || urlPath.startsWith("/api/production-core")
     || urlPath.startsWith("/api/connections")

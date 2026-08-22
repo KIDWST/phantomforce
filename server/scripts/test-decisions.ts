@@ -10,6 +10,7 @@ import { join } from "node:path";
 const tempDir = mkdtempSync(join(tmpdir(), "pf-decisions-"));
 process.env.PHANTOMFORCE_DECISIONS_PATH = join(tempDir, "decisions.json");
 process.env.PHANTOM_HERMES_LEDGER_PATH = join(tempDir, "hermes-ledger.jsonl");
+process.env.PHANTOMFORCE_WORK_GRAPH_DIR = join(tempDir, "work-graph");
 
 const { listDecisions, decide } = await import("../src/phantom-ai/decisions.js");
 const { resolveHermesLedgerPath } = await import("../src/phantom-ai/hermes-ledger.js");
@@ -80,11 +81,18 @@ check("decision carries evidence + recommendation", Boolean(feed.open[0]?.eviden
 feed = await listDecisions(session, accessA, contractFor("tenant-a", [leadSignal, approvalSignal]));
 check("re-listing is idempotent", feed.open.length === 2);
 
-// 3. Approve: decided, ledger written, follow-through is honest navigation.
+// 3. Approve: decided, ledger written, and a real internal follow-up task is
+// executed with read-back verification. Navigation remains a convenience.
 const approvalCard = feed.open.find((decision) => decision.signalId === approvalSignal.id)!;
 const approved = await decide(session, accessA, approvalCard.id, "approve");
 check("approve marks the decision approved", approved.status === "approved" && approved.decidedAt !== null);
-check("approve follow-through is navigation, not execution", approved.followThrough?.type === "navigation" && approved.followThrough.route === "approvals");
+check(
+  "approve follow-through is verified internal execution",
+  approved.followThrough?.type === "execution"
+    && approved.followThrough.route === "approvals"
+    && approved.followThrough.executionStatus === "verified_complete"
+    && Boolean(approved.followThrough.receiptId),
+);
 const ledgerRaw = await readFile(resolveHermesLedgerPath(), "utf8").catch(() => "");
 check("decide writes the Hermes ledger", ledgerRaw.includes("decision_card"));
 

@@ -433,6 +433,14 @@ import {
 import { getBrainContract, getSignals } from "./phantom-ai/signals.js";
 import { decide, listDecisions, type DecideAction } from "./phantom-ai/decisions.js";
 import {
+  decideAllSafeWorkActions,
+  decideWorkAction,
+  getWorkGraphDocument,
+  getWorkGraphHeartbeat,
+  proposeWorkAction,
+  publicWorkGraphAction,
+} from "./workforce/work-graph.js";
+import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
 } from "./phantom-ai/security-scan-scheduler.js";
@@ -1840,6 +1848,136 @@ app.delete("/api/workspace-approvals/:approvalId", async (request, reply) => {
   }
   const result = await deleteWorkspaceApproval({ tenantId, approvalId: params.data.approvalId, actor: session.id });
   return { ok: true, tenant_id: tenantId, approval: result.result, document: publicWorkspaceApprovalDocument(result.document), approval_execution_implemented: false, ...workspaceRecordSafety };
+});
+
+/* ---------------- authoritative workforce heartbeat ----------------
+   This is the first complete owner loop: propose -> approve when required ->
+   execute -> read-back verification -> durable receipt. It is deliberately
+   separate from the legacy workspace approval list so old approval records
+   are preserved and never reinterpreted as executable instructions. */
+const WorkGraphCreateBodySchema = z.object({
+  tenant_id: z.string().trim().max(120).optional(),
+  action: z.unknown(),
+  idempotency_key: z.string().trim().min(1).max(180),
+  correlation_id: z.string().trim().min(1).max(180).optional(),
+});
+const WorkGraphDecisionBodySchema = z.object({
+  tenant_id: z.string().trim().max(120).optional(),
+  decision: z.enum(["approve", "reject"]),
+  note: z.string().trim().max(1200).optional(),
+});
+
+app.get("/api/workforce/heartbeat", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const heartbeat = await getWorkGraphHeartbeat(tenantId, session.id);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    heartbeat,
+    execution: {
+      internal_actions: "enabled",
+      verification: "read_back_required",
+      external_actions: "connector_gated",
+    },
+    ...workspaceRecordSafety,
+  };
+});
+
+app.get("/api/workforce/actions/:actionId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = (request.params ?? {}) as { actionId?: string };
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const document = await getWorkGraphDocument(tenantId, session.id);
+  const action = document.actions.find((candidate) => candidate.id === String(params.actionId || ""));
+  if (!action) return reply.status(404).send({ ok: false, error: "Work action not found for this organization." });
+  return { ok: true, tenant_id: tenantId, action: publicWorkGraphAction(action), audit: document.audit.filter((event) => event.actionId === action.id), ...workspaceRecordSafety };
+});
+
+app.post("/api/workforce/actions", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Organization write access is required to create work." });
+  const parsed = WorkGraphCreateBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await proposeWorkAction({
+      tenantId,
+      actor: session.id,
+      action: parsed.data.action,
+      idempotencyKey: parsed.data.idempotency_key,
+      correlationId: parsed.data.correlation_id,
+    });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      action: publicWorkGraphAction(result.result.action),
+      replayed: result.result.replayed,
+      execution_implemented: true,
+      ...workspaceRecordSafety,
+    };
+  } catch (error) {
+    return reply.status(400).send({ ok: false, error: error instanceof Error ? error.message : "Work action could not be created." });
+  }
+});
+
+app.post("/api/workforce/actions/:actionId/decision", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = (request.params ?? {}) as { actionId?: string };
+  const parsed = WorkGraphDecisionBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canDecideWorkspaceApprovals(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Work decisions require an organization owner or administrator." });
+  }
+  try {
+    const result = await decideWorkAction({
+      tenantId,
+      actionId: String(params.actionId || ""),
+      actor: session.id,
+      decision: parsed.data.decision,
+      note: parsed.data.note,
+    });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      action: publicWorkGraphAction(result.result.action),
+      replayed: result.result.replayed,
+      execution_implemented: true,
+      ...workspaceRecordSafety,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Work decision could not be recorded.";
+    return reply.status(/not found/i.test(message) ? 404 : 400).send({ ok: false, error: message });
+  }
+});
+
+app.post("/api/workforce/actions/decide-all-safe", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canDecideWorkspaceApprovals(session, tenantId)) {
+    return reply.status(403).send({ ok: false, error: "Bulk work decisions require an organization owner or administrator." });
+  }
+  const result = await decideAllSafeWorkActions({ tenantId, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    completed: result.result.completed.map(publicWorkGraphAction),
+    skipped_external: result.result.skippedExternal,
+    execution_implemented: true,
+    ...workspaceRecordSafety,
+  };
 });
 
 app.get("/api/managed-growth/report", async (request, reply) => {
@@ -8249,6 +8387,29 @@ app.get("/phantom-ai/decisions", async (request, reply) => {
     return { ok: true, ...(await listDecisions(session, await pulseAccessFor(session, query.tenant_id))) };
   } catch (error) {
     return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Decisions could not be assembled." });
+  }
+});
+
+app.post("/phantom-ai/decisions/decide-all", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { tenant_id?: unknown };
+  try {
+    const access = await pulseAccessFor(session, body.tenant_id);
+    const feed = await listDecisions(session, access);
+    const completed = [];
+    for (const record of feed.open.slice(0, 25)) {
+      completed.push(await decide(session, access, record.id, "approve"));
+    }
+    return {
+      ok: true,
+      tenant_id: access.tenantId,
+      completed,
+      verified_internal_actions: completed.filter((record) => record.followThrough?.executionStatus === "verified_complete").length,
+      external_actions_executed: false,
+    };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Decision queue could not be completed." });
   }
 });
 
