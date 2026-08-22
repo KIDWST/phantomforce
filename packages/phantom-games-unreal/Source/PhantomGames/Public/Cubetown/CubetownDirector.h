@@ -186,6 +186,10 @@ public:
     UPROPERTY()
     bool bFirstShadowSolidified = false;
 
+    // The Dawnlantern tutorial is an authored three-beat light puzzle, not a one-button unlock.
+    UPROPERTY()
+    int32 FirstShadowAlignmentStep = 0;
+
     UPROPERTY()
     bool bBramblewickLampRestored = false;
 
@@ -298,6 +302,12 @@ public:
     virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
     void Configure(ECubetownEnemyType NewType, int32 Tier);
     ECubetownEnemyType GetEnemyType() const { return EnemyType; }
+    float GetHealth() const { return Health; }
+    float GetMaxHealth() const { return MaxHealth; }
+    float GetHealthRatio() const { return MaxHealth > 0.0f ? FMath::Clamp(Health / MaxHealth, 0.0f, 1.0f) : 0.0f; }
+    bool IsAttackTelegraphing() const { return bAttackWindingUp; }
+    bool IsBoss() const;
+    FString GetCombatName() const;
 
 private:
     UPROPERTY()
@@ -319,7 +329,11 @@ private:
     float AttackRange = 125.0f;
     float AttackInterval = 0.8f;
     float AttackRemaining = 0.0f;
+    float AttackWindupRemaining = 0.0f;
+    float StaggerRemaining = 0.0f;
+    float HitFlashRemaining = 0.0f;
     float SpecialAttackRemaining = 0.0f;
+    bool bAttackWindingUp = false;
     int32 AktarusPhase = 1;
 };
 
@@ -418,6 +432,8 @@ public:
     float GetDashRemaining() const { return DashRemaining; }
     float GetDamageFlash() const { return DamageFlash; }
     float GetStamina() const { return Stamina; }
+    bool IsGuarding() const { return bGuarding; }
+    int32 GetComboStep() const { return ComboStep; }
     bool IsLockedOn() const { return LockedTarget.IsValid(); }
     AActor* GetLockedTarget() const { return LockedTarget.Get(); }
     void SetBuildCameraMode(bool bEnabled);
@@ -549,6 +565,7 @@ private:
     float LocomotionProofMaxPitch = -90.0f;
     FVector LocomotionProofStart = FVector::ZeroVector;
     TWeakObjectPtr<ACubetownEnemy> LockedTarget;
+    float CameraRecenteringRemaining = 0.0f;
 
     void MoveForward(float Value);
     void MoveRight(float Value);
@@ -768,6 +785,8 @@ private:
     TArray<TWeakObjectPtr<AActor>> RestoredOnlyActors;
     TArray<TWeakObjectPtr<APointLight>> DawnLanternLights;
     TWeakObjectPtr<AStaticMeshActor> FirstShadowBridge;
+    TWeakObjectPtr<AStaticMeshActor> FirstShadowLantern;
+    TWeakObjectPtr<APointLight> FirstShadowProjectionLight;
     TWeakObjectPtr<ACubetownEnemy> PaleWarden;
     FString PlayerName = TEXT("Zane");
     EShadowbearerWorldState ShadowbearerWorldState = EShadowbearerWorldState::Dawn;
@@ -775,8 +794,11 @@ private:
     bool bLanternComponentDelivered = false;
     bool bPaleWardenEncountered = false;
     bool bFirstShadowSolidified = false;
+    int32 FirstShadowAlignmentStep = 0;
     bool bBramblewickLampRestored = false;
     bool bShadowbearerCaptureOverride = false;
+    float PaleWardenEncounterSeconds = 0.0f;
+    int32 PaleWardenEncounterBeat = 0;
     float ShadowfallTransitionSeconds = 0.0f;
     int32 CanonicalChapter = 1;
     bool bPrologueSeen = false;

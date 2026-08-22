@@ -966,6 +966,15 @@ pub(crate) fn Studio() -> Element {
         selected_file.set(None);
         editor_content.set(String::new());
         dirty.set(false);
+        // Project selection must always replace the active viewport. Without this,
+        // selecting a native Unreal project could leave the previously selected
+        // web game visible behind the new project's title and controls.
+        playing_entry.set(
+            game_entry_path(&game)
+                .as_ref()
+                .map(|_| game_entry_name(&game)),
+        );
+        reload_token.set(reload_token().wrapping_add(1));
         mods_game_id.set(game.id.clone());
         mods_list.set(read_available_mods(&game.id));
         mods_enabled.set(read_enabled_mods(&game.id));

@@ -2,7 +2,7 @@
   "FileVersion": 3,
   "EngineAssociation": "5.8",
   "Category": "Games",
-  "Description": "Unreal-native home of PhantomStrike, Phantom Ages, Phantom Legends, and Cubetown.",
+  "Description": "Unreal-native home of PhantomStrike, Phantom Ages, Phantom Legends, and Shadowbearer: Dawn's Return.",
   "Modules": [
     {
       "Name": "PhantomGames",

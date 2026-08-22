@@ -29,7 +29,8 @@ bool PhantomModularCharacter::Configure(
     const TCHAR* IdleAnimPath,
     float TargetHeightCm,
     float AnchorZ,
-    float YawOffset
+    float YawOffset,
+    bool bAllowMonolithic
 )
 {
     if (!Owner || !Leader || !AttachParent || !BodyMeshPath) return false;
@@ -66,7 +67,7 @@ bool PhantomModularCharacter::Configure(
         }
     }
     // A production modular humanoid must include both limbs and a head/skull, not merely a body.
-    if (Parts.Num() < 4) return false;
+    if (Parts.Num() < 4 && !bAllowMonolithic) return false;
 
     const float RawHeight = FMath::Max(1.0f, MaxZ - MinZ);
     const float FitScale = FMath::Clamp(TargetHeightCm / RawHeight, 0.01f, 50.0f);

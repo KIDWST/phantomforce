@@ -44,9 +44,27 @@ $expectedFields = @{
     CompanyName = 'PhantomForce'
     OriginalFilename = 'PhantomPlay.exe'
 }
+function ConvertTo-NormalizedVersion {
+    param([Parameter(Mandatory)][string]$Value)
+
+    $parsed = [Version]$Value
+    return @(
+        $parsed.Major,
+        $parsed.Minor,
+        [Math]::Max(0, $parsed.Build),
+        [Math]::Max(0, $parsed.Revision)
+    ) -join '.'
+}
 foreach ($field in $expectedFields.GetEnumerator()) {
-    if ($versionInfo.($field.Key) -ne $field.Value) {
-        throw "Windows identity field $($field.Key) was '$($versionInfo.($field.Key))'; expected '$($field.Value)'."
+    $actualValue = [string]$versionInfo.($field.Key)
+    $fieldMatches = if ($field.Key -in @('FileVersion', 'ProductVersion')) {
+        (ConvertTo-NormalizedVersion $actualValue) -eq (ConvertTo-NormalizedVersion $field.Value)
+    }
+    else {
+        $actualValue -eq $field.Value
+    }
+    if (-not $fieldMatches) {
+        throw "Windows identity field $($field.Key) was '$actualValue'; expected '$($field.Value)'."
     }
 }
 
