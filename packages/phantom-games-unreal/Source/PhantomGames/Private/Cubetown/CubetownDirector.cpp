@@ -7,9 +7,12 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Animation/AnimInstance.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/AnimSingleNodeInstance.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/StaticMeshActor.h"
@@ -17,9 +20,11 @@
 #include "Engine/World.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PointLight.h"
-#include "Animation/AnimSingleNodeInstance.h"
+#include "Engine/SkyLight.h"
+#include "Engine/PostProcessVolume.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -27,11 +32,65 @@
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
+#include "UObject/UObjectGlobals.h"
 
 namespace
 {
     constexpr TCHAR CubetownSaveSlot[] = TEXT("cubetown.echoes.profile");
+    constexpr int32 CubetownBuildSchemaVersion = 26;
     constexpr float CubeSize = 100.0f;
+
+    struct FCubetownCaptureView
+    {
+        FVector Spawn = FVector(300.0f, -10000.0f, 900.0f);
+        FVector Target = FVector(-420.0f, -6900.0f, 210.0f);
+        FString Region;
+        bool bLair = false;
+    };
+
+    FCubetownCaptureView GetCubetownCaptureView()
+    {
+        FCubetownCaptureView View;
+        View.bLair = FParse::Param(FCommandLine::Get(), TEXT("PhantomLairCapture"));
+        if (View.bLair)
+        {
+            View.Spawn = FVector(0.0f, 2750.0f, 900.0f);
+            View.Target = FVector(0.0f, 4120.0f, 180.0f);
+            View.Region = TEXT("lair");
+            return View;
+        }
+
+        FParse::Value(FCommandLine::Get(), TEXT("PhantomRegionCapture="), View.Region);
+        View.Region.ToLowerInline();
+        if (View.Region == TEXT("forest"))
+        {
+            View.Spawn = FVector(-33000.0f, 12000.0f, 900.0f);
+            View.Target = FVector(-36500.0f, 17500.0f, 220.0f);
+        }
+        else if (View.Region == TEXT("farm"))
+        {
+            View.Spawn = FVector(-30500.0f, -40500.0f, 900.0f);
+            View.Target = FVector(-30500.0f, -34500.0f, 220.0f);
+        }
+        else if (View.Region == TEXT("coast"))
+        {
+            View.Spawn = FVector(30500.0f, -35200.0f, 900.0f);
+            View.Target = FVector(30500.0f, -31500.0f, 220.0f);
+        }
+        else if (View.Region == TEXT("quarry"))
+        {
+            View.Spawn = FVector(32500.0f, 6500.0f, 900.0f);
+            View.Target = FVector(32500.0f, 10500.0f, 220.0f);
+        }
+        else if (View.Region == TEXT("phantomite"))
+        {
+            View.Spawn = FVector(34500.0f, 34000.0f, 900.0f);
+            View.Target = FVector(38500.0f, 38500.0f, 220.0f);
+        }
+        return View;
+    }
 
     ACubetownDirector* CubetownDirector(const UObject* Context)
     {
@@ -105,7 +164,8 @@ namespace
         const TCHAR* MeshPath,
         const TCHAR* IdleAnimPath,
         float TargetHeightCm,
-        float YawOffset = -90.0f
+        float YawOffset = -90.0f,
+        bool bAllowMonolithic = false
     )
     {
         if (!Character || !Character->GetCapsuleComponent()) return false;
@@ -117,7 +177,8 @@ namespace
             IdleAnimPath,
             TargetHeightCm,
             -Character->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight(),
-            YawOffset
+            YawOffset,
+            bAllowMonolithic
         );
     }
 
@@ -212,7 +273,7 @@ namespace
     {
         switch (Type)
         {
-            case ECubetownEchoType::Bridge: return TEXT("/Game/Phantom/Generated/Cubetown/SM_CubetownBridge.SM_CubetownBridge");
+            case ECubetownEchoType::Bridge: return TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Bridge.SM_Cube_Bridge");
             case ECubetownEchoType::TideSpire: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A");
             case ECubetownEchoType::SkyPad: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFloatingIsland_A.SM_CubeDreamFloatingIsland_A");
             case ECubetownEchoType::BlastBloom: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamMushroomCluster_A.SM_CubeDreamMushroomCluster_A");
@@ -226,7 +287,7 @@ namespace
     {
         switch (Type)
         {
-            case ECubetownEchoType::Bridge: return FVector(0.82f,0.82f,0.82f);
+            case ECubetownEchoType::Bridge: return FVector(1.05f,1.05f,1.05f);
             case ECubetownEchoType::TideSpire: return FVector(0.52f,0.52f,1.75f);
             case ECubetownEchoType::SkyPad: return FVector(0.34f,0.34f,0.18f);
             case ECubetownEchoType::BlastBloom: return FVector(0.68f);
@@ -240,14 +301,92 @@ namespace
     {
         switch (Friend)
         {
-            case ECubetownFriend::Mira: return TEXT("MIRA");
-            case ECubetownFriend::Rowan: return TEXT("ROWAN");
-            case ECubetownFriend::Pip: return TEXT("PIP");
+            case ECubetownFriend::Sera: return TEXT("SERA");
+            case ECubetownFriend::Mara: return TEXT("MARA");
+            case ECubetownFriend::Tess: return TEXT("TESS");
+            case ECubetownFriend::Vara: return TEXT("VARA");
+            case ECubetownFriend::Brann: return TEXT("BRANN");
+            case ECubetownFriend::Orin: return TEXT("ORIN");
         }
-        return TEXT("FRIEND");
+        return TEXT("VILLAGER");
     }
 
-    // CubeTown deliberately does not use the dark sci-fi Phantom shell. The hit rectangles stay
+    int32 ReturnedBossIndex(ECubetownEnemyType Type)
+    {
+        switch(Type)
+        {
+            case ECubetownEnemyType::CathedralStag: return 0;
+            case ECubetownEnemyType::MarionetteMayor: return 1;
+            case ECubetownEnemyType::BurrowMaw: return 2;
+            case ECubetownEnemyType::SkyfallMatron: return 3;
+            case ECubetownEnemyType::EclipseSeraph: return 4;
+            case ECubetownEnemyType::Aktarus: return 5;
+            default: return INDEX_NONE;
+        }
+    }
+
+    uint32 ReturnedBossBit(ECubetownEnemyType Type)
+    {
+        const int32 Index=ReturnedBossIndex(Type);
+        return Index==INDEX_NONE?0u:(1u<<Index);
+    }
+
+    bool IsCanonicalBoss(ECubetownEnemyType Type)
+    {
+        return ReturnedBossIndex(Type)!=INDEX_NONE;
+    }
+
+    const TCHAR* CanonicalBossName(ECubetownEnemyType Type)
+    {
+        switch(Type)
+        {
+            case ECubetownEnemyType::CathedralStag:return TEXT("THE CATHEDRAL STAG");
+            case ECubetownEnemyType::MarionetteMayor:return TEXT("THE MARIONETTE MAYOR");
+            case ECubetownEnemyType::BurrowMaw:return TEXT("THE BURROW MAW");
+            case ECubetownEnemyType::SkyfallMatron:return TEXT("THE SKYFALL MATRON");
+            case ECubetownEnemyType::EclipseSeraph:return TEXT("THE ECLIPSE SERAPH");
+            case ECubetownEnemyType::Aktarus:return TEXT("AKTARUS // THE SHADOWBEARER");
+            default:return TEXT("RETURNED SOUL");
+        }
+    }
+
+    const TCHAR* CanonicalArmamentName(ECubetownEnemyType Type)
+    {
+        switch(Type)
+        {
+            case ECubetownEnemyType::CathedralStag:return TEXT("ANTLER'S EDGE");
+            case ECubetownEnemyType::MarionetteMayor:return TEXT("THE PUPPETMASTER'S CANE");
+            case ECubetownEnemyType::BurrowMaw:return TEXT("THE BURROW MAW'S LURE");
+            case ECubetownEnemyType::SkyfallMatron:return TEXT("STORMVEIL");
+            case ECubetownEnemyType::EclipseSeraph:return TEXT("ECLIPSE BRAND");
+            case ECubetownEnemyType::Aktarus:return TEXT("NIGHTSPINE");
+            default:return TEXT("RETURNED ARMAMENT");
+        }
+    }
+
+    FVector CanonicalBossLocation(int32 Index)
+    {
+        static const FVector Locations[]={
+            FVector(-36500.0f,17500.0f,180.0f), // Bellroot Cathedral
+            FVector(23500.0f,18500.0f,180.0f),  // Mournmarket
+            FVector(-31500.0f,32500.0f,180.0f), // Deepwarren
+            FVector(36500.0f,34500.0f,240.0f),  // Skyfall Reach
+            FVector(34500.0f,-31500.0f,180.0f), // Vesperhold
+            FVector(0.0f,40500.0f,180.0f)       // Black Meridian
+        };
+        return Locations[FMath::Clamp(Index,0,UE_ARRAY_COUNT(Locations)-1)];
+    }
+
+    ECubetownEnemyType CanonicalBossForIndex(int32 Index)
+    {
+        static const ECubetownEnemyType Types[]={
+            ECubetownEnemyType::CathedralStag,ECubetownEnemyType::MarionetteMayor,
+            ECubetownEnemyType::BurrowMaw,ECubetownEnemyType::SkyfallMatron,
+            ECubetownEnemyType::EclipseSeraph,ECubetownEnemyType::Aktarus};
+        return Types[FMath::Clamp(Index,0,UE_ARRAY_COUNT(Types)-1)];
+    }
+
+    // Shadowbearer deliberately does not use the dark sci-fi Phantom shell. The hit rectangles stay
     // identical to the shared shell so the base director's mouse handling remains valid, while
     // the presentation becomes warm, storybook-like, and lets the live dream world remain visible.
     bool DrawCubetownDreamShell(AHUD* HUD, const APhantomGameDirectorBase* Director, float Width, float Height)
@@ -259,21 +398,21 @@ namespace
         const auto S=[Scale](float V){return V*Scale;};
         const float Margin=S(54.0f), PanelW=FMath::Min(Width-Margin*2.0f,S(1060.0f)), PanelH=FMath::Min(Height-Margin*2.0f,S(650.0f));
         const float PanelX=Margin, PanelY=(Height-PanelH)*0.5f;
-        const FLinearColor Berry(0.58f,0.055f,0.13f,1.0f), Ruby(0.82f,0.12f,0.22f,1.0f), Cream(0.94f,0.88f,0.72f,0.98f);
-        const FLinearColor Ink(0.13f,0.075f,0.10f,1.0f), Moss(0.20f,0.34f,0.19f,1.0f), Paper(0.16f,0.09f,0.12f,0.93f);
+        const FLinearColor Teal(0.035f,0.34f,0.32f,1.0f), Gold(0.88f,0.62f,0.24f,1.0f), Cream(0.96f,0.91f,0.78f,0.98f);
+        const FLinearColor Ink(0.018f,0.025f,0.032f,1.0f), Moss(0.12f,0.28f,0.23f,1.0f), Paper(0.028f,0.045f,0.052f,0.95f);
         if(Director->GetShellScreen()==EPhantomShellScreen::Title)
         {
-            if(UTexture2D* Hero=LoadObject<UTexture2D>(nullptr,TEXT("/Game/Phantom/VisualTargets/CubeTown_TARGET.CubeTown_TARGET")))
+            if(UTexture2D* Hero=LoadObject<UTexture2D>(nullptr,TEXT("/Game/Phantom/VisualTargets/Shadowbearer_TARGET.Shadowbearer_TARGET")))
                 DrawPhantomAspectFillTexture(HUD,Hero,Width,Height);
         }
-        HUD->DrawRect(FLinearColor(0.05f,0.025f,0.055f,0.48f),0,0,Width,Height);
-        HUD->DrawRect(FLinearColor(0.10f,0.035f,0.07f,0.82f),0,0,Width,S(8.0f));
+        HUD->DrawRect(FLinearColor(0.01f,0.018f,0.026f,0.52f),0,0,Width,Height);
+        HUD->DrawRect(FLinearColor(0.82f,0.58f,0.22f,0.90f),0,0,Width,S(6.0f));
         HUD->DrawRect(Paper,PanelX,PanelY,PanelW,PanelH);
-        HUD->DrawRect(Berry,PanelX,PanelY,S(8.0f),PanelH);
-        HUD->DrawRect(FLinearColor(0.95f,0.67f,0.28f,0.18f),PanelX+S(8),PanelY,S(15),PanelH);
-        HUD->DrawText(TEXT("CUBETOWN // DIORAMA ADVENTURE V17"),Cream,PanelX+S(48),PanelY+S(36),nullptr,S(1.30f));
-        HUD->DrawText(TEXT("A FOUR-SEASONS DREAM // FRIENDS, CREATION, ADVENTURE"),FLinearColor(0.95f,0.70f,0.66f),PanelX+S(50),PanelY+S(98),nullptr,S(0.72f));
-        HUD->DrawText(TEXT("THE RED TREES STAY"),Ruby,PanelX+PanelW-S(270),PanelY+S(48),nullptr,S(0.60f));
+        HUD->DrawRect(Teal,PanelX,PanelY,S(8.0f),PanelH);
+        HUD->DrawRect(FLinearColor(0.88f,0.62f,0.24f,0.18f),PanelX+S(8),PanelY,S(15),PanelH);
+        HUD->DrawText(TEXT("SHADOWBEARER"),Cream,PanelX+S(48),PanelY+S(32),nullptr,S(1.42f));
+        HUD->DrawText(TEXT("DAWN'S RETURN"),Gold,PanelX+S(50),PanelY+S(92),nullptr,S(0.82f));
+        HUD->DrawText(TEXT("LIGHT DEFINES REALITY"),FLinearColor(0.56f,0.88f,0.82f),PanelX+PanelW-S(310),PanelY+S(50),nullptr,S(0.58f));
         const float CardX=PanelX+S(44),CardY=PanelY+S(154),CardW=PanelW-S(88),CardH=PanelH-S(202);
         HUD->DrawRect(FLinearColor(0.10f,0.055f,0.07f,0.90f),CardX,CardY,CardW,CardH);
         float MX=-9999,MY=-9999; if(APlayerController* PC=HUD->GetOwningPlayerController()) PC->GetMousePosition(MX,MY);
@@ -281,20 +420,20 @@ namespace
         {
             const float X=CardX+S(34),W=FMath::Min(CardW-S(68),S(560)),H=S(52);
             const bool Hover=MX>=X&&MX<=X+W&&MY>=Y&&MY<=Y+H;
-            FLinearColor Fill=Primary?FLinearColor(0.42f,0.09f,0.13f,0.98f):FLinearColor(0.18f,0.10f,0.12f,0.98f);
-            if(Hover) Fill=Primary?FLinearColor(0.56f,0.12f,0.17f,1.0f):FLinearColor(0.27f,0.15f,0.17f,1.0f);
-            HUD->DrawRect(Fill,X,Y,W,H); HUD->DrawRect(Danger?FLinearColor(0.95f,0.30f,0.28f):Primary?Ruby:FLinearColor(0.42f,0.31f,0.25f),X,Y,S(5),H);
+            FLinearColor Fill=Primary?FLinearColor(0.035f,0.30f,0.27f,0.98f):FLinearColor(0.055f,0.09f,0.10f,0.98f);
+            if(Hover) Fill=Primary?FLinearColor(0.055f,0.43f,0.38f,1.0f):FLinearColor(0.09f,0.15f,0.16f,1.0f);
+            HUD->DrawRect(Fill,X,Y,W,H); HUD->DrawRect(Danger?FLinearColor(0.78f,0.20f,0.28f):Primary?Gold:FLinearColor(0.34f,0.43f,0.38f),X,Y,S(5),H);
             HUD->DrawText(Label,Danger?FLinearColor(1.0f,0.62f,0.58f):Cream,X+S(22),Y+S(13),nullptr,S(0.80f));
         };
         const EPhantomShellScreen Screen=Director->GetShellScreen();
         if(Screen==EPhantomShellScreen::Title)
         {
-            HUD->DrawText(TEXT("WAKE UP SOMEWHERE IMPOSSIBLE."),FLinearColor(0.96f,0.68f,0.56f),CardX+S(34),CardY+S(26),nullptr,S(0.70f));
-            Button(TEXT("[ENTER]  BEGIN ADVENTURE"),CardY+S(70),true); Button(TEXT("[F1]  CONTROLS"),CardY+S(136)); Button(TEXT("[F2]  SETTINGS"),CardY+S(202)); Button(TEXT("[Q / ESC]  LEAVE CUBETOWN"),CardY+S(286),false,true);
+            HUD->DrawText(TEXT("THE WORLD REMEMBERS THE MORNING."),FLinearColor(0.76f,0.88f,0.78f),CardX+S(34),CardY+S(26),nullptr,S(0.70f));
+            Button(TEXT("[ENTER]  BEGIN DAWN"),CardY+S(70),true); Button(TEXT("[F1]  CONTROLS"),CardY+S(136)); Button(TEXT("[F2]  SETTINGS"),CardY+S(202)); Button(TEXT("[Q / ESC]  LEAVE SHADOWBEARER"),CardY+S(286),false,true);
         }
         else if(Screen==EPhantomShellScreen::Pause)
         {
-            HUD->DrawText(TEXT("THE DREAM WAITS"),Cream,CardX+S(34),CardY+S(26),nullptr,S(0.95f));
+            HUD->DrawText(TEXT("THE DAWN WAITS"),Cream,CardX+S(34),CardY+S(26),nullptr,S(0.95f));
             Button(TEXT("[ENTER / ESC]  RETURN"),CardY+S(88),true); Button(TEXT("[F1]  CONTROLS"),CardY+S(154)); Button(TEXT("[F2]  SETTINGS"),CardY+S(220)); Button(TEXT("[Q]  QUIT TO DESKTOP"),CardY+S(304),false,true);
         }
         else if(Screen==EPhantomShellScreen::Controls)
@@ -308,7 +447,7 @@ namespace
             HUD->DrawText(TEXT("SETTINGS"),Cream,CardX+S(34),CardY+S(26),nullptr,S(0.96f));
             HUD->DrawText(FString::Printf(TEXT("MASTER VOLUME     %d%%"),FMath::RoundToInt(Director->GetMasterVolume()*100.0f)),Cream,CardX+S(36),CardY+S(104),nullptr,S(0.80f));
             HUD->DrawRect(FLinearColor(0.12f,0.08f,0.08f),CardX+S(36),CardY+S(145),S(480),S(12));
-            HUD->DrawRect(Ruby,CardX+S(36),CardY+S(145),S(480)*Director->GetMasterVolume(),S(12));
+            HUD->DrawRect(Gold,CardX+S(36),CardY+S(145),S(480)*Director->GetMasterVolume(),S(12));
             HUD->DrawText(FString::Printf(TEXT("GRAPHICS QUALITY  %s"),*Director->GetGraphicsQualityLabel()),Cream,CardX+S(36),CardY+S(212),nullptr,S(0.80f));
             HUD->DrawText(TEXT("LEFT / RIGHT volume      UP / DOWN graphics"),FLinearColor(0.78f,0.70f,0.65f),CardX+S(36),CardY+S(262),nullptr,S(0.66f));
             Button(TEXT("[ENTER / ESC]  BACK"),CardY+CardH-S(76),true);
@@ -499,44 +638,56 @@ void ACubetownEnemy::Configure(ECubetownEnemyType NewType, int32 Tier)
     EnemyType = NewType;
     const int32 SafeTier = FMath::Max(1, Tier);
 
-    const TCHAR* ProductionMeshPath = EnemyType == ECubetownEnemyType::BloomWisp
-        ? TEXT("/Game/Phantom/Characters/Production/SK_SkeletonMage.SK_SkeletonMage")
-        : (EnemyType == ECubetownEnemyType::Roller
-            ? TEXT("/Game/Phantom/Characters/Production/SK_SkeletonRogue.SK_SkeletonRogue")
-            : TEXT("/Game/Phantom/Characters/Production/SK_SkeletonMinion.SK_SkeletonMinion"));
-    const TCHAR* ProductionAnimPath = EnemyType == ECubetownEnemyType::BloomWisp
-        ? TEXT("/Game/Phantom/Characters/Production/Animations/A_SkeletonMage_Idle.A_SkeletonMage_Idle")
-        : (EnemyType == ECubetownEnemyType::Roller
-            ? TEXT("/Game/Phantom/Characters/Production/Animations/A_SkeletonRogue_Idle.A_SkeletonRogue_Idle")
-            : TEXT("/Game/Phantom/Characters/Production/Animations/A_SkeletonMinion_Idle.A_SkeletonMinion_Idle"));
-    const bool bProductionEnemy = ConfigureProductionSkeletalCharacter(
-        this, ProductionMeshPath, ProductionAnimPath,
-        EnemyType == ECubetownEnemyType::RiftGuardian ? 260.0f : 172.0f,
-        -90.0f
-    );
+    // The bone-white imported skeleton set reads like test art beside CubeTown's saturated
+    // miniature-diorama world. Prefer the authored colored creatures and guardian here; the
+    // player hero remains the fully animated production character.
+    const bool bProductionEnemy = false;
 
-    const TCHAR* ModernPath = EnemyType == ECubetownEnemyType::Roller
-        ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Creature_B.SM_CC0_Creature_B")
-        : (EnemyType == ECubetownEnemyType::BloomWisp
-            ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Creature_C.SM_CC0_Creature_C")
-            : TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Creature_A.SM_CC0_Creature_A"));
-    UStaticMesh* Authored = bProductionEnemy ? nullptr : (EnemyType == ECubetownEnemyType::RiftGuardian ? nullptr : LoadObject<UStaticMesh>(nullptr, ModernPath));
+    const TCHAR* ModernPath = [&]() -> const TCHAR*
+    {
+        switch(EnemyType)
+        {
+            case ECubetownEnemyType::Roller:return TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_Roller.SM_Roller");
+            case ECubetownEnemyType::BloomWisp:return TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_BloomWisp.SM_BloomWisp");
+            case ECubetownEnemyType::CathedralStag:return TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_BlueTitan.SM_V9_BlueTitan");
+            case ECubetownEnemyType::MarionetteMayor:return TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_RedMage.SM_V9_RedMage");
+            case ECubetownEnemyType::BurrowMaw:return TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_BlueGolem.SM_V9_BlueGolem");
+            case ECubetownEnemyType::SkyfallMatron:return TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_BlueMage.SM_V9_BlueMage");
+            case ECubetownEnemyType::EclipseSeraph:return TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_BlueDragon.SM_V9_BlueDragon");
+            case ECubetownEnemyType::PaleWarden:
+            case ECubetownEnemyType::RiftGuardian:
+            case ECubetownEnemyType::Aktarus:return TEXT("/Game/Phantom/Generated/Legends/Characters/SM_RiftBrute.SM_RiftBrute");
+            default:return TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_Gloomling.SM_Gloomling");
+        }
+    }();
+    UStaticMesh* Authored = bProductionEnemy ? nullptr : LoadObject<UStaticMesh>(nullptr, ModernPath);
     if (!Authored && !bProductionEnemy)
     {
-        const TCHAR* FallbackPath = EnemyType == ECubetownEnemyType::Roller
-            ? TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_Roller.SM_Roller")
-            : (EnemyType == ECubetownEnemyType::BloomWisp
-                ? TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_BloomWisp.SM_BloomWisp")
-                : (EnemyType == ECubetownEnemyType::RiftGuardian
-                    ? TEXT("/Game/Phantom/Generated/Cubetown/SM_CubetownGuardian.SM_CubetownGuardian")
-                    : TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_Gloomling.SM_Gloomling")));
+        const TCHAR* FallbackPath = IsCanonicalBoss(EnemyType)||EnemyType==ECubetownEnemyType::PaleWarden||EnemyType==ECubetownEnemyType::RiftGuardian
+            ? TEXT("/Game/Phantom/Generated/Legends/Characters/SM_RiftBrute.SM_RiftBrute")
+            : (EnemyType==ECubetownEnemyType::Roller?TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_Roller.SM_Roller"):
+               EnemyType==ECubetownEnemyType::BloomWisp?TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_BloomWisp.SM_BloomWisp"):
+               TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_Gloomling.SM_Gloomling"));
         Authored = LoadObject<UStaticMesh>(nullptr, FallbackPath);
     }
     if (Authored)
     {
         VisualModel->SetStaticMesh(Authored);
-        VisualModel->SetRelativeLocation(EnemyType == ECubetownEnemyType::RiftGuardian ? FVector(0.0f,0.0f,-58.0f) : FVector(0.0f,0.0f,-50.0f));
-        VisualModel->SetRelativeScale3D(EnemyType == ECubetownEnemyType::RiftGuardian ? FVector(0.72f) : FVector(0.82f));
+        const FBoxSphereBounds Bounds = Authored->GetBounds();
+        const float RawHeight = FMath::Max(1.0f, Bounds.BoxExtent.Z * 2.0f);
+        const float TargetHeight = EnemyType == ECubetownEnemyType::Aktarus ? 390.0f
+            : (IsCanonicalBoss(EnemyType) ? 330.0f
+            : (EnemyType == ECubetownEnemyType::PaleWarden ? 430.0f
+            : (EnemyType == ECubetownEnemyType::RiftGuardian ? 520.0f
+            : (EnemyType == ECubetownEnemyType::BloomWisp ? 158.0f : 172.0f))));
+        const float FitScale = FMath::Clamp(TargetHeight / RawHeight, 0.1f, 4.0f);
+        const float LocalBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * FitScale;
+        VisualModel->SetRelativeLocation(FVector(
+            0.0f, 0.0f, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - LocalBottom
+        ));
+        // Preserve the authored guardian's heroic proportions. The previous 2.1x XY stretch
+        // turned its helmet into a room-sized skull and hid the encounter behind one silhouette.
+        VisualModel->SetRelativeScale3D(FVector(FitScale));
         VisualModel->SetVisibility(true);
         BodyMesh->SetVisibility(false);
         EyeMesh->SetVisibility(false);
@@ -565,18 +716,40 @@ void ACubetownEnemy::Configure(ECubetownEnemyType NewType, int32 Tier)
         ApplyColor(BodyMesh, FLinearColor(0.18f, 0.85f, 0.42f));
         ApplyColor(CrestMesh, FLinearColor(0.85f, 1.0f, 0.22f));
     }
+    else if (EnemyType == ECubetownEnemyType::PaleWarden)
+    {
+        Health = 100000.0f;
+        Damage = 48.0f;
+        AttackRange = 215.0f;
+        AttackInterval = 0.72f;
+        GetCharacterMovement()->MaxWalkSpeed = 520.0f;
+        ApplyColor(BodyMesh, FLinearColor(0.76f, 0.82f, 0.86f));
+        ApplyColor(CrestMesh, FLinearColor(0.18f, 0.92f, 0.78f));
+        Tags.AddUnique(TEXT("Shadowbearer.PaleWarden"));
+    }
+    else if (IsCanonicalBoss(EnemyType))
+    {
+        const int32 BossIndex=ReturnedBossIndex(EnemyType);
+        Health=EnemyType==ECubetownEnemyType::Aktarus?3200.0f:1100.0f+BossIndex*260.0f;
+        Damage=EnemyType==ECubetownEnemyType::Aktarus?42.0f:24.0f+BossIndex*3.0f;
+        AttackRange=EnemyType==ECubetownEnemyType::SkyfallMatron||EnemyType==ECubetownEnemyType::EclipseSeraph?390.0f:205.0f;
+        AttackInterval=EnemyType==ECubetownEnemyType::Aktarus?0.62f:0.86f;
+        GetCharacterMovement()->MaxWalkSpeed=EnemyType==ECubetownEnemyType::Aktarus?430.0f:300.0f+BossIndex*18.0f;
+        const FLinearColor BossColors[]={
+            FLinearColor(0.18f,0.72f,0.42f),FLinearColor(0.82f,0.18f,0.36f),
+            FLinearColor(0.18f,0.42f,0.62f),FLinearColor(0.26f,0.72f,0.92f),
+            FLinearColor(0.92f,0.66f,0.18f),FLinearColor(0.16f,0.02f,0.28f)};
+        ApplyColor(BodyMesh,BossColors[FMath::Clamp(BossIndex,0,5)]);
+        ApplyColor(CrestMesh,EnemyType==ECubetownEnemyType::Aktarus?FLinearColor(0.92f,0.62f,0.18f):FLinearColor(0.64f,0.18f,0.96f));
+        Tags.AddUnique(TEXT("Shadowbearer.CanonicalBoss"));
+        Tags.AddUnique(FName(*FString::Printf(TEXT("Shadowbearer.Boss.%d"),BossIndex)));
+    }
     else if (EnemyType == ECubetownEnemyType::RiftGuardian)
     {
-        if (UStaticMesh* GuardianMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Cubetown/SM_CubetownGuardian.SM_CubetownGuardian")))
-        {
-            BodyMesh->SetStaticMesh(GuardianMesh);
-            BodyMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -52.0f));
-            BodyMesh->SetRelativeScale3D(FVector(0.58f));
-            CrestMesh->SetVisibility(false);
-            EyeMesh->SetRelativeLocation(FVector(62.0f, 0.0f, 55.0f));
-            EyeMesh->SetRelativeScale3D(FVector(0.22f));
-        }
-        else
+        // Configure() already fitted the authored guardian above. Do not replace it with the old
+        // generated proxy here: that late override was why the lair regressed even though the
+        // production asset had loaded successfully.
+        if (!Authored)
         {
             BodyMesh->SetRelativeScale3D(FVector(1.35f, 1.15f, 1.55f));
             EyeMesh->SetRelativeLocation(FVector(92.0f, 0.0f, 26.0f));
@@ -601,6 +774,9 @@ void ACubetownEnemy::Configure(ECubetownEnemyType NewType, int32 Tier)
         ApplyColor(CrestMesh, FLinearColor(0.56f, 0.12f, 0.92f));
     }
     ApplyColor(EyeMesh, FLinearColor(1.0f, 0.18f, 0.34f));
+    MaxHealth = Health;
+    AktarusPhase = 1;
+    SpecialAttackRemaining = EnemyType == ECubetownEnemyType::Aktarus ? 2.8f : 0.0f;
     AttackRemaining = FMath::FRandRange(0.1f, AttackInterval);
 
     // V11 skeletal character is authoritative. Never let later role styling re-enable prototype primitives.
@@ -615,11 +791,22 @@ void ACubetownEnemy::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     AttackRemaining = FMath::Max(0.0f, AttackRemaining - DeltaSeconds);
+    SpecialAttackRemaining = FMath::Max(0.0f, SpecialAttackRemaining - DeltaSeconds);
     ACubetownHero* Hero = Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this, 0));
     if (!Hero) return;
+    if (FParse::Param(FCommandLine::Get(), TEXT("PhantomGameplayCapture")) &&
+        FParse::Param(FCommandLine::Get(), TEXT("PhantomLairCapture")))
+    {
+        // The evidence launch is a composed inspection frame, not a combat simulation. Keep the
+        // real encounter roster visible at its authored marks instead of letting every enemy pile
+        // onto the invulnerable proof hero before the delayed screenshot is written.
+        const FVector Look = Hero->GetActorLocation() - GetActorLocation();
+        if (!Look.IsNearlyZero()) SetActorRotation(Look.Rotation());
+        return;
+    }
     AActor* Target = Hero;
     float BestTargetDistance = FVector::DistSquared2D(GetActorLocation(), Hero->GetActorLocation());
-    for (TActorIterator<ACubetownEcho> It(GetWorld()); It; ++It)
+    for (TActorIterator<ACubetownEcho> It(GetWorld()); EnemyType != ECubetownEnemyType::PaleWarden && It; ++It)
     {
         const float EchoDistance = FVector::DistSquared2D(GetActorLocation(), It->GetActorLocation());
         if (EchoDistance < BestTargetDistance && EchoDistance < FMath::Square(620.0f))
@@ -630,6 +817,21 @@ void ACubetownEnemy::Tick(float DeltaSeconds)
     }
     const FVector Offset = Target->GetActorLocation() - GetActorLocation();
     const float Distance = Offset.Size2D();
+    if (EnemyType == ECubetownEnemyType::Aktarus && SpecialAttackRemaining <= 0.0f)
+    {
+        // Each health-gated phase has a materially different combat rhythm. The attacks stay
+        // readable in the Zelda-like camera while forcing movement, shadow control, and timing.
+        const float Radius = AktarusPhase == 1 ? 760.0f : (AktarusPhase == 2 ? 520.0f : (AktarusPhase == 3 ? 900.0f : (AktarusPhase == 4 ? 680.0f : 1120.0f)));
+        if (Distance <= Radius)
+        {
+            const float SpecialDamage = 6.0f + AktarusPhase * 3.0f;
+            UGameplayStatics::ApplyDamage(Hero, SpecialDamage, GetController(), this, UDamageType::StaticClass());
+            const FVector Launch = Offset.GetSafeNormal2D() * (AktarusPhase == 5 ? 980.0f : 540.0f) + FVector(0.0f, 0.0f, AktarusPhase >= 4 ? 320.0f : 160.0f);
+            Hero->LaunchCharacter(Launch, true, true);
+        }
+        const float PhaseCadence[] = {3.2f, 2.35f, 2.8f, 1.95f, 1.35f};
+        SpecialAttackRemaining = PhaseCadence[FMath::Clamp(AktarusPhase - 1, 0, 4)];
+    }
     if (Distance > AttackRange)
     {
         AddMovementInput(Offset.GetSafeNormal2D(), 1.0f);
@@ -654,10 +856,37 @@ float ACubetownEnemy::TakeDamage(
     AActor* DamageCauser
 )
 {
+    if (EnemyType == ECubetownEnemyType::PaleWarden)
+    {
+        // This first encounter is a story event, not a hidden DPS check. The Warden visibly
+        // receives attacks but cannot be defeated before Shadowfall rewrites the location.
+        Health = FMath::Max(1000.0f, Health - DamageAmount);
+        return DamageAmount;
+    }
     Health = FMath::Max(0.0f, Health - DamageAmount);
+    if (EnemyType == ECubetownEnemyType::Aktarus && Health > 0.0f && MaxHealth > 0.0f)
+    {
+        const float Ratio = Health / MaxHealth;
+        const int32 NewPhase = Ratio > 0.80f ? 1 : (Ratio > 0.60f ? 2 : (Ratio > 0.40f ? 3 : (Ratio > 0.20f ? 4 : 5)));
+        if (NewPhase > AktarusPhase)
+        {
+            AktarusPhase = NewPhase;
+            static const float PhaseSpeed[] = {430.0f, 500.0f, 455.0f, 510.0f, 590.0f};
+            static const float PhaseDamage[] = {42.0f, 48.0f, 44.0f, 52.0f, 60.0f};
+            static const float PhaseInterval[] = {0.62f, 0.48f, 0.56f, 0.44f, 0.34f};
+            GetCharacterMovement()->MaxWalkSpeed = PhaseSpeed[NewPhase - 1];
+            Damage = PhaseDamage[NewPhase - 1];
+            AttackInterval = PhaseInterval[NewPhase - 1];
+            AttackRange = NewPhase == 2 ? 320.0f : (NewPhase >= 4 ? 430.0f : 245.0f);
+            SpecialAttackRemaining = 0.45f;
+            if (NewPhase == 2 && VisualModel) VisualModel->SetRelativeScale3D(VisualModel->GetRelativeScale3D() * 1.06f);
+            if (NewPhase == 5 && VisualModel) VisualModel->SetRelativeScale3D(VisualModel->GetRelativeScale3D() * 1.20f);
+            if (ACubetownDirector* Director = CubetownDirector(this)) Director->AdvanceAktarusPhase(NewPhase, GetActorLocation());
+        }
+    }
     if (Health <= 0.0f)
     {
-        if (ACubetownDirector* Director = CubetownDirector(this)) Director->RegisterEnemyDefeat(EnemyType);
+        if (ACubetownDirector* Director = CubetownDirector(this)) Director->RegisterEnemyDefeat(EnemyType,GetActorLocation());
         Destroy();
     }
     return DamageAmount;
@@ -716,7 +945,6 @@ void ACubetownEcho::Configure(ECubetownEchoType NewType)
         BodyMesh->SetRelativeScale3D(FVector(0.62f));
         ApplyColor(BodyMesh, FLinearColor(0.5f, 0.38f, 0.24f));
         ApplyColor(SymbolMesh, FLinearColor(1.0f, 0.52f, 0.08f));
-        ApplyColor(VisualModel, FLinearColor(0.52f, 0.34f, 0.18f));
     }
     else if (EchoType == ECubetownEchoType::Bloom)
     {
@@ -725,7 +953,6 @@ void ACubetownEcho::Configure(ECubetownEchoType NewType)
         AttackRange = 360.0f;
         ApplyColor(BodyMesh, FLinearColor(0.18f, 0.82f, 0.4f));
         ApplyColor(SymbolMesh, FLinearColor(0.8f, 1.0f, 0.2f));
-        ApplyColor(VisualModel, FLinearColor(0.18f, 0.78f, 0.36f));
     }
     else
     {
@@ -734,7 +961,6 @@ void ACubetownEcho::Configure(ECubetownEchoType NewType)
         AttackRange = 160.0f;
         ApplyColor(BodyMesh, FLinearColor(0.12f, 0.72f, 1.0f));
         ApplyColor(SymbolMesh, FLinearColor(0.72f, 0.18f, 1.0f));
-        ApplyColor(VisualModel, FLinearColor(0.08f, 0.82f, 0.78f));
     }
 }
 
@@ -755,12 +981,6 @@ void ACubetownEcho::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     AttackRemaining = FMath::Max(0.0f, AttackRemaining - DeltaSeconds);
     SymbolMesh->AddLocalRotation(FRotator(0.0f, DeltaSeconds * 120.0f, 0.0f));
-    if (VisualModel && VisualModel->IsVisible())
-    {
-        const float Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
-        VisualModel->SetRelativeLocation(FVector(0.0f, 0.0f, -34.0f + FMath::Sin(Time * 6.2f + GetUniqueID() * 0.17f) * 3.4f));
-        VisualModel->SetRelativeRotation(FRotator(FMath::Sin(Time * 3.1f) * 2.2f, 0.0f, FMath::Sin(Time * 4.7f) * 3.5f));
-    }
     ACubetownHero* Hero = Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this, 0));
     if (!Hero) return;
     ACubetownEnemy* Nearest = nullptr;
@@ -865,11 +1085,6 @@ ACubetownVillager::ACubetownVillager()
     VisualModel->SetupAttachment(Root);
     VisualModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     VisualModel->SetVisibility(false);
-
-    FriendSkeletalVisual = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FriendProductionVisual"));
-    FriendSkeletalVisual->SetupAttachment(Root);
-    FriendSkeletalVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    FriendSkeletalVisual->SetVisibility(false, true);
 }
 
 void ACubetownVillager::Configure(ECubetownFriend NewFriend, const FVector& NewHome)
@@ -878,21 +1093,29 @@ void ACubetownVillager::Configure(ECubetownFriend NewFriend, const FVector& NewH
     HomeLocation = NewHome;
     SetActorLocation(HomeLocation);
     WanderPhase = static_cast<float>(static_cast<int32>(FriendType)) * 2.1f;
-    const FLinearColor Body = FriendType == ECubetownFriend::Mira
-        ? FLinearColor(0.12f, 0.58f, 0.92f)
-        : (FriendType == ECubetownFriend::Rowan ? FLinearColor(0.86f, 0.42f, 0.12f) : FLinearColor(0.46f, 0.82f, 0.3f));
-    const FLinearColor Accent = FriendType == ECubetownFriend::Mira
-        ? FLinearColor(0.58f, 0.18f, 1.0f)
-        : (FriendType == ECubetownFriend::Rowan ? FLinearColor(1.0f, 0.75f, 0.14f) : FLinearColor(1.0f, 0.34f, 0.56f));
-
-    const TCHAR* FriendAlias = FriendType == ECubetownFriend::Mira
+    static const FLinearColor BodyColors[]={
+        FLinearColor(0.08f,0.56f,0.49f), FLinearColor(0.70f,0.34f,0.13f),
+        FLinearColor(0.42f,0.68f,0.30f), FLinearColor(0.15f,0.38f,0.62f),
+        FLinearColor(0.53f,0.22f,0.12f), FLinearColor(0.36f,0.31f,0.55f),
+        FLinearColor(0.74f,0.56f,0.22f)};
+    static const FLinearColor AccentColors[]={
+        FLinearColor(0.96f,0.74f,0.24f), FLinearColor(0.92f,0.82f,0.58f),
+        FLinearColor(0.92f,0.48f,0.20f), FLinearColor(0.20f,0.84f,0.78f),
+        FLinearColor(0.94f,0.64f,0.20f), FLinearColor(0.54f,0.30f,0.82f),
+        FLinearColor(0.88f,0.86f,0.72f)};
+    const int32 RoleIndex=FMath::Clamp(static_cast<int32>(FriendType),0,6);
+    const FLinearColor Body=BodyColors[RoleIndex];
+    const FLinearColor Accent=AccentColors[RoleIndex];
+    const bool bRangerRole=FriendType==ECubetownFriend::Sera||FriendType==ECubetownFriend::Tess||FriendType==ECubetownFriend::Orin;
+    const bool bWorkerRole=FriendType==ECubetownFriend::Mara||FriendType==ECubetownFriend::Vara||FriendType==ECubetownFriend::Brann;
+    const TCHAR* FriendAlias=bRangerRole
         ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Char_Ranger.SM_CC0_Char_Ranger")
-        : (FriendType == ECubetownFriend::Rowan
+        : (bWorkerRole
             ? TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Char_Worker.SM_CC0_Char_Worker")
             : TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Char_Wizard.SM_CC0_Char_Wizard"));
-    const TCHAR* FriendFallback = FriendType == ECubetownFriend::Mira
+    const TCHAR* FriendFallback=bRangerRole
         ? TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_Mira.SM_Mira")
-        : (FriendType == ECubetownFriend::Rowan
+        : (bWorkerRole
             ? TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_Rowan.SM_Rowan")
             : TEXT("/Game/Phantom/Generated/Cubetown/Characters/SM_Pip.SM_Pip"));
     UStaticMesh* AuthoredFriend = LoadObject<UStaticMesh>(nullptr, FriendAlias);
@@ -906,42 +1129,6 @@ void ACubetownVillager::Configure(ECubetownFriend NewFriend, const FVector& NewH
         BodyMesh->SetVisibility(false); HeadMesh->SetVisibility(false); AccentMesh->SetVisibility(false);
         LeftArm->SetVisibility(false); RightArm->SetVisibility(false); LeftLeg->SetVisibility(false); RightLeg->SetVisibility(false);
         EyeLeft->SetVisibility(false); EyeRight->SetVisibility(false);
-    }
-
-    const TCHAR* FriendMeshPath = FriendType == ECubetownFriend::Mira
-        ? TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue")
-        : (FriendType == ECubetownFriend::Rowan
-            ? TEXT("/Game/Phantom/Characters/Production/SK_Barbarian.SK_Barbarian")
-            : TEXT("/Game/Phantom/Characters/Production/SK_Mage.SK_Mage"));
-    const TCHAR* FriendIdlePath = FriendType == ECubetownFriend::Mira
-        ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Idle.A_Rogue_Idle")
-        : (FriendType == ECubetownFriend::Rowan
-            ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Barbarian_Idle.A_Barbarian_Idle")
-            : TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Idle.A_Mage_Idle"));
-    const TCHAR* FriendWalkPath = FriendType == ECubetownFriend::Mira
-        ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Walk.A_Rogue_Walk")
-        : (FriendType == ECubetownFriend::Rowan
-            ? TEXT("/Game/Phantom/Characters/Production/Animations/A_Barbarian_Walk.A_Barbarian_Walk")
-            : TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Walk.A_Mage_Walk"));
-    bProductionFriendVisual = PhantomModularCharacter::Configure(
-        this,
-        FriendSkeletalVisual,
-        Root,
-        FriendMeshPath,
-        FriendIdlePath,
-        172.0f,
-        0.0f,
-        -90.0f
-    );
-    if (bProductionFriendVisual)
-    {
-        VisualModel->SetVisibility(false);
-        BodyMesh->SetVisibility(false); HeadMesh->SetVisibility(false); AccentMesh->SetVisibility(false);
-        LeftArm->SetVisibility(false); RightArm->SetVisibility(false); LeftLeg->SetVisibility(false); RightLeg->SetVisibility(false);
-        EyeLeft->SetVisibility(false); EyeRight->SetVisibility(false);
-        FriendIdleAnimation = LoadObject<UAnimSequence>(nullptr, FriendIdlePath);
-        FriendWalkAnimation = LoadObject<UAnimSequence>(nullptr, FriendWalkPath);
-        ActiveFriendAnimation = FriendIdleAnimation;
     }
     ApplyColor(BodyMesh, Body);
     ApplyColor(HeadMesh, FLinearColor(0.82f, 0.65f, 0.5f));
@@ -963,13 +1150,29 @@ void ACubetownVillager::Tick(float DeltaSeconds)
     // Morning/evening keeps them near home, daytime sends each friend to a role-appropriate village space,
     // and dusk pulls everyone toward the Heartstone plaza for social activity.
     float Hour = 12.0f;
-    if (ACubetownDirector* Director = CubetownDirector(this)) Hour = Director->GetTimeOfDayHours();
+    ACubetownDirector* Director=CubetownDirector(this);
+    if (Director) Hour = Director->GetTimeOfDayHours();
+    if (Director && Director->IsShadowfallActive())
+    {
+        const bool bKeepsWatch=FriendType==ECubetownFriend::Sera;
+        SetActorHiddenInGame(!bKeepsWatch);
+        SetActorEnableCollision(bKeepsWatch);
+        if(!bKeepsWatch)return;
+    }
+    else
+    {
+        SetActorHiddenInGame(false);
+        SetActorEnableCollision(true);
+    }
     FVector ScheduleAnchor = HomeLocation;
     if (Hour >= 8.0f && Hour < 16.5f)
     {
-        if (FriendType == ECubetownFriend::Mira) ScheduleAnchor = FVector(-2600.0f, -3000.0f, HomeLocation.Z);
-        else if (FriendType == ECubetownFriend::Rowan) ScheduleAnchor = FVector(7100.0f, -5000.0f, HomeLocation.Z);
-        else ScheduleAnchor = FVector(900.0f, -4100.0f, HomeLocation.Z);
+        static const FVector Workplaces[]={
+            FVector(-600.0f,-5200.0f,90.0f), FVector(2200.0f,-6500.0f,90.0f),
+            FVector(-1700.0f,-4300.0f,90.0f), FVector(-3200.0f,-6100.0f,90.0f),
+            FVector(3200.0f,-7600.0f,90.0f), FVector(650.0f,-3900.0f,90.0f),
+            FVector(2900.0f,-4700.0f,90.0f)};
+        ScheduleAnchor=Workplaces[FMath::Clamp(static_cast<int32>(FriendType),0,6)];
     }
     else if (Hour >= 16.5f && Hour < 21.5f)
     {
@@ -981,48 +1184,47 @@ void ACubetownVillager::Tick(float DeltaSeconds)
     SetActorLocation(Next);
     const FVector Move = Next - Before;
     if (Move.SizeSquared2D() > 1.0f) SetActorRotation(FMath::RInterpTo(GetActorRotation(), Move.Rotation(), DeltaSeconds, 4.0f));
-    if (bProductionFriendVisual && FriendSkeletalVisual)
-    {
-        UAnimSequence* Desired = Move.SizeSquared2D() > 0.08f ? FriendWalkAnimation : FriendIdleAnimation;
-        if (Desired && Desired != ActiveFriendAnimation)
-        {
-            FriendSkeletalVisual->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-            FriendSkeletalVisual->PlayAnimation(Desired, true);
-            ActiveFriendAnimation = Desired;
-        }
-        if (UAnimSingleNodeInstance* SingleNode = FriendSkeletalVisual->GetSingleNodeInstance())
-            SingleNode->SetPlayRate(Move.SizeSquared2D() > 0.08f ? 0.84f : 1.0f);
-    }
     const float Bob = FMath::Sin(GetWorld()->GetTimeSeconds() * 3.0f + WanderPhase) * 2.5f;
     AccentMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 142.0f + Bob));
-    if (!bProductionFriendVisual)
-    {
-        const float Step = FMath::Sin(GetWorld()->GetTimeSeconds() * 5.5f + WanderPhase) * 15.0f;
-        LeftArm->SetRelativeRotation(FRotator(Step, 0.0f, 0.0f));
-        RightArm->SetRelativeRotation(FRotator(-Step, 0.0f, 0.0f));
-        LeftLeg->SetRelativeRotation(FRotator(-Step * 0.65f, 0.0f, 0.0f));
-        RightLeg->SetRelativeRotation(FRotator(Step * 0.65f, 0.0f, 0.0f));
-    }
+    const float Step = FMath::Sin(GetWorld()->GetTimeSeconds() * 5.5f + WanderPhase) * 15.0f;
+    LeftArm->SetRelativeRotation(FRotator(Step, 0.0f, 0.0f));
+    RightArm->SetRelativeRotation(FRotator(-Step, 0.0f, 0.0f));
+    LeftLeg->SetRelativeRotation(FRotator(-Step * 0.65f, 0.0f, 0.0f));
+    RightLeg->SetRelativeRotation(FRotator(Step * 0.65f, 0.0f, 0.0f));
 }
 
 ACubetownHero::ACubetownHero()
 {
     PrimaryActorTick.bCanEverTick = true;
     AutoPossessPlayer = EAutoReceiveInput::Player0;
-    GetCapsuleComponent()->SetCapsuleRadius(38.0f);
-    GetCapsuleComponent()->SetCapsuleHalfHeight(72.0f);
-    GetCharacterMovement()->MaxWalkSpeed = 500.0f;
-    GetCharacterMovement()->MaxAcceleration = 5000.0f;
-    GetCharacterMovement()->BrakingDecelerationWalking = 4200.0f;
-    GetCharacterMovement()->GroundFriction = 10.0f;
-    GetCharacterMovement()->BrakingFriction = 9.0f;
-    GetCharacterMovement()->BrakingFrictionFactor = 1.5f;
+    // Human-scale collision and movement. The old 144 cm capsule and 5000 cm/s²
+    // acceleration made the 188 cm skeletal hero skate and snap like a pawn token.
+    GetCapsuleComponent()->SetCapsuleRadius(40.0f);
+    GetCapsuleComponent()->SetCapsuleHalfHeight(94.0f);
+    GetCharacterMovement()->MaxWalkSpeed = 380.0f;
+    GetCharacterMovement()->MinAnalogWalkSpeed = 20.0f;
+    GetCharacterMovement()->MaxAcceleration = 1650.0f;
+    GetCharacterMovement()->BrakingDecelerationWalking = 1350.0f;
+    GetCharacterMovement()->GroundFriction = 6.5f;
+    GetCharacterMovement()->BrakingFriction = 5.0f;
+    GetCharacterMovement()->BrakingFrictionFactor = 1.0f;
     GetCharacterMovement()->bUseSeparateBrakingFriction = true;
-    GetCharacterMovement()->AirControl = 0.24f;
+    GetCharacterMovement()->AirControl = 0.30f;
+    GetCharacterMovement()->AirControlBoostMultiplier = 1.45f;
+    GetCharacterMovement()->AirControlBoostVelocityThreshold = 165.0f;
+    GetCharacterMovement()->FallingLateralFriction = 0.18f;
+    GetCharacterMovement()->GravityScale = 1.45f;
+    GetCharacterMovement()->Mass = 76.0f;
+    GetCharacterMovement()->MaxStepHeight = 44.0f;
+    GetCharacterMovement()->SetWalkableFloorAngle(48.0f);
+    GetCharacterMovement()->RotationRate = FRotator(0.0f, 520.0f, 0.0f);
     GetCharacterMovement()->bAlwaysCheckFloor = true;
+    GetCharacterMovement()->bMaintainHorizontalGroundVelocity = true;
     GetCharacterMovement()->bOrientRotationToMovement = true;
+    GetCharacterMovement()->bUseControllerDesiredRotation = false;
     GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
-    GetCharacterMovement()->JumpZVelocity = 560.0f;
+    GetCharacterMovement()->JumpZVelocity = 540.0f;
+    GetCharacterMovement()->SetCrouchedHalfHeight(62.0f);
     bUseControllerRotationYaw = false;
     GetMesh()->SetVisibility(false, true);
 
@@ -1030,20 +1232,21 @@ ACubetownHero::ACubetownHero()
     SpringArm->SetupAttachment(GetCapsuleComponent());
     SpringArm->SetUsingAbsoluteRotation(false);
     SpringArm->bUsePawnControlRotation = true;
-    // V17 diorama-adventure framing: high, readable, toy-box composition while preserving free yaw control.
-    SpringArm->TargetArmLength = 860.0f;
-    SpringArm->TargetOffset = FVector(0.0f, 0.0f, 118.0f);
-    SpringArm->SocketOffset = FVector(0.0f, 18.0f, 8.0f);
-    SpringArm->SetRelativeRotation(FRotator(-42.0f, 0.0f, 0.0f));
+    // CubeTown is a readable three-quarter diorama. The former near-horizontal 74 degree camera
+    // turned every house into a wall and hid the authored geography behind the character.
+    SpringArm->TargetArmLength = 6200.0f;
+    SpringArm->TargetOffset = FVector(0.0f, 980.0f, 190.0f);
+    SpringArm->SocketOffset = FVector(0.0f, 0.0f, 0.0f);
+    SpringArm->SetRelativeRotation(FRotator(-38.0f, 0.0f, 0.0f));
     SpringArm->bDoCollisionTest = true;
-    SpringArm->ProbeSize = 16.0f;
+    SpringArm->ProbeSize = 28.0f;
     SpringArm->bEnableCameraLag = true;
     SpringArm->CameraLagSpeed = 12.0f;
     SpringArm->bEnableCameraRotationLag = true;
     SpringArm->CameraRotationLagSpeed = 14.0f;
     AdventureCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("AdventureCamera"));
     AdventureCamera->SetupAttachment(SpringArm);
-    AdventureCamera->FieldOfView = 56.0f;
+    AdventureCamera->FieldOfView = 48.0f;
 
     UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
     UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -1091,31 +1294,6 @@ ACubetownHero::ACubetownHero()
     CloakMesh->SetRelativeRotation(FRotator(0.0f, 0.0f, 18.0f));
     CloakMesh->SetRelativeScale3D(V8HeroCloak ? FVector(1.0f) : FVector(0.34f, 0.38f, 0.72f));
     CloakMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-    // Costume layers keep the production body from reading as a stock mannequin. They carry the
-    // generated Maker target's crimson mantle, brass utility belt, satchel and rune-gauntlet silhouette.
-    MakerSatchel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerSatchel"));
-    MakerSatchel->SetupAttachment(GetCapsuleComponent());
-    MakerSatchel->SetStaticMesh(Cube);
-    MakerSatchel->SetRelativeLocation(FVector(-7.0f, -31.0f, -9.0f));
-    MakerSatchel->SetRelativeRotation(FRotator(0.0f, -12.0f, 8.0f));
-    MakerSatchel->SetRelativeScale3D(FVector(0.25f, 0.12f, 0.29f));
-    MakerSatchel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-    MakerBelt = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerUtilityBelt"));
-    MakerBelt->SetupAttachment(GetCapsuleComponent());
-    MakerBelt->SetStaticMesh(Cylinder);
-    MakerBelt->SetRelativeLocation(FVector(0.0f, 0.0f, -18.0f));
-    MakerBelt->SetRelativeScale3D(FVector(0.36f, 0.36f, 0.07f));
-    MakerBelt->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-    RuneGauntlet = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerRuneGauntlet"));
-    RuneGauntlet->SetupAttachment(GetCapsuleComponent());
-    RuneGauntlet->SetStaticMesh(Cylinder);
-    RuneGauntlet->SetRelativeLocation(FVector(10.0f, 31.0f, -4.0f));
-    RuneGauntlet->SetRelativeRotation(FRotator(90.0f, 0.0f, 0.0f));
-    RuneGauntlet->SetRelativeScale3D(FVector(0.13f, 0.13f, 0.22f));
-    RuneGauntlet->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
     ShoulderGem = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ShoulderGem"));
     ShoulderGem->SetupAttachment(GetCapsuleComponent());
@@ -1172,36 +1350,15 @@ ACubetownHero::ACubetownHero()
     VisualModel->SetupAttachment(GetCapsuleComponent());
     VisualModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     VisualModel->SetVisibility(false);
-
-    // V19 Maker signature. These orbiting crystal sparks and the local cyan light make the
-    // protagonist identifiable from the high adventure camera even before the player moves.
-    EchoOrbitA = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerEchoOrbitA"));
-    EchoOrbitA->SetupAttachment(GetCapsuleComponent());
-    EchoOrbitA->SetStaticMesh(Sphere);
-    EchoOrbitA->SetRelativeScale3D(FVector(0.065f));
-    EchoOrbitA->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    EchoOrbitB = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerEchoOrbitB"));
-    EchoOrbitB->SetupAttachment(GetCapsuleComponent());
-    EchoOrbitB->SetStaticMesh(Sphere);
-    EchoOrbitB->SetRelativeScale3D(FVector(0.050f));
-    EchoOrbitB->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    EchoOrbitC = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MakerEchoOrbitC"));
-    EchoOrbitC->SetupAttachment(GetCapsuleComponent());
-    EchoOrbitC->SetStaticMesh(Sphere);
-    EchoOrbitC->SetRelativeScale3D(FVector(0.040f));
-    EchoOrbitC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    MakerEchoLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("MakerEchoLight"));
-    MakerEchoLight->SetupAttachment(GetCapsuleComponent());
-    MakerEchoLight->SetRelativeLocation(FVector(28.0f, 18.0f, 30.0f));
-    MakerEchoLight->SetLightColor(FLinearColor(0.10f, 0.92f, 0.88f));
-    MakerEchoLight->SetIntensity(850.0f);
-    MakerEchoLight->SetAttenuationRadius(260.0f);
-    MakerEchoLight->SetCastShadows(false);
 }
 
 void ACubetownHero::BeginPlay()
 {
     Super::BeginPlay();
+    const FCubetownCaptureView CaptureView = GetCubetownCaptureView();
+    const bool bLairCapture = CaptureView.bLair;
+    const FVector OpeningSpawn = CaptureView.Spawn;
+    const FVector OpeningTarget = CaptureView.Target;
     GetCharacterMovement()->SetMovementMode(MOVE_Walking);
     GetCharacterMovement()->SetComponentTickEnabled(true);
     GetCharacterMovement()->SetPlaneConstraintEnabled(false);
@@ -1217,47 +1374,84 @@ void ACubetownHero::BeginPlay()
     }
     // Begin on the authored village road rather than just beyond its southern edge.  This gives
     // the adventure camera a clear corridor and an immediate readable town composition.
-    SetActorLocation(FVector(0.0f, -10500.0f, 900.0f), false, nullptr, ETeleportType::TeleportPhysics);
+    SetActorLocation(OpeningSpawn, false, nullptr, ETeleportType::TeleportPhysics);
     if (!SnapCubetownCharacterToGround(this))
     {
         const float CapsuleZ = GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 2.0f;
-        SetActorLocation(FVector(0.0f, -10500.0f, CapsuleZ), false, nullptr, ETeleportType::TeleportPhysics);
+        SetActorLocation(FVector(OpeningSpawn.X, OpeningSpawn.Y, CapsuleZ), false, nullptr, ETeleportType::TeleportPhysics);
     }
     // V9: spawn facing straight into Heartstone. UE forward is +X; the village is north (+Y)
     // of the spawn. The old zero-yaw start literally pointed the hero at the emptiest side of the map.
-    SetActorRotation(FRotator(0.0f, 90.0f, 0.0f));
-    if (APlayerController* FirstPC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
-        FirstPC->SetControlRotation(FRotator(-42.0f, 90.0f, 0.0f));
-    const bool bProductionHero = ConfigureProductionSkeletalCharacter(
+    FocusOpeningView(OpeningTarget);
+    // The authored Rogue is the visual fit for CubeTown. Manny remains a verified skeletal
+    // fallback, but must never be the default white mannequin in the shipping fantasy scene.
+    const bool bRogueHero = ConfigureProductionSkeletalCharacter(
         this,
-        TEXT("/Game/Phantom/Characters/Production/SK_Mage.SK_Mage"),
-        TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Idle.A_Mage_Idle"),
+        TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue"),
+        TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Idle.A_Rogue_Idle"),
         188.0f,
         -90.0f
     );
-    bProductionMakerVisual = bProductionHero;
+    const bool bMannyHero = !bRogueHero && ConfigureProductionSkeletalCharacter(
+        this,
+        TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"),
+        TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"),
+        188.0f,
+        -90.0f,
+        true
+    );
+    const bool bProductionHero = bRogueHero || bMannyHero;
     if (bProductionHero)
     {
+        if (bMannyHero)
+        {
+            IdleAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"));
+            WalkAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Walk/MF_Unarmed_Walk_Fwd.MF_Unarmed_Walk_Fwd"));
+            RunAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jog/MF_Unarmed_Jog_Fwd.MF_Unarmed_Jog_Fwd"));
+            BackwardAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Walk/MF_Unarmed_Walk_Bwd.MF_Unarmed_Walk_Bwd"));
+            StrafeLeftAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jog/MF_Unarmed_Jog_Left.MF_Unarmed_Jog_Left"));
+            StrafeRightAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jog/MF_Unarmed_Jog_Right.MF_Unarmed_Jog_Right"));
+            JumpStartAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Jump.MM_Jump"));
+            JumpLoopAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Fall_Loop.MM_Fall_Loop"));
+            JumpLandAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Land.MM_Land"));
+            DodgeAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Dash.MM_Dash"));
+            GuardAnimation = IdleAnimation;
+            AttackAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_01.MM_Attack_01"));
+            AttackAnimation2 = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02.MM_Attack_02"));
+            AttackAnimation3 = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03.MM_Attack_03"));
+            HitAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Rifle/HitReact/MM_HitReact_Front_Lgt_01.MM_HitReact_Front_Lgt_01"));
+            LocomotionAnimClass = LoadClass<UAnimInstance>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C"));
+        }
+        else
+        {
+            IdleAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Idle.A_Rogue_Idle"));
+            WalkAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Walk.A_Rogue_Walk"));
+            RunAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Run.A_Rogue_Run"));
+            BackwardAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_Rogue_GLTF/Rogue/SkeletalMeshes/RogueWalking_Backwards.RogueWalking_Backwards"));
+            StrafeLeftAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_Rogue_GLTF/Rogue/SkeletalMeshes/RogueRunning_Strafe_Left.RogueRunning_Strafe_Left"));
+            StrafeRightAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_Rogue_GLTF/Rogue/SkeletalMeshes/RogueRunning_Strafe_Right.RogueRunning_Strafe_Right"));
+            JumpStartAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_Rogue_GLTF/Rogue/SkeletalMeshes/RogueJump_Start.RogueJump_Start"));
+            JumpLoopAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_Rogue_GLTF/Rogue/SkeletalMeshes/RogueJump_Idle.RogueJump_Idle"));
+            JumpLandAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_Rogue_GLTF/Rogue/SkeletalMeshes/RogueJump_Land.RogueJump_Land"));
+            DodgeAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_Rogue_GLTF/Rogue/SkeletalMeshes/RogueDodge_Forward.RogueDodge_Forward"));
+            GuardAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_Rogue_GLTF/Rogue/SkeletalMeshes/RogueBlocking.RogueBlocking"));
+            AttackAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Attack.A_Rogue_Attack"));
+            HitAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Rogue_Hit.A_Rogue_Hit"));
+        }
+        if (LocomotionAnimClass)
+        {
+            GetMesh()->SetAnimInstanceClass(LocomotionAnimClass);
+            ActiveAnimation = nullptr;
+        }
+        else
+        {
+            ActiveAnimation = IdleAnimation;
+        }
         BodyMesh->SetVisibility(false); HeadMesh->SetVisibility(false); CapMesh->SetVisibility(false);
-        CloakMesh->SetVisibility(true);
-        LeftArm->SetVisibility(false); RightArm->SetVisibility(false);
+        WandMesh->SetVisibility(false); CloakMesh->SetVisibility(false); ShoulderGem->SetVisibility(false);
+        WandCore->SetVisibility(false); LeftArm->SetVisibility(false); RightArm->SetVisibility(false);
         LeftLeg->SetVisibility(false); RightLeg->SetVisibility(false); EyeLeft->SetVisibility(false); EyeRight->SetVisibility(false);
         VisualModel->SetVisibility(false);
-
-        // Keep the hand-authored echo rod and crystal accents visible over the modular Mage body.
-        // The rod is the Maker's profession-readable silhouette and is animated below with each verb.
-        WandMesh->SetVisibility(true);
-        WandCore->SetVisibility(true);
-        ShoulderGem->SetVisibility(true);
-        MakerSatchel->SetVisibility(true);
-        MakerBelt->SetVisibility(true);
-        RuneGauntlet->SetVisibility(true);
-        MakerIdleAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Idle.A_Mage_Idle"));
-        MakerWalkAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Walk.A_Mage_Walk"));
-        MakerRunAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Run.A_Mage_Run"));
-        MakerAttackAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Attack.A_Mage_Attack"));
-        MakerHitAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Phantom/Characters/Production/Animations/A_Mage_Hit.A_Mage_Hit"));
-        ActiveMakerAnimation = MakerIdleAnimation;
     }
 
     // V7: arbitrary CC0 FBX characters imported as static meshes produced sideways/flattened heroes.
@@ -1276,33 +1470,26 @@ void ACubetownHero::BeginPlay()
         VisualModel->SetRelativeRotation(FRotator::ZeroRotator);
         VisualModel->SetVisibility(true);
         BodyMesh->SetVisibility(false); HeadMesh->SetVisibility(false); CapMesh->SetVisibility(false); WandMesh->SetVisibility(false);
-        CloakMesh->SetVisibility(false); MakerSatchel->SetVisibility(false); MakerBelt->SetVisibility(false);
-        RuneGauntlet->SetVisibility(false); ShoulderGem->SetVisibility(false); WandCore->SetVisibility(false);
+        CloakMesh->SetVisibility(false); ShoulderGem->SetVisibility(false); WandCore->SetVisibility(false);
         LeftArm->SetVisibility(false); RightArm->SetVisibility(false); LeftLeg->SetVisibility(false); RightLeg->SetVisibility(false);
         EyeLeft->SetVisibility(false); EyeRight->SetVisibility(false);
     }
-    ApplyColor(BodyMesh, FLinearColor(0.03f, 0.34f, 0.32f));
+    ApplyColor(BodyMesh, FLinearColor(0.16f, 0.54f, 0.9f));
     ApplyColor(HeadMesh, FLinearColor(0.76f, 0.6f, 0.46f));
-    ApplyColor(CapMesh, FLinearColor(0.58f, 0.055f, 0.09f));
-    ApplyColor(WandMesh, FLinearColor(0.20f, 0.12f, 0.055f));
-    ApplyColor(CloakMesh, FLinearColor(0.58f, 0.055f, 0.09f));
-    ApplyColor(MakerSatchel, FLinearColor(0.20f, 0.105f, 0.045f));
-    ApplyColor(MakerBelt, FLinearColor(0.72f, 0.43f, 0.12f));
-    ApplyColor(RuneGauntlet, FLinearColor(0.18f, 0.48f, 0.44f));
-    ApplyColor(ShoulderGem, FLinearColor(0.16f, 0.96f, 0.90f));
-    ApplyColor(WandCore, FLinearColor(0.16f, 0.96f, 0.90f));
-    ApplyColor(LeftArm, FLinearColor(0.03f, 0.34f, 0.32f));
-    ApplyColor(RightArm, FLinearColor(0.03f, 0.34f, 0.32f));
-    ApplyColor(LeftLeg, FLinearColor(0.72f, 0.64f, 0.48f));
-    ApplyColor(RightLeg, FLinearColor(0.72f, 0.64f, 0.48f));
+    ApplyColor(CapMesh, FLinearColor(0.54f, 0.13f, 0.9f));
+    ApplyColor(WandMesh, FLinearColor(0.16f, 0.92f, 1.0f));
+    ApplyColor(CloakMesh, FLinearColor(0.12f, 0.055f, 0.28f));
+    ApplyColor(ShoulderGem, FLinearColor(0.32f, 0.92f, 1.0f));
+    ApplyColor(WandCore, FLinearColor(0.55f, 0.16f, 1.0f));
+    ApplyColor(LeftArm, FLinearColor(0.20f, 0.64f, 0.96f));
+    ApplyColor(RightArm, FLinearColor(0.20f, 0.64f, 0.96f));
+    ApplyColor(LeftLeg, FLinearColor(0.09f, 0.13f, 0.28f));
+    ApplyColor(RightLeg, FLinearColor(0.09f, 0.13f, 0.28f));
     ApplyColor(EyeLeft, FLinearColor(0.025f, 0.035f, 0.05f));
     ApplyColor(EyeRight, FLinearColor(0.025f, 0.035f, 0.05f));
-    ApplyColor(EchoOrbitA, FLinearColor(0.10f, 0.96f, 0.90f));
-    ApplyColor(EchoOrbitB, FLinearColor(0.96f, 0.22f, 0.30f));
-    ApplyColor(EchoOrbitC, FLinearColor(0.72f, 0.55f, 0.92f));
     if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
     {
-        PlayerController->SetControlRotation(FRotator(-42.0f, 90.0f, 0.0f));
+        FocusOpeningView(OpeningTarget);
         PlayerController->bShowMouseCursor = false;
         PlayerController->SetInputMode(FInputModeGameOnly());
     }
@@ -1324,14 +1511,76 @@ void ACubetownHero::Tick(float DeltaSeconds)
     if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
     {
         FRotator ViewRotation = PlayerController->GetControlRotation();
-        ViewRotation.Pitch = FMath::Clamp(FRotator::NormalizeAxis(ViewRotation.Pitch), -52.0f, -28.0f);
+        const bool bLocomotionProof = FParse::Param(FCommandLine::Get(), TEXT("PhantomLocomotionProof"));
+        const bool bGameplayCapture = FParse::Param(FCommandLine::Get(), TEXT("PhantomGameplayCapture")) && !bLocomotionProof;
+        const FCubetownCaptureView CaptureView = GetCubetownCaptureView();
+        const bool bLairCapture = CaptureView.bLair;
+        if (bLocomotionProof)
+        {
+            if (!bLocomotionProofInitialized)
+            {
+                bLocomotionProofInitialized = true;
+                LocomotionProofStart = GetActorLocation();
+            }
+            LocomotionProofElapsed += DeltaSeconds;
+            const float PreviousYaw = ViewRotation.Yaw;
+            ViewRotation.Yaw += DeltaSeconds * 24.0f;
+            ViewRotation.Pitch = -45.0f + FMath::Sin(LocomotionProofElapsed * 0.72f) * 28.0f;
+            LocomotionProofYawTravel += FMath::Abs(FMath::FindDeltaAngleDegrees(PreviousYaw, ViewRotation.Yaw));
+            LocomotionProofMinPitch = FMath::Min(LocomotionProofMinPitch, ViewRotation.Pitch);
+            LocomotionProofMaxPitch = FMath::Max(LocomotionProofMaxPitch, ViewRotation.Pitch);
+
+            const FVector ProofForward = FRotationMatrix(FRotator(0.0f, ViewRotation.Yaw, 0.0f)).GetUnitAxis(EAxis::X);
+            if (LocomotionProofElapsed < 2.4f)
+            {
+                bSprinting = false;
+                GetCharacterMovement()->MaxWalkSpeed = 380.0f;
+                AddMovementInput(ProofForward, 0.72f);
+            }
+            else
+            {
+                bSprinting = true;
+                GetCharacterMovement()->MaxWalkSpeed = 600.0f;
+                AddMovementInput(ProofForward, 1.0f);
+                if (!bLocomotionProofJumped && LocomotionProofElapsed > 3.35f)
+                {
+                    bLocomotionProofJumped = true;
+                    Jump();
+                }
+            }
+            if (SpringArm)
+            {
+                // Keep the runtime proof close enough to expose the body, gait, and foot placement.
+                // The old long proof boom could finish behind a roof and hide the subject entirely.
+                SpringArm->TargetArmLength = FMath::FInterpTo(SpringArm->TargetArmLength, 900.0f, DeltaSeconds, 5.0f);
+                SpringArm->TargetOffset = FVector(0.0f, 0.0f, 105.0f);
+            }
+            LocomotionProofMaxSpeed = FMath::Max(LocomotionProofMaxSpeed, GetVelocity().Size2D());
+        }
+        if (bGameplayCapture)
+        {
+            const FVector CaptureTarget = CaptureView.Target;
+            const FVector CaptureLook = CaptureTarget - GetActorLocation();
+            ViewRotation.Yaw = CaptureLook.Rotation().Yaw;
+            ViewRotation.Pitch = bLairCapture ? -42.0f : -38.0f;
+        }
+        // Full 360-degree orbit plus a near-horizon-to-overhead vertical range.
+        // Capture runs remain deterministic, while normal play is no longer
+        // forced back into a narrow top-down pitch every frame.
+        ViewRotation.Pitch = FMath::Clamp(FRotator::NormalizeAxis(ViewRotation.Pitch), -82.0f, -6.0f);
         ViewRotation.Roll = 0.0f;
         PlayerController->SetControlRotation(ViewRotation);
+        const ACubetownDirector* ActiveDirector=CubetownDirector(this);
+        if(SpringArm && !bLocomotionProof && (!ActiveDirector || !ActiveDirector->IsBuildMode()))
+        {
+            const FVector ViewForward=FRotationMatrix(FRotator(0.0f,ViewRotation.Yaw,0.0f)).GetUnitAxis(EAxis::X);
+            SpringArm->TargetOffset=ViewForward*(bLairCapture?560.0f:820.0f)+FVector(0.0f,0.0f,bLairCapture?190.0f:190.0f);
+        }
 
         // Hard fallback for packaged builds: some launcher/input-stack combinations can fail to
         // deliver legacy MoveForward/MoveRight axis events even though keyboard state is live.
         // Read WASD directly so the adventure can never become a stationary camera demo.
-        if (!UGameplayStatics::IsGamePaused(this))
+        if (!UGameplayStatics::IsGamePaused(this) && (!ActiveDirector||!ActiveDirector->IsStoryCinematicActive()))
         {
             const float ForwardKey = ((PlayerController->IsInputKeyDown(EKeys::W) || PlayerController->IsInputKeyDown(EKeys::Up)) ? 1.0f : 0.0f)
                 - ((PlayerController->IsInputKeyDown(EKeys::S) || PlayerController->IsInputKeyDown(EKeys::Down)) ? 1.0f : 0.0f);
@@ -1345,13 +1594,8 @@ void ACubetownHero::Tick(float DeltaSeconds)
                 if (!Wish.IsNearlyZero())
                 {
                     AddMovementInput(Wish, 1.0f);
-                    // Emergency packaged-build fallback: if CharacterMovement is possessed but the
-                    // legacy input stack still produces zero velocity, sweep the capsule directly.
-                    if (GetVelocity().SizeSquared2D() < 4.0f)
-                    {
-                        FHitResult MoveHit;
-                        AddActorWorldOffset(Wish * GetCharacterMovement()->MaxWalkSpeed * DeltaSeconds, true, &MoveHit);
-                    }
+                    // Always stay inside CharacterMovement so acceleration, slopes,
+                    // gravity, collision, and animation velocity remain authoritative.
                 }
             }
         }
@@ -1367,6 +1611,10 @@ void ACubetownHero::Tick(float DeltaSeconds)
     InvulnerableRemaining = FMath::Max(0.0f, InvulnerableRemaining - DeltaSeconds);
     ComboResetRemaining = FMath::Max(0.0f, ComboResetRemaining - DeltaSeconds);
     ParryWindowRemaining = FMath::Max(0.0f, ParryWindowRemaining - DeltaSeconds);
+    const bool bFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
+    if (bWasFalling && !bFalling) LandingAnimationRemaining = 0.34f;
+    bWasFalling = bFalling;
+    LandingAnimationRemaining = FMath::Max(0.0f, LandingAnimationRemaining - DeltaSeconds);
     if (ComboResetRemaining <= 0.0f) ComboStep = 0;
     if (DashRemaining <= 0.0f && !bGuarding) Stamina = FMath::Min(100.0f, Stamina + DeltaSeconds * 24.0f);
     if (LockedTarget.IsValid())
@@ -1385,110 +1633,76 @@ void ACubetownHero::Tick(float DeltaSeconds)
             }
         }
     }
+    if (GetCharacterMovement())
+    {
+        const bool bLocked = LockedTarget.IsValid();
+        GetCharacterMovement()->bOrientRotationToMovement = !bLocked;
+        GetCharacterMovement()->bUseControllerDesiredRotation = bLocked;
+    }
     if (VisualModel && VisualModel->IsVisible())
     {
         const float Speed = GetVelocity().Size2D();
         const float Bob = Speed > 40.0f ? FMath::Sin(GetWorld()->GetTimeSeconds() * 10.0f) * 0.9f : 0.0f;
         VisualModel->SetRelativeLocation(FVector(0.0f,0.0f,-72.0f + Bob));
     }
-    UpdateMakerPresentation(DeltaSeconds);
-}
-
-void ACubetownHero::PlayMakerAnimation(UAnimSequence* Animation, bool bLoop, float PlayRate)
-{
-    if (!bProductionMakerVisual || !Animation || !GetMesh()) return;
-    if (ActiveMakerAnimation != Animation)
-    {
-        GetMesh()->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-        GetMesh()->PlayAnimation(Animation, bLoop);
-        ActiveMakerAnimation = Animation;
-    }
-    if (UAnimSingleNodeInstance* SingleNode = GetMesh()->GetSingleNodeInstance())
-        SingleNode->SetPlayRate(FMath::Clamp(PlayRate, 0.35f, 1.75f));
-}
-
-void ACubetownHero::UpdateMakerPresentation(float DeltaSeconds)
-{
-    const float Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+    WandCore->AddLocalRotation(FRotator(0.0f, DeltaSeconds * 160.0f, 0.0f));
+    ShoulderGem->SetRelativeScale3D(FVector(0.14f + FMath::Sin(GetWorld()->GetTimeSeconds() * 4.0f) * 0.018f));
+    const float Swing = AttackRemaining > 0.0f ? FMath::Sin(AttackRemaining * 18.0f) * 34.0f : 0.0f;
+    WandMesh->SetRelativeRotation(FRotator(0.0f, 0.0f, -28.0f + Swing));
     const float Speed = GetVelocity().Size2D();
-    const bool bAirborne = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
-
-    if (bProductionMakerVisual)
+    UpdateLocomotionAnimation(DeltaSeconds);
+    if (FParse::Param(FCommandLine::Get(), TEXT("PhantomLocomotionProof")) &&
+        LocomotionProofElapsed > 8.5f && !bLocomotionProofReported)
     {
-        UAnimSequence* Desired = MakerIdleAnimation;
-        bool bLoop = true;
-        float Rate = 1.0f;
-        if (DamageFlash > 0.72f && MakerHitAnimation)
-        {
-            Desired = MakerHitAnimation;
-            bLoop = false;
-            Rate = 1.10f;
-        }
-        else if (AttackRemaining > 0.0f && MakerAttackAnimation)
-        {
-            Desired = MakerAttackAnimation;
-            bLoop = false;
-            Rate = ComboStep == 3 ? 0.92f : 1.28f;
-        }
-        else if (bAirborne && MakerRunAnimation)
-        {
-            Desired = MakerRunAnimation;
-            Rate = 0.70f;
-        }
-        else if ((bSprinting || DashRemaining > 0.0f || Speed > 610.0f) && MakerRunAnimation)
-        {
-            Desired = MakerRunAnimation;
-            Rate = DashRemaining > 0.0f ? 1.48f : FMath::Clamp(Speed / 620.0f, 1.02f, 1.34f);
-        }
-        else if (Speed > 35.0f && MakerWalkAnimation)
-        {
-            Desired = MakerWalkAnimation;
-            Rate = FMath::Clamp(Speed / 430.0f, 0.72f, 1.24f);
-        }
-        PlayMakerAnimation(Desired, bLoop, Rate);
+        bLocomotionProofReported = true;
+        const float Distance = FVector::Dist2D(LocomotionProofStart, GetActorLocation());
+        const float PitchRange = LocomotionProofMaxPitch - LocomotionProofMinPitch;
+        const bool bAnimationsPassed = (LocomotionProofAnimationMask & 0x0f) == 0x0f;
+        const bool bPassed = Distance > 700.0f && LocomotionProofMaxSpeed > 500.0f &&
+            LocomotionProofYawTravel > 150.0f && PitchRange > 35.0f && bAnimationsPassed;
+        UE_LOG(LogTemp, Display,
+            TEXT("CUBETOWN LOCOMOTION RUNTIME %s distance=%.1f max_speed=%.1f yaw_travel=%.1f pitch_range=%.1f animation_mask=0x%02x capsule=%.1fx%.1f"),
+            bPassed ? TEXT("PASS") : TEXT("FAIL"), Distance, LocomotionProofMaxSpeed,
+            LocomotionProofYawTravel, PitchRange, LocomotionProofAnimationMask,
+            GetCapsuleComponent()->GetScaledCapsuleRadius(), GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
     }
-
-    // The crystal train and rod intentionally react to every core verb. This makes running,
-    // guarding, dashing and staff combat readable even from the elevated diorama framing.
-    const float Activity = FMath::Clamp(Speed / 620.0f, 0.0f, 1.0f);
-    const float OrbitRate = 1.65f + Activity * 2.35f;
-    const float OrbitRadius = 38.0f + Activity * 11.0f;
-    const float OrbitZ = 17.0f + FMath::Sin(Time * 2.2f) * 8.0f;
-    EchoOrbitA->SetRelativeLocation(FVector(FMath::Cos(Time * OrbitRate) * OrbitRadius, FMath::Sin(Time * OrbitRate) * OrbitRadius, OrbitZ));
-    EchoOrbitB->SetRelativeLocation(FVector(FMath::Cos(Time * OrbitRate + 2.094f) * OrbitRadius, FMath::Sin(Time * OrbitRate + 2.094f) * OrbitRadius, OrbitZ + 9.0f));
-    EchoOrbitC->SetRelativeLocation(FVector(FMath::Cos(Time * OrbitRate + 4.188f) * OrbitRadius, FMath::Sin(Time * OrbitRate + 4.188f) * OrbitRadius, OrbitZ - 7.0f));
-    EchoOrbitA->AddLocalRotation(FRotator(DeltaSeconds * 140.0f, DeltaSeconds * 210.0f, 0.0f));
-    EchoOrbitB->AddLocalRotation(FRotator(0.0f, DeltaSeconds * -180.0f, DeltaSeconds * 120.0f));
-    EchoOrbitC->AddLocalRotation(FRotator(DeltaSeconds * -160.0f, 0.0f, DeltaSeconds * 190.0f));
-
-    const float Swing = AttackRemaining > 0.0f ? FMath::Sin(AttackRemaining * 18.0f) * 48.0f : 0.0f;
-    const float SprintLean = (bSprinting || DashRemaining > 0.0f) ? -18.0f : 0.0f;
-    const float GuardRaise = bGuarding ? 34.0f : 0.0f;
-    const float RodBob = Speed > 35.0f ? FMath::Sin(Time * 10.0f) * 3.2f : FMath::Sin(Time * 2.6f) * 1.2f;
-    WandMesh->SetRelativeLocation(FVector(30.0f, bGuarding ? 10.0f : 24.0f, -3.0f + RodBob + GuardRaise * 0.22f));
-    WandMesh->SetRelativeRotation(FRotator(SprintLean, bGuarding ? -16.0f : 0.0f, -28.0f + Swing + GuardRaise));
-    WandCore->SetRelativeLocation(WandMesh->GetRelativeLocation() + FVector(20.0f, bGuarding ? 1.0f : -24.0f, 26.0f));
-    WandCore->AddLocalRotation(FRotator(0.0f, DeltaSeconds * (190.0f + Activity * 160.0f), 0.0f));
-    ShoulderGem->SetRelativeScale3D(FVector(0.14f + FMath::Sin(Time * 4.0f) * 0.018f));
-    const float CostumeStride = FMath::Sin(Time * (3.0f + Activity * 7.0f));
-    CloakMesh->SetRelativeLocation(FVector(-24.0f - Activity * 5.0f, 0.0f, -8.0f + CostumeStride * Activity * 2.2f));
-    CloakMesh->SetRelativeRotation(FRotator(SprintLean * 0.55f, CostumeStride * Activity * 5.0f, 18.0f + CostumeStride * Activity * 7.0f));
-    MakerSatchel->SetRelativeLocation(FVector(-7.0f, -31.0f, -9.0f + FMath::Abs(CostumeStride) * Activity * 2.6f));
-    MakerSatchel->SetRelativeRotation(FRotator(0.0f, -12.0f + CostumeStride * Activity * 7.0f, 8.0f - CostumeStride * Activity * 9.0f));
-    MakerBelt->SetRelativeRotation(FRotator(0.0f, 0.0f, CostumeStride * Activity * 2.5f));
-    RuneGauntlet->SetRelativeRotation(FRotator(90.0f + Swing * 0.18f, GuardRaise * -0.28f, CostumeStride * Activity * 9.0f));
-    if (MakerEchoLight)
-        MakerEchoLight->SetIntensity(720.0f + Activity * 520.0f + (AttackRemaining > 0.0f ? 620.0f : 0.0f));
-
-    if (!bProductionMakerVisual)
+    // Static fallback only; production skeletal heroes use the complete state
+    // machine above, including airborne, landing, strafe, guard, and dodge clips.
+    if (GetMesh() && GetMesh()->IsVisible() && !IdleAnimation)
     {
-        const float WalkPhase = Time * (Speed > 40.0f ? 9.0f : 2.0f);
-        const float LimbSwing = Speed > 40.0f ? FMath::Sin(WalkPhase) * 22.0f : 0.0f;
-        LeftArm->SetRelativeRotation(FRotator(LimbSwing, 0.0f, 0.0f));
-        RightArm->SetRelativeRotation(FRotator(-LimbSwing - Swing * 0.22f, 0.0f, 0.0f));
-        LeftLeg->SetRelativeRotation(FRotator(-LimbSwing * 0.72f, 0.0f, 0.0f));
-        RightLeg->SetRelativeRotation(FRotator(LimbSwing * 0.72f, 0.0f, 0.0f));
+        UAnimSequence* DesiredAnimation = IdleAnimation;
+        bool bLoopAnimation = true;
+        if (DamageFlash > 0.72f && HitAnimation)
+        {
+            DesiredAnimation = HitAnimation;
+            bLoopAnimation = false;
+        }
+        else if (AttackRemaining > 0.0f && AttackAnimation)
+        {
+            DesiredAnimation = AttackAnimation;
+            bLoopAnimation = false;
+        }
+        else if (Speed > 610.0f && RunAnimation)
+        {
+            DesiredAnimation = RunAnimation;
+        }
+        else if (Speed > 35.0f && WalkAnimation)
+        {
+            DesiredAnimation = WalkAnimation;
+        }
+        if (DesiredAnimation && DesiredAnimation != ActiveAnimation)
+        {
+            GetMesh()->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+            GetMesh()->PlayAnimation(DesiredAnimation, bLoopAnimation);
+            ActiveAnimation = DesiredAnimation;
+        }
     }
+    const float WalkPhase = GetWorld()->GetTimeSeconds() * (Speed > 40.0f ? 9.0f : 2.0f);
+    const float LimbSwing = Speed > 40.0f ? FMath::Sin(WalkPhase) * 22.0f : 0.0f;
+    LeftArm->SetRelativeRotation(FRotator(LimbSwing, 0.0f, 0.0f));
+    RightArm->SetRelativeRotation(FRotator(-LimbSwing - Swing * 0.22f, 0.0f, 0.0f));
+    LeftLeg->SetRelativeRotation(FRotator(-LimbSwing * 0.72f, 0.0f, 0.0f));
+    RightLeg->SetRelativeRotation(FRotator(LimbSwing * 0.72f, 0.0f, 0.0f));
 }
 
 void ACubetownHero::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -1496,8 +1710,8 @@ void ACubetownHero::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
     Super::SetupPlayerInputComponent(PlayerInputComponent);
     PlayerInputComponent->BindAxis(TEXT("MoveForward"), this, &ACubetownHero::MoveForward);
     PlayerInputComponent->BindAxis(TEXT("MoveRight"), this, &ACubetownHero::MoveRight);
-    PlayerInputComponent->BindAxis(TEXT("Turn"), this, &APawn::AddControllerYawInput);
-    PlayerInputComponent->BindAxis(TEXT("LookUp"), this, &APawn::AddControllerPitchInput);
+    PlayerInputComponent->BindAxis(TEXT("Turn"), this, &ACubetownHero::TurnCamera);
+    PlayerInputComponent->BindAxis(TEXT("LookUp"), this, &ACubetownHero::LookCamera);
     PlayerInputComponent->BindAxis(TEXT("CameraZoom"), this, &ACubetownHero::ZoomCamera);
     PlayerInputComponent->BindKey(EKeys::MouseScrollUp, IE_Pressed, this, &ACubetownHero::ZoomIn);
     PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &ACubetownHero::ZoomOut);
@@ -1526,6 +1740,8 @@ void ACubetownHero::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
     PlayerInputComponent->BindKey(EKeys::LeftShift, IE_Released, this, &ACubetownHero::StopSprint);
     PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &ACubetownHero::JumpOrClimb);
     PlayerInputComponent->BindKey(EKeys::V, IE_Pressed, this, &ACubetownHero::RecenterCamera);
+    PlayerInputComponent->BindKey(EKeys::T, IE_Pressed, this, &ACubetownHero::UseArmament);
+    PlayerInputComponent->BindKey(EKeys::H, IE_Pressed, this, &ACubetownHero::ToggleVestige);
     PlayerInputComponent->BindKey(EKeys::MiddleMouseButton, IE_Pressed, this, &ACubetownHero::RecenterCamera);
     PlayerInputComponent->BindKey(EKeys::LeftControl, IE_DoubleClick, this, &ACubetownHero::HeavyAttack);
     PlayerInputComponent->BindKey(EKeys::Comma, IE_Pressed, this, &ACubetownHero::BuildRotateLeft);
@@ -1542,8 +1758,127 @@ void ACubetownHero::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
     PlayerInputComponent->BindKey(EKeys::Six, IE_Pressed, this, &ACubetownHero::BuildDecorTool);
 }
 
+void ACubetownHero::TurnCamera(float Value)
+{
+    if(ACubetownDirector* D=CubetownDirector(this);D&&D->IsStoryCinematicActive())return;
+    if (!FMath::IsNearlyZero(Value)) AddControllerYawInput(Value);
+}
+
+void ACubetownHero::LookCamera(float Value)
+{
+    if(ACubetownDirector* D=CubetownDirector(this);D&&D->IsStoryCinematicActive())return;
+    if (!FMath::IsNearlyZero(Value)) AddControllerPitchInput(Value);
+}
+
+void ACubetownHero::UpdateLocomotionAnimation(float DeltaSeconds)
+{
+    if (!GetMesh() || !GetMesh()->IsVisible()) return;
+
+    const bool bUseBlendGraph = LocomotionAnimClass != nullptr;
+    UAnimSequence* DesiredAnimation = bUseBlendGraph ? nullptr : IdleAnimation;
+    bool bLoopAnimation = true;
+    float PlayRate = 1.0f;
+    const FVector Velocity = GetVelocity();
+    const float Speed = Velocity.Size2D();
+    const bool bFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
+
+    if (DamageFlash > 0.72f && HitAnimation)
+    {
+        DesiredAnimation = HitAnimation;
+        bLoopAnimation = false;
+    }
+    else if (AttackRemaining > 0.0f && AttackAnimation)
+    {
+        DesiredAnimation = ComboStep == 3 && AttackAnimation3
+            ? AttackAnimation3
+            : (ComboStep == 2 && AttackAnimation2 ? AttackAnimation2 : AttackAnimation);
+        bLoopAnimation = false;
+        PlayRate = ComboStep == 3 ? 0.92f : 1.08f;
+    }
+    else if (DashRemaining > 0.12f && DodgeAnimation)
+    {
+        DesiredAnimation = DodgeAnimation;
+        bLoopAnimation = false;
+        PlayRate = 1.15f;
+    }
+    else if (!bUseBlendGraph && bFalling)
+    {
+        DesiredAnimation = Velocity.Z > 110.0f && JumpStartAnimation ? JumpStartAnimation : JumpLoopAnimation;
+        bLoopAnimation = DesiredAnimation == JumpLoopAnimation;
+    }
+    else if (!bUseBlendGraph && LandingAnimationRemaining > 0.0f && JumpLandAnimation)
+    {
+        DesiredAnimation = JumpLandAnimation;
+        bLoopAnimation = false;
+        PlayRate = 1.18f;
+    }
+    else if (bGuarding && GuardAnimation)
+    {
+        DesiredAnimation = GuardAnimation;
+    }
+    else if (!bUseBlendGraph && Speed > 25.0f)
+    {
+        const FVector Direction = Velocity.GetSafeNormal2D();
+        const float ForwardAmount = FVector::DotProduct(Direction, GetActorForwardVector());
+        const float RightAmount = FVector::DotProduct(Direction, GetActorRightVector());
+        if (ForwardAmount < -0.45f && BackwardAnimation)
+        {
+            DesiredAnimation = BackwardAnimation;
+            PlayRate = FMath::Clamp(Speed / 245.0f, 0.72f, 1.35f);
+        }
+        else if (FMath::Abs(RightAmount) > 0.62f && (StrafeLeftAnimation || StrafeRightAnimation))
+        {
+            DesiredAnimation = RightAmount < 0.0f ? StrafeLeftAnimation : StrafeRightAnimation;
+            PlayRate = FMath::Clamp(Speed / 430.0f, 0.72f, 1.35f);
+        }
+        else if ((bSprinting || Speed > 460.0f) && RunAnimation)
+        {
+            DesiredAnimation = RunAnimation;
+            PlayRate = FMath::Clamp(Speed / 590.0f, 0.82f, 1.30f);
+        }
+        else if (WalkAnimation)
+        {
+            DesiredAnimation = WalkAnimation;
+            PlayRate = FMath::Clamp(Speed / (bCrouchedByInput ? 190.0f : 320.0f), 0.62f, 1.35f);
+        }
+    }
+
+    if (bUseBlendGraph && !DesiredAnimation)
+    {
+        if (GetMesh()->GetAnimationMode() != EAnimationMode::AnimationBlueprint ||
+            GetMesh()->GetAnimClass() != LocomotionAnimClass.Get())
+        {
+            GetMesh()->SetAnimInstanceClass(LocomotionAnimClass);
+        }
+        ActiveAnimation = nullptr;
+    }
+    else if (DesiredAnimation && DesiredAnimation != ActiveAnimation)
+    {
+        GetMesh()->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+        GetMesh()->PlayAnimation(DesiredAnimation, bLoopAnimation);
+        ActiveAnimation = DesiredAnimation;
+    }
+    if (bUseBlendGraph)
+    {
+        if (Speed > 25.0f && !(bSprinting || Speed > 460.0f)) LocomotionProofAnimationMask |= 0x01;
+        if (Speed > 25.0f && (bSprinting || Speed > 460.0f)) LocomotionProofAnimationMask |= 0x02;
+        if (bFalling) LocomotionProofAnimationMask |= 0x04;
+        if (!bFalling && LandingAnimationRemaining > 0.0f) LocomotionProofAnimationMask |= 0x08;
+    }
+    else
+    {
+        if (DesiredAnimation == WalkAnimation) LocomotionProofAnimationMask |= 0x01;
+        if (DesiredAnimation == RunAnimation) LocomotionProofAnimationMask |= 0x02;
+        if (DesiredAnimation == JumpStartAnimation || DesiredAnimation == JumpLoopAnimation) LocomotionProofAnimationMask |= 0x04;
+        if (DesiredAnimation == JumpLandAnimation) LocomotionProofAnimationMask |= 0x08;
+    }
+    if (UAnimSingleNodeInstance* SingleNode = GetMesh()->GetSingleNodeInstance())
+        SingleNode->SetPlayRate(FMath::FInterpTo(SingleNode->GetPlayRate(), PlayRate, DeltaSeconds, 9.0f));
+}
+
 void ACubetownHero::MoveForward(float Value)
 {
+    if(ACubetownDirector* D=CubetownDirector(this);D&&D->IsStoryCinematicActive())return;
     if (FMath::IsNearlyZero(Value)) return;
     const FRotator Control = Controller ? Controller->GetControlRotation() : GetActorRotation();
     const FVector Forward = FRotationMatrix(FRotator(0.0f, Control.Yaw, 0.0f)).GetUnitAxis(EAxis::X);
@@ -1557,6 +1892,7 @@ void ACubetownHero::MoveForward(float Value)
 
 void ACubetownHero::MoveRight(float Value)
 {
+    if(ACubetownDirector* D=CubetownDirector(this);D&&D->IsStoryCinematicActive())return;
     if (FMath::IsNearlyZero(Value)) return;
     const FRotator Control = Controller ? Controller->GetControlRotation() : GetActorRotation();
     const FVector Right = FRotationMatrix(FRotator(0.0f, Control.Yaw, 0.0f)).GetUnitAxis(EAxis::Y);
@@ -1576,23 +1912,24 @@ void ACubetownHero::ZoomCamera(float Value)
         if(D->IsCreationSelecting()){D->CycleEcho();return;}
     }
     if(!SpringArm) return;
-    SpringArm->TargetArmLength=FMath::Clamp(SpringArm->TargetArmLength-Value*70.0f,430.0f,CubetownDirector(this)&&CubetownDirector(this)->IsBuildMode()?2200.0f:980.0f);
+        SpringArm->TargetArmLength=FMath::Clamp(SpringArm->TargetArmLength-Value*150.0f,2800.0f,CubetownDirector(this)&&CubetownDirector(this)->IsBuildMode()?7400.0f:6900.0f);
 }
 
 void ACubetownHero::ZoomIn()
 {
-    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - 80.0f, 420.0f, CubetownDirector(this)&&CubetownDirector(this)->IsBuildMode()?1800.0f:980.0f);
+    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength - 150.0f, 2800.0f, CubetownDirector(this)&&CubetownDirector(this)->IsBuildMode()?7400.0f:6900.0f);
 }
 
 void ACubetownHero::ZoomOut()
 {
-    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength + 80.0f, 420.0f, CubetownDirector(this)&&CubetownDirector(this)->IsBuildMode()?1800.0f:980.0f);
+    if (SpringArm) SpringArm->TargetArmLength = FMath::Clamp(SpringArm->TargetArmLength + 150.0f, 2800.0f, CubetownDirector(this)&&CubetownDirector(this)->IsBuildMode()?7400.0f:6900.0f);
 }
 
 void ACubetownHero::PrimaryAction()
 {
     if (ACubetownDirector* Director=CubetownDirector(this))
     {
+        if(Director->IsStoryCinematicActive()){Director->AdvanceStoryCinematic();return;}
         if(Director->IsBuildMode())
         {
             Director->CommitBuildTool(Cast<APlayerController>(GetController()));
@@ -1670,6 +2007,7 @@ void ACubetownHero::Interact()
 {
     if (ACubetownDirector* Director = CubetownDirector(this))
     {
+        if(Director->IsStoryCinematicActive()){Director->AdvanceStoryCinematic();return;}
         if(Director->IsBuildMode()) Director->RotateBuildPreview(15.0f);
         else Director->InteractNearby(GetActorLocation());
     }
@@ -1677,6 +2015,7 @@ void ACubetownHero::Interact()
 
 void ACubetownHero::Dash()
 {
+    if(ACubetownDirector* D=CubetownDirector(this);D&&D->IsStoryCinematicActive())return;
     if (DashRemaining > 0.0f || Stamina < 28.0f) return;
     Stamina -= 28.0f;
     FVector Direction=GetVelocity().GetSafeNormal2D();
@@ -1689,6 +2028,7 @@ void ACubetownHero::Dash()
 
 void ACubetownHero::HeavyAttack()
 {
+    if(ACubetownDirector* D=CubetownDirector(this);D&&D->IsStoryCinematicActive())return;
     if (AttackRemaining > 0.0f || Stamina < 20.0f) return;
     Stamina -= 20.0f; ComboStep=0; ComboResetRemaining=0.0f;
     if (ACubetownDirector* Director=CubetownDirector(this)) Director->PrimaryAtCursor(Cast<APlayerController>(GetController()),this,2.15f);
@@ -1704,50 +2044,96 @@ void ACubetownHero::StartGuard()
     if (Stamina < 5.0f || DashRemaining > 0.0f) return;
     bGuarding = true;
     ParryWindowRemaining = 0.20f;
-    GetCharacterMovement()->MaxWalkSpeed = 280.0f;
+    GetCharacterMovement()->MaxWalkSpeed = 220.0f;
 }
 
 void ACubetownHero::StopGuard()
 {
     bGuarding = false;
     ParryWindowRemaining = 0.0f;
-    GetCharacterMovement()->MaxWalkSpeed = bCrouchedByInput ? 280.0f : (bSprinting ? 780.0f : 520.0f);
+    GetCharacterMovement()->MaxWalkSpeed = bCrouchedByInput ? 200.0f : (bSprinting ? 600.0f : 380.0f);
 }
 
 void ACubetownHero::StartSprint()
 {
     if(bCrouchedByInput || bGuarding) return;
     bSprinting=true;
-    GetCharacterMovement()->MaxWalkSpeed=780.0f;
+    GetCharacterMovement()->MaxWalkSpeed=600.0f;
 }
 void ACubetownHero::StopSprint()
 {
     bSprinting=false;
-    GetCharacterMovement()->MaxWalkSpeed=bCrouchedByInput?280.0f:520.0f;
+    GetCharacterMovement()->MaxWalkSpeed=bCrouchedByInput?200.0f:380.0f;
 }
 void ACubetownHero::ToggleCrouch()
 {
     if(ACubetownDirector* D=CubetownDirector(this)) if(D->IsBuildMode()) return;
     bCrouchedByInput=!bCrouchedByInput;
-    if(bCrouchedByInput){Crouch();GetCharacterMovement()->MaxWalkSpeed=280.0f;}
-    else{UnCrouch();GetCharacterMovement()->MaxWalkSpeed=bSprinting?780.0f:520.0f;}
+    if(bCrouchedByInput){Crouch();GetCharacterMovement()->MaxWalkSpeed=200.0f;}
+    else{UnCrouch();GetCharacterMovement()->MaxWalkSpeed=bSprinting?600.0f:380.0f;}
 }
 void ACubetownHero::RecenterCamera()
 {
+    if(SpringArm)
+    {
+        SpringArm->TargetArmLength=6200.0f;
+        SpringArm->TargetOffset=GetActorForwardVector()*980.0f+FVector(0.0f,0.0f,190.0f);
+        SpringArm->SocketOffset=FVector::ZeroVector;
+    }
     if(APlayerController* PC=Cast<APlayerController>(GetController()))
-        PC->SetControlRotation(FRotator(-24.0f,GetActorRotation().Yaw,0.0f));
+        PC->SetControlRotation(FRotator(-38.0f,GetActorRotation().Yaw,0.0f));
+}
+
+void ACubetownHero::UseArmament()
+{
+    if(ACubetownDirector* Director=CubetownDirector(this))
+    {
+        if(Director->IsStoryCinematicActive())return;
+        Director->UseEquippedArmament(GetActorLocation(),this);
+    }
+}
+
+void ACubetownHero::ToggleVestige()
+{
+    if(ACubetownDirector* Director=CubetownDirector(this))
+    {
+        if(Director->IsStoryCinematicActive())return;
+        Director->ToggleVestigeForm();
+    }
+}
+
+void ACubetownHero::FocusOpeningView(const FVector& WorldTarget)
+{
+    const FVector ToTarget = WorldTarget - GetActorLocation();
+    const float TargetYaw = ToTarget.IsNearlyZero() ? 90.0f : ToTarget.Rotation().Yaw;
+    const bool bLairCapture = FParse::Param(FCommandLine::Get(), TEXT("PhantomLairCapture"));
+    const bool bGameplayCapture = FParse::Param(FCommandLine::Get(), TEXT("PhantomGameplayCapture"));
+    SetActorRotation(FRotator(0.0f, TargetYaw, 0.0f));
+    if (SpringArm)
+    {
+        SpringArm->TargetArmLength = bLairCapture ? 3400.0f : 5000.0f;
+        SpringArm->TargetOffset = ToTarget.GetSafeNormal2D() * (bLairCapture ? 420.0f : 820.0f) + FVector(0.0f, 0.0f, 190.0f);
+        SpringArm->SocketOffset = FVector::ZeroVector;
+        // The lair evidence view is deterministic and non-interactive. Geometry collision on the
+        // proof boom can collapse the camera into a floor/wall while the packaged map settles.
+        SpringArm->bDoCollisionTest = !(bLairCapture || bGameplayCapture);
+    }
+    if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+        PlayerController->SetControlRotation(FRotator(bLairCapture ? -42.0f : -38.0f, TargetYaw, 0.0f));
 }
 void ACubetownHero::SetBuildCameraMode(bool bEnabled)
 {
     if(SpringArm)
     {
-        SpringArm->TargetArmLength=bEnabled?1250.0f:720.0f;
+        SpringArm->TargetArmLength=bEnabled?7200.0f:6200.0f;
+        SpringArm->TargetOffset=bEnabled?FVector(0.0f,0.0f,150.0f):GetActorForwardVector()*980.0f+FVector(0.0f,0.0f,190.0f);
+        SpringArm->SocketOffset=FVector::ZeroVector;
         SpringArm->bDoCollisionTest=true;
     }
     if(APlayerController* PC=Cast<APlayerController>(GetController()))
     {
         const float Yaw=PC->GetControlRotation().Yaw;
-        PC->SetControlRotation(FRotator(bEnabled?-48.0f:-24.0f,Yaw,0.0f));
+        PC->SetControlRotation(FRotator(bEnabled?-50.0f:-38.0f,Yaw,0.0f));
     }
     if(VisualModel) VisualModel->SetVisibility(!bEnabled);
 }
@@ -1792,6 +2178,9 @@ float ACubetownHero::TakeDamage(
     AActor* DamageCauser
 )
 {
+    // Runtime proof must measure the authored arena, not a death/respawn race while the capture
+    // delay is running. Normal gameplay damage remains unchanged.
+    if (FParse::Param(FCommandLine::Get(), TEXT("PhantomLairCapture"))) return 0.0f;
     if (InvulnerableRemaining > 0.0f) return 0.0f;
     float AppliedDamage = DamageAmount;
     if (bGuarding)
@@ -1813,7 +2202,7 @@ float ACubetownHero::TakeDamage(
         {
             Stamina = 0.0f;
             bGuarding = false;
-            GetCharacterMovement()->MaxWalkSpeed = bCrouchedByInput ? 280.0f : (bSprinting ? 780.0f : 520.0f);
+            GetCharacterMovement()->MaxWalkSpeed = bCrouchedByInput ? 200.0f : (bSprinting ? 600.0f : 380.0f);
             AppliedDamage *= 0.72f;
         }
     }
@@ -1821,6 +2210,9 @@ float ACubetownHero::TakeDamage(
     DamageFlash = FMath::Clamp(DamageFlash + AppliedDamage / 35.0f, 0.0f, 1.0f);
     if (Health <= 0.0f)
     {
+        const FVector FallenLocation=GetActorLocation();
+        ACubetownDirector* Director=CubetownDirector(this);
+        const bool bStoryDefeat=Director&&Director->IsOpeningStoryDefeatActive();
         Health = 120.0f;
         Stamina = 100.0f;
         AttackRemaining = 0.0f;
@@ -1835,13 +2227,14 @@ float ACubetownHero::TakeDamage(
         if (bCrouchedByInput) UnCrouch();
         bCrouchedByInput = false;
         GetCharacterMovement()->StopMovementImmediately();
-        GetCharacterMovement()->MaxWalkSpeed = 520.0f;
-        SetActorLocation(FVector(0.0f, -11200.0f, 900.0f), false, nullptr, ETeleportType::TeleportPhysics);
+        GetCharacterMovement()->MaxWalkSpeed = 380.0f;
+        const FVector RespawnLocation=bStoryDefeat?FallenLocation:FVector(0.0f,-11200.0f,900.0f);
+        SetActorLocation(RespawnLocation, false, nullptr, ETeleportType::TeleportPhysics);
         if (!SnapCubetownCharacterToGround(this))
-            SetActorLocation(FVector(0.0f, -11200.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 2.0f), false, nullptr, ETeleportType::TeleportPhysics);
+            SetActorLocation(FVector(RespawnLocation.X,RespawnLocation.Y,GetCapsuleComponent()->GetScaledCapsuleHalfHeight()+2.0f), false, nullptr, ETeleportType::TeleportPhysics);
         SetActorRotation(FRotator(0.0f, 90.0f, 0.0f));
-        if (APlayerController* PC=Cast<APlayerController>(GetController())) PC->SetControlRotation(FRotator(-42.0f,90.0f,0.0f));
-        if (ACubetownDirector* Director = CubetownDirector(this)) Director->NotifyHeroDefeated();
+        RecenterCamera();
+        if (Director) Director->NotifyHeroDefeated();
     }
     return AppliedDamage;
 }
@@ -1855,14 +2248,263 @@ void ACubetownHUD::DrawHUD()
     if(!Director||!Hero)return;
     const float Width=Canvas->SizeX, Height=Canvas->SizeY;
     if(DrawCubetownDreamShell(this,Director,Width,Height))return;
+    if(Director->IsStoryCinematicActive())
+    {
+        const float Scale=FMath::Clamp(FMath::Min(Width/1920.0f,Height/1080.0f),0.76f,1.65f);
+        const auto S=[Scale](float V){return V*Scale;};
+        UFont* Medium=GEngine?GEngine->GetMediumFont():nullptr;
+        DrawRect(FLinearColor(0.005f,0.008f,0.015f,0.60f),0,0,Width,Height);
+        DrawRect(FLinearColor(0.002f,0.004f,0.008f,0.98f),0,0,Width,S(132));
+        DrawRect(FLinearColor(0.002f,0.004f,0.008f,0.98f),0,Height-S(220),Width,S(220));
+        const FLinearColor Gold(1.0f,0.70f,0.20f),Cream(0.98f,0.94f,0.84f),Teal(0.18f,0.92f,0.78f);
+        DrawText(Director->GetStoryCinematicKicker(),Teal,S(70),Height-S(188),Medium,S(0.58f));
+        DrawText(Director->GetStoryCinematicTitle(),Gold,S(70),Height-S(151),Medium,S(1.04f));
+        DrawText(Director->GetStoryCinematicLine(),Cream,S(70),Height-S(101),Medium,S(0.70f));
+        const float BarW=FMath::Min(Width-S(140),S(930));
+        DrawRect(FLinearColor(0.10f,0.12f,0.16f,0.95f),S(70),Height-S(34),BarW,S(5));
+        DrawRect(Teal,S(70),Height-S(34),BarW*Director->GetStoryCinematicProgress(),S(5));
+        DrawText(TEXT("[E / LMB]  CONTINUE"),FLinearColor(0.70f,0.76f,0.78f),Width-S(265),Height-S(46),Medium,S(0.46f));
+        return;
+    }
+    const bool bUseDioramaHUD = true;
+    if (bUseDioramaHUD)
+    {
+        const float UIScale=FMath::Clamp(FMath::Min(Width/1920.0f,Height/1080.0f),0.74f,1.60f);
+        const auto S=[UIScale](float V){return V*UIScale;};
+        UFont* Medium=GEngine?GEngine->GetMediumFont():nullptr;
+        UFont* Small=GEngine?GEngine->GetSmallFont():nullptr;
+        const FLinearColor Ink(0.018f,0.025f,0.038f,0.82f);
+        const FLinearColor Cream(0.98f,0.95f,0.83f);
+        const FLinearColor Ruby(0.98f,0.18f,0.28f);
+        const FLinearColor Violet(0.52f,0.16f,0.96f);
+        const FLinearColor Cyan(0.22f,0.88f,1.0f);
+        const FLinearColor Gold(1.0f,0.76f,0.22f);
+        const float Pad=S(26.0f);
+
+        auto Panel=[this](float X,float Y,float W,float H,float Alpha=0.82f)
+        {
+            DrawRect(FLinearColor(0.012f,0.020f,0.032f,Alpha),X,Y,W,H);
+            DrawLine(X,Y,X+W,Y,FLinearColor(0.55f,0.76f,0.86f,0.45f),1.5f);
+            DrawLine(X,Y+H,X+W,Y+H,FLinearColor(0.08f,0.16f,0.22f,0.72f),1.0f);
+        };
+        auto Circle=[this](const FVector2D& Center,float Radius,const FLinearColor& Color,float Thickness)
+        {
+            constexpr int32 Segments=48;
+            FVector2D Previous=Center+FVector2D(Radius,0.0f);
+            for(int32 I=1;I<=Segments;++I)
+            {
+                const float A=(2.0f*PI*I)/Segments;
+                const FVector2D Next=Center+FVector2D(FMath::Cos(A)*Radius,FMath::Sin(A)*Radius);
+                DrawLine(Previous.X,Previous.Y,Next.X,Next.Y,Color,Thickness);
+                Previous=Next;
+            }
+        };
+
+        // Life and Phantomite are readable at a glance without a developer-sized status panel.
+        const int32 HeartCount=10;
+        const float HealthPerHeart=120.0f/HeartCount;
+        for(int32 I=0;I<HeartCount;++I)
+        {
+            const float X=Pad+I*S(35.0f),Y=Pad+S(2.0f);
+            const bool bFull=Hero->GetHealth()>I*HealthPerHeart;
+            const FLinearColor HeartColor=bFull?Ruby:FLinearColor(0.16f,0.17f,0.20f,0.88f);
+            DrawRect(FLinearColor(0.0f,0.0f,0.0f,0.50f),X+S(3),Y+S(5),S(23),S(18));
+            DrawRect(HeartColor,X+S(2),Y+S(2),S(9),S(8));
+            DrawRect(HeartColor,X+S(15),Y+S(2),S(9),S(8));
+            DrawRect(HeartColor,X,Y+S(8),S(26),S(7));
+            DrawRect(HeartColor,X+S(3),Y+S(15),S(20),S(6));
+            DrawRect(HeartColor,X+S(8),Y+S(21),S(10),S(5));
+        }
+        const float MagicY=Pad+S(39.0f),MagicW=S(226.0f);
+        Circle(FVector2D(Pad+S(10),MagicY+S(7)),S(8),Cyan,S(2));
+        DrawRect(FLinearColor(0.035f,0.025f,0.07f,0.92f),Pad+S(24),MagicY,MagicW,S(14));
+        DrawRect(Violet,Pad+S(27),MagicY+S(3),FMath::Max(0.0f,(MagicW-S(6))*FMath::Clamp(Director->GetEchoEnergy()/100.0f,0.0f,1.0f)),S(8));
+        DrawText(FString::Printf(TEXT("PHANTOMITE  %d"),Director->GetEchoEnergy()),Cream,Pad+S(24),MagicY+S(18),Small,S(0.78f));
+        if(Director->GetReturnedSoulCount()>0)
+            DrawText(FString::Printf(TEXT("[T] %s   //   RETURNED SOULS %d/6%s"),*Director->GetEquippedArmamentName(),Director->GetReturnedSoulCount(),Director->HasFirstEclipse()?TEXT("   //   [H] VESTIGE"):TEXT("")),Cyan,Pad+S(24),MagicY+S(37),Small,S(0.64f));
+
+        // One compact active objective. No diagnostics, version strings, or control manual in play.
+        const FString Objective=Director->GetObjectiveMarker(Hero->GetActorLocation());
+        if(!Objective.IsEmpty())
+        {
+            const float QY=MagicY+S(58.0f);
+            DrawText(FString::Printf(TEXT("\x25C7  SHADOWBEARER // %s"),*Director->GetShadowbearerWorldStateLabel()),Gold,Pad,QY,Medium,S(0.72f));
+            DrawText(Objective,Cream,Pad,QY+S(32.0f),Medium,S(0.76f));
+        }
+
+        // Reference-shaped action dock: the approved frame puts tactile adventure tools in the
+        // upper-right and keeps persisted materials low in the frame. This replaces the four
+        // identical telemetry rectangles that read like an editor overlay.
+        struct FResourceChip{const TCHAR* Name;ECubetownBlockType Type;FLinearColor Color;};
+        const FResourceChip Chips[]={
+            {TEXT("WOOD"),ECubetownBlockType::Wood,FLinearColor(0.70f,0.40f,0.18f)},
+            {TEXT("STONE"),ECubetownBlockType::Stone,FLinearColor(0.68f,0.72f,0.76f)},
+            {TEXT("AMBER"),ECubetownBlockType::Amber,Gold},
+            {TEXT("CRYSTAL"),ECubetownBlockType::Crystal,Cyan}
+        };
+        const TCHAR* ActionKeys[]={TEXT("Y"),TEXT("X"),TEXT("A"),TEXT("B")};
+        const FLinearColor ActionColors[]={Cream,Cyan,Ruby,Gold};
+        const float ActionW=S(74.0f),ActionGap=S(9.0f),ActionY=Pad;
+        for(int32 I=0;I<UE_ARRAY_COUNT(Chips);++I)
+        {
+            const float X=Width-Pad-(UE_ARRAY_COUNT(Chips)-I)*(ActionW+ActionGap)+ActionGap;
+            Panel(X,ActionY,ActionW,ActionW,0.86f);
+            DrawLine(X,ActionY,X+ActionW,ActionY,ActionColors[I],S(2.2f));
+            Circle(FVector2D(X+S(16),ActionY+S(16)),S(10),FLinearColor(0.02f,0.04f,0.06f,0.96f),S(7.0f));
+            DrawText(ActionKeys[I],ActionColors[I],X+S(11),ActionY+S(8),Medium,S(0.48f));
+            if(I==0)
+            {
+                DrawLine(X+S(27),ActionY+S(54),X+S(51),ActionY+S(28),Cream,S(4));
+                DrawLine(X+S(24),ActionY+S(48),X+S(34),ActionY+S(58),Gold,S(3));
+            }
+            else if(I==1)
+            {
+                DrawRect(FLinearColor(0.08f,0.34f,0.62f,0.95f),X+S(29),ActionY+S(28),S(27),S(27));
+                DrawLine(X+S(29),ActionY+S(28),X+S(56),ActionY+S(55),Cyan,S(2));
+            }
+            else if(I==2)
+            {
+                Circle(FVector2D(X+S(43),ActionY+S(43)),S(15),FLinearColor(0.28f,0.31f,0.36f,0.96f),S(6));
+                DrawLine(X+S(49),ActionY+S(29),X+S(55),ActionY+S(22),Gold,S(3));
+            }
+            else
+            {
+                DrawRect(Gold,X+S(34),ActionY+S(26),S(18),S(7));
+                Circle(FVector2D(X+S(43),ActionY+S(48)),S(14),FLinearColor(0.54f,0.90f,0.28f,0.95f),S(7));
+            }
+        }
+
+        const float ResourceW=S(116.0f),ResourceH=S(44.0f),ResourceY=Height-Pad-ResourceH;
+        for(int32 I=0;I<UE_ARRAY_COUNT(Chips);++I)
+        {
+            const float X=Pad+I*(ResourceW+S(8.0f));
+            Panel(X,ResourceY,ResourceW,ResourceH,0.82f);
+            Circle(FVector2D(X+S(19),ResourceY+S(22)),S(8),Chips[I].Color,S(6));
+            DrawText(Chips[I].Name,FLinearColor(0.72f,0.78f,0.76f),X+S(34),ResourceY+S(6),Small,S(0.62f));
+            DrawText(FString::Printf(TEXT("x %d"),Director->GetInventory(Chips[I].Type)),Cream,X+S(34),ResourceY+S(22),Medium,S(0.54f));
+        }
+
+        // A real local map, not a crosshair in a dark square: circular terrain fill, the visible
+        // river, street hierarchy, homes, civic landmark, and canonical live-player transform.
+        const float MapR=S(100.0f);
+        const FVector2D MapCenter(Width-Pad-MapR,Height-Pad-MapR);
+        for(float Row=-MapR;Row<=MapR;Row+=S(3.0f))
+        {
+            const float Half=FMath::Sqrt(FMath::Max(0.0f,MapR*MapR-Row*Row));
+            const float Shade=0.035f+0.025f*((Row+MapR)/(MapR*2.0f));
+            DrawRect(FLinearColor(0.045f+Shade,0.18f+Shade,0.13f+Shade*0.4f,0.94f),MapCenter.X-Half,MapCenter.Y+Row,Half*2.0f,S(3.2f));
+        }
+        Circle(MapCenter,MapR,FLinearColor(0.82f,0.72f,0.38f,0.92f),S(2.0f));
+        const FVector HeroLocation=Hero->GetActorLocation();
+        const float MapScale=MapR/S(11500.0f);
+        auto MapPoint=[&](const FVector& World)
+        {
+            const FVector Delta=World-HeroLocation;
+            return MapCenter+FVector2D(Delta.X*MapScale,-Delta.Y*MapScale);
+        };
+        const FVector2D SouthRoad=MapPoint(FVector(0,-11800,0));
+        const FVector2D NorthRoad=MapPoint(FVector(0,-3800,0));
+        DrawLine(SouthRoad.X,SouthRoad.Y,NorthRoad.X,NorthRoad.Y,FLinearColor(0.78f,0.67f,0.42f,0.90f),S(5.5f));
+        const FVector2D WestCross=MapPoint(FVector(-3900,-7200,0));
+        const FVector2D EastCross=MapPoint(FVector(3900,-7200,0));
+        DrawLine(WestCross.X,WestCross.Y,EastCross.X,EastCross.Y,FLinearColor(0.78f,0.67f,0.42f,0.86f),S(4.5f));
+        const FVector2D RiverSouth=MapPoint(FVector(-2250,-12000,0));
+        const FVector2D RiverNorth=MapPoint(FVector(-2250,-3800,0));
+        DrawLine(RiverSouth.X,RiverSouth.Y,RiverNorth.X,RiverNorth.Y,FLinearColor(0.16f,0.72f,0.95f,0.95f),S(9.0f));
+        const FVector Homes[]={FVector(-1320,-10280,0),FVector(1420,-10120,0),FVector(-1500,-9000,0),FVector(1480,-8850,0),FVector(-1850,-8100,0),FVector(1880,-8050,0),FVector(-1780,-5950,0),FVector(1800,-5800,0),FVector(-1500,-4550,0),FVector(1450,-4400,0)};
+        for(const FVector& Home:Homes)
+        {
+            const FVector2D P=MapPoint(Home);
+            if(FVector2D::Distance(P,MapCenter)<MapR-S(9))
+                DrawRect(FLinearColor(0.92f,0.86f,0.69f,0.96f),P.X-S(3),P.Y-S(3),S(6),S(6));
+        }
+        const FVector Landmarks[]={FVector(0,-10500,0),FVector(0,-7200,0),FVector(-2250,-8580,0),FVector(1880,-8050,0),FVector(-1080,-7900,0)};
+        const FLinearColor LandmarkColors[]={Cream,Cyan,Gold,Ruby,Violet};
+        for(int32 I=0;I<UE_ARRAY_COUNT(Landmarks);++I)
+        {
+            FVector2D P=MapPoint(Landmarks[I]);
+            FVector2D Relative=P-MapCenter;
+            if(Relative.Size()>MapR-S(14))P=MapCenter+Relative.GetSafeNormal()*(MapR-S(14));
+            Circle(P,S(4),LandmarkColors[I],S(3));
+        }
+        const float HeroYaw=FMath::DegreesToRadians(Hero->GetActorRotation().Yaw);
+        const FVector2D Nose=MapCenter+FVector2D(FMath::Cos(HeroYaw),-FMath::Sin(HeroYaw))*S(11);
+        DrawLine(MapCenter.X,MapCenter.Y,Nose.X,Nose.Y,Cream,S(4));
+        Circle(MapCenter,S(4),Cyan,S(2));
+        DrawText(TEXT("N"),Cream,MapCenter.X-S(5),MapCenter.Y-MapR-S(22),Small,S(0.75f));
+
+        const FString InteractionPrompt=Director->GetInteractionPrompt(Hero->GetActorLocation());
+        if(!InteractionPrompt.IsEmpty()&&!Director->IsBuildMode())
+        {
+            const float PromptW=S(420.0f),PromptX=(Width-PromptW)*0.5f,PromptY=Height-S(135.0f);
+            Panel(PromptX,PromptY,PromptW,S(44.0f),0.92f);
+            DrawText(InteractionPrompt,Cream,PromptX+S(18),PromptY+S(11),Medium,S(0.55f));
+        }
+
+        if(Director->GetActivePanel()!=0)
+        {
+            const float PW=FMath::Min(S(760.0f),Width-S(80.0f)),PH=FMath::Min(S(500.0f),Height-S(80.0f));
+            const float PX=(Width-PW)*0.5f,PY=(Height-PH)*0.5f;
+            Panel(PX,PY,PW,PH,0.96f);
+            const TCHAR* Title=Director->GetActivePanel()==1?TEXT("FIELD SATCHEL"):Director->GetActivePanel()==2?TEXT("SHADOWBEARER WORLD MAP"):TEXT("ADVENTURE JOURNAL");
+            DrawText(Title,Cream,PX+S(34),PY+S(26),Medium,S(0.84f));
+            if(Director->GetActivePanel()==1)
+            {
+                DrawText(FString::Printf(TEXT("WOOD %d     STONE %d     AMBER %d     CRYSTAL %d"),Director->GetInventory(ECubetownBlockType::Wood),Director->GetInventory(ECubetownBlockType::Stone),Director->GetInventory(ECubetownBlockType::Amber),Director->GetInventory(ECubetownBlockType::Crystal)),Cream,PX+S(38),PY+S(110),Medium,S(0.62f));
+                DrawText(FString::Printf(TEXT("PHANTOMITE %d     MEMORIES %d/9     CREATION LOAD %d/%d"),Director->GetEchoEnergy(),Director->GetUnlockedCreationCount(),Director->GetCreationBudgetUsed(),Director->GetCreationBudgetMax()),Cyan,PX+S(38),PY+S(170),Medium,S(0.60f));
+            }
+            else if(Director->GetActivePanel()==2)
+            {
+                DrawText(TEXT("BRAMBLEWICK  -  DAWNLAMP  -  MARKET  -  SILENT ROAD  -  SHADELINE"),Cream,PX+S(38),PY+S(120),Medium,S(0.55f));
+                DrawText(FString::Printf(TEXT("YOU ARE IN %s"),*Director->GetRegionName(Hero->GetActorLocation())),Cyan,PX+S(38),PY+S(190),Medium,S(0.64f));
+            }
+            else
+            {
+                DrawText(Director->GetQuestStatus(),Cream,PX+S(38),PY+S(116),Medium,S(0.58f));
+                DrawText(FString::Printf(TEXT("SERA %d/5   MARA %d/5   TESS %d/5   //   %s"),Director->GetFriendship(0),Director->GetFriendship(1),Director->GetFriendship(2),*Director->GetShadowbearerWorldStateLabel()),Gold,PX+S(38),PY+S(185),Medium,S(0.58f));
+            }
+            DrawText(TEXT("TAB / M / J  CLOSE"),FLinearColor(0.62f,0.70f,0.72f),PX+S(38),PY+PH-S(46),Small,S(0.75f));
+        }
+
+        if(Director->IsCreationSelecting())
+        {
+            DrawRect(FLinearColor(0.02f,0.01f,0.05f,0.68f),0,0,Width,Height);
+            const float WheelW=S(580.0f),WheelX=(Width-WheelW)*0.5f,WheelY=(Height-S(330.0f))*0.5f;
+            Panel(WheelX,WheelY,WheelW,S(330.0f),0.96f);
+            DrawText(TEXT("MEMORYCRAFT"),Cream,WheelX+S(28),WheelY+S(24),Medium,S(0.82f));
+            const ECubetownEchoType Types[]={ECubetownEchoType::Blade,ECubetownEchoType::Boulder,ECubetownEchoType::Bloom,ECubetownEchoType::Bridge,ECubetownEchoType::TideSpire,ECubetownEchoType::SkyPad,ECubetownEchoType::BlastBloom,ECubetownEchoType::GaleTotem,ECubetownEchoType::Climbroot};
+            for(int32 I=0;I<CubetownCreationTypeCount;++I)
+            {
+                const int32 Col=I%3,Row=I/3;const float X=WheelX+S(24)+Col*S(180),Y=WheelY+S(82)+Row*S(66);
+                const bool bSelected=Director->GetSelectedEcho()==Types[I];
+                if(bSelected)DrawRect(Violet,X-S(6),Y-S(5),S(170),S(52));
+                DrawText(EchoName(Types[I]),bSelected?Cream:FLinearColor(0.58f,0.64f,0.68f),X,Y,Small,S(0.70f));
+                DrawText(Director->IsEchoUnlocked(Types[I])?TEXT("READY"):TEXT("LOCKED"),Director->IsEchoUnlocked(Types[I])?Cyan:FLinearColor(0.42f,0.38f,0.44f),X,Y+S(23),Small,S(0.60f));
+            }
+        }
+
+        if(Director->IsBuildMode())
+        {
+            const float BW=S(720.0f),BX=(Width-BW)*0.5f,BY=Height-S(125.0f);
+            Panel(BX,BY,BW,S(92.0f),0.94f);
+            static const TCHAR* ToolNames[]={TEXT("HOME"),TEXT("WALL"),TEXT("ROOM"),TEXT("FENCE"),TEXT("GARDEN"),TEXT("DECOR")};
+            DrawText(FString::Printf(TEXT("BUILD  %s  /  %s"),ToolNames[FMath::Clamp(Director->GetBuildToolIndex(),0,5)],*Director->GetBuildPrefabName()),Cyan,BX+S(22),BY+S(14),Medium,S(0.60f));
+            DrawText(TEXT("1-6 TOOL   LMB PLACE   RMB CANCEL   Q/E ROTATE   CTRL+Z/Y UNDO/REDO   B FINISH"),Cream,BX+S(22),BY+S(50),Small,S(0.70f));
+        }
+        if(Hero->GetDamageFlash()>0.0f)
+        {
+            const float A=Hero->GetDamageFlash()*0.18f;
+            DrawRect(FLinearColor(1.0f,0.0f,0.06f,A),0,0,Width,S(8));
+            DrawRect(FLinearColor(1.0f,0.0f,0.06f,A),0,Height-S(8),Width,S(8));
+        }
+        return;
+    }
     // Scale the adventure HUD beyond 1080p. Capping this at 1.0 made objectives and prompts
     // illegible in the installed application's 4K playtest despite ample available screen space.
     const float UIScale=FMath::Clamp(FMath::Min(Width/1920.0f,Height/1080.0f),0.78f,1.75f);
     const auto S=[UIScale](float V){return V*UIScale;};
     UFont* Medium=GEngine?GEngine->GetMediumFont():nullptr;
-    const FLinearColor Panel(0.012f,0.026f,0.024f,0.88f);
-    const FLinearColor Mint(0.10f,0.94f,0.82f);
-    const FLinearColor Crimson(0.94f,0.12f,0.20f);
+    const FLinearColor Panel(0.055f,0.030f,0.048f,0.82f), Mint(0.96f,0.36f,0.42f);
     const float Pad=S(18.0f);
 
     // Third-person interaction reticle. Mining, attacks and Maker placement use this center aim point.
@@ -1874,8 +2516,8 @@ void ACubetownHUD::DrawHUD()
 
     // Adventure HUD: only the information needed while moving through the world.
     DrawRect(Panel,Pad,Pad,S(610.0f),S(96.0f));
-    DrawRect(Crimson,Pad,Pad,S(5.0f),S(96.0f));
-    DrawText(FString::Printf(TEXT("CUBETOWN // %s"),*Director->GetRegionName(Hero->GetActorLocation())),FLinearColor(1.0f,0.91f,0.76f),Pad+S(20.0f),Pad+S(13.0f),Medium,S(0.68f));
+    DrawRect(Mint,Pad,Pad,S(5.0f),S(96.0f));
+    DrawText(FString::Printf(TEXT("SHADOWBEARER // %s"),*Director->GetShadowbearerWorldStateLabel()),FLinearColor(1.0f,0.91f,0.76f),Pad+S(20.0f),Pad+S(13.0f),Medium,S(0.68f));
     DrawText(Director->GetQuestStatus(),FLinearColor(0.78f,0.88f,0.92f),Pad+S(20.0f),Pad+S(45.0f),Medium,S(0.48f));
     DrawText(FString::Printf(TEXT("SHRINES %d/3   MEMORIES %d/9   LOAD %d/%d   %02d:%02d   %s"),Director->GetShrinesRestored(),Director->GetUnlockedCreationCount(),Director->GetCreationBudgetUsed(),Director->GetCreationBudgetMax(),FMath::FloorToInt(Director->GetTimeOfDayHours()),FMath::FloorToInt(FMath::Fmod(Director->GetTimeOfDayHours(),1.0f)*60.0f),*Director->GetWeatherName()),FLinearColor(1.0f,0.76f,0.34f),Pad+S(20.0f),Pad+S(71.0f),Medium,S(0.45f));
 
@@ -1886,7 +2528,7 @@ void ACubetownHUD::DrawHUD()
     {
         const float ObjectiveW=S(360.0f),ObjectiveX=Width-ObjectiveW-Pad;
         DrawRect(FLinearColor(0.055f,0.030f,0.048f,0.86f),ObjectiveX,Pad+S(112.0f),ObjectiveW,S(44.0f));
-        DrawRect(Mint,ObjectiveX,Pad+S(112.0f),S(5.0f),S(44.0f));
+        DrawRect(FLinearColor(1.0f,0.62f,0.24f),ObjectiveX,Pad+S(112.0f),S(5.0f),S(44.0f));
         DrawText(ObjectiveMarker,FLinearColor(1.0f,0.91f,0.76f),ObjectiveX+S(18.0f),Pad+S(124.0f),Medium,S(0.56f));
     }
 
@@ -1895,37 +2537,28 @@ void ACubetownHUD::DrawHUD()
     DrawText(TEXT("LIFE"),FLinearColor(1.0f,0.72f,0.76f),HeartX+S(14.0f),HeartY+S(10.0f),Medium,S(0.58f));
     for(int32 I=0;I<6;++I){const bool Full=Hero->GetHealth()>=((I+1)*20.0f);DrawRect(Full?FLinearColor(1.0f,0.24f,0.38f):FLinearColor(0.20f,0.09f,0.12f),HeartX+S(66.0f+I*31.0f),HeartY+S(12.0f),S(23.0f),S(17.0f));}
     DrawRect(FLinearColor(0.07f,0.08f,0.09f),HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f),S(7.0f));
-    DrawRect(Mint,HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f)*Hero->GetStamina()/100.0f,S(7.0f));
+    DrawRect(FLinearColor(0.26f,0.92f,0.52f),HeartX+S(66.0f),HeartY+S(39.0f),S(178.0f)*Hero->GetStamina()/100.0f,S(7.0f));
 
-    // V19 command deck: three readable Maker tools instead of one dense instruction sentence.
-    const float SlotW=S(142.0f),SlotH=S(52.0f),SlotGap=S(10.0f);
-    const float DeckW=SlotW*3.0f+SlotGap*2.0f,DeckX=(Width-DeckW)*0.5f,DeckY=Height-S(70.0f);
-    const TCHAR* SlotKeys[]={TEXT("Q"),TEXT("C"),TEXT("X")};
-    const FString SlotNames[]={FString::Printf(TEXT("CREATE %s"),EchoName(Director->GetSelectedEcho())),TEXT("REMEMBER"),TEXT("WEAVE")};
-    for(int32 Slot=0;Slot<3;++Slot)
-    {
-        const float X=DeckX+Slot*(SlotW+SlotGap);
-        DrawRect(Panel,X,DeckY,SlotW,SlotH);
-        DrawRect(Slot==0?Mint:Crimson,X,DeckY,S(4.0f),SlotH);
-        DrawText(SlotKeys[Slot],FLinearColor(1.0f,0.92f,0.76f),X+S(13.0f),DeckY+S(9.0f),Medium,S(0.56f));
-        DrawText(SlotNames[Slot],FLinearColor(0.72f,0.91f,0.86f),X+S(38.0f),DeckY+S(12.0f),Medium,S(0.40f));
-        DrawText(Slot==0?TEXT("HOLD / CHOOSE"):Slot==1?TEXT("CAPTURE WORLD"):TEXT("MOVE MEMORY"),FLinearColor(0.56f,0.66f,0.64f),X+S(13.0f),DeckY+S(33.0f),Medium,S(0.30f));
-    }
-    DrawText(TEXT("LMB COMBO   SHIFT SPRINT   SPACE VAULT   B BUILD"),FLinearColor(0.72f,0.78f,0.74f),DeckX+S(42.0f),DeckY-S(20.0f),Medium,S(0.34f));
+    const float ActionW=FMath::Min(S(1060.0f),Width-S(420.0f));
+    const float ActionX=(Width-ActionW)*0.5f, ActionY=Height-S(92.0f);
+    DrawRect(Panel,ActionX,ActionY,ActionW,S(73.0f));
+    DrawRect(FLinearColor(0.96f,0.30f,0.40f),ActionX,ActionY,S(5.0f),S(73.0f));
+    DrawText(TEXT("[LMB] COMBO   [E] INTERACT   [F] LOCK   [T] ARMAMENT   [H] VESTIGE   [SHIFT] SPRINT   [SPACE] JUMP"),FLinearColor(0.72f,0.96f,0.88f),ActionX+S(17.0f),ActionY+S(10.0f),Medium,S(0.42f));
+    DrawText(FString::Printf(TEXT("[Q] CREATE %s   [C] REMEMBER   [X] WEAVE   [G] RIDE   [B] BUILD   [TAB] KIT   [M] MAP   [J] JOURNAL"),EchoName(Director->GetSelectedEcho())),FLinearColor(0.96f,0.84f,0.74f),ActionX+S(17.0f),ActionY+S(39.0f),Medium,S(0.42f));
 
     const FString InteractionPrompt=Director->GetInteractionPrompt(Hero->GetActorLocation());
     if(!InteractionPrompt.IsEmpty() && !Director->IsBuildMode())
     {
-        const float PromptW=S(440.0f),PromptX=(Width-PromptW)*0.5f,PromptY=Height-S(92.0f);
+        const float PromptW=S(440.0f),PromptX=(Width-PromptW)*0.5f,PromptY=Height-S(144.0f);
         DrawRect(FLinearColor(0.12f,0.045f,0.07f,0.94f),PromptX,PromptY,PromptW,S(42.0f));
-        DrawRect(Mint,PromptX,PromptY,S(5.0f),S(42.0f));
+        DrawRect(FLinearColor(0.96f,0.30f,0.40f),PromptX,PromptY,S(5.0f),S(42.0f));
         DrawText(InteractionPrompt,FLinearColor(1.0f,0.92f,0.78f),PromptX+S(18.0f),PromptY+S(12.0f),Medium,S(0.52f));
     }
 
     DrawRect(Panel,Width-S(360.0f)-Pad,Pad,S(360.0f),S(96.0f));
     DrawText(TEXT("TOWN LIFE"),FLinearColor(1.0f,0.90f,0.74f),Width-S(342.0f)-Pad,Pad+S(11.0f),Medium,S(0.66f));
-    DrawText(FString::Printf(TEXT("MIRA %d/5   ROWAN %d/5   PIP %d/5"),Director->GetFriendship(0),Director->GetFriendship(1),Director->GetFriendship(2)),FLinearColor(1.0f,0.58f,0.78f),Width-S(342.0f)-Pad,Pad+S(43.0f),Medium,S(0.54f));
-    DrawText(Director->IsGuardianDefeated()?TEXT("HEARTSTONE SAFE"):TEXT("RIFT THREAT ACTIVE"),Director->IsGuardianDefeated()?Mint:Crimson,Width-S(342.0f)-Pad,Pad+S(70.0f),Medium,S(0.50f));
+    DrawText(FString::Printf(TEXT("SERA %d/5   MARA %d/5   TESS %d/5"),Director->GetFriendship(0),Director->GetFriendship(1),Director->GetFriendship(2)),FLinearColor(1.0f,0.58f,0.78f),Width-S(342.0f)-Pad,Pad+S(43.0f),Medium,S(0.54f));
+    DrawText(Director->GetShadowbearerWorldStateLabel(),Director->IsShadowfallActive()?FLinearColor(0.70f,0.44f,1.0f):Mint,Width-S(342.0f)-Pad,Pad+S(70.0f),Medium,S(0.50f));
 
     if(Hero->IsLockedOn())
     {
@@ -1958,16 +2591,16 @@ void ACubetownHUD::DrawHUD()
         else if(Director->GetActivePanel()==2)
         {
             DrawText(TEXT("ILLUSTRATED WORLD MAP"),FLinearColor(1.0f,0.90f,0.72f),OX+S(34),OY+S(28),Medium,S(0.92f));
-            DrawText(TEXT("FROSTBLOOM HEIGHTS        CRIMSON GROVE         EMBERBLOOM VALLEY"),FLinearColor(0.82f,0.72f,0.95f),OX+S(55),OY+S(120),Medium,S(0.58f));
-            DrawText(TEXT("MOONMOSS MARSH       HEARTSTONE / CROWNLANDS       STARFALL MEADOWS"),FLinearColor(0.58f,0.88f,0.76f),OX+S(55),OY+S(235),Medium,S(0.58f));
-            DrawText(TEXT("                         SUNPETAL COAST"),FLinearColor(0.95f,0.70f,0.42f),OX+S(55),OY+S(350),Medium,S(0.58f));
+            DrawText(TEXT("FROSTBLOOM HEIGHTS        CRIMSON GROVE        EMBERBLOOM PHANTOMITE"),FLinearColor(0.82f,0.72f,0.95f),OX+S(55),OY+S(120),Medium,S(0.54f));
+            DrawText(TEXT("DEEP FOREST          SHADELINE / BRAMBLEWICK          STARFALL QUARRY"),FLinearColor(0.58f,0.88f,0.76f),OX+S(55),OY+S(235),Medium,S(0.54f));
+            DrawText(TEXT("MOONMOSS FARMS                                      SUNPETAL COAST"),FLinearColor(0.95f,0.70f,0.42f),OX+S(55),OY+S(350),Medium,S(0.56f));
             DrawText(FString::Printf(TEXT("YOU ARE HERE: %s"),*Director->GetRegionName(Hero->GetActorLocation())),FLinearColor(1.0f,0.36f,0.42f),OX+S(55),OY+S(460),Medium,S(0.68f));
         }
         else
         {
             DrawText(TEXT("ADVENTURE JOURNAL"),FLinearColor(1.0f,0.90f,0.72f),OX+S(34),OY+S(28),Medium,S(0.92f));
             DrawText(Director->GetQuestStatus(),FLinearColor(0.94f,0.80f,0.70f),OX+S(38),OY+S(105),Medium,S(0.62f));
-            DrawText(FString::Printf(TEXT("MIRA %d/5   ROWAN %d/5   PIP %d/5   //   SHRINES %d/3"),Director->GetFriendship(0),Director->GetFriendship(1),Director->GetFriendship(2),Director->GetShrinesRestored()),FLinearColor(0.96f,0.48f,0.64f),OX+S(38),OY+S(180),Medium,S(0.62f));
+            DrawText(FString::Printf(TEXT("SERA %d/5   MARA %d/5   TESS %d/5   //   %s"),Director->GetFriendship(0),Director->GetFriendship(1),Director->GetFriendship(2),*Director->GetShadowbearerWorldStateLabel()),FLinearColor(0.96f,0.48f,0.64f),OX+S(38),OY+S(180),Medium,S(0.62f));
             DrawText(TEXT("The world is designed around curiosity: red forests, impossible seasonal overlaps, ruins, friends, Creation magic and homes you can actually build."),FLinearColor(0.74f,0.74f,0.70f),OX+S(38),OY+S(250),Medium,S(0.55f));
         }
         DrawText(TEXT("TAB / M / J CLOSE OR SWITCH"),FLinearColor(0.74f,0.68f,0.64f),OX+S(38),OY+OH-S(48),Medium,S(0.52f));
@@ -2018,35 +2651,186 @@ ACubetownDirector::ACubetownDirector()
 void ACubetownDirector::BeginPlay()
 {
     Super::BeginPlay();
+    const FCubetownCaptureView CaptureView = GetCubetownCaptureView();
+    const bool bLairCapture = CaptureView.bLair;
+    const FVector OpeningTarget = CaptureView.Target;
     LoadProgress();
+    FString CaptureState;
+    if (FParse::Value(FCommandLine::Get(), TEXT("ShadowbearerCaptureState="), CaptureState))
+    {
+        CaptureState.ToLowerInline();
+        bShadowbearerCaptureOverride=true;
+        if(CaptureState==TEXT("prologue"))
+        {
+            ShadowbearerWorldState=EShadowbearerWorldState::Dawn;
+            OpeningQuestStep=0;
+            bPrologueSeen=false;
+        }
+        else if(CaptureState==TEXT("shadowfall")||CaptureState==TEXT("shadow"))
+        {
+            ShadowbearerWorldState=EShadowbearerWorldState::Shadowfall;
+            OpeningQuestStep=3;
+            bLanternComponentDelivered=true;
+            bPaleWardenEncountered=true;
+        }
+        else if(CaptureState==TEXT("restored")||CaptureState==TEXT("return"))
+        {
+            ShadowbearerWorldState=EShadowbearerWorldState::Restored;
+            OpeningQuestStep=5;
+            bLanternComponentDelivered=true;
+            bPaleWardenEncountered=true;
+            bFirstShadowSolidified=true;
+            bBramblewickLampRestored=true;
+        }
+        else if(CaptureState==TEXT("finale")||CaptureState==TEXT("aktarus"))
+        {
+            ShadowbearerWorldState=EShadowbearerWorldState::Restored;
+            OpeningQuestStep=5;bLanternComponentDelivered=true;bPaleWardenEncountered=true;
+            bFirstShadowSolidified=true;bBramblewickLampRestored=true;bPrologueSeen=true;
+            ReturnedSoulMask=0x1fu;ArmamentMask=0x1fu;MemoryMask=0x1fu;CanonicalChapter=20;
+        }
+        else if(CaptureState==TEXT("eclipse")||CaptureState==TEXT("postgame"))
+        {
+            ShadowbearerWorldState=EShadowbearerWorldState::Restored;
+            OpeningQuestStep=5;bLanternComponentDelivered=true;bPaleWardenEncountered=true;
+            bFirstShadowSolidified=true;bBramblewickLampRestored=true;bPrologueSeen=true;
+            ReturnedSoulMask=0x3fu;ArmamentMask=0x3fu;MemoryMask=0x3fu;CanonicalChapter=22;
+            bNightspineOwned=true;bVestigeOwned=true;bVestigeEquipped=true;
+            bFirstEclipseUnlocked=true;bEclipsedDawnlantern=true;bPostgameUnlocked=true;EquippedArmament=5;
+        }
+        else
+        {
+            ShadowbearerWorldState=EShadowbearerWorldState::Dawn;
+            OpeningQuestStep=0;
+        }
+    }
+    // Evidence must judge the authored town rather than whichever clock value an old local save
+    // happened to persist. Normal saves keep their real time; only deterministic proof starts at
+    // the same warm morning used by the approved visual reference.
+    if (FParse::Param(FCommandLine::Get(), TEXT("PhantomGameplayCapture")) && !CaptureView.bLair)
+        TimeOfDayHours = 10.25f;
     BuildDreamWorld();
-    SpawnMakerArrivalTrail();
+    BuildShadowbearerOpening();
     RestoreSavedBuilds();
     SpawnVillage();
-    SpawnMemorycraftTrials();
-    RefreshStoryQuest();
-    if (ShrinesRestored >= 3 && !bGuardianDefeated)
+    ApplyShadowbearerWorldState(true);
+    if (APlayerController* PlayerController = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
     {
-        bGuardianSpawned = true;
-        SpawnEnemy(ECubetownEnemyType::RiftGuardian, FVector(22000.0f, 17000.0f, 155.0f), WorldCycle + 3);
-        StoryChapter = FMath::Max(StoryChapter, 2);
-        QuestStatus = TEXT("THE RIFT GUARDIAN AWAITS // FIGHT BESIDE YOUR ECHO AND PROTECT YOUR FRIENDS");
+        if (PlayerController->PlayerCameraManager)
+        {
+            // A short in-engine reveal prevents a cold map pop while keeping control immediate.
+            PlayerController->PlayerCameraManager->StartCameraFade(
+                1.0f, 0.0f, 1.15f, FLinearColor::Black, false, true
+            );
+        }
     }
-    else if (!bGuardianDefeated)
+    // A cold packaged launch can stream the persistent Heartstone meshes for several seconds.
+    // Finish that work behind the shell so gameplay never opens on an empty terrain tile.
+    if (GetWorld()) GetWorld()->FlushLevelStreaming(EFlushLevelStreamingType::Full);
+    FlushAsyncLoading();
+    if (ACubetownHero* Hero = Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this, 0)))
     {
-        SpawnEnemyWave();
+        Hero->FocusOpeningView(OpeningTarget);
+        // Proof launches have no intentional mouse owner. Reassert the authored opening after
+        // the viewport captures the OS cursor so candidate evidence cannot drift off the town.
+        if (FParse::Param(FCommandLine::Get(), TEXT("PhantomGameplayCapture")) && GetWorld())
+        {
+            FTimerHandle OpeningViewTimer;
+            GetWorld()->GetTimerManager().SetTimer(
+                OpeningViewTimer,
+                FTimerDelegate::CreateWeakLambda(this, [this, CaptureView]()
+                {
+                    if (ACubetownHero* ReadyHero = Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this, 0)))
+                    {
+                        if (CaptureView.bLair || !CaptureView.Region.IsEmpty())
+                        {
+                            ReadyHero->SetActorLocation(CaptureView.Spawn, false, nullptr, ETeleportType::TeleportPhysics);
+                            SnapCubetownCharacterToGround(ReadyHero);
+                        }
+                        ReadyHero->FocusOpeningView(CaptureView.Target);
+                    }
+                }),
+                6.0f,
+                false
+            );
+        }
+    }
+    SpawnMemorycraftTrials();
+    if(bVestigeEquipped||bFirstEclipseUnlocked)ApplyPostgameForm();
+    if(CaptureState==TEXT("prologue")) BeginStoryCinematic(EShadowbearerCinematic::Prologue,ECubetownEnemyType::Gloomling,FVector(0,-7200,150));
+    else if(CaptureState==TEXT("finale")||CaptureState==TEXT("aktarus")) BeginStoryCinematic(EShadowbearerCinematic::AktarusDefeat,ECubetownEnemyType::Aktarus,CanonicalBossLocation(5));
+    else if(CaptureState==TEXT("eclipse")||CaptureState==TEXT("postgame")) ApplyPostgameForm();
+    RefreshStoryQuest();
+    if (bLairCapture)
+    {
+        // A stable proof frame still includes a representative encounter, but avoids the normal
+        // wave director flooding the arena before the delayed screenshot is written.
+        bGuardianSpawned = true;
+        SpawnEnemy(ECubetownEnemyType::RiftGuardian, FVector(-560.0f, 3980.0f, 155.0f), WorldCycle + 3);
+        SpawnEnemy(ECubetownEnemyType::Gloomling, FVector(-620.0f, 3520.0f, 155.0f), WorldCycle + 1);
+        SpawnEnemy(ECubetownEnemyType::Roller, FVector(620.0f, 3640.0f, 155.0f), WorldCycle + 1);
+        SpawnEnemy(ECubetownEnemyType::Gloomling, FVector(-1080.0f, 4180.0f, 155.0f), WorldCycle + 2);
+        SpawnEnemy(ECubetownEnemyType::Roller, FVector(1020.0f, 4100.0f, 155.0f), WorldCycle + 2);
+        SpawnEnemy(ECubetownEnemyType::BloomWisp, FVector(-250.0f, 3950.0f, 180.0f), WorldCycle + 2);
+        QuestStatus = TEXT("BREACH THE PHANTOMITE LAIR // FIND THE LAIR GUARDIAN");
     }
     else
     {
-        StoryChapter = FMath::Max(StoryChapter, 3);
         RefreshStoryQuest();
+        if(IsShadowfallActive() && !bPaleWardenEncountered)
+            bPaleWardenEncountered=true;
     }
+}
+
+void ACubetownHero::ApplyShadowbearerForm(bool bVestige,bool bFirstEclipse)
+{
+    // The Vestige is a transformation, not an inventory tint: it changes silhouette, cloak,
+    // carried weapon, idle motion accents and shadow-facing profile while preserving the real
+    // skeletal locomotion underneath.
+    const bool bTransformed=bVestige||bFirstEclipse;
+    if(CloakMesh)
+    {
+        CloakMesh->SetVisibility(bTransformed,true);
+        CloakMesh->SetRelativeLocation(FVector(-28.0f,0.0f,-4.0f));
+        CloakMesh->SetRelativeScale3D(bFirstEclipse?FVector(1.28f,1.12f,1.42f):FVector(1.10f,1.02f,1.26f));
+        ApplyColor(CloakMesh,bFirstEclipse?FLinearColor(0.04f,0.34f,0.31f):FLinearColor(0.025f,0.008f,0.06f));
+    }
+    if(WandMesh)
+    {
+        if(bTransformed)
+        {
+            if(UStaticMesh* Nightspine=LoadObject<UStaticMesh>(nullptr,TEXT("/Game/Phantom/External/CC0/Aliases/Knight/StaticMeshes/2H_Sword.2H_Sword")))
+                WandMesh->SetStaticMesh(Nightspine);
+            WandMesh->SetRelativeLocation(FVector(22.0f,34.0f,-8.0f));
+            WandMesh->SetRelativeRotation(FRotator(8.0f,-8.0f,-38.0f));
+            WandMesh->SetRelativeScale3D(bFirstEclipse?FVector(1.34f):FVector(1.18f));
+            ApplyColor(WandMesh,bFirstEclipse?FLinearColor(0.92f,0.62f,0.16f):FLinearColor(0.025f,0.01f,0.05f));
+        }
+        WandMesh->SetVisibility(bTransformed,true);
+    }
+    if(ShoulderGem)
+    {
+        ShoulderGem->SetVisibility(bTransformed,true);
+        ShoulderGem->SetRelativeScale3D(bFirstEclipse?FVector(0.30f):FVector(0.22f));
+        ApplyColor(ShoulderGem,bFirstEclipse?FLinearColor(1.0f,0.72f,0.20f):FLinearColor(0.52f,0.08f,0.92f));
+    }
+    if(WandCore)
+    {
+        WandCore->SetVisibility(bFirstEclipse,true);
+        WandCore->SetRelativeScale3D(FVector(0.24f));
+        ApplyColor(WandCore,FLinearColor(0.12f,0.88f,0.78f));
+    }
+    if(GetMesh())
+        GetMesh()->SetRelativeScale3D(bTransformed?FVector(1.04f,1.12f,1.08f):FVector(1.0f));
 }
 
 void ACubetownDirector::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     UpdateDreamEnvironment(DeltaSeconds);
+    UpdateOpeningStory(DeltaSeconds);
+    UpdateCanonicalStory(DeltaSeconds);
+    UpdateStoryCinematic(DeltaSeconds);
     UpdateCreationUtilities(DeltaSeconds);
     UpdateWeave(DeltaSeconds);
     PruneCreations();
@@ -2054,9 +2838,17 @@ void ACubetownDirector::Tick(float DeltaSeconds)
     if(bBuildMode) UpdateBuildPreview(GetWorld()?GetWorld()->GetFirstPlayerController():nullptr);
     EnemyWaveRemaining -= DeltaSeconds;
     SaveRemaining -= DeltaSeconds;
+    PhantomiteRegenSeconds += DeltaSeconds;
+    if (EchoEnergy < 100 && PhantomiteRegenSeconds >= 2.5f)
+    {
+        const int32 Pulses = FMath::FloorToInt(PhantomiteRegenSeconds / 2.5f);
+        EchoEnergy = FMath::Min(100, EchoEnergy + Pulses);
+        PhantomiteRegenSeconds -= Pulses * 2.5f;
+    }
     if (FriendTalkCooldowns.Num() < 3) FriendTalkCooldowns.SetNumZeroed(3);
     for (float& Cooldown : FriendTalkCooldowns) Cooldown = FMath::Max(0.0f, Cooldown - DeltaSeconds);
-    if (EnemyWaveRemaining <= 0.0f && EnemiesAlive < 12 && !bGuardianSpawned && !bGuardianDefeated)
+    if (EnemyWaveRemaining <= 0.0f && EnemiesAlive < 8 && !bGuardianSpawned && !bGuardianDefeated &&
+        IsShadowfallActive() && bFirstShadowSolidified && !IsStoryCinematicActive())
     {
         ++WorldCycle;
         SpawnEnemyWave();
@@ -2128,97 +2920,6 @@ void ACubetownDirector::SpawnDreamWorldDetails()
     SpawnStaticMeshAsset(TEXT("MoonmossBrokenCart"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Cart.SM_CC0_Cart"),FVector(-15000,-8000,30),FVector(0.92f),FRotator(0,63,0),false,true);
 }
 
-void ACubetownDirector::SpawnMakerArrivalTrail()
-{
-    // V19 opening composition follows the approved visual target: crimson canopy, cyan guidance,
-    // a readable village road, tactile maker props and a companion already moving with the hero.
-    // It is additive and idempotent at runtime, so the authored V18R1 map remains the release floor.
-    for (int32 I = 0; I < 7; ++I)
-    {
-        const float Y = -9700.0f + I * 920.0f;
-        const float Bend = FMath::Sin(I * 0.72f) * 180.0f;
-        for (int32 Side = -1; Side <= 1; Side += 2)
-        {
-            const FVector P(Bend + Side * (520.0f + (I % 2) * 90.0f), Y, 28.0f);
-            SpawnStaticMeshAsset(
-                FString::Printf(TEXT("MakerTrailLantern_%02d_%d"), I, Side),
-                TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Lantern.SM_CC0_Lantern"),
-                P,
-                FVector(0.78f),
-                FRotator(0.0f, Side < 0 ? 24.0f : -24.0f, 0.0f),
-                false,
-                true
-            );
-            if ((I % 2) == 0)
-            {
-                if (APointLight* Light = SpawnPointLight(
-                    FString::Printf(TEXT("MakerTrailGlow_%02d_%d"), I, Side),
-                    P + FVector(0.0f, 0.0f, 135.0f),
-                    FLinearColor(0.08f, 0.88f, 0.82f),
-                    930.0f,
-                    390.0f,
-                    false))
-                {
-                    DreamNightLights.Add(Light);
-                }
-            }
-        }
-        SpawnStaticMeshAsset(
-            FString::Printf(TEXT("MakerTrailWildflowers_%02d"), I),
-            TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFlowerPatch_A.SM_CubeDreamFlowerPatch_A"),
-            FVector(Bend + ((I & 1) ? 760.0f : -760.0f), Y + 210.0f, 16.0f),
-            FVector(0.32f + (I % 3) * 0.05f),
-            FRotator(0.0f, I * 37.0f, 0.0f),
-            false,
-            true
-        );
-    }
-
-    SpawnStaticMeshAsset(
-        TEXT("MakerTrailGate"),
-        TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamAncientArch_A.SM_CubeDreamAncientArch_A"),
-        FVector(0.0f, -6900.0f, 32.0f),
-        FVector(0.82f),
-        FRotator(0.0f, 90.0f, 0.0f),
-        false,
-        true
-    );
-    SpawnStaticMeshAsset(
-        TEXT("MakerTrailCrystalLeft"),
-        TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A"),
-        FVector(-1040.0f, -5300.0f, 26.0f),
-        FVector(0.46f),
-        FRotator(0.0f, 18.0f, 0.0f),
-        false,
-        true
-    );
-    SpawnStaticMeshAsset(
-        TEXT("MakerTrailCrystalRight"),
-        TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A"),
-        FVector(1040.0f, -5150.0f, 26.0f),
-        FVector(0.38f),
-        FRotator(0.0f, -26.0f, 0.0f),
-        false,
-        true
-    );
-
-    const FVector CanopyLocations[] = {
-        FVector(-2500.0f, -8500.0f, 30.0f), FVector(2700.0f, -8100.0f, 30.0f),
-        FVector(-3300.0f, -5650.0f, 30.0f), FVector(3400.0f, -5000.0f, 30.0f)
-    };
-    for (int32 I = 0; I < UE_ARRAY_COUNT(CanopyLocations); ++I)
-        SpawnDreamTree(FString::Printf(TEXT("MakerTrailCrimsonTree_%02d"), I), CanopyLocations[I], 0.74f + I * 0.05f, I % 3, true);
-
-    if (ActiveEchoes.Num() == 0)
-    {
-        if (ACubetownEcho* FirstEcho = GetWorld()->SpawnActor<ACubetownEcho>(FVector(150.0f, -10350.0f, 180.0f), FRotator(0.0f, 90.0f, 0.0f)))
-        {
-            FirstEcho->Configure(ECubetownEchoType::Blade);
-            ActiveEchoes.Add(FirstEcho);
-        }
-    }
-}
-
 AStaticMeshActor* ACubetownDirector::SpawnCreationProp(ECubetownEchoType Type, const FVector& Location, const FRotator& Rotation, bool bWorldSource)
 {
     if(static_cast<int32>(Type)<3)return nullptr;
@@ -2246,12 +2947,12 @@ void ACubetownDirector::SpawnMemorycraftTrials()
 {
     struct FSource{ECubetownEchoType Type;FVector Location;float Yaw;FLinearColor Glow;};
     const FSource Sources[]={
-        {ECubetownEchoType::Bridge,FVector(1450,-9200,40),8.0f,FLinearColor(1.0f,0.62f,0.28f)},
-        {ECubetownEchoType::TideSpire,FVector(-1450,-8850,40),-12.0f,FLinearColor(0.18f,0.78f,1.0f)},
-        {ECubetownEchoType::SkyPad,FVector(3000,-7350,140),0.0f,FLinearColor(0.72f,0.58f,1.0f)},
-        {ECubetownEchoType::BlastBloom,FVector(-3050,-7200,35),0.0f,FLinearColor(1.0f,0.30f,0.48f)},
-        {ECubetownEchoType::GaleTotem,FVector(4650,-4200,35),18.0f,FLinearColor(0.58f,0.92f,0.88f)},
-        {ECubetownEchoType::Climbroot,FVector(-4700,-4000,35),-20.0f,FLinearColor(0.44f,1.0f,0.52f)}};
+        {ECubetownEchoType::Bridge,FVector(2600,-4200,40),8.0f,FLinearColor(1.0f,0.62f,0.28f)},
+        {ECubetownEchoType::TideSpire,FVector(-2600,-4050,40),-12.0f,FLinearColor(0.18f,0.78f,1.0f)},
+        {ECubetownEchoType::SkyPad,FVector(3150,-2500,140),0.0f,FLinearColor(0.72f,0.58f,1.0f)},
+        {ECubetownEchoType::BlastBloom,FVector(-3200,-2350,35),0.0f,FLinearColor(1.0f,0.30f,0.48f)},
+        {ECubetownEchoType::GaleTotem,FVector(4200,300,35),18.0f,FLinearColor(0.58f,0.92f,0.88f)},
+        {ECubetownEchoType::Climbroot,FVector(-4200,450,35),-20.0f,FLinearColor(0.44f,1.0f,0.52f)}};
     for(int32 I=0;I<UE_ARRAY_COUNT(Sources);++I)
     {
         if(AStaticMeshActor* Source=SpawnCreationProp(Sources[I].Type,Sources[I].Location,FRotator(0,Sources[I].Yaw,0),true))
@@ -2263,10 +2964,239 @@ void ACubetownDirector::SpawnMemorycraftTrials()
     SpawnStaticMeshAsset(TEXT("MemoryTrial_WindGate"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamAncientArch_A.SM_CubeDreamAncientArch_A"),FVector(11800,7900,35),FVector(1.05f),FRotator(0,25,0),true,true);
 }
 
+void ACubetownDirector::SpawnProductionWorldPopulation()
+{
+    // The persistent V24 map authors roads, terrain transitions, settlements and landmarks.
+    // These HISM layers supply the connective density between them without giving thousands of
+    // individual Actors a tick/render-state cost. Every 20m macro cell receives deliberate scenery.
+    TArray<FTransform> CanopyA;
+    TArray<FTransform> CanopyB;
+    TArray<FTransform> Rocks;
+    TArray<FTransform> Flowers;
+    TArray<FTransform> Shrubs;
+    TArray<FTransform> FarmCrops;
+    TArray<FTransform> FarmCropsGold;
+    TArray<FTransform> FarmBlooms;
+    TArray<FTransform> CoastGardens;
+    TArray<FTransform> Crystals;
+    TArray<FTransform> GroundHerbs;
+    TArray<FTransform> GroundFlowers;
+    CanopyA.Reserve(1400);
+    CanopyB.Reserve(1000);
+    Rocks.Reserve(900);
+    Flowers.Reserve(2500);
+    Shrubs.Reserve(3500);
+    FarmCrops.Reserve(800);
+    FarmCropsGold.Reserve(400);
+    FarmBlooms.Reserve(400);
+    CoastGardens.Reserve(800);
+    Crystals.Reserve(450);
+    GroundHerbs.Reserve(16000);
+    GroundFlowers.Reserve(6000);
+
+    for (int32 GX=-23; GX<=23; ++GX)
+    {
+        for (int32 GY=-23; GY<=23; ++GY)
+        {
+            float X=GX*1980.0f+static_cast<float>(((GX*137+GY*71)&1023)-511);
+            float Y=GY*1980.0f+static_cast<float>(((GX*59-GY*149)&1023)-511);
+            if (FMath::Abs(X)>45800.0f || FMath::Abs(Y)>45800.0f) continue;
+
+            // Protect the authored opening, arena and road centerlines; move dressing to their
+            // shoulders instead of deleting it and creating another empty sector.
+            if (FMath::Abs(X)<4700.0f && Y>-12200.0f && Y<-3600.0f) continue;
+            if (FMath::Abs(X)<2500.0f && Y>1800.0f && Y<6200.0f) continue;
+            if (FMath::Abs(X)<1150.0f) X += ((GX+GY)&1) ? 1750.0f : -1750.0f;
+            if (FMath::Abs(Y+2300.0f)<1050.0f) Y += ((GX-GY)&1) ? 1650.0f : -1650.0f;
+
+            const int32 Seed=FMath::Abs(GX*92821+GY*68917+17);
+            const float Yaw=static_cast<float>(Seed%360);
+            const bool bRockCountry=X>18000.0f || (X<-15000.0f && Y>22000.0f);
+            const bool bPhantomite=X>18000.0f && Y>18000.0f;
+            const bool bOpenCountry=Y<-18000.0f && X>-14000.0f;
+            const bool bFarm=X<-18000.0f && Y<-18000.0f;
+            const bool bCoast=X>18000.0f && Y<-18000.0f;
+            const float TreeScale=((bFarm||bCoast)?0.29f:(bOpenCountry?0.36f:0.43f))+static_cast<float>(Seed%6)*0.038f;
+            const float PrimaryScale=bRockCountry
+                ? 0.22f+static_cast<float>(Seed%5)*0.035f
+                : TreeScale;
+            FTransform Primary(FRotator(0.0f,Yaw,0.0f),FVector(X,Y,20.0f),FVector(PrimaryScale));
+            if (bFarm && (Seed%5)!=0)
+            {
+                // The dedicated row grid below owns crop placement; keep macro farm cells open.
+            }
+            else if (bCoast && (Seed%6)!=0)
+            {
+                CoastGardens.Add(Primary);
+            }
+            else if (bRockCountry && (Seed%3)!=0)
+                Rocks.Add(Primary);
+            else if ((Seed&3)==0)
+                CanopyB.Add(Primary);
+            else
+                CanopyA.Add(Primary);
+
+            // Every macro cell receives low vegetation as well as its primary silhouette.
+            // This closes the 20m visual gaps that remained between authored landmarks.
+            const FVector ShrubLocation(X-520.0f+static_cast<float>(Seed%330),Y+480.0f-static_cast<float>(Seed%270),15.0f);
+            if (!bFarm)
+                Shrubs.Emplace(FRotator(0.0f,FMath::Fmod(Yaw+37.0f,360.0f),0.0f),ShrubLocation,FVector(0.40f+static_cast<float>(Seed%5)*0.04f));
+            const FVector DetailLocation(X+620.0f-static_cast<float>(Seed%260),Y-510.0f+static_cast<float>(Seed%310),15.0f);
+            const float DetailScale=0.30f+static_cast<float>(Seed%5)*0.042f;
+            if (!bFarm)
+                Flowers.Emplace(FRotator(0.0f,FMath::Fmod(Yaw+73.0f,360.0f),0.0f),DetailLocation,FVector(DetailScale));
+            if (bCoast)
+            {
+                const FVector DistrictFill(X+790.0f-static_cast<float>(Seed%220),Y+720.0f-static_cast<float>(Seed%190),15.0f);
+                Shrubs.Emplace(FRotator(0.0f,FMath::Fmod(Yaw+211.0f,360.0f),0.0f),DistrictFill,FVector(0.27f+static_cast<float>(Seed%4)*0.04f));
+            }
+            if ((Seed%4)==0 && !bRockCountry && !bFarm && !bCoast)
+            {
+                const FVector RockLocation(X-700.0f+static_cast<float>(Seed%240),Y+560.0f-static_cast<float>(Seed%330),15.0f);
+                Rocks.Emplace(FRotator(0.0f,FMath::Fmod(Yaw+141.0f,360.0f),0.0f),RockLocation,FVector(0.30f+static_cast<float>(Seed%4)*0.06f));
+            }
+            if (bPhantomite && (Seed%3)==1)
+            {
+                Crystals.Emplace(FRotator(0.0f,FMath::Fmod(Yaw+29.0f,360.0f),0.0f),FVector(X+420.0f,Y+310.0f,18.0f),FVector(0.42f+static_cast<float>(Seed%5)*0.07f));
+            }
+        }
+    }
+
+    // A second 10m ground-cover lattice makes the entire overworld visually continuous. It uses
+    // cheap HISM clusters, keeps the road/opening corridors clear, and avoids the empty acreage
+    // exposed by the wider adventure camera.
+    for (int32 GX=-46; GX<=46; ++GX)
+    {
+        for (int32 GY=-46; GY<=46; ++GY)
+        {
+            float X=GX*990.0f+static_cast<float>(((GX*67+GY*31)&511)-255);
+            float Y=GY*990.0f+static_cast<float>(((GX*43-GY*83)&511)-255);
+            if (FMath::Abs(X)>46200.0f || FMath::Abs(Y)>46200.0f) continue;
+            if (FMath::Abs(X)<3000.0f && Y>-11900.0f && Y<-4100.0f) continue;
+            if (FMath::Abs(X)<1700.0f) X += ((GX+GY)&1) ? 1950.0f : -1950.0f;
+            if (FMath::Abs(Y+2300.0f)<1300.0f) Y += ((GX-GY)&1) ? 1950.0f : -1950.0f;
+            const int32 Seed=FMath::Abs(GX*41761+GY*29179+101);
+            const float Yaw=static_cast<float>(Seed%360);
+            const bool bMicroFarm=X<-18000.0f && Y<-18000.0f;
+            const bool bMicroCoast=X>18000.0f && Y<-18000.0f;
+            if (!bMicroFarm)
+                Shrubs.Emplace(FRotator(0.0f,FMath::Fmod(Yaw+97.0f,360.0f),0.0f),FVector(X+330.0f,Y-290.0f,14.0f),FVector(0.34f+static_cast<float>(Seed%4)*0.045f));
+            if ((Seed%3)==0 && !bMicroFarm && !bMicroCoast)
+                Rocks.Emplace(FRotator(0.0f,FMath::Fmod(Yaw+151.0f,360.0f),0.0f),FVector(X-310.0f,Y+260.0f,13.0f),FVector(0.17f+static_cast<float>(Seed%4)*0.035f));
+            if (bMicroCoast && (Seed%4)==0)
+                CoastGardens.Emplace(FRotator(0.0f,Yaw,0.0f),FVector(X+210.0f,Y+340.0f,14.0f),FVector(0.25f+static_cast<float>(Seed%3)*0.04f));
+        }
+    }
+
+    // Fine 6.5m storybook ground cover closes the last camera-visible lawns without adding Actors.
+    // Roads, the opening, and the Sunpetal street cross stay clear so density never harms traversal.
+    for (int32 GX=-70; GX<=70; ++GX)
+    {
+        for (int32 GY=-70; GY<=70; ++GY)
+        {
+            float X=GX*650.0f+static_cast<float>(((GX*37+GY*19)&255)-127);
+            float Y=GY*650.0f+static_cast<float>(((GX*23-GY*41)&255)-127);
+            if (FMath::Abs(X)>46100.0f || FMath::Abs(Y)>46100.0f) continue;
+            if (FMath::Abs(X)<3000.0f && Y>-11900.0f && Y<-4100.0f) continue;
+            if (FMath::Abs(X)<720.0f || FMath::Abs(Y+2300.0f)<620.0f) continue;
+            const bool bSunpetalStreet=X>22000.0f && X<39000.0f && Y>-39500.0f && Y<-24500.0f &&
+                (FMath::Abs(X-30500.0f)<760.0f || FMath::Abs(Y+32000.0f)<760.0f);
+            if (bSunpetalStreet) continue;
+            const bool bFarmField=X>-39000.0f && X<-23000.0f && Y>-44500.0f && Y<-30000.0f;
+            if (bFarmField) continue;
+            const int32 Seed=FMath::Abs(GX*19603+GY*10427+307);
+            const float Yaw=static_cast<float>(Seed%360);
+            const float Scale=0.13f+static_cast<float>(Seed%5)*0.018f;
+            FTransform Detail(FRotator(0.0f,Yaw,0.0f),FVector(X,Y,12.0f),FVector(Scale));
+            if ((Seed%4)==0) GroundFlowers.Add(Detail);
+            else GroundHerbs.Add(Detail);
+        }
+    }
+
+    // Moonmoss production rows: a precise grid that reads as agriculture from the full camera.
+    for (int32 Row=0; Row<24; ++Row)
+    {
+        const float Y=-43000.0f+static_cast<float>(Row)*480.0f;
+        for (int32 Column=0; Column<25; ++Column)
+        {
+            const float X=-38000.0f+static_cast<float>(Column)*600.0f;
+            if (FMath::Abs(Y-(-31500.0f+(X+30500.0f)*0.18f))<600.0f) continue;
+            const float Scale=0.145f+static_cast<float>((Row+Column)%3)*0.018f;
+            const FTransform Crop(FRotator(0.0f,static_cast<float>((Row*11+Column*7)%18-9),0.0f),FVector(X,Y,14.0f),FVector(Scale));
+            const bool bNorthParcel=Y>-37800.0f;
+            const bool bWestParcel=X<-31250.0f;
+            if (bNorthParcel && bWestParcel) FarmBlooms.Add(Crop);
+            else if (bNorthParcel || bWestParcel) FarmCropsGold.Add(Crop);
+            else FarmCrops.Add(Crop);
+        }
+    }
+
+    SpawnInstancedMeshCluster(TEXT("CubeV24CanopyA_HISM"),TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Tree_A.SM_Cube_Tree_A"),CanopyA,false);
+    SpawnInstancedMeshCluster(TEXT("CubeV24CanopyB_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Tree_A.SM_CC0_Tree_A"),CanopyB,false);
+    SpawnInstancedMeshCluster(TEXT("CubeV24Rocks_HISM"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Rock_2.Rock_2"),Rocks,false);
+    SpawnInstancedMeshCluster(TEXT("CubeV24Flowers_HISM"),TEXT("/Game/Phantom/Generated/Common/SM_FlowerPatch_A.SM_FlowerPatch_A"),Flowers,false);
+    SpawnInstancedMeshCluster(TEXT("CubeV24Shrubs_HISM"),TEXT("/Game/Phantom/Generated/Common/SM_Bush_A.SM_Bush_A"),Shrubs,false);
+    SpawnInstancedMeshCluster(TEXT("CubeV24FarmCrops_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Bush.SM_CC0_Bush"),FarmCrops,false);
+    SpawnInstancedMeshCluster(TEXT("CubeV24FarmCropsGold_HISM"),TEXT("/Game/Phantom/Generated/Common/SM_Bush_A.SM_Bush_A"),FarmCropsGold,false);
+    SpawnInstancedMeshCluster(TEXT("CubeV24FarmBlooms_HISM"),TEXT("/Game/Phantom/Generated/Common/SM_FlowerPatch_A.SM_FlowerPatch_A"),FarmBlooms,false);
+    SpawnInstancedMeshCluster(TEXT("CubeV24CoastGardens_HISM"),TEXT("/Game/Phantom/Generated/Common/SM_FlowerPatch_A.SM_FlowerPatch_A"),CoastGardens,false);
+    if (UHierarchicalInstancedStaticMeshComponent* CrystalCluster=SpawnInstancedMeshCluster(
+        TEXT("CubeV24Crystals_HISM"),
+        TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A"),
+        Crystals,
+        false))
+    {
+        if (UMaterialInterface* CrystalMaterial=LoadObject<UMaterialInterface>(
+            nullptr,
+            TEXT("/Game/Phantom/Generated/Cubetown/V17/Materials/M_CT17_MagicCyan.M_CT17_MagicCyan")))
+        {
+            for (int32 Slot=0; Slot<FMath::Max(1,CrystalCluster->GetNumMaterials()); ++Slot)
+                CrystalCluster->SetMaterial(Slot,CrystalMaterial);
+        }
+    }
+    SpawnInstancedMeshCluster(TEXT("CubeV24GroundHerbs_HISM"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamHerbPatch_A.SM_CubeDreamHerbPatch_A"),GroundHerbs,false);
+    SpawnInstancedMeshCluster(TEXT("CubeV24GroundFlowers_HISM"),TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Flower.SM_CC0_Flower"),GroundFlowers,false);
+}
+
 void ACubetownDirector::BuildDreamWorld()
 {
-    DreamSun=SpawnSun(3.9f,FRotator(-42.0f,-28.0f,0.0f),FLinearColor(1.0f,0.80f,0.64f));
-    SetWorldMood(FLinearColor(0.12f,0.18f,0.22f),0.0015f,FLinearColor(0.34f,0.46f,0.60f));
+    DreamSun=SpawnSun(0.66f,FRotator(-48.0f,-34.0f,0.0f),FLinearColor(1.0f,0.93f,0.82f));
+    if(ADirectionalLight* Sun=DreamSun.Get())
+        if(UDirectionalLightComponent* Directional=Cast<UDirectionalLightComponent>(Sun->GetLightComponent()))
+        {
+            Directional->SetLightSourceAngle(12.0f);
+            Directional->SetShadowSourceAngleFactor(1.0f);
+        }
+    DreamShadowFill=SpawnSun(0.0f,FRotator(-58.0f,146.0f,0.0f),FLinearColor(0.30f,0.43f,0.92f));
+    if(ADirectionalLight* Fill=DreamShadowFill.Get())
+        if(UDirectionalLightComponent* Directional=Cast<UDirectionalLightComponent>(Fill->GetLightComponent()))
+        {
+            Directional->SetCastShadows(false);
+            Directional->SetLightSourceAngle(18.0f);
+        }
+    DreamSky=GetWorld()->SpawnActor<ASkyLight>();
+    if(ASkyLight* Sky=DreamSky.Get())if(USkyLightComponent* SkyComponent=Sky->GetLightComponent())
+    {
+        SkyComponent->SetMobility(EComponentMobility::Movable);
+        SkyComponent->SetIntensity(0.72f);
+        SkyComponent->SetLightColor(FLinearColor(0.74f,0.82f,0.98f));
+    }
+    SetWorldMood(FLinearColor(0.19f,0.25f,0.30f),0.00062f,FLinearColor(0.62f,0.69f,0.78f));
+    StyleWorldPostProcess(-0.22f, 1.06f, 1.04f, 0.26f, 0.22f);
+    for (TActorIterator<APostProcessVolume> It(GetWorld()); It; ++It)
+    {
+        It->Settings.bOverride_AmbientOcclusionIntensity=true;
+        It->Settings.AmbientOcclusionIntensity=1.24f;
+        It->Settings.bOverride_AmbientOcclusionRadius=true;
+        It->Settings.AmbientOcclusionRadius=92.0f;
+        It->Settings.bOverride_DepthOfFieldFocalDistance=true;
+        It->Settings.DepthOfFieldFocalDistance=6200.0f;
+        It->Settings.bOverride_DepthOfFieldFstop=true;
+        It->Settings.DepthOfFieldFstop=2.8f;
+        It->Settings.bOverride_DepthOfFieldSensorWidth=true;
+        It->Settings.DepthOfFieldSensorWidth=46.0f;
+        break;
+    }
 
     // V10 PRODUCTION MAP CONTRACT: the visible environment already exists in CubeTown_World.
     // Never build the old runtime world on top of it again. That V10 rescue: previous double-world bug was a major
@@ -2296,6 +3226,49 @@ void ACubetownDirector::BuildDreamWorld()
             ACubetownShrine* Shrine=GetWorld()->SpawnActor<ACubetownShrine>(ShrineLocations[Index],FRotator(0,Index*38.0f,0));
             if(!Shrine) continue; Shrine->Configure(Index); if(ActiveShrineIndices.Contains(Index)) Shrine->Activate(); Shrines.Add(Shrine);
         }
+        SpawnPointLight(TEXT("PhantomiteLairViolet"), FVector(0.0f, 4050.0f, 420.0f), FLinearColor(0.44f, 0.12f, 0.92f), 1850.0f, 900.0f, true);
+        SpawnPointLight(TEXT("PhantomiteLairEmerald"), FVector(0.0f, 3100.0f, 300.0f), FLinearColor(0.08f, 0.66f, 0.44f), 1050.0f, 610.0f, false);
+        SpawnPointLight(TEXT("PhantomiteLairFireLeft"), FVector(-950.0f, 4700.0f, 220.0f), FLinearColor(1.0f, 0.34f, 0.10f), 1120.0f, 420.0f, false);
+        SpawnPointLight(TEXT("PhantomiteLairFireRight"), FVector(950.0f, 4700.0f, 220.0f), FLinearColor(1.0f, 0.34f, 0.10f), 1120.0f, 420.0f, false);
+        SpawnPointLight(TEXT("PhantomiteGuardianKey"), FVector(-560.0f, 3980.0f, 480.0f), FLinearColor(0.92f, 0.58f, 0.16f), 1650.0f, 560.0f, true);
+        const FVector HeartstoneLampLocations[]={
+            FVector(-820,-8220,310),FVector(820,-8220,310),FVector(-1040,-6200,310),FVector(1040,-6200,310),
+            FVector(-2100,-9300,320),FVector(2100,-9200,320),FVector(-2400,-5200,320),FVector(2350,-5000,320),
+            FVector(0,-7200,360),FVector(-3000,-7200,300)
+        };
+        for(int32 LampIndex=0;LampIndex<UE_ARRAY_COUNT(HeartstoneLampLocations);++LampIndex)
+        {
+            const bool bCivicMagic=LampIndex>=8;
+            if(APointLight* Lamp=SpawnPointLight(
+                FString::Printf(TEXT("HeartstoneNightLight_%02d"),LampIndex),
+                HeartstoneLampLocations[LampIndex],
+                bCivicMagic?FLinearColor(0.20f,0.78f,1.0f):FLinearColor(1.0f,0.46f,0.16f),
+                900.0f,
+                bCivicMagic?520.0f:360.0f,
+                false))
+                DreamNightLights.Add(Lamp);
+        }
+        if (APostProcessVolume* LairGrade = GetWorld()->SpawnActor<APostProcessVolume>())
+        {
+            LairGrade->Tags.Add(FName(TEXT("Cubetown.PhantomiteGrade")));
+            LairGrade->bUnbound = true;
+            LairGrade->BlendWeight = 0.0f;
+            LairGrade->Priority = 50.0f;
+            FPostProcessSettings& Settings = LairGrade->Settings;
+            Settings.bOverride_AutoExposureBias = true;
+            Settings.AutoExposureBias = -0.42f;
+            Settings.bOverride_ColorContrast = true;
+            Settings.ColorContrast = FVector4(1.08f, 1.08f, 1.08f, 1.0f);
+            Settings.bOverride_ColorSaturation = true;
+            Settings.ColorSaturation = FVector4(0.92f, 0.92f, 0.98f, 1.0f);
+            Settings.bOverride_BloomIntensity = true;
+            Settings.BloomIntensity = 0.72f;
+            Settings.bOverride_VignetteIntensity = true;
+            Settings.VignetteIntensity = 0.32f;
+            Settings.bOverride_AmbientOcclusionIntensity = true;
+            Settings.AmbientOcclusionIntensity = 1.28f;
+        }
+        SpawnProductionWorldPopulation();
         return;
     }
 
@@ -2541,14 +3514,660 @@ void ACubetownDirector::BuildDreamWorld()
     if(APointLight* L=SpawnPointLight(TEXT("HeartstoneLight"),FVector(0,-4200,190),FLinearColor(0.30f,0.68f,1.0f),3300.0f,460.0f,false)) DreamNightLights.Add(L);
 }
 
+void ACubetownDirector::RegisterWorldStateActor(AActor* Actor, EShadowbearerWorldState VisibleState)
+{
+    if(!Actor)return;
+    Actor->Tags.AddUnique(TEXT("Shadowbearer.WorldState"));
+    if(Actor->GetActorEnableCollision())Actor->Tags.AddUnique(TEXT("Shadowbearer.StateCollision"));
+    if(VisibleState==EShadowbearerWorldState::Dawn)DawnOnlyActors.Add(Actor);
+    else if(VisibleState==EShadowbearerWorldState::Shadowfall)ShadowOnlyActors.Add(Actor);
+    else if(VisibleState==EShadowbearerWorldState::Restored)RestoredOnlyActors.Add(Actor);
+}
+
+FString ACubetownDirector::GetShadowbearerWorldStateLabel() const
+{
+    switch(ShadowbearerWorldState)
+    {
+        case EShadowbearerWorldState::Dawn:return TEXT("BRAMBLEWICK DAWN");
+        case EShadowbearerWorldState::Omen:return TEXT("THE LAST MORNING");
+        case EShadowbearerWorldState::Shadowfall:return TEXT("SHADOWFALL");
+        case EShadowbearerWorldState::Restoring:return TEXT("DAWN RETURNING");
+        case EShadowbearerWorldState::Restored:return TEXT("BRAMBLEWICK RESTORED");
+        default:return TEXT("BRAMBLEWICK");
+    }
+}
+
+bool ACubetownDirector::IsShadowfallActive() const
+{
+    return ShadowbearerWorldState==EShadowbearerWorldState::Shadowfall ||
+        ShadowbearerWorldState==EShadowbearerWorldState::Restoring;
+}
+
+bool ACubetownDirector::IsOpeningStoryDefeatActive() const
+{
+    return ShadowbearerWorldState==EShadowbearerWorldState::Omen && bPaleWardenEncountered;
+}
+
+void ACubetownDirector::BuildShadowbearerOpening()
+{
+    // Bramblewick is layered into the canonical 960m world so Dawn, Shadowfall and restoration
+    // occupy the same physical streets. State changes swap authored dressing and grading rather
+    // than loading a duplicate map or teleporting the player to a disconnected vignette.
+    struct FStateProp{const TCHAR* Name;const TCHAR* Asset;FVector P;FVector S;float Yaw;EShadowbearerWorldState State;bool bCollision;};
+    const FStateProp Props[]={
+        {TEXT("BramblewickBellTower"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Bell_Tower.Bell_Tower"),FVector(0,-7350,35),FVector(1.34f),0,EShadowbearerWorldState::Dawn,true},
+        {TEXT("BramblewickMarketWest"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/MarketStand_1.MarketStand_1"),FVector(-1650,-6500,35),FVector(1.10f),18,EShadowbearerWorldState::Dawn,true},
+        {TEXT("BramblewickMarketEast"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/MarketStand_2.MarketStand_2"),FVector(1700,-6450,35),FVector(1.10f),-18,EShadowbearerWorldState::Dawn,true},
+        {TEXT("BramblewickCart"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Cart.Cart"),FVector(-2450,-5650,35),FVector(0.96f),38,EShadowbearerWorldState::Dawn,true},
+        {TEXT("BramblewickBags"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Bags.Bags"),FVector(2050,-6120,35),FVector(0.92f),-26,EShadowbearerWorldState::Dawn,false},
+        {TEXT("BramblewickBench"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Bench_1.Bench_1"),FVector(920,-4900,35),FVector(1.0f),90,EShadowbearerWorldState::Dawn,true},
+        {TEXT("ShadowfallBrokenCart"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Cart.Cart"),FVector(-2450,-5650,35),FVector(0.96f),-24,EShadowbearerWorldState::Shadowfall,true},
+        {TEXT("ShadowfallRootWest"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamLandmarkTree_A.SM_CubeDreamLandmarkTree_A"),FVector(-1350,-6200,25),FVector(0.52f,0.52f,0.72f),32,EShadowbearerWorldState::Shadowfall,true},
+        {TEXT("ShadowfallRootEast"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamLandmarkTree_A.SM_CubeDreamLandmarkTree_A"),FVector(1520,-5480,25),FVector(0.46f,0.46f,0.66f),-42,EShadowbearerWorldState::Shadowfall,true},
+        {TEXT("ShadowfallCrystalScar"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A"),FVector(0,-4700,25),FVector(0.68f),0,EShadowbearerWorldState::Shadowfall,false},
+        {TEXT("RestoredFlowerScar"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFlowerPatch_A.SM_CubeDreamFlowerPatch_A"),FVector(0,-4700,28),FVector(0.72f),0,EShadowbearerWorldState::Restored,false},
+        {TEXT("RestoredMemorialBench"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Bench_2.Bench_2"),FVector(-700,-4550,35),FVector(1.0f),20,EShadowbearerWorldState::Restored,true}
+    };
+    for(const FStateProp& Prop:Props)
+    {
+        AStaticMeshActor* Actor=nullptr;
+        if(Prop.State==EShadowbearerWorldState::Shadowfall && FString(Prop.Name).Contains(TEXT("Root")))
+            Actor=SpawnTintedStaticMeshAsset(Prop.Name,Prop.Asset,Prop.P,Prop.S,FLinearColor(0.035f,0.025f,0.055f),FRotator(0,Prop.Yaw,0),Prop.bCollision,true);
+        else
+            Actor=SpawnStaticMeshAsset(Prop.Name,Prop.Asset,Prop.P,Prop.S,FRotator(0,Prop.Yaw,0),Prop.bCollision,true);
+        RegisterWorldStateActor(Actor,Prop.State);
+    }
+
+    for(int32 I=0;I<26;++I)
+    {
+        const float A=I*2.399963f;
+        const float R=780.0f+(I%6)*460.0f;
+        const FVector P(FMath::Cos(A)*R,-6100.0f+FMath::Sin(A)*R,26.0f);
+        AStaticMeshActor* Flowers=SpawnStaticMeshAsset(FString::Printf(TEXT("BramblewickDawnFlowers_%02d"),I),
+            TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFlowerPatch_A.SM_CubeDreamFlowerPatch_A"),P,
+            FVector(0.30f+(I%3)*0.05f),FRotator(0,I*31.0f,0),false,true);
+        RegisterWorldStateActor(Flowers,EShadowbearerWorldState::Dawn);
+    }
+
+    AStaticMeshActor* Delivery=SpawnStaticMeshAsset(TEXT("RoadsideDawnLantern"),
+        TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Bell.Bell"),FVector(0,-450,55),FVector(1.20f),FRotator::ZeroRotator,true,true);
+    if(Delivery)Delivery->Tags.AddUnique(TEXT("Shadowbearer.DeliveryShrine"));
+
+    FirstShadowBridge=SpawnTintedStaticMeshAsset(TEXT("FirstSolidShadow"),
+        TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Bridge.SM_Cube_Bridge"),FVector(0,-3000,55),FVector(0.84f,1.18f,0.42f),
+        FLinearColor(0.025f,0.020f,0.045f),FRotator(0,90,0),true,true);
+    if(AStaticMeshActor* Bridge=FirstShadowBridge.Get())
+    {
+        Bridge->Tags.AddUnique(TEXT("Shadowbearer.FirstShadow"));
+        Bridge->SetActorHiddenInGame(!bFirstShadowSolidified);
+        Bridge->SetActorEnableCollision(bFirstShadowSolidified);
+    }
+
+    AStaticMeshActor* Lamp=SpawnStaticMeshAsset(TEXT("BramblewickDawnlamp"),
+        TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Lantern.SM_CC0_Lantern"),FVector(0,-4700,35),FVector(1.22f),FRotator::ZeroRotator,false,true);
+    if(Lamp)Lamp->Tags.AddUnique(TEXT("Shadowbearer.RestorationLamp"));
+    if(APointLight* Light=SpawnPointLight(TEXT("BramblewickDawnlampLight"),FVector(0,-4700,260),
+        FLinearColor(1.0f,0.64f,0.22f),0.0f,720.0f,true))DawnLanternLights.Add(Light);
+
+    if(APostProcessVolume* ShadowGrade=GetWorld()->SpawnActor<APostProcessVolume>())
+    {
+        ShadowGrade->Tags.Add(TEXT("Shadowbearer.ShadowGrade"));
+        ShadowGrade->bUnbound=true;
+        ShadowGrade->BlendWeight=0.0f;
+        ShadowGrade->Priority=80.0f;
+        FPostProcessSettings& Settings=ShadowGrade->Settings;
+        Settings.bOverride_AutoExposureBias=true; Settings.AutoExposureBias=1.35f;
+        Settings.bOverride_ColorContrast=true; Settings.ColorContrast=FVector4(1.01f,1.02f,1.05f,1.0f);
+        Settings.bOverride_ColorSaturation=true; Settings.ColorSaturation=FVector4(0.82f,0.86f,1.0f,1.0f);
+        Settings.bOverride_ColorGain=true; Settings.ColorGain=FVector4(0.70f,0.56f,0.88f,1.0f);
+        Settings.bOverride_BloomIntensity=true; Settings.BloomIntensity=0.82f;
+        Settings.bOverride_VignetteIntensity=true; Settings.VignetteIntensity=0.14f;
+        Settings.bOverride_AmbientOcclusionIntensity=true; Settings.AmbientOcclusionIntensity=0.74f;
+    }
+}
+
+void ACubetownDirector::ApplyShadowbearerWorldState(bool bForce)
+{
+    const bool bDawn=ShadowbearerWorldState==EShadowbearerWorldState::Dawn||ShadowbearerWorldState==EShadowbearerWorldState::Omen||
+        ShadowbearerWorldState==EShadowbearerWorldState::Restored;
+    const bool bShadow=IsShadowfallActive();
+    const bool bRestored=ShadowbearerWorldState==EShadowbearerWorldState::Restored;
+    const auto ApplyVisibility=[](TArray<TWeakObjectPtr<AActor>>& Actors,bool bVisible)
+    {
+        for(TWeakObjectPtr<AActor>& Ref:Actors)if(AActor* Actor=Ref.Get())
+        {
+            Actor->SetActorHiddenInGame(!bVisible);
+            Actor->SetActorEnableCollision(bVisible && Actor->ActorHasTag(TEXT("Shadowbearer.StateCollision")));
+        }
+    };
+    ApplyVisibility(DawnOnlyActors,bDawn);
+    ApplyVisibility(ShadowOnlyActors,bShadow);
+    ApplyVisibility(RestoredOnlyActors,bRestored);
+    if(AStaticMeshActor* Bridge=FirstShadowBridge.Get())
+    {
+        const bool bVisible=bShadow && bFirstShadowSolidified;
+        Bridge->SetActorHiddenInGame(!bVisible);
+        Bridge->SetActorEnableCollision(bVisible);
+    }
+    for(TWeakObjectPtr<APointLight>& Ref:DawnLanternLights)if(APointLight* Light=Ref.Get())
+        if(UPointLightComponent* Component=Cast<UPointLightComponent>(Light->GetLightComponent()))
+            Component->SetIntensity((bBramblewickLampRestored||bRestored)?1650.0f:0.0f);
+    for(TActorIterator<APostProcessVolume> It(GetWorld());It;++It)
+        if(It->ActorHasTag(TEXT("Shadowbearer.ShadowGrade")))It->BlendWeight=bShadow?1.0f:0.0f;
+    if(bForce)UpdateDreamEnvironment(0.0f);
+}
+
+void ACubetownDirector::SetShadowbearerWorldState(EShadowbearerWorldState NewState,const FString& Reason)
+{
+    if(ShadowbearerWorldState==NewState)return;
+    ShadowbearerWorldState=NewState;
+    ShadowfallTransitionSeconds=NewState==EShadowbearerWorldState::Restoring?2.4f:0.0f;
+    ApplyShadowbearerWorldState(true);
+    if(!Reason.IsEmpty())QuestStatus=Reason;
+    if(!bShadowbearerCaptureOverride)SaveProgress();
+}
+
+void ACubetownDirector::SpawnPaleWarden()
+{
+    if(PaleWarden.IsValid())return;
+    bPaleWardenEncountered=true;
+    ACubetownEnemy* Warden=GetWorld()->SpawnActor<ACubetownEnemy>(FVector(0,1500,155),FRotator(0,-90,0));
+    if(Warden)
+    {
+        Warden->Configure(ECubetownEnemyType::PaleWarden,8);
+        PaleWarden=Warden;
+        ++EnemiesAlive;
+    }
+    QuestStatus=TEXT("THE PALE WARDEN // SURVIVE THE LAST MORNING");
+}
+
+void ACubetownDirector::SolidifyFirstShadow()
+{
+    if(bFirstShadowSolidified)return;
+    if(EchoEnergy<12)
+    {
+        QuestStatus=FString::Printf(TEXT("THE SHADOW NEEDS %d MORE PHANTOMITE"),12-EchoEnergy);
+        return;
+    }
+    EchoEnergy-=12;
+    bFirstShadowSolidified=true;
+    CreationUnlockMask|=CreationBit(ECubetownEchoType::Bridge);
+    OpeningQuestStep=4;
+    ApplyShadowbearerWorldState();
+    QuestStatus=TEXT("SHADOW MADE SOLID // CROSS BACK INTO BRAMBLEWICK AND RELIGHT THE DAWNLAMP");
+    SaveProgress();
+}
+
+void ACubetownDirector::RestoreBramblewickLamp()
+{
+    if(bBramblewickLampRestored)return;
+    bBramblewickLampRestored=true;
+    OpeningQuestStep=5;
+    SetShadowbearerWorldState(EShadowbearerWorldState::Restoring,TEXT("THE DAWNLAMP REMEMBERS // HOLD THE LIGHT"));
+}
+
+void ACubetownDirector::UpdateOpeningStory(float DeltaSeconds)
+{
+    if(bShadowbearerCaptureOverride)return;
+    ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0));
+    if(!Hero)return;
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Omen && bLanternComponentDelivered &&
+       Hero->GetActorLocation().Y>650.0f && !PaleWarden.IsValid())
+        SpawnPaleWarden();
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Restoring)
+    {
+        ShadowfallTransitionSeconds-=DeltaSeconds;
+        if(ShadowfallTransitionSeconds<=0.0f)
+        {
+            SetShadowbearerWorldState(EShadowbearerWorldState::Restored,
+                TEXT("BRAMBLEWICK RESTORED // THE SCAR REMAINS, AND THE ROAD AHEAD IS OPEN"));
+            EchoEnergy=FMath::Min(100,EchoEnergy+36);
+        }
+    }
+}
+
+int32 ACubetownDirector::GetReturnedSoulCount() const
+{
+    int32 Count=0;
+    for(int32 Bit=0;Bit<6;++Bit)if((ReturnedSoulMask&(1u<<Bit))!=0u)++Count;
+    return Count;
+}
+
+FString ACubetownDirector::GetEquippedArmamentName() const
+{
+    if(EquippedArmament<0||EquippedArmament>5)return TEXT("DAWNLANTERN BLADE");
+    return FString(CanonicalArmamentName(CanonicalBossForIndex(EquippedArmament)));
+}
+
+float ACubetownDirector::GetStoryCinematicProgress() const
+{
+    int32 Count=1;
+    switch(ActiveCinematic)
+    {
+        case EShadowbearerCinematic::Prologue:Count=14;break;
+        case EShadowbearerCinematic::ReturnedSoul:Count=8;break;
+        case EShadowbearerCinematic::MemoryReveal:Count=7;break;
+        case EShadowbearerCinematic::AktarusDefeat:Count=25;break;
+        case EShadowbearerCinematic::Ascension:Count=10;break;
+        case EShadowbearerCinematic::DawnsReturn:Count=10;break;
+        case EShadowbearerCinematic::Festival:Count=10;break;
+        default:break;
+    }
+    return FMath::Clamp((CinematicBeat+1.0f)/Count,0.0f,1.0f);
+}
+
+FString ACubetownDirector::GetStoryCinematicKicker() const
+{
+    switch(ActiveCinematic)
+    {
+        case EShadowbearerCinematic::Prologue:return TEXT("PROLOGUE // BEFORE THERE WERE SHADOWS TO FEAR");
+        case EShadowbearerCinematic::ReturnedSoul:return TEXT("THE WEAPONS OF THE FALLEN // ARMAMENT • SOUL • MEMORY");
+        case EShadowbearerCinematic::MemoryReveal:return TEXT("CHRONOS LIGHT // THE WORLD REMEMBERS");
+        case EShadowbearerCinematic::AktarusDefeat:return TEXT("CHAPTER XX // HIS NAME");
+        case EShadowbearerCinematic::Ascension:return TEXT("CHAPTER XXI // THE ASCENSION");
+        case EShadowbearerCinematic::DawnsReturn:return TEXT("CHAPTER XXII // DAWN'S RETURN");
+        case EShadowbearerCinematic::Festival:return TEXT("EPILOGUE // THE FESTIVAL");
+        default:return TEXT("SHADOWBEARER: DAWN'S RETURN");
+    }
+}
+
+FString ACubetownDirector::GetStoryCinematicTitle() const
+{
+    if(ActiveCinematic==EShadowbearerCinematic::ReturnedSoul)return FString(CanonicalBossName(CinematicBoss));
+    if(ActiveCinematic==EShadowbearerCinematic::MemoryReveal)
+    {
+        if(CanonicalChapter==11)return TEXT("THE HOUSE THAT REMEMBERS");
+        if(CanonicalChapter==13)return TEXT("LIVING SHADOWS");
+        if(CanonicalChapter==15)return TEXT("VESPERHOLD");
+        if(CanonicalChapter==17)return TEXT("THE TRUTH OF THE DAWNLANTERN");
+    }
+    if(ActiveCinematic==EShadowbearerCinematic::AktarusDefeat)
+        return CinematicBeat<5?TEXT("THE SHADOWBEARER FALLS"):TEXT("MY NAME IS AKTARUS");
+    if(ActiveCinematic==EShadowbearerCinematic::Ascension)return CinematicBeat<8?TEXT("LIGHT AND SHADOW MERGE"):TEXT("THE FIRST ECLIPSE");
+    if(ActiveCinematic==EShadowbearerCinematic::DawnsReturn)return TEXT("THE WORLD CASTS SHADOWS AGAIN");
+    if(ActiveCinematic==EShadowbearerCinematic::Festival)return CinematicBeat<6?TEXT("THE RETURN HOME"):TEXT("THERE IS NO DAWN WITHOUT NIGHT");
+    return CinematicBeat<12?TEXT("DARKNESS WAS HOME"):TEXT("SHADOWBEARER: DAWN'S RETURN");
+}
+
+FString ACubetownDirector::GetStoryCinematicLine() const
+{
+    if(ActiveCinematic==EShadowbearerCinematic::Prologue)
+    {
+        static const TCHAR* Lines[]={
+            TEXT("The surface built towers for morning and taught its children to fear the dark."),
+            TEXT("Far below, black rivers crossed stone forests and cavern flowers opened without sunlight."),
+            TEXT("There, beneath a sky made of stone, a child was born. His name was Aktarus."),
+            TEXT("His people laughed, made music, chased luminous insects, and gathered at violet gardens."),
+            TEXT("Aktarus believed his world was beautiful. Because it was."),
+            TEXT("When he first climbed to the surface and saw dawn, he cried because it was beautiful too."),
+            TEXT("He dreamed that the people above and below could learn to cherish both worlds."),
+            TEXT("For a time he travelled between them, sharing underground flowers, music, and stars."),
+            TEXT("Then fear became doctrine. The underground people were called cursed and unnatural."),
+            TEXT("Lantern-bearing soldiers burned gardens, shattered sanctuaries, and drove families deeper."),
+            TEXT("Aktarus returned to find his home burning in artificial light."),
+            TEXT("\"If they could see what I see, they would not fear us.\""),
+            TEXT("\"If they refuse to enter the dark willingly... then I will bring the dark to them.\""),
+            TEXT("The world forgot the man. It remembered only THE SHADOWBEARER.")};
+        return Lines[FMath::Clamp(CinematicBeat,0,UE_ARRAY_COUNT(Lines)-1)];
+    }
+    if(ActiveCinematic==EShadowbearerCinematic::ReturnedSoul)
+    {
+        if(CinematicBeat==0)return TEXT("The final strike lands. The arena becomes unnaturally silent.");
+        if(CinematicBeat==1)return TEXT("Aktarus's corruption peels away in black fragments.");
+        if(CinematicBeat==2)return FString::Printf(TEXT("%s strikes the ground first—heavy, physical, real."),CanonicalArmamentName(CinematicBoss));
+        if(CinematicBeat==3)return TEXT("The body dissolves. A visible soul remains suspended in darkness.");
+        if(CinematicBoss==ECubetownEnemyType::CathedralStag)
+            return CinematicBeat==4?TEXT("\"I remember the sun. He told us it had abandoned us.\""):CinematicBeat==5?TEXT("\"He told us the dark was all that remained. I believed him.\""):CinematicBeat==6?TEXT("Zane raises the Dawnlantern. The Rite of Return begins."):TEXT("ANTLER'S EDGE // RETURNED SOUL // MEMORY RESTORED");
+        if(CinematicBoss==ECubetownEnemyType::MarionetteMayor)
+            return CinematicBeat==4?TEXT("\"He told me nobody would ever laugh with me again. So I made them laugh.\""):CinematicBeat==5?TEXT("\"I had forgotten the difference between laughter and screaming.\""):CinematicBeat==6?TEXT("Zane cuts the last shadow string and performs the Rite of Return."):TEXT("PUPPETMASTER'S CANE // RETURNED SOUL // MEMORY RESTORED");
+        if(CinematicBoss==ECubetownEnemyType::BurrowMaw)
+            return CinematicBeat==4?TEXT("The soul does not speak. It trembles like a wounded animal."):CinematicBeat==5?TEXT("It was never evil. Aktarus filled it with pain."):CinematicBeat==6?TEXT("The Dawnlantern receives it gently. Natural darkness remains."):TEXT("BURROW MAW'S LURE // RETURNED SOUL // UMBRAL STORAGE");
+        if(CinematicBoss==ECubetownEnemyType::SkyfallMatron)
+            return CinematicBeat==4?TEXT("\"I followed him willingly. He was kind—until kindness became obedience.\""):CinematicBeat==5?TEXT("\"Do not forgive him because you understand him.\""):CinematicBeat==6?TEXT("She enters the light without asking Zane to excuse what Aktarus did."):TEXT("STORMVEIL // RETURNED SOUL // MEMORY RESTORED");
+        return CinematicBeat==4?TEXT("\"I burned his home. Then he gave me one.\""):CinematicBeat==5?TEXT("\"I never noticed when forgiveness became a chain.\""):CinematicBeat==6?TEXT("The Seraph names the road ahead: THE BLACK MERIDIAN."):TEXT("ECLIPSE BRAND // RETURNED SOUL // MEMORY RESTORED");
+    }
+    if(ActiveCinematic==EShadowbearerCinematic::MemoryReveal)
+    {
+        if(CanonicalChapter==11)
+        {
+            static const TCHAR* Lines[]={TEXT("A ruined stair casts the shadow of itself unbroken."),TEXT("Rooms remember the families who once stood inside them."),TEXT("A young Aktarus laughs beside surface scholars."),TEXT("He shares glowing underground flowers and teaches children to navigate caves."),TEXT("Villagers attack underground travellers. Aktarus begs them to stop."),TEXT("SERA: \"Memory is not truth. It only remembers what stood in the light.\""),TEXT("CHRONOS LIGHT AWAKENED // THE PAST CAN GIVE RUINS SHAPE")};
+            return Lines[FMath::Clamp(CinematicBeat,0,6)];
+        }
+        if(CanonicalChapter==13)
+        {
+            static const TCHAR* Lines[]={TEXT("Natural Living Shadows emerge from Deepwarren—curious, harmless, alive."),TEXT("Zane befriends them. They carry, defend, explore, and operate forgotten mechanisms."),TEXT("When one enters Bramblewick, fear moves faster than understanding."),TEXT("A villager raises a weapon. Zane steps between them."),TEXT("SERA: \"You don't know what those things are.\""),TEXT("ZANE: \"Neither did we.\""),TEXT("Zane is no longer restoring the old world. He is creating something new.")};
+            return Lines[FMath::Clamp(CinematicBeat,0,6)];
+        }
+        if(CanonicalChapter==15)
+        {
+            static const TCHAR* Lines[]={TEXT("Vesperhold survives behind walls of artificial light."),TEXT("At first it feels safe."),TEXT("Then Zane sees dying plants, sleepless citizens, and Living Shadows erased at the gate."),TEXT("The city answered darkness by trying to eliminate every shadow."),TEXT("Too much light can destroy."),TEXT("The world does not need light to defeat darkness."),TEXT("It needs balance to defeat corruption.")};
+            return Lines[FMath::Clamp(CinematicBeat,0,6)];
+        }
+        static const TCHAR* Lines[]={TEXT("Chronos Light reveals the Dawnlantern's final hidden memory."),TEXT("It belonged to Aktarus. He made it before he became the Shadowbearer."),TEXT("It carried light underground without destroying the darkness around it."),TEXT("It was a promise that both worlds could coexist."),TEXT("Luma was an underground light creature Aktarus cared for."),TEXT("She feared his presence because she remembered him."),TEXT("The lantern he made to unite two worlds is now the only thing that can stop him.")};
+        return Lines[FMath::Clamp(CinematicBeat,0,6)];
+    }
+    if(ActiveCinematic==EShadowbearerCinematic::AktarusDefeat)
+    {
+        static const TCHAR* Lines[]={
+            TEXT("Silence. Nightspine hits the floor and the sound echoes through the Black Meridian."),
+            TEXT("Zane walks to the enormous blade and takes it. NIGHTSPINE ACQUIRED."),
+            TEXT("Aktarus remains kneeling while centuries of darkness and armor fall away."),
+            TEXT("The outer Shadowbearer form collapses into THE VESTIGE OF THE SHADOWBEARER."),
+            TEXT("The Dawnlantern reaches for his soul. AKTARUS: \"Don't.\" Zane lowers it."),
+            TEXT("AKTARUS: \"Shadowbearer. That is what they called me.\""),
+            TEXT("AKTARUS: \"For so long that I nearly forgot.\""),
+            TEXT("AKTARUS: \"My name is Aktarus.\""),
+            TEXT("He tells Zane of cavern stars, glowing water, music, and a childhood without fear of night."),
+            TEXT("He tells him of his first sunrise and the dream of bringing both worlds together."),
+            TEXT("AKTARUS: \"I wanted them to understand that darkness was not death. It was where I was born.\""),
+            TEXT("AKTARUS: \"They would not come. So I brought it to them.\""),
+            TEXT("ZANE: \"You destroyed them.\"   AKTARUS: \"Yes.\""),
+            TEXT("AKTARUS: \"First fear would pass. Then suffering was necessary. Then resistance meant ignorance.\""),
+            TEXT("AKTARUS: \"Eventually, nobody around me was allowed to disagree.\""),
+            TEXT("AKTARUS: \"I gave them a home. Then I made sure they could never leave it.\""),
+            TEXT("AKTARUS: \"I became everything I believed the light had done to us.\""),
+            TEXT("AKTARUS: \"Will you destroy the dark now?\""),
+            TEXT("ZANE: \"No. I'm bringing the dawn back.\""),
+            TEXT("AKTARUS: \"There is no dawn without night.\""),
+            TEXT("ZANE: \"I know.\""),
+            TEXT("Aktarus understands: Zane learned the truth without forcing the world to suffer for it."),
+            TEXT("AKTARUS: \"Then perhaps... you listened better than they did.\""),
+            TEXT("Aktarus allows the Dawnlantern to take his soul."),
+            TEXT("AKTARUS // RETURNED SOUL")};
+        return Lines[FMath::Clamp(CinematicBeat,0,UE_ARRAY_COUNT(Lines)-1)];
+    }
+    if(ActiveCinematic==EShadowbearerCinematic::Ascension)
+    {
+        static const TCHAR* Lines[]={TEXT("The Dawnlantern cracks. Too many souls. Too much light. Too much shadow."),TEXT("Every Returned Soul appears physically around Zane."),TEXT("The Cathedral Stag. Marionette Mayor. Burrow Maw. Skyfall Matron. Eclipse Seraph."),TEXT("Aktarus appears last. The lantern shatters."),TEXT("Golden light erupts—and Zane's own shadow rises to catch it."),TEXT("Light enters shadow. Shadow enters light. Neither is erased."),TEXT("Luma flies into the center as the Dawnlantern reforms: half brass, half living darkness."),TEXT("Zane rises. His teal cloak moves in impossible wind; his shadow moves independently."),TEXT("Not god of light. Not lord of darkness. Something between."),TEXT("THE FIRST ECLIPSE // THE DAWNBEARER")};
+        return Lines[FMath::Clamp(CinematicBeat,0,9)];
+    }
+    if(ActiveCinematic==EShadowbearerCinematic::DawnsReturn)
+    {
+        static const TCHAR* Lines[]={TEXT("The Shadowfall vortex collapses. The sun rises—and casts healthy shadows."),TEXT("Bellroot Cathedral hears bells moved by real wind."),TEXT("Mournmarket rebuilds its festival without strings."),TEXT("Deepwarren remains softly, beautifully dark as surface visitors arrive in peace."),TEXT("Vesperhold turns off its artificial walls of light. Its citizens see stars again."),TEXT("Bramblewick repairs the bell, bakery, forge, and square."),TEXT("Living Shadows walk beside children. One child offers bread."),TEXT("The creature eats the shadow cast by the bread. The child laughs."),TEXT("The world was not returned to what it was."),TEXT("It learned to hold dawn and night together.")};
+        return Lines[FMath::Clamp(CinematicBeat,0,9)];
+    }
+    static const TCHAR* Lines[]={TEXT("Zane walks home by the same road—repaired, older, different."),TEXT("Sera looks at his transformed shadow and the Eclipsed Dawnlantern."),TEXT("SERA: \"Did you kill him?\""),TEXT("ZANE: \"No.\""),TEXT("ZANE: \"I brought him home.\""),TEXT("Months later, Bramblewick finally holds the Dawn Festival."),TEXT("This time the celebration continues after sunset. Lanterns deliberately leave room for night."),TEXT("Deepwarren visitors and Living Shadows celebrate beside the village."),TEXT("AKTARUS: \"There is no dawn without night.\""),TEXT("Fireflies rise. Underground flowers bloom. Beyond the night waits the faintest new sunrise.")};
+    return Lines[FMath::Clamp(CinematicBeat,0,9)];
+}
+
+void ACubetownDirector::BeginStoryCinematic(EShadowbearerCinematic Cinematic,ECubetownEnemyType Boss,const FVector& Location)
+{
+    ActiveCinematic=Cinematic;CinematicBoss=Boss;CinematicBeat=0;CinematicBeatSeconds=0.0f;CinematicLocation=Location;
+    if(APlayerController* PC=GetWorld()?GetWorld()->GetFirstPlayerController():nullptr)
+    {
+        PC->SetIgnoreMoveInput(true);PC->SetIgnoreLookInput(true);
+        if(PC->PlayerCameraManager)PC->PlayerCameraManager->StartCameraFade(0.45f,0.0f,0.65f,FLinearColor::Black,false,true);
+    }
+    if(ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0)))
+    {
+        Hero->GetCharacterMovement()->StopMovementImmediately();
+        if(!Location.IsNearlyZero())Hero->FocusOpeningView(Location+FVector(0,0,120));
+    }
+    RitualFragments.Reset();RitualWeapon.Reset();RitualSoul.Reset();
+    if(Cinematic==EShadowbearerCinematic::ReturnedSoul)
+    {
+        for(int32 I=0;I<12;++I)
+        {
+            const float A=I*(2.0f*PI/12.0f);const FVector P=Location+FVector(FMath::Cos(A)*150.0f,FMath::Sin(A)*150.0f,80.0f+I*16.0f);
+            if(AStaticMeshActor* Fragment=SpawnTintedStaticMeshAsset(FString::Printf(TEXT("RiteFragment_%02d"),I),TEXT("/Engine/BasicShapes/Cube.Cube"),P,FVector(0.08f+(I%3)*0.03f),FLinearColor(0.015f,0.004f,0.035f),FRotator(I*17,I*31,I*13),false,true))RitualFragments.Add(Fragment);
+        }
+    }
+}
+
+void ACubetownDirector::SpawnRitualWeapon()
+{
+    if(RitualWeapon.IsValid())return;
+    const TCHAR* Asset=CinematicBoss==ECubetownEnemyType::MarionetteMayor
+        ?TEXT("/Game/Phantom/Characters/Production/_Import_Mage_GLTF/Mage/StaticMeshes/2H_Staff.2H_Staff")
+        :TEXT("/Game/Phantom/External/CC0/Aliases/Knight/StaticMeshes/2H_Sword.2H_Sword");
+    RitualWeapon=SpawnTintedStaticMeshAsset(TEXT("ReturnedBossArmament"),Asset,CinematicLocation+FVector(0,0,560),
+        CinematicBoss==ECubetownEnemyType::Aktarus?FVector(2.2f):FVector(1.25f),
+        CinematicBoss==ECubetownEnemyType::Aktarus?FLinearColor(0.02f,0.005f,0.04f):FLinearColor(0.82f,0.58f,0.18f),FRotator(0,20,-68),false,true);
+}
+
+void ACubetownDirector::SpawnRitualSoul()
+{
+    if(RitualSoul.IsValid())return;
+    RitualSoul=SpawnTintedStaticMeshAsset(TEXT("ReturnedBossSoul"),TEXT("/Engine/BasicShapes/Sphere.Sphere"),CinematicLocation+FVector(0,0,220),
+        CinematicBoss==ECubetownEnemyType::Aktarus?FVector(0.95f):FVector(0.62f),FLinearColor(0.22f,0.96f,0.82f),FRotator::ZeroRotator,false,true);
+}
+
+void ACubetownDirector::AdvanceStoryCinematic()
+{
+    if(ActiveCinematic==EShadowbearerCinematic::None)return;
+    int32 Count=1;
+    switch(ActiveCinematic)
+    {
+        case EShadowbearerCinematic::Prologue:Count=14;break;case EShadowbearerCinematic::ReturnedSoul:Count=8;break;
+        case EShadowbearerCinematic::MemoryReveal:Count=7;break;case EShadowbearerCinematic::AktarusDefeat:Count=25;break;
+        case EShadowbearerCinematic::Ascension:case EShadowbearerCinematic::DawnsReturn:case EShadowbearerCinematic::Festival:Count=10;break;
+        default:break;
+    }
+    ++CinematicBeat;CinematicBeatSeconds=0.0f;
+    if(CinematicBeat>=Count)CompleteStoryCinematic();
+}
+
+void ACubetownDirector::UpdateStoryCinematic(float DeltaSeconds)
+{
+    if(ActiveCinematic==EShadowbearerCinematic::None)return;
+    CinematicBeatSeconds+=DeltaSeconds;
+    if(ActiveCinematic==EShadowbearerCinematic::ReturnedSoul)
+    {
+        if(CinematicBeat>=2)SpawnRitualWeapon();
+        if(CinematicBeat>=3)SpawnRitualSoul();
+        if(AStaticMeshActor* Weapon=RitualWeapon.Get())
+        {
+            FVector P=Weapon->GetActorLocation();P.Z=FMath::FInterpTo(P.Z,CinematicLocation.Z+38.0f,DeltaSeconds,5.5f);Weapon->SetActorLocation(P);Weapon->AddActorLocalRotation(FRotator(0,DeltaSeconds*26.0f,0));
+        }
+        if(AStaticMeshActor* Soul=RitualSoul.Get())
+        {
+            FVector P=CinematicLocation+FVector(0,0,225.0f+FMath::Sin(GetWorld()->GetTimeSeconds()*2.3f)*24.0f);Soul->SetActorLocation(P);Soul->AddActorLocalRotation(FRotator(0,DeltaSeconds*54.0f,0));
+        }
+        for(int32 I=0;I<RitualFragments.Num();++I)if(AStaticMeshActor* Fragment=RitualFragments[I].Get())
+        {Fragment->AddActorWorldOffset(FVector(FMath::Sin(I*1.7f)*DeltaSeconds*26.0f,FMath::Cos(I*1.3f)*DeltaSeconds*26.0f,DeltaSeconds*(20.0f+I*2.0f)));Fragment->AddActorLocalRotation(FRotator(DeltaSeconds*41,DeltaSeconds*58,DeltaSeconds*29));}
+    }
+    if(CinematicBeatSeconds>=6.5f)AdvanceStoryCinematic();
+}
+
+void ACubetownDirector::CompleteStoryCinematic()
+{
+    const EShadowbearerCinematic Finished=ActiveCinematic;
+    ActiveCinematic=EShadowbearerCinematic::None;CinematicBeat=0;CinematicBeatSeconds=0.0f;
+    if(APlayerController* PC=GetWorld()?GetWorld()->GetFirstPlayerController():nullptr){PC->ResetIgnoreMoveInput();PC->ResetIgnoreLookInput();}
+    if(Finished==EShadowbearerCinematic::Prologue)
+    {
+        bPrologueSeen=true;CanonicalChapter=FMath::Max(CanonicalChapter,1);RefreshStoryQuest();SaveProgress();return;
+    }
+    if(Finished==EShadowbearerCinematic::ReturnedSoul)
+    {
+        const uint32 Bit=ReturnedBossBit(CinematicBoss);ReturnedSoulMask|=Bit;ArmamentMask|=Bit;MemoryMask|=Bit;
+        EquippedArmament=ReturnedBossIndex(CinematicBoss);EchoEnergy=FMath::Min(100,EchoEnergy+28);
+        if(CinematicBoss==ECubetownEnemyType::CathedralStag){CanonicalChapter=10;QuestStatus=TEXT("MOURNMARKET // FOLLOW THE SILENT FESTIVAL ROAD");}
+        else if(CinematicBoss==ECubetownEnemyType::MarionetteMayor){CanonicalChapter=11;QuestStatus=TEXT("THE REMNANT ESTATE // USE CHRONOS LIGHT WHERE THE HOUSE REMEMBERS");}
+        else if(CinematicBoss==ECubetownEnemyType::BurrowMaw){CanonicalChapter=13;QuestStatus=TEXT("LIVING SHADOWS // BRING ONE HOME TO BRAMBLEWICK");}
+        else if(CinematicBoss==ECubetownEnemyType::SkyfallMatron){CanonicalChapter=15;QuestStatus=TEXT("VESPERHOLD // ENTER THE CITY THAT NEVER TURNS OFF ITS LIGHTS");}
+        else if(CinematicBoss==ECubetownEnemyType::EclipseSeraph){CanonicalChapter=17;QuestStatus=TEXT("RETURN TO THE REMNANT ESTATE // THE DAWNLANTERN HAS ONE MEMORY LEFT");}
+        SaveProgress();return;
+    }
+    if(Finished==EShadowbearerCinematic::MemoryReveal)
+    {
+        if(CanonicalChapter==11){CanonicalChapter=12;QuestStatus=TEXT("DEEPWARREN // DESCEND TO THE BURIED SUN");}
+        else if(CanonicalChapter==13){CanonicalChapter=14;QuestStatus=TEXT("SKYFALL REACH // CLIMB INTO THE STORM");}
+        else if(CanonicalChapter==15){CanonicalChapter=16;QuestStatus=TEXT("THE ECLIPSE SERAPH // ASCEND VESPERHOLD'S HIGHEST TOWER");}
+        else if(CanonicalChapter==17){CanonicalChapter=18;QuestStatus=TEXT("THE BLACK MERIDIAN // AKTARUS WAITS BENEATH THE VORTEX");}
+        SaveProgress();return;
+    }
+    if(Finished==EShadowbearerCinematic::AktarusDefeat)
+    {
+        ReturnedSoulMask|=ReturnedBossBit(ECubetownEnemyType::Aktarus);ArmamentMask|=ReturnedBossBit(ECubetownEnemyType::Aktarus);MemoryMask|=ReturnedBossBit(ECubetownEnemyType::Aktarus);
+        bNightspineOwned=true;bVestigeOwned=true;EquippedArmament=5;CanonicalChapter=21;
+        BeginStoryCinematic(EShadowbearerCinematic::Ascension,ECubetownEnemyType::Aktarus,CinematicLocation);return;
+    }
+    if(Finished==EShadowbearerCinematic::Ascension)
+    {
+        bFirstEclipseUnlocked=true;bEclipsedDawnlantern=true;bVestigeEquipped=true;ApplyPostgameForm();CanonicalChapter=22;
+        BeginStoryCinematic(EShadowbearerCinematic::DawnsReturn,ECubetownEnemyType::Aktarus,FVector(0,-6100,150));return;
+    }
+    if(Finished==EShadowbearerCinematic::DawnsReturn)
+    {
+        SetShadowbearerWorldState(EShadowbearerWorldState::Restored,TEXT("DAWN'S RETURN // WALK THE OLD ROAD HOME"));
+        BeginStoryCinematic(EShadowbearerCinematic::Festival,ECubetownEnemyType::Aktarus,FVector(0,-7200,150));return;
+    }
+    if(Finished==EShadowbearerCinematic::Festival)
+    {
+        bPostgameUnlocked=true;QuestStatus=TEXT("POSTGAME // THE FIRST ECLIPSE // RESTORE, BUILD, EXPLORE, AND FIND EVERY REMAINING SOUL");ApplyPostgameForm();SaveProgress();
+    }
+}
+
+void ACubetownDirector::ApplyPostgameForm()
+{
+    if(ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0)))Hero->ApplyShadowbearerForm(bVestigeEquipped,bFirstEclipseUnlocked);
+}
+
+void ACubetownDirector::ToggleVestigeForm()
+{
+    if(!bVestigeOwned){QuestStatus=TEXT("THE VESTIGE IS EARNED FROM AKTARUS AFTER THE LAST SHADOW");return;}
+    bVestigeEquipped=!bVestigeEquipped;ApplyPostgameForm();
+    QuestStatus=bVestigeEquipped?TEXT("VESTIGE OF THE SHADOWBEARER // TRANSFORMATION ACTIVE"):TEXT("VESTIGE RELEASED // ZANE'S FORM RESTORED");SaveProgress();
+}
+
+void ACubetownDirector::UseEquippedArmament(const FVector& Origin,AActor* DamageCauser)
+{
+    if(EquippedArmament<0){QuestStatus=TEXT("RETURNED ARMAMENTS ARE EARNED THROUGH THE RITE OF RETURN");return;}
+    static const float Radii[]={420,520,470,680,600,900};static const float Damages[]={52,46,58,44,68,110};
+    const int32 I=FMath::Clamp(EquippedArmament,0,5);PulseNearbyEnemies(Origin,Radii[I],Damages[I],DamageCauser);
+    if(I==0)CreationUnlockMask|=CreationBit(ECubetownEchoType::Bridge);
+    else if(I==1)CreationUnlockMask|=CreationBit(ECubetownEchoType::GaleTotem);
+    else if(I==2)CreationUnlockMask|=CreationBit(ECubetownEchoType::Climbroot);
+    else if(I==3)CreationUnlockMask|=CreationBit(ECubetownEchoType::SkyPad);
+    else if(I==4)CreationUnlockMask|=CreationBit(ECubetownEchoType::TideSpire);
+    else {CreationUnlockMask=0x1ffu;EchoEnergy=100;}
+    QuestStatus=FString::Printf(TEXT("%s // SIGNATURE MECHANIC RELEASED"),CanonicalArmamentName(CanonicalBossForIndex(I)));
+}
+
+void ACubetownDirector::AdvanceAktarusPhase(int32 Phase,const FVector& ArenaLocation)
+{
+    static const TCHAR* PhaseTitles[]={
+        TEXT("PHASE I // THE BEARER OF NIGHT"),
+        TEXT("PHASE II // NIGHTSPINE"),
+        TEXT("PHASE III // THE STOLEN"),
+        TEXT("PHASE IV // BEFORE THE SHADOWBEARER"),
+        TEXT("PHASE V // THE LAST SHADOW")};
+    const int32 SafePhase=FMath::Clamp(Phase,1,5);
+    QuestStatus=PhaseTitles[SafePhase-1];
+
+    const FLinearColor PhaseLight=SafePhase==2?FLinearColor(0.20f,0.02f,0.34f):
+        (SafePhase==4?FLinearColor(0.92f,0.56f,0.18f):FLinearColor(0.28f,0.04f,0.58f));
+    SpawnPointLight(FString::Printf(TEXT("AktarusPhaseLight_%d"),SafePhase),ArenaLocation+FVector(0,0,520),PhaseLight,2400.0f+SafePhase*420.0f,920.0f,false);
+
+    if(SafePhase==2)
+    {
+        // Nightspine physically rises from the arena shadow before Aktarus begins the blade phase.
+        SpawnStaticMeshAsset(TEXT("AktarusNightspineManifest"),TEXT("/Game/Phantom/External/CC0/Aliases/Knight/StaticMeshes/2H_Sword.2H_Sword"),
+            ArenaLocation+FVector(120,0,80),FVector(1.7f),FRotator(0,0,-72),false,true);
+    }
+    else if(SafePhase==3)
+    {
+        // The Stolen: corrupted boss silhouettes return around the arena while redeemed souls
+        // materialize beside Zane as independent allies rather than servants.
+        static const TCHAR* SilhouetteAssets[]={
+            TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_BlueTitan.SM_V9_BlueTitan"),
+            TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_RedMage.SM_V9_RedMage"),
+            TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_BlueMage.SM_V9_BlueMage"),
+            TEXT("/Game/Phantom/Generated/Legends/V9/Units/SM_V9_BlueDragon.SM_V9_BlueDragon")};
+        for(int32 I=0;I<4;++I)
+        {
+            const float Angle=I*(2.0f*PI/4.0f)+0.55f;
+            const FVector P=ArenaLocation+FVector(FMath::Cos(Angle)*980.0f,FMath::Sin(Angle)*980.0f,40.0f);
+            if(AStaticMeshActor* Shadow=SpawnStaticMeshAsset(FString::Printf(TEXT("TheStolenSilhouette_%d"),I),SilhouetteAssets[I],P,FVector(0.78f),FRotator(0,Angle*180.0f/PI+180.0f,0),false,true))
+                Shadow->Tags.AddUnique(TEXT("Shadowbearer.TheStolen"));
+            SpawnEnemy(ECubetownEnemyType::Gloomling,P+FVector(0,0,110),12);
+        }
+        if(ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0)))
+        {
+            const ECubetownEchoType SoulForms[]={ECubetownEchoType::Blade,ECubetownEchoType::Boulder,ECubetownEchoType::Bloom};
+            for(int32 I=0;I<3;++I)
+            {
+                ACubetownEcho* Soul=GetWorld()->SpawnActor<ACubetownEcho>(Hero->GetActorLocation()+FVector(-180.0f,I*150.0f-150.0f,70.0f),FRotator::ZeroRotator);
+                if(Soul){Soul->Configure(SoulForms[I]);Soul->Tags.AddUnique(TEXT("Shadowbearer.ReturnedSoulAlly"));ActiveEchoes.Add(Soul);}
+            }
+        }
+    }
+    else if(SafePhase==4)
+    {
+        // Chronos Light replaces the fortress with fragments of Aktarus's childhood cavern.
+        for(int32 I=0;I<8;++I)
+        {
+            const float Angle=I*(2.0f*PI/8.0f);
+            const FVector P=ArenaLocation+FVector(FMath::Cos(Angle)*760.0f,FMath::Sin(Angle)*760.0f,24.0f);
+            SpawnStaticMeshAsset(FString::Printf(TEXT("AktarusMemoryGarden_%d"),I),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamMushroomCluster_A.SM_CubeDreamMushroomCluster_A"),P,FVector(0.70f),FRotator(0,I*31.0f,0),false,true);
+        }
+        QuestStatus=TEXT("PHASE IV // BEFORE THE SHADOWBEARER // LOOK AT IT // BECAUSE I CARRY YOUR SHADOW TOO");
+    }
+    else if(SafePhase==5)
+    {
+        for(int32 I=0;I<12;++I)
+        {
+            const float Angle=I*(2.0f*PI/12.0f);
+            const FVector P=ArenaLocation+FVector(FMath::Cos(Angle)*1120.0f,FMath::Sin(Angle)*1120.0f,48.0f);
+            SpawnStaticMeshAsset(FString::Printf(TEXT("LastShadowFragment_%02d"),I),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamRockCluster_Cream.SM_CubeDreamRockCluster_Cream"),P,FVector(0.58f),FRotator(0,I*47.0f,0),false,true);
+        }
+        QuestStatus=TEXT("PHASE V // THE LAST SHADOW // COMBINE LIGHT, SHADOW, CHRONOS, LIVING SHADOWS, AND EVERY RETURNED ARMAMENT");
+    }
+}
+
+void ACubetownDirector::SpawnNextCanonicalBoss()
+{
+    if(ActiveStoryBoss.IsValid()||IsStoryCinematicActive()||!GetWorld())return;
+    int32 Index=INDEX_NONE;
+    const int32 RequiredChapters[]={8,10,12,14,16,18};
+    for(int32 I=0;I<6;++I)if(CanonicalChapter>=RequiredChapters[I]&&(ReturnedSoulMask&(1u<<I))==0u){Index=I;break;}
+    if(Index==INDEX_NONE)return;
+    ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0));if(!Hero)return;
+    const FVector Location=CanonicalBossLocation(Index);
+    if(FVector::DistSquared2D(Hero->GetActorLocation(),Location)>FMath::Square(3600.0f))return;
+    ACubetownEnemy* Boss=GetWorld()->SpawnActor<ACubetownEnemy>(Location,FRotator(0,-90,0));if(!Boss)return;
+    Boss->Configure(CanonicalBossForIndex(Index),8+Index*2);ActiveStoryBoss=Boss;++EnemiesAlive;
+    QuestStatus=Index==5
+        ? TEXT("PHASE I // THE BEARER OF NIGHT // AKTARUS EXTINGUISHES ARTIFICIAL LIGHT AND COMMANDS THE ARENA'S SHADOWS")
+        : FString::Printf(TEXT("%s // PURIFY THE GUARDIAN // %s WILL FALL FIRST"),CanonicalBossName(CanonicalBossForIndex(Index)),CanonicalArmamentName(CanonicalBossForIndex(Index)));
+}
+
+void ACubetownDirector::UpdateCanonicalStory(float DeltaSeconds)
+{
+    (void)DeltaSeconds;
+    if(bShadowbearerCaptureOverride&&!IsStoryCinematicActive())return;
+    if(!bPrologueSeen&&!IsStoryCinematicActive()&&!IsShellVisible())
+    {
+        BeginStoryCinematic(EShadowbearerCinematic::Prologue,ECubetownEnemyType::Gloomling,FVector(0,-7200,150));return;
+    }
+    if(IsStoryCinematicActive()||!bPrologueSeen)return;
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Restored&&CanonicalChapter<8)
+    {
+        CanonicalChapter=8;QuestStatus=TEXT("BELLROOT WOOD // FIND THE CATHEDRAL AND RESTORE THE FIRST DAWN HEART");SaveProgress();
+    }
+    ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0));if(!Hero)return;
+    if(CanonicalChapter==11&&FVector::DistSquared2D(Hero->GetActorLocation(),FVector(0,27000,150))<FMath::Square(3200.0f))
+        BeginStoryCinematic(EShadowbearerCinematic::MemoryReveal,ECubetownEnemyType::Gloomling,FVector(0,27000,150));
+    else if(CanonicalChapter==13&&FVector::DistSquared2D(Hero->GetActorLocation(),FVector(0,-6100,150))<FMath::Square(2800.0f))
+        BeginStoryCinematic(EShadowbearerCinematic::MemoryReveal,ECubetownEnemyType::Gloomling,FVector(0,-6100,150));
+    else if(CanonicalChapter==15&&FVector::DistSquared2D(Hero->GetActorLocation(),CanonicalBossLocation(4))<FMath::Square(4200.0f))
+        BeginStoryCinematic(EShadowbearerCinematic::MemoryReveal,ECubetownEnemyType::Gloomling,CanonicalBossLocation(4));
+    else if(CanonicalChapter==17&&FVector::DistSquared2D(Hero->GetActorLocation(),FVector(0,27000,150))<FMath::Square(3200.0f))
+        BeginStoryCinematic(EShadowbearerCinematic::MemoryReveal,ECubetownEnemyType::Gloomling,FVector(0,27000,150));
+    else SpawnNextCanonicalBoss();
+}
+
 void ACubetownDirector::SpawnVillage()
 {
     const bool bProductionWorld = GetWorld() && GetWorld()->GetMapName().Contains(TEXT("CubeTown_World"));
     if (bProductionWorld)
     {
-        // Visual Heartstone is authored into the persistent map. Runtime only adds social actors.
-        const FVector Homes[]={FVector(-2400,-6900,90),FVector(2400,-6900,90),FVector(0,-4700,90)};
-        for(int32 I=0;I<3;++I)
+        // Bramblewick's seven core townspeople carry the social continuity across both world states.
+        const FVector Homes[]={
+            FVector(-650,-5250,90),FVector(2300,-6550,90),FVector(-1650,-4300,90),
+            FVector(-3300,-6100,90),FVector(3300,-7600,90),FVector(700,-3900,90),FVector(2950,-4700,90)};
+        for(int32 I=0;I<UE_ARRAY_COUNT(Homes);++I)
         {
             ACubetownVillager* V=GetWorld()->SpawnActor<ACubetownVillager>(Homes[I],FRotator(0,90,0));
             if(!V) continue; V->Configure(static_cast<ECubetownFriend>(I),Homes[I]); Villagers.Add(V);
@@ -2641,8 +4260,10 @@ void ACubetownDirector::SpawnVillage()
         SpawnStaticMeshAsset(FString::Printf(TEXT("HeartstoneFlower_%02d"),I),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFlowerPatch_A.SM_CubeDreamFlowerPatch_A"),P,FVector(0.35f+(I%3)*0.08f),FRotator(0,I*23,0),false,true);
     }
 
-    const FVector Homes[]={FVector(-3900,-5700,90),FVector(3900,-5700,90),FVector(0,-7900,90)};
-    for(int32 I=0;I<3;++I)
+    const FVector Homes[]={
+        FVector(-650,-5250,90),FVector(2300,-6550,90),FVector(-1650,-4300,90),
+        FVector(-3300,-6100,90),FVector(3300,-7600,90),FVector(700,-3900,90)};
+    for(int32 I=0;I<UE_ARRAY_COUNT(Homes);++I)
     {
         ACubetownVillager* V=GetWorld()->SpawnActor<ACubetownVillager>(Homes[I],FRotator::ZeroRotator); if(!V)continue; V->Configure(static_cast<ECubetownFriend>(I),Homes[I]); Villagers.Add(V);
     }
@@ -2773,6 +4394,24 @@ FString ACubetownDirector::BuildNameForIndex(int32 Index) const
     return Names[FMath::Clamp(Index,0,7)];
 }
 
+bool ACubetownDirector::SpendBuildMaterials(int32 WoodCost,int32 StoneCost,int32 AmberCost,const FString& Action)
+{
+    if(Inventory.Num()<6)Inventory.SetNumZeroed(6);
+    const int32 WoodIndex=static_cast<int32>(ECubetownBlockType::Wood);
+    const int32 StoneIndex=static_cast<int32>(ECubetownBlockType::Stone);
+    const int32 AmberIndex=static_cast<int32>(ECubetownBlockType::Amber);
+    if(Inventory[WoodIndex]<WoodCost||Inventory[StoneIndex]<StoneCost||Inventory[AmberIndex]<AmberCost)
+    {
+        QuestStatus=FString::Printf(TEXT("%s NEEDS  WOOD %d  STONE %d  AMBER %d"),*Action,WoodCost,StoneCost,AmberCost);
+        return false;
+    }
+    Inventory[WoodIndex]-=WoodCost;
+    Inventory[StoneIndex]-=StoneCost;
+    Inventory[AmberIndex]-=AmberCost;
+    SaveProgress();
+    return true;
+}
+
 void ACubetownDirector::ToggleBuildMode(APlayerController* PlayerController)
 {
     bBuildMode=!bBuildMode;
@@ -2869,6 +4508,7 @@ void ACubetownDirector::CommitBuildTool(APlayerController* PlayerController)
     if(BuildToolIndex==4||BuildToolIndex==5)
     {
         FHitResult Hit;if(!AdventureTrace(PlayerController,Hit))return; const FVector P=Hit.Location;
+        if(!SpendBuildMaterials(BuildToolIndex==4?1:2,0,0,BuildToolIndex==4?TEXT("GARDEN"):TEXT("DECOR")))return;
         FString Asset;
         if(BuildToolIndex==4) Asset=(BuildCatalogIndex%2==0)?TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFlowerPatch_A.SM_CubeDreamFlowerPatch_A"):TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamMushroomCluster_A.SM_CubeDreamMushroomCluster_A");
         else Asset=BuildAssetForIndex(FMath::Clamp(BuildCatalogIndex,3,7));
@@ -2882,6 +4522,10 @@ void ACubetownDirector::CommitBuildTool(APlayerController* PlayerController)
     const float Snap=bFine?25.0f:(bCoarse?100.0f:50.0f);
     if(!bFree){Point.X=FMath::GridSnap(Point.X,Snap);Point.Y=FMath::GridSnap(Point.Y,Snap);}
     if(!bHasBuildStart){BuildStart=Point;bHasBuildStart=true;QuestStatus=BuildToolIndex==2?TEXT("ROOM CORNER SET // CLICK OPPOSITE CORNER"):TEXT("START SET // CLICK ENDPOINT");return;}
+    const float PlannedLength=(Point-BuildStart).Size2D();
+    const int32 PlannedSegments=FMath::Max(1,FMath::CeilToInt(PlannedLength/(BuildToolIndex==3?240.0f:320.0f)));
+    const int32 MaterialMultiplier=BuildToolIndex==2?4:1;
+    if(!SpendBuildMaterials(BuildToolIndex==3?PlannedSegments*MaterialMultiplier:0,BuildToolIndex==3?0:PlannedSegments*MaterialMultiplier,0,BuildToolIndex==2?TEXT("ROOM"):BuildToolIndex==3?TEXT("FENCE"):TEXT("WALL")))return;
     TArray<TWeakObjectPtr<AActor>> Tx;
     const FString SegmentAsset=BuildToolIndex==3?TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_Fence.SM_CC0_Fence"):TEXT("/Game/Phantom/External/CC0/Aliases/SM_CC0_CastleWall.SM_CC0_CastleWall");
     auto SpawnLine=[&](const FVector& A,const FVector& B)
@@ -2897,6 +4541,7 @@ void ACubetownDirector::CommitBuildTool(APlayerController* PlayerController)
 void ACubetownDirector::PlaceBuildPrefab(APlayerController* PlayerController,bool bKeepTool)
 {
     if(!bBuildMode||!PlayerController)return;UpdateBuildPreview(PlayerController);AStaticMeshActor* Preview=BuildPreview.Get();if(!Preview)return;
+    if(!SpendBuildMaterials(8,4,1,BuildNameForIndex(BuildCatalogIndex)))return;
     const FVector P=Preview->GetActorLocation();const FRotator R=Preview->GetActorRotation();const FString Asset=BuildAssetForIndex(BuildCatalogIndex);
     TArray<TWeakObjectPtr<AActor>> Tx;AStaticMeshActor* Placed=SpawnStaticMeshAsset(FString::Printf(TEXT("PlayerBuild_%d"),PlayerBuildables.Num()),Asset,P,FVector(1.0f),R,true,true);
     if(Placed){RegisterBuildActor(Placed,Asset);Tx.Add(Placed);PushBuildTransaction(Tx);}QuestStatus=FString::Printf(TEXT("%s PLACED // CTRL+Z/Y // [/] CATALOG // Q/E ROTATE"),*BuildNameForIndex(BuildCatalogIndex));if(!bKeepTool)CancelBuildPlacement();
@@ -2946,22 +4591,63 @@ FString ACubetownDirector::GetWeatherName() const
 FString ACubetownDirector::GetRegionName(const FVector& P) const
 {
     struct R{FVector C;const TCHAR* N;};const R Regions[]={
-        {FVector(0,15000,0),TEXT("CRIMSON GROVE")},{FVector(16000,6000,0),TEXT("STARFALL MEADOWS")},{FVector(-17000,15000,0),TEXT("FROSTBLOOM HEIGHTS")},
-        {FVector(-17000,-7000,0),TEXT("MOONMOSS MARSH")},{FVector(17500,-14000,0),TEXT("SUNPETAL COAST")},{FVector(22000,17000,0),TEXT("EMBERBLOOM VALLEY")},{FVector(0,-4200,0),TEXT("HEARTSTONE / CROWNLANDS")}};
+        {FVector(0,4100,0),TEXT("PHANTOMITE LAIR")},
+        {FVector(-33000,9000,0),TEXT("DEEP FOREST")},{FVector(33000,9000,0),TEXT("STARFALL QUARRY")},
+        {FVector(-25000,33000,0),TEXT("FROSTBLOOM HEIGHTS")},{FVector(0,35000,0),TEXT("CRIMSON GROVE")},
+        {FVector(32000,34000,0),TEXT("EMBERBLOOM PHANTOMITE")},{FVector(-30000,-31000,0),TEXT("MOONMOSS FARMS")},
+        {FVector(30000,-31000,0),TEXT("SUNPETAL COAST")},{FVector(0,-6500,0),TEXT("BRAMBLEWICK / CROWNLANDS")}};
     float Best=TNumericLimits<float>::Max();const TCHAR* Name=TEXT("CROWNLANDS");for(const R& Region:Regions){const float D=FVector::DistSquared2D(P,Region.C);if(D<Best){Best=D;Name=Region.N;}}return FString(Name);
 }
 void ACubetownDirector::UpdateDreamEnvironment(float DeltaSeconds)
 {
-    TimeOfDayHours=FMath::Fmod(TimeOfDayHours+DeltaSeconds*(24.0f/900.0f),24.0f);if(TimeOfDayHours<0)TimeOfDayHours+=24.0f;
+    const ACubetownHero* Hero = Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this, 0));
+    const bool bInPhantomiteLair = Hero && Hero->GetActorLocation().Y > 1900.0f;
+    if(IsShadowfallActive())TimeOfDayHours=1.35f;
+    else TimeOfDayHours=FMath::Fmod(TimeOfDayHours+DeltaSeconds*(24.0f/900.0f),24.0f);
+    if(TimeOfDayHours<0)TimeOfDayHours+=24.0f;
     const float DayAlpha=FMath::Clamp(FMath::Sin((TimeOfDayHours-6.0f)/12.0f*PI),0.0f,1.0f);
     if(ADirectionalLight* Sun=DreamSun.Get())if(UDirectionalLightComponent* C=Cast<UDirectionalLightComponent>(Sun->GetLightComponent()))
-    {const float Angle=(TimeOfDayHours/24.0f)*360.0f-90.0f;Sun->SetActorRotation(FRotator(-18.0f-FMath::Sin((TimeOfDayHours-6.0f)/12.0f*PI)*48.0f,Angle*0.35f-30.0f,0));C->SetIntensity(0.35f+DayAlpha*5.0f);C->SetLightColor(FLinearColor::LerpUsingHSV(FLinearColor(0.48f,0.58f,0.90f),FLinearColor(1.0f,0.78f,0.56f),DayAlpha));}
-    const float NightAlpha=1.0f-DayAlpha;for(TWeakObjectPtr<APointLight>& Ref:DreamNightLights)if(APointLight* L=Ref.Get())if(UPointLightComponent* C=Cast<UPointLightComponent>(L->GetLightComponent()))C->SetIntensity(FMath::Lerp(90.0f,850.0f,NightAlpha));
+    {
+        const float Angle=(TimeOfDayHours/24.0f)*360.0f-90.0f;
+        Sun->SetActorRotation(FRotator(-18.0f-FMath::Sin((TimeOfDayHours-6.0f)/12.0f*PI)*48.0f,Angle*0.35f-30.0f,0));
+        const bool bShadow=IsShadowfallActive();
+        C->SetIntensity(bShadow?0.54f:(bInPhantomiteLair?0.12f:(0.42f+DayAlpha*0.40f)));
+        C->SetLightColor(bShadow?FLinearColor(0.48f,0.62f,1.0f):
+            (bInPhantomiteLair?FLinearColor(0.34f,0.24f,0.62f):FLinearColor::LerpUsingHSV(FLinearColor(0.62f,0.68f,0.86f),FLinearColor(1.0f,0.94f,0.84f),DayAlpha)));
+    }
+    if(ASkyLight* Sky=DreamSky.Get())if(USkyLightComponent* C=Sky->GetLightComponent())
+    {
+        const bool bShadow=IsShadowfallActive();
+        C->SetIntensity(bShadow?1.18f:0.72f);
+        C->SetLightColor(bShadow?FLinearColor(0.24f,0.34f,0.68f):FLinearColor(0.74f,0.82f,0.98f));
+    }
+    if(ADirectionalLight* Fill=DreamShadowFill.Get())if(UDirectionalLightComponent* C=Cast<UDirectionalLightComponent>(Fill->GetLightComponent()))
+    {
+        C->SetIntensity(IsShadowfallActive()?0.05f:0.0f);
+        C->SetLightColor(FLinearColor(0.30f,0.43f,0.92f));
+    }
+    for(TActorIterator<APostProcessVolume> It(GetWorld());It;++It)
+    {
+        if(It->ActorHasTag(FName(TEXT("Cubetown.PhantomiteGrade"))))
+            It->BlendWeight=FMath::FInterpTo(It->BlendWeight,(bInPhantomiteLair&&!IsShadowfallActive())?1.0f:0.0f,DeltaSeconds,5.0f);
+        if(It->ActorHasTag(FName(TEXT("Shadowbearer.ShadowGrade"))))
+            It->BlendWeight=FMath::FInterpTo(It->BlendWeight,IsShadowfallActive()?1.0f:0.0f,DeltaSeconds,3.4f);
+    }
+    const float NightAlpha=IsShadowfallActive()?1.0f:1.0f-DayAlpha;
+    for(TWeakObjectPtr<APointLight>& Ref:DreamNightLights)if(APointLight* L=Ref.Get())if(UPointLightComponent* C=Cast<UPointLightComponent>(L->GetLightComponent()))
+        C->SetIntensity(IsShadowfallActive()?FMath::Lerp(760.0f,1950.0f,NightAlpha):FMath::Lerp(90.0f,850.0f,NightAlpha));
     WeatherRemaining-=DeltaSeconds;if(WeatherRemaining<=0.0f){WeatherIndex=(WeatherIndex+1)%4;WeatherRemaining=85.0f+WeatherIndex*24.0f;}
 }
 
 void ACubetownDirector::RestoreSavedBuilds()
 {
+    if(LoadedBuildSchemaVersion<CubetownBuildSchemaVersion)
+    {
+        // Preserve progression/resources while intentionally retiring only incompatible construction.
+        SavedBuildAssetPaths.Reset();
+        SavedBuildTransforms.Reset();
+        return;
+    }
     // EMERGENCY VISUAL RECOVERY: old experimental CubeTown saves could contain giant primitive/
     // voxel-era transforms. Never let one stale save turn the new authored world into a black wall.
     const int32 Count=FMath::Min(SavedBuildAssetPaths.Num(),SavedBuildTransforms.Num());
@@ -2980,7 +4666,11 @@ void ACubetownDirector::RestoreSavedBuilds()
             FMath::Abs(L.X)<=47000.0f && FMath::Abs(L.Y)<=47000.0f &&
             Sc.GetAbsMax()<=4.0f &&
             FMath::Min3(FMath::Abs(Sc.X),FMath::Abs(Sc.Y),FMath::Abs(Sc.Z))>=0.05f;
-        if(!bApprovedArchitecture || !bSaneTransform) continue;
+        UStaticMesh* CandidateMesh=(bApprovedArchitecture&&bSaneTransform)?LoadObject<UStaticMesh>(nullptr,*Asset):nullptr;
+        const FVector RawSize=CandidateMesh?CandidateMesh->GetBounds().BoxExtent*2.0f:FVector::ZeroVector;
+        const FVector WorldSize=RawSize*Sc.GetAbs();
+        const bool bSaneWorldSize=CandidateMesh&&WorldSize.GetAbsMax()<=2400.0f&&WorldSize.Z<=1800.0f;
+        if(!bApprovedArchitecture || !bSaneTransform || !bSaneWorldSize) continue;
         AStaticMeshActor* A=SpawnStaticMeshAsset(FString::Printf(TEXT("RestoredBuild_%03d"),I),Asset,L,Sc,T.Rotator(),true,true);
         if(A) RegisterBuildActor(A,Asset);
     }
@@ -2989,7 +4679,7 @@ void ACubetownDirector::RestoreSavedBuilds()
 void ACubetownDirector::CycleBlock()
 {
     // Kept for backwards-compatible save data; no player-facing block construction is exposed.
-    QuestStatus = TEXT("CUBETOWN DOES NOT USE BLOCK BUILDING // PRESS B FOR ARCHITECTURE OR HOLD Q FOR CREATION MAGIC");
+    QuestStatus = TEXT("SHADOWBEARER USES MEMORYCRAFT, NOT BLOCK PLACEMENT // PRESS B FOR ARCHITECTURE OR HOLD Q FOR CREATION MAGIC");
 }
 
 void ACubetownDirector::CycleEcho()
@@ -3110,6 +4800,50 @@ void ACubetownDirector::ClearCreations(){EndWeave();int32 Removed=0;for(TWeakObj
 
 void ACubetownDirector::InteractNearby(const FVector& HeroLocation)
 {
+    for(TActorIterator<AStaticMeshActor> It(GetWorld());It;++It)
+    {
+        if(It->ActorHasTag(TEXT("Shadowbearer.DeliveryShrine")) &&
+           FVector::DistSquared2D(HeroLocation,It->GetActorLocation())<=FMath::Square(390.0f) &&
+           ShadowbearerWorldState==EShadowbearerWorldState::Dawn && OpeningQuestStep>=1)
+        {
+            bLanternComponentDelivered=true;
+            OpeningQuestStep=2;
+            SetShadowbearerWorldState(EShadowbearerWorldState::Omen,
+                TEXT("SERA'S DAWNLANTERN COMPONENT DELIVERED // SOMETHING PALE IS WAITING ON THE ROAD"));
+            return;
+        }
+        if(It->ActorHasTag(TEXT("Shadowbearer.FirstShadow")) && IsShadowfallActive() &&
+           !bFirstShadowSolidified && FVector::DistSquared2D(HeroLocation,It->GetActorLocation())<=FMath::Square(520.0f))
+        {
+            SolidifyFirstShadow();
+            return;
+        }
+        if(It->ActorHasTag(TEXT("Shadowbearer.RestorationLamp")) && IsShadowfallActive() &&
+           bFirstShadowSolidified && !bBramblewickLampRestored &&
+           FVector::DistSquared2D(HeroLocation,It->GetActorLocation())<=FMath::Square(420.0f))
+        {
+            RestoreBramblewickLamp();
+            return;
+        }
+    }
+    for(TActorIterator<AStaticMeshActor> It(GetWorld());It;++It)
+    {
+        if(!It->ActorHasTag(TEXT("Cubetown.Forge"))||FVector::DistSquared2D(HeroLocation,It->GetActorLocation())>FMath::Square(390.0f))continue;
+        if(ForgeTier>=3)
+        {
+            QuestStatus=TEXT("HEARTSTONE FORGE MASTERED // PHANTOMITE REGENERATES TO FULL POWER");
+            return;
+        }
+        const int32 NextTier=ForgeTier+1;
+        const int32 StoneCost=4+NextTier*2;
+        const int32 AmberCost=2+NextTier;
+        if(!SpendBuildMaterials(0,StoneCost,AmberCost,FString::Printf(TEXT("FORGE TIER %d"),NextTier)))return;
+        ForgeTier=NextTier;
+        EchoEnergy=FMath::Min(100,EchoEnergy+20+ForgeTier*5);
+        QuestStatus=FString::Printf(TEXT("FORGE TIER %d COMPLETE // PHANTOMITE RESTORED // NEW BUILD STRENGTH UNLOCKED"),ForgeTier);
+        SaveProgress();
+        return;
+    }
     ACubetownVillager* NearestVillager = nullptr;
     float BestDistance = FMath::Square(285.0f);
     for (const TWeakObjectPtr<ACubetownVillager>& Entry : Villagers)
@@ -3155,6 +4889,28 @@ void ACubetownDirector::InteractNearby(const FVector& HeroLocation)
 
 FString ACubetownDirector::GetInteractionPrompt(const FVector& HeroLocation) const
 {
+    for(TActorIterator<AStaticMeshActor> It(GetWorld());It;++It)
+    {
+        if(It->ActorHasTag(TEXT("Shadowbearer.DeliveryShrine")) &&
+           ShadowbearerWorldState==EShadowbearerWorldState::Dawn && OpeningQuestStep>=1 &&
+           FVector::DistSquared2D(HeroLocation,It->GetActorLocation())<=FMath::Square(440.0f))
+            return TEXT("[E] DELIVER SERA'S DAWNLANTERN COMPONENT");
+        if(It->ActorHasTag(TEXT("Shadowbearer.FirstShadow")) && IsShadowfallActive() && !bFirstShadowSolidified &&
+           FVector::DistSquared2D(HeroLocation,It->GetActorLocation())<=FMath::Square(560.0f))
+            return EchoEnergy>=12?TEXT("[E] PROJECT LIGHT // SOLIDIFY SHADOW  //  12 PHANTOMITE"):
+                FString::Printf(TEXT("NEED %d MORE PHANTOMITE TO HOLD THE SHADOW"),12-EchoEnergy);
+        if(It->ActorHasTag(TEXT("Shadowbearer.RestorationLamp")) && IsShadowfallActive() &&
+           bFirstShadowSolidified && !bBramblewickLampRestored &&
+           FVector::DistSquared2D(HeroLocation,It->GetActorLocation())<=FMath::Square(460.0f))
+            return TEXT("[E] RELIGHT THE BRAMBLEWICK DAWNLAMP");
+    }
+    for(TActorIterator<AStaticMeshActor> It(GetWorld());It;++It)
+    {
+        if(!It->ActorHasTag(TEXT("Cubetown.Forge"))||FVector::DistSquared2D(HeroLocation,It->GetActorLocation())>FMath::Square(430.0f))continue;
+        if(ForgeTier>=3)return TEXT("[E] HEARTSTONE FORGE  //  MASTERED");
+        const int32 NextTier=ForgeTier+1;
+        return FString::Printf(TEXT("[E] FORGE TIER %d  //  STONE %d  AMBER %d"),NextTier,4+NextTier*2,2+NextTier);
+    }
     for(const TWeakObjectPtr<AStaticMeshActor>& Ref:MemorySources)
     {
         const AStaticMeshActor* Source=Ref.Get();if(!Source||FVector::DistSquared2D(HeroLocation,Source->GetActorLocation())>FMath::Square(360.0f))continue;
@@ -3195,6 +4951,54 @@ FString ACubetownDirector::GetInteractionPrompt(const FVector& HeroLocation) con
 
 FString ACubetownDirector::GetObjectiveMarker(const FVector& HeroLocation) const
 {
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Restored&&CanonicalChapter>=8)
+    {
+        if(bPostgameUnlocked)return TEXT("THE FIRST ECLIPSE // RESTORE THE WORLD // NIGHTSPINE [T] // VESTIGE [H]");
+        FVector Target=FVector::ZeroVector;FString Label;
+        if(CanonicalChapter==11||CanonicalChapter==17){Target=FVector(0,27000,HeroLocation.Z);Label=TEXT("REMNANT ESTATE");}
+        else if(CanonicalChapter==13){Target=FVector(0,-6100,HeroLocation.Z);Label=TEXT("BRING A LIVING SHADOW HOME");}
+        else if(CanonicalChapter==15){Target=CanonicalBossLocation(4);Label=TEXT("ENTER VESPERHOLD");}
+        else
+        {
+            const int32 Required[]={8,10,12,14,16,18};int32 BossIndex=5;
+            for(int32 I=0;I<6;++I)if(CanonicalChapter>=Required[I]&&(ReturnedSoulMask&(1u<<I))==0u){BossIndex=I;break;}
+            Target=CanonicalBossLocation(BossIndex);Label=CanonicalBossName(CanonicalBossForIndex(BossIndex));
+        }
+        return FString::Printf(TEXT("%s  //  %d M"),*Label,FMath::RoundToInt(FVector::Dist2D(HeroLocation,Target)/100.0f));
+    }
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Dawn && OpeningQuestStep==0)
+    {
+        const FVector Target(-650,-5250,HeroLocation.Z);
+        return FString::Printf(TEXT("FIND SERA  //  %d M"),FMath::RoundToInt(FVector::Dist2D(HeroLocation,Target)/100.0f));
+    }
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Dawn && OpeningQuestStep>=1)
+    {
+        const FVector Target(0,-450,HeroLocation.Z);
+        return FString::Printf(TEXT("DELIVER THE DAWNLANTERN COMPONENT  //  %d M"),FMath::RoundToInt(FVector::Dist2D(HeroLocation,Target)/100.0f));
+    }
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Omen)
+    {
+        const FVector Target(0,1500,HeroLocation.Z);
+        return bPaleWardenEncountered?TEXT("THE PALE WARDEN // THIS FIGHT CHANGES EVERYTHING"):
+            FString::Printf(TEXT("FOLLOW THE SILENT ROAD  //  %d M"),FMath::RoundToInt(FVector::Dist2D(HeroLocation,Target)/100.0f));
+    }
+    if(IsShadowfallActive() && !bFirstShadowSolidified)
+    {
+        const FVector Target(0,-3000,HeroLocation.Z);
+        return FString::Printf(TEXT("SOLIDIFY THE FIRST SHADOW  //  %d M"),FMath::RoundToInt(FVector::Dist2D(HeroLocation,Target)/100.0f));
+    }
+    if(IsShadowfallActive() && !bBramblewickLampRestored)
+    {
+        const FVector Target(0,-4700,HeroLocation.Z);
+        return FString::Printf(TEXT("RELIGHT BRAMBLEWICK  //  %d M"),FMath::RoundToInt(FVector::Dist2D(HeroLocation,Target)/100.0f));
+    }
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Restored)
+        return TEXT("DAWN RETURNED // FIND WHAT THE SHADOW LEFT BEHIND");
+    if (HeroLocation.Y > 1900.0f && !bGuardianDefeated)
+    {
+        const float Distance = FVector::Dist2D(HeroLocation, FVector(0.0f, 4400.0f, HeroLocation.Z));
+        return FString::Printf(TEXT("DEFEAT LAIR GUARDIAN  //  %d M"), FMath::RoundToInt(Distance / 100.0f));
+    }
     const bool bFriendIntroComplete = Friendship.Num() >= 3 && Friendship[0] > 0 && Friendship[1] > 0 && Friendship[2] > 0;
     if (!bFriendIntroComplete)
     {
@@ -3245,10 +5049,49 @@ FString ACubetownDirector::GetObjectiveMarker(const FVector& HeroLocation) const
 void ACubetownDirector::TalkToVillager(ACubetownVillager* Villager)
 {
     if (!Villager) return;
-    const int32 Index = FMath::Clamp(static_cast<int32>(Villager->GetFriendType()), 0, 2);
+    const ECubetownFriend Friend=Villager->GetFriendType();
+    const int32 RawIndex=static_cast<int32>(Friend);
+    const int32 Index=FMath::Clamp(RawIndex,0,2);
     if (Friendship.Num() < 3) Friendship.SetNumZeroed(3);
     if (FriendTalkCooldowns.Num() < 3) FriendTalkCooldowns.SetNumZeroed(3);
-    const TCHAR* Name = FriendName(Villager->GetFriendType());
+    const TCHAR* Name=FriendName(Friend);
+
+    if(Friend==ECubetownFriend::Sera && ShadowbearerWorldState==EShadowbearerWorldState::Dawn && OpeningQuestStep==0)
+    {
+        OpeningQuestStep=1;
+        EchoEnergy=FMath::Max(EchoEnergy,24);
+        QuestStatus=TEXT("SERA: TRY NOT TO TURN A TEN-MINUTE WALK INTO AN ADVENTURE // TAKE THE BRASS MECHANISM TO THE LANTERN SHRINE BEYOND SUNPETAL MEADOW");
+        SaveProgress();
+        return;
+    }
+    if(IsShadowfallActive())
+    {
+        if(Friend==ECubetownFriend::Sera)
+            QuestStatus=bFirstShadowSolidified
+                ? TEXT("SERA: YOU GAVE THE DARKNESS WEIGHT // NOW BRING THAT SHADOW TO THE DEAD DAWNLAMP")
+                : TEXT("SERA: THE WORLD TURNED WHERE YOU FELL // PROJECT LIGHT, THEN STEP ON THE SHADOW IT CASTS");
+        else
+            QuestStatus=FString::Printf(TEXT("%s IS SHELTERED INSIDE // RESTORE BRAMBLEWICK TO BRING THEM HOME"),Name);
+        return;
+    }
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Restored && RawIndex>=3)
+    {
+        static const TCHAR* RestoredLines[]={
+            TEXT("VARA: THE FORGE IS WARM AGAIN. I WILL MAKE WHAT THIS NEW WORLD NEEDS."),
+            TEXT("BRANN: I CAN REBUILD WALLS. I CANNOT PRETEND THEY WERE NEVER BROKEN."),
+            TEXT("ORIN: LIGHT REVEALS SHAPE. SHADOW REVEALS WHAT SHAPE CAN BECOME.")};
+        QuestStatus=RestoredLines[FMath::Clamp(RawIndex-3,0,2)];
+        return;
+    }
+    if(RawIndex>=3)
+    {
+        static const TCHAR* DawnLines[]={
+            TEXT("VARA: THE FORGE IS TOO HOT, THE FESTIVAL IS TOO CLOSE, AND BRANN STILL OWES ME GOOD OAK."),
+            TEXT("BRANN: MARKET RAIL IS FIXED. TELL MARA I USED THE GOOD OAK."),
+            TEXT("ORIN: A LANTERN DOES NOT FIGHT DARKNESS, ZANE. IT DEFINES AN EDGE.")};
+        QuestStatus=DawnLines[FMath::Clamp(RawIndex-3,0,2)];
+        return;
+    }
 
     if (FriendTalkCooldowns[Index] > 0.0f)
     {
@@ -3260,22 +5103,22 @@ void ACubetownDirector::TalkToVillager(ACubetownVillager* Villager)
     FriendTalkCooldowns[Index] = 22.0f;
     const int32 Level = Friendship[Index];
 
-    if (Villager->GetFriendType() == ECubetownFriend::Mira)
+    if (Friend == ECubetownFriend::Sera)
     {
         EchoEnergy += 6 + Level * 2;
-        QuestStatus = FString::Printf(TEXT("MIRA FRIENDSHIP %d/5 // SHE SHARES ECHO ENERGY FOR THE ROAD"), Level);
+        QuestStatus = FString::Printf(TEXT("SERA BOND %d/5 // DAWNLANTERN ENERGY SHARED FOR THE ROAD"), Level);
     }
-    else if (Villager->GetFriendType() == ECubetownFriend::Rowan)
+    else if (Friend == ECubetownFriend::Mara)
     {
         Inventory[static_cast<int32>(ECubetownBlockType::Wood)] += 4 + Level;
         Inventory[static_cast<int32>(ECubetownBlockType::Stone)] += 2 + Level / 2;
-        QuestStatus = FString::Printf(TEXT("ROWAN FRIENDSHIP %d/5 // MAKER MATERIALS ADDED TO YOUR KIT"), Level);
+        QuestStatus = FString::Printf(TEXT("MARA BOND %d/5 // REPAIR MATERIALS ADDED TO YOUR KIT"), Level);
     }
     else
     {
         if (ACubetownHero* Hero = Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this, 0))) Hero->RestoreHealth(18.0f + Level * 4.0f);
         if (Level >= 3) Inventory[static_cast<int32>(ECubetownBlockType::Crystal)] += 1;
-        QuestStatus = FString::Printf(TEXT("PIP FRIENDSHIP %d/5 // YOUR HEARTS HAVE BEEN RESTORED"), Level);
+        QuestStatus = FString::Printf(TEXT("TESS BOND %d/5 // YOUR HEARTS HAVE BEEN RESTORED"), Level);
     }
 
     if (Friendship[0] > 0 && Friendship[1] > 0 && Friendship[2] > 0 && StoryChapter < 1) StoryChapter = 1;
@@ -3286,6 +5129,41 @@ void ACubetownDirector::TalkToVillager(ACubetownVillager* Villager)
 
 void ACubetownDirector::RefreshStoryQuest()
 {
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Dawn)
+    {
+        QuestStatus=OpeningQuestStep==0
+            ? TEXT("BRAMBLEWICK MORNING // FIND SERA AT THE VILLAGE LANTERNS")
+            : TEXT("SUNPETAL MEADOW // DELIVER SERA'S BRASS MECHANISM TO THE OLD LANTERN SHRINE");
+        return;
+    }
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Omen)
+    {
+        QuestStatus=bPaleWardenEncountered?TEXT("THE PALE WARDEN // SURVIVE THE LAST MORNING"):
+            TEXT("THE LAST MORNING // FOLLOW THE SILENT ROAD BEYOND BRAMBLEWICK");
+        return;
+    }
+    if(IsShadowfallActive())
+    {
+        QuestStatus=!bFirstShadowSolidified
+            ? TEXT("SHADOWFALL // RETURN TO BRAMBLEWICK // PROJECT LIGHT AND MAKE THE FIRST SHADOW SOLID")
+            : TEXT("SHADOWFALL // CROSS YOUR SOLID SHADOW AND RELIGHT THE BRAMBLEWICK DAWNLAMP");
+        return;
+    }
+    if(ShadowbearerWorldState==EShadowbearerWorldState::Restored)
+    {
+        if(bPostgameUnlocked)QuestStatus=TEXT("POSTGAME // THE FIRST ECLIPSE // NIGHTSPINE [T] // VESTIGE [H] // ALL SYSTEMS UNLOCKED");
+        else if(CanonicalChapter==11)QuestStatus=TEXT("THE REMNANT ESTATE // USE CHRONOS LIGHT WHERE THE HOUSE REMEMBERS");
+        else if(CanonicalChapter==13)QuestStatus=TEXT("LIVING SHADOWS // BRING ONE HOME TO BRAMBLEWICK");
+        else if(CanonicalChapter==15)QuestStatus=TEXT("VESPERHOLD // ENTER THE CITY THAT NEVER TURNS OFF ITS LIGHTS");
+        else if(CanonicalChapter==17)QuestStatus=TEXT("RETURN TO THE REMNANT ESTATE // THE DAWNLANTERN HAS ONE MEMORY LEFT");
+        else if(CanonicalChapter>=18)QuestStatus=TEXT("THE BLACK MERIDIAN // AKTARUS WAITS BENEATH THE VORTEX");
+        else if(CanonicalChapter>=16)QuestStatus=TEXT("THE ECLIPSE SERAPH // ASCEND VESPERHOLD'S HIGHEST TOWER");
+        else if(CanonicalChapter>=14)QuestStatus=TEXT("SKYFALL REACH // CLIMB INTO THE STORM");
+        else if(CanonicalChapter>=12)QuestStatus=TEXT("DEEPWARREN // DESCEND TO THE BURIED SUN");
+        else if(CanonicalChapter>=10)QuestStatus=TEXT("MOURNMARKET // FOLLOW THE SILENT FESTIVAL ROAD");
+        else QuestStatus=TEXT("BELLROOT WOOD // FIND THE CATHEDRAL AND RESTORE THE FIRST DAWN HEART");
+        return;
+    }
     if (Friendship.Num() < 3) Friendship.SetNumZeroed(3);
     if (bGuardianDefeated)
     {
@@ -3293,11 +5171,11 @@ void ACubetownDirector::RefreshStoryQuest()
         if (GetTotalFriendship() >= 12)
         {
             StoryChapter = 4;
-            QuestStatus = TEXT("HEARTSTONE FESTIVAL UNLOCKED // CUBETOWN IS SAFE, YOUR FRIENDS ARE THRIVING, EXPLORE FREELY");
+            QuestStatus = TEXT("BRAMBLEWICK FESTIVAL UNLOCKED // THE TOWN IS SAFE, YOUR FRIENDS ARE THRIVING, EXPLORE FREELY");
         }
         else
         {
-            QuestStatus = TEXT("CUBETOWN RESTORED // DEEPEN FRIENDSHIPS WITH MIRA, ROWAN, AND PIP TO PREPARE THE FESTIVAL");
+            QuestStatus = TEXT("BRAMBLEWICK RESTORED // DEEPEN BONDS WITH SERA, MARA, AND TESS TO PREPARE THE FESTIVAL");
         }
         return;
     }
@@ -3314,7 +5192,7 @@ void ACubetownDirector::RefreshStoryQuest()
         return;
     }
     StoryChapter = 0;
-    QuestStatus = TEXT("WELCOME TO HEARTSTONE VILLAGE // [E] TALK TO MIRA, ROWAN, AND PIP");
+    QuestStatus = TEXT("WELCOME TO BRAMBLEWICK // [E] TALK TO SERA, MARA, AND TESS");
 }
 
 void ACubetownDirector::ActivateNearbyShrine(const FVector& HeroLocation)
@@ -3337,7 +5215,7 @@ void ACubetownDirector::ActivateNearbyShrine(const FVector& HeroLocation)
         if (ShrinesRestored >= 3 && !bGuardianSpawned && !bGuardianDefeated)
         {
             bGuardianSpawned = true;
-            SpawnEnemy(ECubetownEnemyType::RiftGuardian, FVector(22000.0f, 17000.0f, 155.0f), WorldCycle + 3);
+            SpawnEnemy(ECubetownEnemyType::RiftGuardian, FVector(0.0f, 3900.0f, 155.0f), WorldCycle + 3);
             StoryChapter = FMath::Max(StoryChapter, 2);
             QuestStatus = TEXT("THE RIFT GUARDIAN AWAKENS // DEFEND HEARTSTONE VILLAGE WITH YOUR ECHO COMPANION");
         }
@@ -3374,9 +5252,18 @@ void ACubetownDirector::SpawnEnemyWave()
     QuestStatus = FString::Printf(TEXT("WORLD CYCLE %d // NEW CREATURE ECHOES HAVE EMERGED"), WorldCycle);
 }
 
-void ACubetownDirector::RegisterEnemyDefeat(ECubetownEnemyType Type)
+void ACubetownDirector::RegisterEnemyDefeat(ECubetownEnemyType Type,const FVector& DefeatLocation)
 {
     EnemiesAlive = FMath::Max(0, EnemiesAlive - 1);
+    if(IsCanonicalBoss(Type))
+    {
+        ActiveStoryBoss.Reset();
+        if(Type==ECubetownEnemyType::Aktarus)
+            BeginStoryCinematic(EShadowbearerCinematic::AktarusDefeat,Type,DefeatLocation);
+        else
+            BeginStoryCinematic(EShadowbearerCinematic::ReturnedSoul,Type,DefeatLocation);
+        return;
+    }
     if (Type == ECubetownEnemyType::RiftGuardian)
     {
         bGuardianDefeated = true;
@@ -3401,8 +5288,25 @@ void ACubetownDirector::RegisterEnemyDefeat(ECubetownEnemyType Type)
 
 void ACubetownDirector::NotifyHeroDefeated()
 {
+    if(IsOpeningStoryDefeatActive())
+    {
+        if(ACubetownEnemy* Warden=PaleWarden.Get())
+        {
+            Warden->Destroy();
+            EnemiesAlive=FMath::Max(0,EnemiesAlive-1);
+        }
+        PaleWarden.Reset();
+        OpeningQuestStep=3;
+        TimeOfDayHours=1.35f;
+        EchoEnergy=FMath::Max(EchoEnergy,24);
+        SetShadowbearerWorldState(EShadowbearerWorldState::Shadowfall,
+            TEXT("THE PALE WARDEN: \"The dawn has already ended.\" // BLACK // SHADOWFALL // YOU AWAKEN WHERE YOU FELL // RETURN TO BRAMBLEWICK"));
+        if(APlayerController* PC=GetWorld()?GetWorld()->GetFirstPlayerController():nullptr)
+            if(PC->PlayerCameraManager)PC->PlayerCameraManager->StartCameraFade(1.0f,0.0f,1.8f,FLinearColor(0.025f,0.01f,0.06f),false,true);
+        return;
+    }
     EchoEnergy = FMath::Max(0, EchoEnergy - 15);
-    QuestStatus = TEXT("THE MAKER REAWAKENS AT THE HEARTSTONE // 15 ECHO ENERGY LOST");
+    QuestStatus = TEXT("THE SHADOWBEARER REAWAKENS AT BRAMBLEWICK // 15 PHANTOMITE LOST");
 }
 
 void ACubetownDirector::PulseNearbyEnemies(const FVector& Origin, float Radius, float Damage, AActor* DamageCauser)
@@ -3467,6 +5371,31 @@ void ACubetownDirector::LoadProgress()
         Friendship = Save->Friendship;
         if (Friendship.Num() < 3) Friendship.SetNumZeroed(3);
         StoryChapter = FMath::Clamp(Save->StoryChapter, 0, 4);
+        ForgeTier = FMath::Clamp(Save->ForgeTier, 0, 3);
+        PlayerName=Save->PlayerName.IsEmpty()?TEXT("Zane"):Save->PlayerName;
+        const uint8 RawShadowState=Save->ShadowbearerWorldState;
+        ShadowbearerWorldState=RawShadowState<=static_cast<uint8>(EShadowbearerWorldState::Restored)
+            ? static_cast<EShadowbearerWorldState>(RawShadowState):EShadowbearerWorldState::Dawn;
+        OpeningQuestStep=FMath::Clamp(Save->OpeningQuestStep,0,5);
+        bLanternComponentDelivered=Save->bLanternComponentDelivered;
+        bPaleWardenEncountered=Save->bPaleWardenEncountered;
+        bFirstShadowSolidified=Save->bFirstShadowSolidified;
+        bBramblewickLampRestored=Save->bBramblewickLampRestored;
+        CanonicalChapter=FMath::Clamp(Save->CanonicalChapter,1,22);
+        bPrologueSeen=Save->bPrologueSeen;
+        ReturnedSoulMask=Save->ReturnedSoulMask&0x3fu;
+        ArmamentMask=Save->ArmamentMask&0x3fu;
+        MemoryMask=Save->MemoryMask&0x3fu;
+        EquippedArmament=FMath::Clamp(Save->EquippedArmament,-1,5);
+        bNightspineOwned=Save->bNightspineOwned;
+        bVestigeOwned=Save->bVestigeOwned;
+        bVestigeEquipped=Save->bVestigeEquipped&&bVestigeOwned;
+        bFirstEclipseUnlocked=Save->bFirstEclipseUnlocked;
+        bEclipsedDawnlantern=Save->bEclipsedDawnlantern;
+        bPostgameUnlocked=Save->bPostgameUnlocked;
+        if(Save->ShadowbearerSaveVersion<2)
+            CanonicalChapter=ShadowbearerWorldState==EShadowbearerWorldState::Restored?8:1;
+        LoadedBuildSchemaVersion=Save->BuildSchemaVersion;
         SavedBuildAssetPaths=Save->BuildAssetPaths; SavedBuildTransforms=Save->BuildTransforms; TimeOfDayHours=Save->TimeOfDayHours;
         if (!bBladeUnlocked && !bBoulderUnlocked && !bBloomUnlocked)
         {
@@ -3500,6 +5429,28 @@ void ACubetownDirector::SaveProgress()
     Save->CreationUnlockMask = CreationUnlockMask;
     Save->Friendship = Friendship;
     Save->StoryChapter = StoryChapter;
+    Save->ForgeTier = ForgeTier;
+    Save->PlayerName=PlayerName;
+    Save->ShadowbearerSaveVersion=2;
+    Save->ShadowbearerWorldState=static_cast<uint8>(ShadowbearerWorldState);
+    Save->OpeningQuestStep=OpeningQuestStep;
+    Save->bLanternComponentDelivered=bLanternComponentDelivered;
+    Save->bPaleWardenEncountered=bPaleWardenEncountered;
+    Save->bFirstShadowSolidified=bFirstShadowSolidified;
+    Save->bBramblewickLampRestored=bBramblewickLampRestored;
+    Save->CanonicalChapter=CanonicalChapter;
+    Save->bPrologueSeen=bPrologueSeen;
+    Save->ReturnedSoulMask=ReturnedSoulMask;
+    Save->ArmamentMask=ArmamentMask;
+    Save->MemoryMask=MemoryMask;
+    Save->EquippedArmament=EquippedArmament;
+    Save->bNightspineOwned=bNightspineOwned;
+    Save->bVestigeOwned=bVestigeOwned;
+    Save->bVestigeEquipped=bVestigeEquipped;
+    Save->bFirstEclipseUnlocked=bFirstEclipseUnlocked;
+    Save->bEclipsedDawnlantern=bEclipsedDawnlantern;
+    Save->bPostgameUnlocked=bPostgameUnlocked;
+    Save->BuildSchemaVersion = CubetownBuildSchemaVersion;
     Save->TimeOfDayHours=TimeOfDayHours; Save->BuildAssetPaths.Reset(); Save->BuildTransforms.Reset();
     for(const TWeakObjectPtr<AActor>& Ref:PlayerBuildables)
     {

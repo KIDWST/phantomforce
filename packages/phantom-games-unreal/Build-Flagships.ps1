@@ -111,7 +111,7 @@ function Invoke-NativeChecked([string]$Exe,[string[]]$Arguments,[string]$Label){
 function Invoke-PortfolioStaticValidators {
     $Python = Get-Command python.exe -ErrorAction SilentlyContinue
     if(-not $Python){throw 'Python 3 is required for the PhantomPlay portfolio validators.'}
-    foreach($Validator in @('ValidatePortfolioGameplayV14.py','ValidateCubetownMemorycraftV16.py')){
+    foreach($Validator in @('ValidatePortfolioGameplayV14.py','ValidateCubetownMemorycraftV16.py','ValidateShadowbearerDawnsReturnV1.py')){
         $Path = Join-Path $ProjectRoot ("Tools\"+$Validator)
         Invoke-NativeChecked $Python.Source @($Path) ("STATIC PORTFOLIO GATE "+$Validator)
     }

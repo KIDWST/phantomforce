@@ -200,9 +200,9 @@ fn flagship_game_blurb(game_id: &str) -> Option<GameBlurb> {
             "Build a lasting stronghold, command workers and armies, conquer a living fantasy map, and return stronger after every campaign.",
         ),
         "cubetown" => (
-            "Cubetown",
-            "Voxel echo-adventure and creative builder",
-            "Mine and rebuild a handcrafted block island, capture creature echoes, restore Wisdom Shrines, and defeat the Rift Guardian with your own solutions.",
+            "Shadowbearer: Dawn's Return",
+            "Storybook action-adventure of light, shadow, and remembered worlds",
+            "Begin in Bramblewick before Shadowfall, survive the Pale Warden, restore five fallen guardians and their armaments, uncover Aktarus's history, and carry both light and darkness through the Black Meridian into Dawn's Return.",
         ),
         _ => return None,
     };
