@@ -17,6 +17,7 @@ const studioSource = fs.readFileSync(path.join(shellSourceRoot, "studio.rs"), "u
 const historySource = fs.readFileSync(path.join(shellSourceRoot, "project_history.rs"), "utf8");
 const buildSource = fs.readFileSync(path.join(shellRoot, "build.rs"), "utf8");
 const bundleConfig = fs.readFileSync(path.join(shellRoot, "Dioxus.toml"), "utf8");
+const packageManifest = JSON.parse(fs.readFileSync(path.join(shellRoot, "package.json"), "utf8"));
 const windowsInstaller = fs.readFileSync(
   path.join(shellRoot, "installer", "PhantomPlay.nsi"),
   "utf8",
@@ -51,6 +52,11 @@ for (const [label, source, contract] of [
   ["Windows uninstall icon", windowsInstaller, "!define MUI_UNICON"],
   ["Windows Apps display icon", windowsInstaller, '"DisplayIcon" "$INSTDIR\\{{main_binary_name}},0"'],
   ["Windows shortcut icon", windowsInstaller, '"" "$INSTDIR\\{{main_binary_name}}" 0'],
+  ["canonical Shadowbearer desktop title", mainSource, '"Shadowbearer: Dawn\'s Return"'],
+  ["shared public project title helper", mainSource, "fn public_game_title(game: &GameEntry) -> &str"],
+  ["project rail uses public titles", studioSource, '"{public_game_title(&game)}"'],
+  ["workspace chrome uses public titles", studioSource, '"{public_game_title(game)}"'],
+  ["desktop diagnostic uses package version", studioSource, 'env!("CARGO_PKG_VERSION")'],
 ]) {
   if (!source.includes(contract)) {
     throw new Error(`PhantomPlay desktop shell is missing ${label}: ${contract}`);
@@ -63,6 +69,15 @@ if (studioSource.includes("disabled: playing_entry().is_none()")) {
 
 if (!studioSource.includes('disabled: ai_busy(),')) {
   throw new Error("PhantomPlay Apply must remain clickable when configuration is missing so it can explain the exact blocker.");
+}
+
+const cargoVersion = fs.readFileSync(manifest, "utf8").match(/^version = "([^"]+)"/mu)?.[1];
+const bundleVersion = bundleConfig.match(/^version = "([^"]+)"/mu)?.[1];
+if (!cargoVersion || cargoVersion !== bundleVersion || cargoVersion !== packageManifest.version) {
+  throw new Error(`PhantomPlay package versions are out of sync: Cargo=${cargoVersion}, Dioxus=${bundleVersion}, package=${packageManifest.version}`);
+}
+if (!bundleConfig.includes(`file_version = "${cargoVersion}.0"`)) {
+  throw new Error(`PhantomPlay Windows file version is not aligned to ${cargoVersion}.0.`);
 }
 
 for (const argumentsList of [

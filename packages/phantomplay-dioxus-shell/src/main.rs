@@ -250,6 +250,13 @@ struct GameBlurb {
     fantasy: String,
 }
 
+fn public_game_title(game: &GameEntry) -> &str {
+    game.blurb
+        .as_ref()
+        .map(|blurb| blurb.title.as_str())
+        .unwrap_or(game.id.as_str())
+}
+
 #[derive(Clone, PartialEq, Debug)]
 struct GameRuntimeProfile {
     renderer: String,
@@ -2258,6 +2265,8 @@ mod tests {
             .iter()
             .find(|game| game.id == "cubetown")
             .expect("cubetown must remain in the catalog");
+        assert_eq!(public_game_title(cubetown), "Shadowbearer: Dawn's Return");
+        assert_ne!(public_game_title(cubetown), "Cubetown");
         assert_eq!(cubetown.runtime.renderer, "Unreal Engine 5");
         assert_eq!(cubetown.runtime.engine, "Unreal Engine 5.8");
         assert!(cubetown.runtime.native);

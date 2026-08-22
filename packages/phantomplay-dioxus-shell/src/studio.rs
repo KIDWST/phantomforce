@@ -981,7 +981,8 @@ pub(crate) fn Studio() -> Element {
         }
         status.set(format!(
             "Opened {} with {} source files.",
-            game.id, game.runtime.file_count
+            public_game_title(&game),
+            game.runtime.file_count
         ));
     };
 
@@ -1051,7 +1052,10 @@ pub(crate) fn Studio() -> Element {
         };
         let entry_path = game_entry_path(&game);
         if entry_path.is_none() && !game.runtime.native {
-            status.set(format!("{} does not have a playable entry file.", game.id));
+            status.set(format!(
+                "{} does not have a playable entry file.",
+                public_game_title(&game)
+            ));
             return;
         }
 
@@ -1575,7 +1579,7 @@ pub(crate) fn Studio() -> Element {
                                     div { class: "project-index", {format!("{:02}", index + 1)} }
                                     div { class: "project-copy",
                                         strong {
-                                            "{game.blurb.as_ref().map(|blurb| blurb.title.clone()).unwrap_or_else(|| game.id.clone())}"
+                                            "{public_game_title(&game)}"
                                         }
                                         span {
                                             if game.meta.hidden {
@@ -1691,7 +1695,7 @@ pub(crate) fn Studio() -> Element {
                                 span { "/" }
                                 strong {
                                     if let Some(game) = project.as_ref() {
-                                        "{game.id}"
+                                        "{public_game_title(game)}"
                                     } else {
                                         "no-project"
                                     }
@@ -1700,7 +1704,7 @@ pub(crate) fn Studio() -> Element {
                             div { class: "workspace-heading",
                                 strong {
                                     if let Some(game) = project.as_ref() {
-                                        "{game.blurb.as_ref().map(|blurb| blurb.title.clone()).unwrap_or_else(|| game.id.clone())}"
+                                        "{public_game_title(game)}"
                                     } else {
                                         "Choose a project"
                                     }
@@ -2845,7 +2849,7 @@ pub(crate) fn Studio() -> Element {
                                     }
                                     div { class: "runtime-fact-grid",
                                         article { span { "LIVE PROJECT ROOT" } strong { "{phantomplay_live_root().display()}" } }
-                                        article { span { "CURRENT PROJECT" } strong { if let Some(game) = project.as_ref() { "{game.id}" } else { "None selected" } } }
+                                        article { span { "CURRENT PROJECT" } strong { if let Some(game) = project.as_ref() { "{public_game_title(game)}" } else { "None selected" } } }
                                         article { span { "RENDERER" } strong { if let Some(game) = project.as_ref() { "{game.runtime.renderer}" } else { "Waiting" } } }
                                         article { span { "API STATE" } strong { {match api_online() { Some(true) => "Online", Some(false) => "Offline", None => "Checking" }} } }
                                     }
@@ -2872,7 +2876,7 @@ pub(crate) fn Studio() -> Element {
                                         }
                                     }
                                     div { class: "diagnostic-list",
-                                        div { span { "PhantomPlay" } strong { "Desktop 0.3.4" } }
+                                        div { span { "PhantomPlay" } strong { {format!("Desktop {}", env!("CARGO_PKG_VERSION"))} } }
                                         div { span { "Local API" } strong { "{api_origin}" } }
                                         div { span { "API status" } strong { {match api_online() { Some(true) => "ONLINE", Some(false) => "OFFLINE", None => "CHECKING" }} } }
                                         div { span { "Primary route" } strong { "{ai_provider}" } }
@@ -2926,7 +2930,7 @@ pub(crate) fn Studio() -> Element {
                     FolderOpen { size: 12 }
                     span {
                         if let Some(game) = project.as_ref() {
-                            "{game.id}"
+                            "{public_game_title(game)}"
                         } else {
                             "workspace"
                         }
