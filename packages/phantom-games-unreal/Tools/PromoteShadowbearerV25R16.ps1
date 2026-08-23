@@ -4,9 +4,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Revision = 'V25R24'
+$Revision = 'V25R25'
 $ProjectRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
-$CandidateRoot = [IO.Path]::GetFullPath((Join-Path $ProjectRoot 'CandidateBuilds\Shadowbearer-Dawns-Return-V25R24\cubetown'))
+$CandidateRoot = [IO.Path]::GetFullPath((Join-Path $ProjectRoot 'CandidateBuilds\Shadowbearer-Dawns-Return-V25R25\cubetown'))
 $WindowsRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'PhantomPlay\Games\Unreal\Windows'))
 $InstalledRoot = [IO.Path]::GetFullPath((Join-Path $WindowsRoot 'cubetown'))
 $BuildsetPath = [IO.Path]::GetFullPath((Join-Path $WindowsRoot 'PHANTOMPLAY_BUILDSET.json'))
@@ -55,7 +55,7 @@ foreach ($Game in @($Previous.games | Where-Object { $_.id -ne 'cubetown' })) {
 }
 
 $Timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$BackupRoot = Assert-Within (Join-Path $BackupParent "shadowbearer-v25r24-$Timestamp") $BackupParent 'Rollback checkpoint'
+$BackupRoot = Assert-Within (Join-Path $BackupParent "shadowbearer-v25r25-$Timestamp") $BackupParent 'Rollback checkpoint'
 $BackupGame = Assert-Within (Join-Path $BackupRoot 'cubetown') $BackupRoot 'Rollback game tree'
 New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
 Copy-Item -LiteralPath $BuildsetPath -Destination (Join-Path $BackupRoot 'PHANTOMPLAY_BUILDSET.json')

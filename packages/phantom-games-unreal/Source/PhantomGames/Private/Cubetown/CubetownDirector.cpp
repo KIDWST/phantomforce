@@ -2668,22 +2668,45 @@ void ACubetownHUD::DrawHUD()
             DrawText(InteractionPrompt,Cream,PromptX+S(18),PromptY+S(11),Medium,S(0.55f));
         }
 
-        if(Director->GetActivePanel()!=0)
+        if(Director->GetActivePanel()==2)
+        {
+            // The approved illustrated map is the geography authority. Display it directly and
+            // aspect-fit it at near-fullscreen size so labels remain readable at 1080p and 4K.
+            DrawRect(FLinearColor(0.002f,0.005f,0.009f,0.94f),0,0,Width,Height);
+            if(UTexture2D* WorldMap=LoadObject<UTexture2D>(nullptr,TEXT("/Game/Phantom/VisualTargets/Shadowbearer_WorldMap_Canonical.Shadowbearer_WorldMap_Canonical")))
+            {
+                const float Margin=S(22.0f);
+                const float MaxW=Width-Margin*2.0f,MaxH=Height-Margin*2.0f;
+                const float TextureAspect=FMath::Max(1.0f,static_cast<float>(WorldMap->GetSizeX()))/FMath::Max(1.0f,static_cast<float>(WorldMap->GetSizeY()));
+                float MapW=MaxW,MapH=MapW/TextureAspect;
+                if(MapH>MaxH){MapH=MaxH;MapW=MapH*TextureAspect;}
+                const float MapX=(Width-MapW)*0.5f,MapY=(Height-MapH)*0.5f;
+                DrawRect(FLinearColor(0.76f,0.58f,0.29f,0.88f),MapX-S(3),MapY-S(3),MapW+S(6),MapH+S(6));
+                DrawTexture(WorldMap,MapX,MapY,MapW,MapH,0,0,1,1,FLinearColor::White,BLEND_Opaque,1.0f,false);
+                const FString Location=FString::Printf(TEXT("YOU ARE HERE // %s"),*Director->GetRegionName(Hero->GetActorLocation()));
+                const float ChipW=S(350.0f),ChipH=S(42.0f),ChipX=MapX+S(18.0f),ChipY=MapY+MapH-ChipH-S(18.0f);
+                DrawRect(FLinearColor(0.005f,0.010f,0.014f,0.90f),ChipX,ChipY,ChipW,ChipH);
+                DrawText(Location,Cyan,ChipX+S(15),ChipY+S(11),Small,S(0.70f));
+                DrawText(TEXT("[M] CLOSE"),Cream,MapX+MapW-S(112),MapY+MapH-S(43),Small,S(0.72f));
+            }
+            else
+            {
+                Panel(S(80),S(80),Width-S(160),Height-S(160),0.97f);
+                DrawText(TEXT("WORLD MAP ASSET UNAVAILABLE"),Ruby,S(120),S(130),Medium,S(0.84f));
+                DrawText(TEXT("REPAIR THE SHADOWBEARER CONTENT PACKAGE"),Cream,S(120),S(190),Medium,S(0.58f));
+            }
+        }
+        else if(Director->GetActivePanel()!=0)
         {
             const float PW=FMath::Min(S(760.0f),Width-S(80.0f)),PH=FMath::Min(S(500.0f),Height-S(80.0f));
             const float PX=(Width-PW)*0.5f,PY=(Height-PH)*0.5f;
             Panel(PX,PY,PW,PH,0.96f);
-            const TCHAR* Title=Director->GetActivePanel()==1?TEXT("FIELD SATCHEL"):Director->GetActivePanel()==2?TEXT("SHADOWBEARER WORLD MAP"):TEXT("ADVENTURE JOURNAL");
+            const TCHAR* Title=Director->GetActivePanel()==1?TEXT("FIELD SATCHEL"):TEXT("ADVENTURE JOURNAL");
             DrawText(Title,Cream,PX+S(34),PY+S(26),Medium,S(0.84f));
             if(Director->GetActivePanel()==1)
             {
                 DrawText(FString::Printf(TEXT("WOOD %d     STONE %d     AMBER %d     CRYSTAL %d"),Director->GetInventory(ECubetownBlockType::Wood),Director->GetInventory(ECubetownBlockType::Stone),Director->GetInventory(ECubetownBlockType::Amber),Director->GetInventory(ECubetownBlockType::Crystal)),Cream,PX+S(38),PY+S(110),Medium,S(0.62f));
                 DrawText(FString::Printf(TEXT("PHANTOMITE %d     MEMORIES %d/9     CREATION LOAD %d/%d"),Director->GetEchoEnergy(),Director->GetUnlockedCreationCount(),Director->GetCreationBudgetUsed(),Director->GetCreationBudgetMax()),Cyan,PX+S(38),PY+S(170),Medium,S(0.60f));
-            }
-            else if(Director->GetActivePanel()==2)
-            {
-                DrawText(TEXT("BRAMBLEWICK  -  DAWNLAMP  -  MARKET  -  SILENT ROAD  -  SHADELINE"),Cream,PX+S(38),PY+S(120),Medium,S(0.55f));
-                DrawText(FString::Printf(TEXT("YOU ARE IN %s"),*Director->GetRegionName(Hero->GetActorLocation())),Cyan,PX+S(38),PY+S(190),Medium,S(0.64f));
             }
             else
             {

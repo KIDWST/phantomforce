@@ -1,0 +1,67 @@
+{
+  "release": "V25R25",
+  "public_title": "Shadowbearer: Dawn's Return",
+  "public_version": "1.0.1-dawns-return",
+  "internal_compatibility_id": "cubetown",
+  "engine": "Unreal Engine 5.8.1",
+  "promoted_at": "2026-08-23",
+  "promoted_utc": "2026-08-23T15:31:38.5664932Z",
+  "promotion_scope": "shadowbearer-only-canonical-world-map",
+  "installed_path": "C:\\Users\\jorda\\AppData\\Local\\PhantomPlay\\Games\\Unreal\\Windows\\cubetown",
+  "rollback_path": "C:\\Users\\jorda\\Documents\\Codex\\backups\\shadowbearer-v25r25-20260823-103137\\cubetown",
+  "candidate": {
+    "relative_path": "CandidateBuilds/Shadowbearer-Dawns-Return-V25R25/cubetown",
+    "file_count": 31,
+    "byte_count": 1090092438,
+    "unexpected_foreign_game_binaries": 0
+  },
+  "installed": {
+    "file_count": 31,
+    "byte_count": 1090092410,
+    "marker": "PHANTOM_V25R25_INSTALLED.txt"
+  },
+  "canonical_world_map": {
+    "source": "Docs/Shadowbearer/ArtBible/Shadowbearer_WorldMap_Canonical.png",
+    "app_asset": "app/assets/phantomplay/shadowbearer-world-map.png",
+    "unreal_asset": "/Game/Phantom/VisualTargets/Shadowbearer_WorldMap_Canonical",
+    "width": 1536,
+    "height": 1024,
+    "source_sha256": "316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C",
+    "app_asset_sha256": "316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C",
+    "unreal_asset_sha256": "7E75CAB6F4A5C83206D8C9B920EDBB7D1B7E1CF8E9B25E962A806959ED7AACFA",
+    "macro_regions": [
+      "Velmor Keep",
+      "Ashenwold",
+      "The Sunken Court",
+      "Stonehelm Mountains",
+      "Duscreach Desert",
+      "The Shattered Coast",
+      "The Black Spire"
+    ],
+    "runtime_contract": "The M-key overlay displays the canonical illustrated map directly with an aspect-fitted gold frame, dark readability scrim, dynamic YOU ARE HERE chip, and explicit close control. Text-only placeholder diagrams are forbidden."
+  },
+  "authority_sha256": {
+    "story_canon": "D3C43A0C8EE25A4893845ABF3DE6B36D14A92A25BD78FD647D5636FC332E0D78",
+    "director_cpp": "83AD10F3FDE2CF9A6DDE60ACC22697EA58EC464C9BED8AD0324F48C4333118D8",
+    "map_importer": "023BE165501079BA9D4EF9592D37BA65D17F69DA7943B850C8446BAD4E2AD2ED",
+    "validator": "B33A6B71BAE288055DEC225969F95EDC298D00F6DBC0CBA5C81CEA0443A493FA"
+  },
+  "package_sha256": {
+    "Cubetown.exe": "693F901BF7B4F9DF9E2FF7954E66BF0443F431A16EE5F6E265351C430A6FF2D5",
+    "Cubetown-Win64-Shipping.exe": "D3B6E663FD69B1B99DA3CF8ACE188A52B080AE7A00B9B6C89713D15045727965",
+    "PhantomGames-Windows.pak": "1FC03E9702BDF06F86521256F71AB8C9FA49A92FF836752B4D2A95CD9CC464DD",
+    "PhantomGames-Windows.ucas": "1F99C3F4956128CB733454B0EF0C8E420CBD563656BB451BDA0C307EDCA46B5D",
+    "PhantomGames-Windows.utoc": "E1CFF531220A5CEA971902E68F493D297C815DC47880D606A48BA59E4B524FBA"
+  },
+  "verification": {
+    "canonical_map_import": "pass",
+    "canonical_story_static_validator": "pass",
+    "unreal_editor_module_compile": "pass",
+    "shipping_cook_and_package": "pass",
+    "candidate_to_installed_critical_hashes": "pass",
+    "retained_phantomplay_game_hashes": "pass",
+    "canonical_map_present_in_installed_container_index": "pass",
+    "rollback_preserved": true,
+    "interactive_playtest": "not_run_owner_requested_do_not_play"
+  }
+}

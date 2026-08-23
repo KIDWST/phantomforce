@@ -11,6 +11,9 @@ HDR = ROOT / "Source/PhantomGames/Public/Cubetown/CubetownDirector.h"
 APP = REPO / "app/js/phantomplay.js"
 SHELL = REPO / "packages/phantomplay-dioxus-shell/src/main.rs"
 REFERENCE = REPO / "app/assets/phantomplay/shadowbearer-cover.png"
+WORLD_MAP = ROOT / "Docs/Shadowbearer/ArtBible/Shadowbearer_WorldMap_Canonical.png"
+WORLD_MAP_ASSET = ROOT / "Content/Phantom/VisualTargets/Shadowbearer_WorldMap_Canonical.uasset"
+WORLD_MAP_WEB = REPO / "app/assets/phantomplay/shadowbearer-world-map.png"
 MANIFEST = ROOT / "Docs/Shadowbearer/ArtBible/REFERENCE_MANIFEST.md"
 CANON = ROOT / "Docs/Shadowbearer/COMPLETE_STORY_CANON.md"
 CAPTURE = ROOT / "Tools/Capture-GameplayProof.ps1"
@@ -22,7 +25,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> int:
-    for path in (CPP, HDR, APP, SHELL, REFERENCE, MANIFEST, CANON, CAPTURE):
+    for path in (CPP, HDR, APP, SHELL, REFERENCE, WORLD_MAP, WORLD_MAP_ASSET, WORLD_MAP_WEB, MANIFEST, CANON, CAPTURE):
         require(path.is_file(), f"missing {path}")
     cpp = CPP.read_text(encoding="utf-8")
     hdr = HDR.read_text(encoding="utf-8")
@@ -58,6 +61,7 @@ def main() -> int:
         "bFirstEclipseUnlocked",
         "bEclipsedDawnlantern",
         "bPostgameUnlocked",
+        "/Game/Phantom/VisualTargets/Shadowbearer_WorldMap_Canonical.Shadowbearer_WorldMap_Canonical",
     ]
     shipped = cpp + "\n" + hdr
     for token in required_runtime:
@@ -131,6 +135,13 @@ def main() -> int:
     require('"Shadowbearer: Dawn\'s Return"' in shell, "desktop catalog still lacks public title")
     require('artUrl("shadowbearer-cover.png")' in app, "web catalog is not using canonical art")
     require(REFERENCE.stat().st_size > 500_000, "canonical reference art is missing or placeholder-sized")
+    expected_map_hash = "316f4351143c36886b350d7aea41d66f2cdc38e836a05ad900ecc0a40df30e1c"
+    require(hashlib.sha256(WORLD_MAP.read_bytes()).hexdigest() == expected_map_hash,
+            "canonical world-map image changed")
+    require(hashlib.sha256(WORLD_MAP_WEB.read_bytes()).hexdigest() == expected_map_hash,
+            "PhantomPlay world-map copy does not match canon")
+    require(WORLD_MAP_ASSET.stat().st_size > 2_000_000,
+            "packaged Unreal world-map texture is missing or placeholder-sized")
     require(cpp.count("{") == cpp.count("}"), "C++ source brace count mismatch")
     require(hdr.count("{") == hdr.count("}"), "C++ header brace count mismatch")
 
@@ -142,6 +153,7 @@ def main() -> int:
     print("PASS: Shadowbearer: Dawn's Return V1 static validation")
     print("cpp_sha256", hashlib.sha256(CPP.read_bytes()).hexdigest())
     print("reference_sha256", hashlib.sha256(REFERENCE.read_bytes()).hexdigest())
+    print("world_map_sha256", hashlib.sha256(WORLD_MAP.read_bytes()).hexdigest())
     print("NOTE: internal cubetown id/target remains intentionally stable for save, install, and launcher compatibility.")
     return 0
 

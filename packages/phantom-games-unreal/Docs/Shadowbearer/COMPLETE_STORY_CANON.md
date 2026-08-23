@@ -20,6 +20,12 @@ This is the sole story authority for the game publicly titled **Shadowbearer: Da
 10. The Ascension merges light and shadow into the Eclipsed Dawnlantern. Zane becomes the First Eclipse / DawnBearer. Dawn's Return restores healthy natural shadows, followed by the walk home and Sera asking whether Zane killed Aktarus. Zane answers, “No. I brought him home.”
 11. The epilogue Dawn Festival continues after sunset. Postgame retains Nightspine, the Vestige, the Eclipsed Dawnlantern, returned boss weapons, divine shadow abilities, restoration, building, side quests, remaining souls, memory shadows, Living Shadows, secret dungeons, and optional bosses.
 
+## Canonical world geography
+
+The user-approved illustrated world map dated 2026-08-23 is the geographic authority. Its seven macro-regions are Velmor Keep, Ashenwold, The Sunken Court, Stonehelm Mountains, Duscreach Desert, The Shattered Coast, and The Black Spire. Existing campaign locations such as Bramblewick, Bellroot Wood, Mournmarket, Deepwarren, Skyfall Reach, Vesperhold, and the Black Meridian remain story locations within that larger geography rather than competing world maps.
+
+The Gloomweaver, Volrund the Icebound, Xilthara the Drowned Queen, and Zyrak the Burning are optional world bosses. They expand exploration and postgame challenge without replacing the five Returned guardian encounters or Aktarus's five-phase finale.
+
 ## Theme gate
 
 The story must never collapse into light-good / dark-evil. Light and darkness are forces. Natural darkness is valuable; excessive light is destructive; corruption and coercion are the enemy. Understanding Aktarus does not forgive him. Zane succeeds by restoring light without destroying darkness and redeeming shadows without surrendering to them.

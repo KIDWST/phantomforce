@@ -5,8 +5,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Revision = 'V25R24'
-$ReleaseName = 'Shadowbearer-Dawns-Return-V25R24'
+$Revision = 'V25R25'
+$ReleaseName = 'Shadowbearer-Dawns-Return-V25R25'
 $ProjectRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
 $Project = Join-Path $ProjectRoot 'PhantomGames.uproject'
 $Artifact = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "BuildArtifacts\$ReleaseName\cubetown"))
@@ -65,7 +65,7 @@ $Marker = Join-Path $Candidate "PHANTOM_${Revision}_CANDIDATE.txt"
     'internal_compatibility_id=cubetown'
     "built=$([DateTime]::UtcNow.ToString('o'))"
     'runtime=native-unreal-engine-5.8'
-    'profile=story-first-action-adventure'
+    'profile=story-first-action-adventure-canonical-world-map'
 ) | Set-Content -LiteralPath $Marker -Encoding UTF8
 
 $Files = @(Get-ChildItem -LiteralPath $Candidate -Recurse -File)

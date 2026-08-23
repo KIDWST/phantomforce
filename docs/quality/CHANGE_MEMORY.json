@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-08-22",
+  "lastUpdated": "2026-08-23",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
@@ -2577,23 +2577,23 @@
     {
       "id": "shadowbearer-dawns-return-promoted-floor",
       "status": "active",
-      "title": "Shadowbearer: Dawn's Return V25R15 remains the promoted native adventure",
-      "ownerDecision": "The former Cubetown compatibility slot now publicly ships as Shadowbearer: Dawn's Return. V25R15 is its documented promoted floor, using the stable internal cubetown identifier only for saves, launcher compatibility, and the installed path. The complete Dawn, Omen, Shadowfall, Restoring, and Restored arc; Bramblewick residents; Pale Warden opening; five Returned guardians; Aktarus history; Black Meridian finale; First Eclipse postgame; production adventure character; reference art; and truthful web/desktop/server identity must remain together. The older public CubeTown/Maker identity cannot silently replace the promoted Shadowbearer release.",
+      "title": "Shadowbearer: Dawn's Return V25R25 remains the promoted canonical-map native adventure",
+      "ownerDecision": "The former Cubetown compatibility slot now publicly ships as Shadowbearer: Dawn's Return. V25R25 is its documented promoted floor, using the stable internal cubetown identifier only for saves, launcher compatibility, and the installed path. The complete Dawn, Omen, Shadowfall, Restoring, and Restored arc; Bramblewick residents; Pale Warden opening; five Returned guardians; Aktarus history; Black Meridian finale; First Eclipse postgame; production adventure character; and truthful web/desktop/server identity must remain together. The owner-approved canonical map with SHA-256 316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C is displayed directly from the M-key overlay and defines the macro-geography of Velmor Keep, Ashenwold, The Sunken Court, Stonehelm Mountains, Duscreach Desert, The Shattered Coast, and The Black Spire. Story locations nest within that geography, optional world bosses do not replace the release-critical story arc, and a text-only or regenerated placeholder map cannot silently replace the approved art. The older public CubeTown/Maker identity cannot silently replace the promoted Shadowbearer release.",
       "requiredPatterns": [
         {
-          "file": "packages/phantom-games-unreal/Docs/Shadowbearer/SHADOWBEARER_V25R15_RELEASE.json",
-          "pattern": "\"release\": \"V25R15\"[\\s\\S]*\"public_title\": \"Shadowbearer: Dawn's Return\"[\\s\\S]*\"internal_compatibility_id\": \"cubetown\"[\\s\\S]*\"promoted_at\": \"2026-08-21\"[\\s\\S]*\"rollback_path\"",
-          "description": "The authoritative release record retains the promoted floor, stable compatibility id, and rollback evidence."
+          "file": "packages/phantom-games-unreal/Docs/Shadowbearer/SHADOWBEARER_V25R25_RELEASE.json",
+          "pattern": "\"release\": \"V25R25\"[\\s\\S]*\"public_title\": \"Shadowbearer: Dawn's Return\"[\\s\\S]*\"internal_compatibility_id\": \"cubetown\"[\\s\\S]*\"promoted_at\": \"2026-08-23\"[\\s\\S]*\"rollback_path\"[\\s\\S]*316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C",
+          "description": "The authoritative release record retains the V25R25 promoted floor, canonical map hash, stable compatibility id, and rollback evidence."
         },
         {
           "file": "docs/phantomplay-production/creative-bibles/cubetown.json",
-          "pattern": "Shadowbearer: Dawn's Return[\\s\\S]*internal compatibility id[\\s\\S]*V25R15[\\s\\S]*Dawn[\\s\\S]*Shadowfall[\\s\\S]*First Eclipse",
-          "description": "The compatibility-slot creative bible reflects the current public game and complete story floor."
+          "pattern": "Shadowbearer: Dawn's Return[\\s\\S]*internal compatibility id[\\s\\S]*V25R25[\\s\\S]*canonical illustrated world map[\\s\\S]*Dawn[\\s\\S]*Shadowfall[\\s\\S]*First Eclipse[\\s\\S]*shadowbearer-world-map[.]png[\\s\\S]*Shadowbearer_WorldMap_Canonical[.]uasset",
+          "description": "The compatibility-slot creative bible reflects the current public game, complete story floor, and canonical map assets."
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp",
-          "pattern": "AdvanceAktarusPhase[\\s\\S]*SK_Rogue\\.SK_Rogue[\\s\\S]*bFirstEclipseUnlocked[\\s\\S]*BuildShadowbearerOpening[\\s\\S]*SpawnPaleWarden",
-          "description": "The promoted native runtime retains the production adventure character and complete Shadowbearer progression."
+          "pattern": "AdvanceAktarusPhase[\\s\\S]*SK_Rogue\\.SK_Rogue[\\s\\S]*Shadowbearer_WorldMap_Canonical[\\s\\S]*bFirstEclipseUnlocked[\\s\\S]*BuildShadowbearerOpening[\\s\\S]*SpawnPaleWarden",
+          "description": "The promoted native runtime retains the production adventure character, canonical map overlay, and complete Shadowbearer progression."
         },
         {
           "file": "app/js/phantomplay.js",
@@ -2607,8 +2607,8 @@
         },
         {
           "file": "packages/phantom-games-unreal/Tools/ValidateShadowbearerDawnsReturnV1.py",
-          "pattern": "COMPLETE_STORY_CANON[\\s\\S]*required_runtime[\\s\\S]*PASS: Shadowbearer: Dawn's Return V1 static validation",
-          "description": "The complete story, identity, and runtime retain a focused executable validator."
+          "pattern": "WORLD_MAP[\\s\\S]*expected_map_hash[\\s\\S]*316f4351143c36886b350d7aea41d66f2cdc38e836a05ad900ecc0a40df30e1c[\\s\\S]*PASS: Shadowbearer: Dawn's Return V1 static validation",
+          "description": "The focused validator protects the complete story, identity, runtime, canonical map copies, exact map hash, and packaged Unreal texture."
         }
       ],
       "forbiddenPatterns": [

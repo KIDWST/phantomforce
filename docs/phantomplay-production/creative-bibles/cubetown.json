@@ -3,14 +3,15 @@
   "game_id": "cubetown",
   "title": "Shadowbearer: Dawn's Return",
   "production_status": "Promoted Unreal Engine 5.8 native adventure; the internal compatibility id remains cubetown for saves and the installed route",
-  "current_floor": "V25R15 Shadowbearer: Dawn's Return promoted release; preserve the complete Dawn-to-First-Eclipse story, native runtime, public identity, reference art, package evidence, and rollback record",
-  "next_target": "Future successors build from the promoted V25R15 floor in an isolated candidate; V25R15 remains the no-regression floor until a newer candidate is verified and promoted",
+  "current_floor": "V25R25 Shadowbearer: Dawn's Return promoted release; preserve the complete Dawn-to-First-Eclipse story, native runtime, public identity, canonical illustrated world map, package evidence, and rollback record",
+  "next_target": "Future successors build from the promoted V25R25 floor in an isolated candidate; V25R25 remains the no-regression floor until a newer candidate is verified and promoted",
   "core_fantasy": "A handcrafted storybook action-adventure where Zane survives Shadowfall, projects light to make shadow physically real, restores five fallen guardians and their armaments, confronts Aktarus at the Black Meridian, and carries light and darkness into Dawn's Return.",
   "design_pillars": [
     "Zane is a readable production adventure character with complete locomotion, guard, dodge, attack, hit, and traversal presentation — never a default pawn or permanently idling mesh.",
     "Projected light, held shadow, Memorycraft, returned souls, and guardian armaments are physical world and combat systems, not passive inventory text.",
     "Bramblewick before and after Shadowfall anchors the emotional arc through Sera, Mara, Tess, Vara, Brann, Orin, and the Pale Warden.",
     "The five Returned guardians and Aktarus history lead into the Black Meridian finale, Dawn's Return, and persistent First Eclipse postgame.",
+    "The canonical illustrated map is the macro-geography shown directly in the M-key world-map overlay: Velmor Keep, Ashenwold, The Sunken Court, Stonehelm Mountains, Duscreach Desert, The Shattered Coast, and The Black Spire. Story locations nest inside those regions; optional world bosses expand the world without replacing the release-critical story arc.",
     "Every opening frame must show authored natural depth, readable traversal, warm light against held shadow, and a clear destination across foreground, midground, and background."
   ],
   "visual_identity": {
@@ -19,7 +20,9 @@
     "hud": "Minimal near-black glass with teal, cream, and controlled gold accents; story, combat tells, objectives, health, and resources stay readable without generic sci-fi chrome or purple-blue gradients.",
     "visual_targets": [
       "app/assets/phantomplay/shadowbearer-cover.png",
-      "packages/phantom-games-unreal/Content/Phantom/VisualTargets/Shadowbearer_TARGET.uasset"
+      "app/assets/phantomplay/shadowbearer-world-map.png",
+      "packages/phantom-games-unreal/Content/Phantom/VisualTargets/Shadowbearer_TARGET.uasset",
+      "packages/phantom-games-unreal/Content/Phantom/VisualTargets/Shadowbearer_WorldMap_Canonical.uasset"
     ]
   },
   "forbidden_crossovers": [
@@ -44,5 +47,5 @@
     "interact": "E",
     "inventory_map_journal": "Tab / M / J"
   },
-  "release_policy": "V25R15 is documented as promoted on 2026-08-21 with a Shadowbearer-only candidate, package hashes, stable compatibility path, and rollback path. Future revisions must package to a new isolated candidate, pass focused gates, and preserve rollback readiness before replacing this floor."
+  "release_policy": "V25R25 is documented as promoted on 2026-08-23 with the canonical map SHA-256 316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C, a Shadowbearer-only candidate, matching installed package hashes, stable compatibility path, and rollback path. Future revisions must package to a new isolated candidate, pass focused gates, preserve the exact map or an explicitly approved successor, and retain rollback readiness before replacing this floor."
 }
