@@ -2024,7 +2024,7 @@
       "id": "phantomplay-control-center-and-native-workspace-floor",
       "status": "active",
       "title": "PhantomPlay keeps every native workspace mode usable and explains AI blockers",
-      "ownerDecision": "Play, Code, and Split must remain clickable for native Unreal projects even when they have no embedded web entry. The desktop app owns a real green-and-black settings control center for connections, exact models, fallback routing, workspace behavior, runtime origin, and diagnostics. Apply stays actionable whenever it is not already running so missing files, instructions, API service, invalid keys, credits, permissions, and provider failures are explained instead of hidden behind a gray button. Provider keys are validated and stored only through the encrypted local PhantomForce vault.",
+      "ownerDecision": "Play, Code, and Split must remain clickable for native Unreal projects even when they have no embedded web entry. The desktop app owns a real green-and-black settings control center for connections, exact models, fallback routing, workspace behavior, runtime origin, and diagnostics. Apply stays actionable whenever it is not already running so missing files, instructions, API service, invalid keys, credits, permissions, and provider failures are explained instead of hidden behind a gray button. Provider keys are validated and stored only through the encrypted local PhantomForce vault. The desktop must wait longer than provider validation can take and refresh saved connection state whenever Settings opens, so a successfully stored OpenRouter key can never remain labeled as an unreachable vault.",
       "requiredPatterns": [
         {
           "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
@@ -2045,6 +2045,16 @@
           "file": "server/src/index.ts",
           "pattern": "\\/api\\/phantomplay\\/connections\\/openrouter[\\s\\S]{0,2200}saveAiProviderCredential\\([\\s\\S]{0,2200}secretReturned: false",
           "description": "OpenRouter setup validates and stores the secret in the encrypted server vault without returning it."
+        },
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "MODEL_SERVICE_TIMEOUT_SECONDS: u64 = 50[\\s\\S]{0,120}CONNECTION_VAULT_TIMEOUT_SECONDS: u64 = 45",
+          "description": "The desktop request windows outlast real provider validation instead of reporting a false vault failure."
+        },
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/studio.rs",
+          "pattern": "Refreshing current connections[\\s\\S]{0,1200}connection_refresh_feedback",
+          "description": "Opening Settings replaces stale vault errors with the current saved connection state."
         }
       ],
       "forbiddenPatterns": [

@@ -8,6 +8,9 @@ use super::studio_icons::{
 use super::*;
 use serde::{Deserialize, Serialize};
 
+const MODEL_SERVICE_TIMEOUT_SECONDS: u64 = 50;
+const CONNECTION_VAULT_TIMEOUT_SECONDS: u64 = 45;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum WorkspaceView {
     Play,
@@ -304,7 +307,9 @@ fn ai_route_status_text(
 async fn request_ai_models(provider: String, api_origin: String) -> AiModelsOutput {
     let fallback = fallback_ai_model_options(&provider);
     let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(6))
+        .timeout(std::time::Duration::from_secs(
+            MODEL_SERVICE_TIMEOUT_SECONDS,
+        ))
         .build()
     {
         Ok(client) => client,
@@ -355,7 +360,9 @@ async fn request_ai_models(provider: String, api_origin: String) -> AiModelsOutp
 
 async fn save_openrouter_connection(api_origin: String, api_key: String) -> Result<String, String> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(12))
+        .timeout(std::time::Duration::from_secs(
+            CONNECTION_VAULT_TIMEOUT_SECONDS,
+        ))
         .build()
         .map_err(|error| error.to_string())?;
     let response = client
@@ -385,7 +392,9 @@ async fn save_openrouter_connection(api_origin: String, api_key: String) -> Resu
 
 async fn delete_openrouter_connection(api_origin: String) -> Result<String, String> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(12))
+        .timeout(std::time::Duration::from_secs(
+            CONNECTION_VAULT_TIMEOUT_SECONDS,
+        ))
         .build()
         .map_err(|error| error.to_string())?;
     let response = client
@@ -463,6 +472,33 @@ async fn run_connection_checks(api_origin: String) -> Vec<ConnectionCheck> {
         });
     }
     checks
+}
+
+fn connection_refresh_feedback(checks: &[ConnectionCheck]) -> String {
+    let api_ready = checks
+        .iter()
+        .find(|check| check.id == "api")
+        .and_then(|check| check.configured);
+    if api_ready != Some(true) {
+        return "Connection refresh complete: the local API is offline and must be repaired before AI edits can run."
+            .to_string();
+    }
+
+    match checks
+        .iter()
+        .find(|check| check.id == "openrouter")
+        .and_then(|check| check.configured)
+    {
+        Some(true) => {
+            "Connections refreshed. OpenRouter is connected and live models are available."
+                .to_string()
+        }
+        Some(false) => {
+            "Connections refreshed. OpenRouter needs attention; review its exact status below."
+                .to_string()
+        }
+        None => "Connections refreshed. Review each current status below.".to_string(),
+    }
 }
 
 fn preferred_file_index(files: &[(PathBuf, String)]) -> Option<usize> {
@@ -881,6 +917,28 @@ pub(crate) fn Studio() -> Element {
         let origin = api_origin();
         spawn(async move {
             api_online.set(Some(check_api_health_at(&origin).await));
+        });
+    });
+
+    use_effect(move || {
+        if !settings_open() {
+            return;
+        }
+
+        let origin = api_origin();
+        connection_checking.set(true);
+        settings_feedback.set("Refreshing current connections...".to_string());
+        spawn(async move {
+            let checks = run_connection_checks(origin).await;
+            let ready = checks
+                .first()
+                .and_then(|check| check.configured)
+                .unwrap_or(false);
+            let feedback = connection_refresh_feedback(&checks);
+            api_online.set(Some(ready));
+            connection_checks.set(checks);
+            connection_checking.set(false);
+            settings_feedback.set(feedback);
         });
     });
 
@@ -2547,14 +2605,11 @@ pub(crate) fn Studio() -> Element {
                                                 spawn(async move {
                                                     let checks = run_connection_checks(origin).await;
                                                     let ready = checks.first().and_then(|check| check.configured).unwrap_or(false);
+                                                    let feedback = connection_refresh_feedback(&checks);
                                                     api_online.set(Some(ready));
                                                     connection_checks.set(checks);
                                                     connection_checking.set(false);
-                                                    settings_feedback.set(if ready {
-                                                        "Connection test complete. Every result below is current.".to_string()
-                                                    } else {
-                                                        "Connection test complete: the local API must be repaired before AI edits can run.".to_string()
-                                                    });
+                                                    settings_feedback.set(feedback);
                                                 });
                                             },
                                             RefreshCw { size: 14, class: if connection_checking() { "is-spinning" } else { "" } }
@@ -4841,6 +4896,37 @@ mod tests {
         );
 
         assert_eq!(status, expected);
+    }
+
+    #[test]
+    fn desktop_connection_timeouts_outlast_provider_validation() {
+        let vault_timeout = std::hint::black_box(CONNECTION_VAULT_TIMEOUT_SECONDS);
+        let model_timeout = std::hint::black_box(MODEL_SERVICE_TIMEOUT_SECONDS);
+        assert!(vault_timeout >= 30);
+        assert!(model_timeout >= vault_timeout);
+    }
+
+    #[test]
+    fn refreshed_connection_feedback_replaces_stale_vault_errors() {
+        let checks = vec![
+            ConnectionCheck {
+                id: "api".to_string(),
+                name: "PhantomForce API".to_string(),
+                configured: Some(true),
+                detail: "Connected securely".to_string(),
+            },
+            ConnectionCheck {
+                id: "openrouter".to_string(),
+                name: "OpenRouter".to_string(),
+                configured: Some(true),
+                detail: "Connected".to_string(),
+            },
+        ];
+
+        assert_eq!(
+            connection_refresh_feedback(&checks),
+            "Connections refreshed. OpenRouter is connected and live models are available."
+        );
     }
 
     #[test]

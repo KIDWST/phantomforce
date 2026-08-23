@@ -70,6 +70,13 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **PhantomPlay connection-status repair (2026-08-22)** — aligns the
+  desktop connection-vault and live-model request windows with real OpenRouter
+  validation time, refreshes saved connection state whenever Settings opens,
+  and replaces stale unreachable-vault messages with the current verified
+  provider status. Native tests pass 43/43, including timeout and stale-status
+  regressions; packaging and installed-client verification are tracked in the
+  release evidence for this change.
 - **PhantomPlay 0.3.4 control center candidate (2026-08-21)** — keeps Play,
   Code, and Split available for Unreal and browser projects; adds native launch
   and side-by-side source workflows; and replaces the shallow settings panel
