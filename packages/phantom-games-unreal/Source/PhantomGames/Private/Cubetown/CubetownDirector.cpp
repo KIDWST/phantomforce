@@ -279,12 +279,15 @@ namespace
     {
         switch (Type)
         {
-            case ECubetownEchoType::Bridge: return TEXT("/Game/Phantom/Curated/Cube/SM_Cube_Bridge.SM_Cube_Bridge");
-            case ECubetownEchoType::TideSpire: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamCrystalCluster_A.SM_CubeDreamCrystalCluster_A");
-            case ECubetownEchoType::SkyPad: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFloatingIsland_A.SM_CubeDreamFloatingIsland_A");
-            case ECubetownEchoType::BlastBloom: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamMushroomCluster_A.SM_CubeDreamMushroomCluster_A");
-            case ECubetownEchoType::GaleTotem: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamWindmill_A.SM_CubeDreamWindmill_A");
-            case ECubetownEchoType::Climbroot: return TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamLandmarkTree_A.SM_CubeDreamLandmarkTree_A");
+            // Only scale-verified meshes may enter the live creation system. Several legacy
+            // generated aliases cook as giant primitive source geometry, so every memory tool now
+            // uses a material-complete native village asset with predictable bounds.
+            case ECubetownEchoType::Bridge: return TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Path_Straight.Path_Straight");
+            case ECubetownEchoType::TideSpire: return TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Well.Well");
+            case ECubetownEchoType::SkyPad: return TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Path_Square.Path_Square");
+            case ECubetownEchoType::BlastBloom: return TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Bonfire_Lit.Bonfire_Lit");
+            case ECubetownEchoType::GaleTotem: return TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Bell_Tower.Bell_Tower");
+            case ECubetownEchoType::Climbroot: return TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Stairs.Stairs");
             default: return TEXT("");
         }
     }
@@ -293,12 +296,12 @@ namespace
     {
         switch (Type)
         {
-            case ECubetownEchoType::Bridge: return FVector(1.05f,1.05f,1.05f);
-            case ECubetownEchoType::TideSpire: return FVector(0.52f,0.52f,1.75f);
-            case ECubetownEchoType::SkyPad: return FVector(0.34f,0.34f,0.18f);
-            case ECubetownEchoType::BlastBloom: return FVector(0.68f);
-            case ECubetownEchoType::GaleTotem: return FVector(0.56f);
-            case ECubetownEchoType::Climbroot: return FVector(0.44f,0.44f,0.80f);
+            case ECubetownEchoType::Bridge: return FVector(4.2f,3.0f,1.0f);
+            case ECubetownEchoType::TideSpire: return FVector(1.15f);
+            case ECubetownEchoType::SkyPad: return FVector(3.4f,3.4f,1.0f);
+            case ECubetownEchoType::BlastBloom: return FVector(1.1f);
+            case ECubetownEchoType::GaleTotem: return FVector(0.82f);
+            case ECubetownEchoType::Climbroot: return FVector(2.2f,2.2f,1.4f);
             default: return FVector(1.0f);
         }
     }
@@ -1342,7 +1345,9 @@ ACubetownHero::ACubetownHero()
     // V8 MAX-FIDELITY articulated hero: guaranteed bundled Y-up parts, preserving the existing animated limb rig.
     UStaticMesh* V8HeroTorso = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Cubetown/V8/Characters/SM_V8_HeroTorso.SM_V8_HeroTorso"));
     UStaticMesh* V8HeroHead  = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Cubetown/V8/Characters/SM_V8_HeroHead.SM_V8_HeroHead"));
-    UStaticMesh* V8HeroCap   = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Cubetown/V8/Characters/SM_V8_HeroCap.SM_V8_HeroCap"));
+    // A matching source-pack hood preserves Zane's silhouette. Its vertices are authored in
+    // skeleton-root space, so it can share the fitted character transform without a second scale.
+    UStaticMesh* V8HeroCap   = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Characters/Production/_Import_SkeletonRogue_GLTF/Skeleton_Rogue/StaticMeshes/Skeleton_Rogue_Hood.Skeleton_Rogue_Hood"));
     UStaticMesh* V8HeroArm   = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Cubetown/V8/Characters/SM_V8_HeroArm.SM_V8_HeroArm"));
     UStaticMesh* V8HeroLeg   = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Cubetown/V8/Characters/SM_V8_HeroLeg.SM_V8_HeroLeg"));
     UStaticMesh* V8HeroWand  = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Phantom/Generated/Cubetown/V8/Characters/SM_V8_HeroWand.SM_V8_HeroWand"));
@@ -1470,8 +1475,8 @@ void ACubetownHero::BeginPlay()
     // V9: spawn facing straight into Heartstone. UE forward is +X; the village is north (+Y)
     // of the spawn. The old zero-yaw start literally pointed the hero at the emptiest side of the map.
     FocusOpeningView(OpeningTarget);
-    // The authored Rogue is the visual fit for CubeTown. Manny remains a verified skeletal
-    // fallback, but must never be the default white mannequin in the shipping fantasy scene.
+    // The authored Rogue is the visual fit for Shadowbearer. Its body and clothing are a single
+    // leader-pose assembly; no independent physics or capsule-attached cosmetic is allowed.
     const bool bRogueHero = ConfigureProductionSkeletalCharacter(
         this,
         TEXT("/Game/Phantom/Characters/Production/SK_Rogue.SK_Rogue"),
@@ -1541,27 +1546,21 @@ void ACubetownHero::BeginPlay()
         WandCore->SetVisibility(false); LeftArm->SetVisibility(false); RightArm->SetVisibility(false);
         LeftLeg->SetVisibility(false); RightLeg->SetVisibility(false); EyeLeft->SetVisibility(false); EyeRight->SetVisibility(false);
         VisualModel->SetVisibility(false);
-        if (bRogueHero && CloakMesh)
+        // A rigid cape cannot deform. The licensed hood, however, is authored in the same
+        // character-root coordinate system and can share the fitted skeletal transform without
+        // physics, gravity, or an independent world-space offset.
+        if (bRogueHero && CapMesh && GetMesh())
         {
-            // The modular Rogue deliberately ships without a skeletal cape part. Reuse the
-            // matching authored GLTF cape at the exact fitted body transform so Zane has the
-            // story silhouette in Dawn instead of reading as a bare prototype pawn.
-            if (UStaticMesh* DawnCloak = LoadObject<UStaticMesh>(
-                nullptr,
-                TEXT("/Game/Phantom/Characters/Production/_Import_Rogue_GLTF/Rogue/StaticMeshes/Rogue_Cape.Rogue_Cape")))
-            {
-                CloakMesh->SetStaticMesh(DawnCloak);
-                CloakMesh->SetRelativeTransform(GetMesh()->GetRelativeTransform());
-                CloakMesh->SetVisibility(true, true);
-            }
-            if (UStaticMesh* DawnHood = LoadObject<UStaticMesh>(
-                nullptr,
-                TEXT("/Game/Phantom/Characters/Production/_Import_SkeletonRogue_GLTF/Skeleton_Rogue/StaticMeshes/Skeleton_Rogue_Hood.Skeleton_Rogue_Hood")))
-            {
-                CapMesh->SetStaticMesh(DawnHood);
-                CapMesh->SetRelativeTransform(GetMesh()->GetRelativeTransform());
-                CapMesh->SetVisibility(true, true);
-            }
+            CapMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+            CapMesh->SetRelativeLocation(FVector::ZeroVector);
+            CapMesh->SetRelativeRotation(FRotator::ZeroRotator);
+            CapMesh->SetRelativeScale3D(FVector::OneVector);
+            CapMesh->SetAbsolute(false, false, false);
+            CapMesh->SetSimulatePhysics(false);
+            CapMesh->SetEnableGravity(false);
+            CapMesh->SetVisibility(true, true);
+            CapMesh->SetHiddenInGame(false, true);
+            CapMesh->ComponentTags.AddUnique(TEXT("Phantom.RootCosmetic"));
         }
     }
 
@@ -1772,12 +1771,37 @@ void ACubetownHero::Tick(float DeltaSeconds)
         const float Distance = FVector::Dist2D(LocomotionProofStart, GetActorLocation());
         const float PitchRange = LocomotionProofMaxPitch - LocomotionProofMinPitch;
         const bool bAnimationsPassed = (LocomotionProofAnimationMask & 0x0f) == 0x0f;
+        TArray<USkeletalMeshComponent*> SkeletalParts;
+        GetComponents<USkeletalMeshComponent>(SkeletalParts);
+        int32 FollowerCount = 0;
+        bool bFollowersBound = true;
+        for (USkeletalMeshComponent* Part : SkeletalParts)
+        {
+            if (!Part || !Part->ComponentTags.Contains(TEXT("Phantom.ModularFollower"))) continue;
+            ++FollowerCount;
+            bFollowersBound = bFollowersBound && Part->GetAttachParent() == GetMesh() &&
+                !Part->IsSimulatingPhysics() &&
+                FVector::DistSquared(Part->GetComponentLocation(), GetMesh()->GetComponentLocation()) < 4.0f;
+        }
+        const float HeadwearRadius = CapMesh ? CapMesh->Bounds.SphereRadius : 0.0f;
+        const bool bBoneCosmeticBound = CapMesh && CapMesh->IsVisible() &&
+            CapMesh->GetAttachParent() == GetMesh() && !CapMesh->IsSimulatingPhysics() &&
+            HeadwearRadius >= 12.0f;
+        const bool bFallbackCosmeticsHidden = BodyMesh && HeadMesh && CloakMesh &&
+            !BodyMesh->IsVisible() && !HeadMesh->IsVisible() && !CloakMesh->IsVisible();
+        const bool bCharacterIntegrityPassed = GetMesh() && GetMesh()->IsVisible() &&
+            GetMesh()->GetSkeletalMeshAsset() && !GetMesh()->IsSimulatingPhysics() &&
+            bFollowersBound && FollowerCount >= 6 && bFallbackCosmeticsHidden && bBoneCosmeticBound;
         const bool bPassed = Distance > 700.0f && LocomotionProofMaxSpeed > 500.0f &&
-            LocomotionProofYawTravel > 150.0f && PitchRange > 35.0f && bAnimationsPassed;
+            LocomotionProofYawTravel > 150.0f && PitchRange > 35.0f && bAnimationsPassed &&
+            bCharacterIntegrityPassed;
         const FString ProofResult = FString::Printf(
-            TEXT("SHADOWBEARER LOCOMOTION RUNTIME %s distance=%.1f max_speed=%.1f yaw_travel=%.1f pitch_range=%.1f animation_mask=0x%02x capsule=%.1fx%.1f"),
+            TEXT("SHADOWBEARER LOCOMOTION + CHARACTER INTEGRITY RUNTIME %s distance=%.1f max_speed=%.1f yaw_travel=%.1f pitch_range=%.1f animation_mask=0x%02x followers=%d followers_bound=%s fallback_hidden=%s bone_cosmetic_bound=%s headwear_radius=%.1f capsule=%.1fx%.1f"),
             bPassed ? TEXT("PASS") : TEXT("FAIL"), Distance, LocomotionProofMaxSpeed,
             LocomotionProofYawTravel, PitchRange, LocomotionProofAnimationMask,
+            FollowerCount, bFollowersBound ? TEXT("true") : TEXT("false"),
+            bFallbackCosmeticsHidden ? TEXT("true") : TEXT("false"),
+            bBoneCosmeticBound ? TEXT("true") : TEXT("false"), HeadwearRadius,
             GetCapsuleComponent()->GetScaledCapsuleRadius(), GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
         UE_LOG(LogTemp, Display, TEXT("%s"), *ProofResult);
         const FString ProofPath = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("ShadowbearerLocomotionProof.txt"));
@@ -2958,7 +2982,10 @@ void ACubetownDirector::BeginPlay()
             );
         }
     }
-    SpawnMemorycraftTrials();
+    // Memorycraft is introduced by the story, not dumped into the prologue as unexplained kit.
+    // This also prevents late-game tool silhouettes from contaminating Bramblewick's first frame.
+    if (CanonicalChapter >= 3 || bFirstShadowSolidified)
+        SpawnMemorycraftTrials();
     if(bVestigeEquipped||bFirstEclipseUnlocked)ApplyPostgameForm();
     if(CaptureState==TEXT("prologue")) BeginStoryCinematic(EShadowbearerCinematic::Prologue,ECubetownEnemyType::Gloomling,FVector(0,-7200,150));
     else if(CaptureState==TEXT("finale")||CaptureState==TEXT("aktarus")) BeginStoryCinematic(EShadowbearerCinematic::AktarusDefeat,ECubetownEnemyType::Aktarus,CanonicalBossLocation(5));
@@ -3161,10 +3188,11 @@ void ACubetownDirector::SpawnMemorycraftTrials()
         if(AStaticMeshActor* Source=SpawnCreationProp(Sources[I].Type,Sources[I].Location,FRotator(0,Sources[I].Yaw,0),true))
             if(APointLight* L=SpawnPointLight(FString::Printf(TEXT("MemoryGlow_%02d"),I),Source->GetActorLocation()+FVector(0,0,120),Sources[I].Glow,900.0f,360.0f,false))DreamNightLights.Add(L);
     }
-    SpawnStaticMeshAsset(TEXT("MemoryTrial_RiverArch"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamAncientArch_A.SM_CubeDreamAncientArch_A"),FVector(8600,-1200,35),FVector(1.25f),FRotator(0,90,0),true,true);
-    SpawnStaticMeshAsset(TEXT("MemoryTrial_SkyIsleA"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFloatingIsland_A.SM_CubeDreamFloatingIsland_A"),FVector(-9200,5200,1050),FVector(0.72f),FRotator(0,12,0),true,false);
-    SpawnStaticMeshAsset(TEXT("MemoryTrial_SkyIsleB"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamFloatingIsland_A.SM_CubeDreamFloatingIsland_A"),FVector(-7200,7000,1720),FVector(0.58f),FRotator(0,-24,0),true,false);
-    SpawnStaticMeshAsset(TEXT("MemoryTrial_WindGate"),TEXT("/Game/Phantom/Generated/Cubetown/Dream/SM_CubeDreamAncientArch_A.SM_CubeDreamAncientArch_A"),FVector(11800,7900,35),FVector(1.05f),FRotator(0,25,0),true,true);
+    // Trial landmarks stay grounded and human-scale. No floating debug islands or generated
+    // kilometer arches are permitted in the live world.
+    SpawnStaticMeshAsset(TEXT("MemoryTrial_RiverGate"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Gazebo.Gazebo"),FVector(8600,-1200,35),FVector(1.4f),FRotator(0,90,0),true,true);
+    SpawnStaticMeshAsset(TEXT("MemoryTrial_HighBell"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Bell_Tower.Bell_Tower"),FVector(-7800,6100,35),FVector(1.1f),FRotator(0,12,0),true,true);
+    SpawnStaticMeshAsset(TEXT("MemoryTrial_WindGate"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Gazebo.Gazebo"),FVector(11800,7900,35),FVector(1.2f),FRotator(0,25,0),true,true);
 }
 
 void ACubetownDirector::SpawnProductionWorldPopulation()
@@ -3485,9 +3513,48 @@ void ACubetownDirector::BuildDreamWorld()
             Settings.bOverride_AmbientOcclusionIntensity = true;
             Settings.AmbientOcclusionIntensity = 1.28f;
         }
-        // The persistent level owns Bramblewick and the story route. A protected, material-safe
-        // HISM pass supplies the rest of the 960 m world so no playable region becomes empty.
-        SpawnProductionWorldPopulation();
+        // The persistent level owns Bramblewick and the story route. Population is composed as
+        // bounded points of interest, never a map-wide filler lattice. The previous pass placed
+        // thousands of rock stand-ins over every visible metre and made the world read as an
+        // asset test. These clusters leave deliberate negative space and keep roads readable.
+        TArray<FTransform> RidgeRocks;
+        TArray<FTransform> FarmRows;
+        TArray<FTransform> CoastMarkers;
+        const FVector RidgeCenters[]={
+            FVector(-25000.0f,12000.0f,14.0f), FVector(24500.0f,14500.0f,14.0f),
+            FVector(-21000.0f,28500.0f,14.0f), FVector(27500.0f,28500.0f,14.0f)};
+        for(int32 C=0; C<UE_ARRAY_COUNT(RidgeCenters); ++C)
+        {
+            for(int32 I=0; I<18; ++I)
+            {
+                const float A=I*2.399963f+C*0.61f;
+                const float R=420.0f+(I%6)*230.0f;
+                RidgeRocks.Emplace(FRotator(0.0f,FMath::RadiansToDegrees(A),0.0f),
+                    RidgeCenters[C]+FVector(FMath::Cos(A)*R,FMath::Sin(A)*R,0.0f),
+                    FVector(0.28f+(I%4)*0.07f));
+            }
+        }
+        for(int32 Row=0; Row<8; ++Row)
+        {
+            for(int32 Column=0; Column<12; ++Column)
+            {
+                FarmRows.Emplace(FRotator(0.0f,0.0f,0.0f),
+                    FVector(-34500.0f+Column*430.0f,-39000.0f+Row*520.0f,14.0f),
+                    FVector(0.22f));
+            }
+        }
+        const FVector CoastCenters[]={FVector(30000.0f,-35000.0f,14.0f),FVector(36000.0f,-28500.0f,14.0f)};
+        for(int32 C=0; C<UE_ARRAY_COUNT(CoastCenters); ++C)
+            for(int32 I=0; I<14; ++I)
+            {
+                const float A=I*(2.0f*PI/14.0f)+C*0.4f;
+                CoastMarkers.Emplace(FRotator(0.0f,I*23.0f,0.0f),
+                    CoastCenters[C]+FVector(FMath::Cos(A)*(650.0f+(I%3)*260.0f),FMath::Sin(A)*(650.0f+(I%3)*260.0f),0.0f),
+                    FVector(0.24f+(I%3)*0.06f));
+            }
+        SpawnInstancedMeshCluster(TEXT("ShadowbearerRidgeRocks_HISM"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Rock_2.Rock_2"),RidgeRocks,false);
+        SpawnInstancedMeshCluster(TEXT("ShadowbearerFarmRows_HISM"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Hay.Hay"),FarmRows,false);
+        SpawnInstancedMeshCluster(TEXT("ShadowbearerCoastMarkers_HISM"),TEXT("/Game/Phantom/External/Quaternius/MedievalVillage/Rock_3.Rock_3"),CoastMarkers,false);
         return;
     }
 

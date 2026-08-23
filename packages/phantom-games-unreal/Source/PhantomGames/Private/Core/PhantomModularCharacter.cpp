@@ -66,6 +66,22 @@ bool PhantomModularCharacter::Configure(
             Parts.Add({FString(Suffix), PartMesh});
         }
     }
+    // Zane's source Rogue set has no cloak part, while the same licensed character pack ships a
+    // skeleton-compatible cloak on the minion rig.  Bind that deforming mesh through the same
+    // leader pose so Shadowbearer has a complete silhouette without reviving the rigid cape that
+    // visibly separated from the body during locomotion.
+    if (Alias.Equals(TEXT("Rogue"), ESearchCase::IgnoreCase))
+    {
+        static const TCHAR* RogueCloakPath =
+            TEXT("/Game/Phantom/Characters/Production/Parts/SK_SkeletonMinion_Cloak.SK_SkeletonMinion_Cloak");
+        if (USkeletalMesh* RogueCloak = LoadObject<USkeletalMesh>(nullptr, RogueCloakPath))
+        {
+            const FBoxSphereBounds Bounds = RogueCloak->GetBounds();
+            MinZ = FMath::Min(MinZ, Bounds.Origin.Z - Bounds.BoxExtent.Z);
+            MaxZ = FMath::Max(MaxZ, Bounds.Origin.Z + Bounds.BoxExtent.Z);
+            Parts.Add({TEXT("Cloak"), RogueCloak});
+        }
+    }
     // A production modular humanoid must include both limbs and a head/skull, not merely a body.
     if (Parts.Num() < 4 && !bAllowMonolithic) return false;
 
@@ -77,6 +93,8 @@ bool PhantomModularCharacter::Configure(
 
     Leader->SetSkeletalMeshAsset(Body);
     Leader->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Leader->SetSimulatePhysics(false);
+    Leader->SetEnableGravity(false);
     Leader->SetRelativeLocation(RelativeLocation);
     Leader->SetRelativeRotation(RelativeRotation);
     Leader->SetRelativeScale3D(RelativeScale);
@@ -88,17 +106,27 @@ bool PhantomModularCharacter::Configure(
         const FName ComponentName(*FString::Printf(TEXT("Production_%s_%s"), *Alias, *Part.Suffix));
         USkeletalMeshComponent* Follower = NewObject<USkeletalMeshComponent>(Owner, ComponentName);
         if (!Follower) continue;
-        Follower->SetupAttachment(AttachParent);
         Follower->SetSkeletalMeshAsset(Part.Mesh);
         Follower->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        Follower->SetRelativeLocation(RelativeLocation);
-        Follower->SetRelativeRotation(RelativeRotation);
-        Follower->SetRelativeScale3D(RelativeScale);
+        Follower->SetSimulatePhysics(false);
+        Follower->SetEnableGravity(false);
+        Follower->SetGenerateOverlapEvents(false);
+        Follower->SetCanEverAffectNavigation(false);
         Follower->SetVisibility(true, true);
         Follower->SetHiddenInGame(false, true);
-        Follower->SetLeaderPoseComponent(Leader, true, false);
+        Follower->ComponentTags.AddUnique(TEXT("Phantom.ModularFollower"));
         Owner->AddInstanceComponent(Follower);
         Follower->RegisterComponent();
+        // Followers share the leader component transform and bone buffer.  Attaching each part
+        // directly to the capsule with a copied transform allowed independent imported roots to
+        // diverge as soon as locomotion changed clips, which looked like Zane's skin and clothes
+        // falling off.  A leader-child hierarchy makes separation physically impossible.
+        Follower->AttachToComponent(Leader, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+        Follower->SetRelativeLocation(FVector::ZeroVector);
+        Follower->SetRelativeRotation(FRotator::ZeroRotator);
+        Follower->SetRelativeScale3D(FVector::OneVector);
+        Follower->SetLeaderPoseComponent(Leader, true, true);
+        Follower->SetBoundsScale(1.25f);
     }
 
     if (UAnimSequence* Idle = LoadObject<UAnimSequence>(nullptr, IdleAnimPath))

@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CPP = ROOT / "Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp"
 HDR = ROOT / "Source/PhantomGames/Public/Cubetown/CubetownDirector.h"
 WORLD_PATCH = ROOT / "Tools/PatchShadowbearerDawnsReturnV25R16.py"
+MODULAR_CPP = ROOT / "Source/PhantomGames/Private/Core/PhantomModularCharacter.cpp"
 
 
 def require(condition: bool, message: str) -> None:
@@ -17,7 +18,8 @@ def main() -> None:
     cpp = CPP.read_text(encoding="utf-8")
     hdr = HDR.read_text(encoding="utf-8")
     world_patch = WORLD_PATCH.read_text(encoding="utf-8")
-    shipped = cpp + "\n" + hdr
+    modular_cpp = MODULAR_CPP.read_text(encoding="utf-8")
+    shipped = cpp + "\n" + hdr + "\n" + modular_cpp
 
     native_contracts = (
         "SpringArm->TargetArmLength = 3300.0f",
@@ -62,6 +64,8 @@ def main() -> None:
     require(cpp.count("++FirstShadowAlignmentStep") == 1, "Dawnlantern puzzle must advance one authored beat per interaction")
     require("Save->FirstShadowAlignmentStep=FirstShadowAlignmentStep" in cpp, "Dawnlantern puzzle progress is not persisted")
     require("build_bramblewick_buildings" in world_patch, "authored Bramblewick districts are missing")
+    require("build_bramblewick_nature" in world_patch and "authored_nature_actors" in world_patch,
+            "authored Bramblewick nature clusters are missing")
     require("authored_districts\": 5" in world_patch, "Bramblewick district gate is missing")
     require("CT_V13_Roadside_" in world_patch and "CT_Tree_" in world_patch,
             "legacy village clutter cleanup is missing")
@@ -72,10 +76,14 @@ def main() -> None:
     require("SM_Sign_A" not in world_patch, "kilometre-scale generated sign remains in the opening")
     require("SM_V10_WarBanner" not in world_patch and "SM_FlowerPatch_A" not in world_patch,
             "ambiguous generated patch assets remain in the Shipping opening")
-    require(cpp.count("SpawnProductionWorldPopulation();") == 1,
-            "material-safe outer-world population is not wired exactly once")
-    require(cpp.count("FMath::Abs(X)<9000.0f && Y>-15000.0f && Y<2500.0f") == 3,
-            "Bramblewick is not protected in every population lattice")
+    require("Shadowbearer.CrossStreet" in world_patch,
+            "homes are still disconnected from the authored street network")
+    require(cpp.count("SpawnProductionWorldPopulation();") == 0,
+            "legacy map-wide filler population is still wired")
+    require("ShadowbearerRidgeRocks_HISM" in cpp and "ShadowbearerFarmRows_HISM" in cpp,
+            "bounded authored outer-world clusters are missing")
+    require("if (CanonicalChapter >= 3 || bFirstShadowSolidified)" in cpp,
+            "late-game memory tools still contaminate the prologue")
     population = cpp.split("void ACubetownDirector::SpawnProductionWorldPopulation()", 1)[1].split(
         "void ACubetownDirector::BuildDreamWorld()", 1)[0]
     for unsafe_asset in ("SM_Cube_Tree_A", "SM_V9_HeartTree", "SM_CC0_Tree_A", "SM_FlowerPatch_A", "SM_Bush_A", "SM_CC0_Bush", "SM_CC0_Flower", "SM_CubeDreamHerbPatch_A"):
@@ -86,6 +94,18 @@ def main() -> None:
                 f"malformed foliage asset remains in the authored opening: {unsafe_opening_asset}")
     require("ShadowbearerFriendGround" in cpp,
             "native villagers are not grounded against authored world geometry")
+    require("Follower->AttachToComponent(Leader" in modular_cpp,
+            "modular character parts are not physically parented to their pose leader")
+    require("Follower->SetLeaderPoseComponent(Leader, true, true)" in modular_cpp,
+            "modular character parts do not share the authoritative bone buffer")
+    require("Follower->SetSimulatePhysics(false)" in modular_cpp,
+            "modular character followers can still enter independent physics")
+    require("SK_SkeletonMinion_Cloak" in modular_cpp and "Parts.Add({TEXT(\"Cloak\")" in modular_cpp,
+            "Zane's skeleton-bound cloak silhouette is missing")
+    require("Phantom.RootCosmetic" in cpp and "CapMesh->AttachToComponent(GetMesh()" in cpp,
+            "Zane's source-authored hood is not attached to the fitted skeletal root")
+    require("Rogue_Cape.Rogue_Cape" not in cpp and "Skeleton_Rogue_Hood.Skeleton_Rogue_Hood" in cpp,
+            "source-authored root-bound hood contract is missing or the rejected rigid cape returned")
 
     normal_camera_values = [float(value) for value in re.findall(r"TargetArmLength\s*=\s*(\d+(?:\.\d+)?)f", cpp)]
     require(3300.0 in normal_camera_values, "authored adventure camera default is absent")
@@ -98,7 +118,8 @@ def main() -> None:
     print("combat", "soft-lock+los+windup+stagger+knockback")
     print("opening_defeat_seconds", 12)
     print("opening_shadow_puzzle", "rotate+align+solidify+persistent")
-    print("opening_world", "5-authored-districts+protected-outer-population+grounded-villagers+measured-asset-bounds")
+    print("opening_world", "5-authored-districts+cross-streets+140-nature-cluster-actors+bounded-poi-clusters+grounded-villagers+measured-asset-bounds")
+    print("character_integrity", "leader-parented+shared-bone-buffer+physics-disabled+root-bound-headwear+deforming-cloak")
     print("cinematic_controls", "mouse+keyboard+gamepad")
 
 

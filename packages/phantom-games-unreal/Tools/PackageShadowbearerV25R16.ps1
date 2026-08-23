@@ -5,8 +5,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Revision = 'V25R16'
-$ReleaseName = 'Shadowbearer-Dawns-Return-V25R16'
+$Revision = 'V25R24'
+$ReleaseName = 'Shadowbearer-Dawns-Return-V25R24'
 $ProjectRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
 $Project = Join-Path $ProjectRoot 'PhantomGames.uproject'
 $Artifact = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "BuildArtifacts\$ReleaseName\cubetown"))
