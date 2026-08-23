@@ -1,0 +1,71 @@
+{
+  "release": "V25R26",
+  "public_title": "Shadowbearer: Dawn's Return",
+  "public_version": "1.0.1-dawns-return",
+  "internal_compatibility_id": "cubetown",
+  "engine": "Unreal Engine 5.8.1",
+  "promoted_at": "2026-08-23",
+  "promoted_utc": "2026-08-23T16:27:01.0379068Z",
+  "promotion_scope": "shadowbearer-startup-playability-and-input-recovery",
+  "installed_path": "C:\\Users\\jorda\\AppData\\Local\\PhantomPlay\\Games\\Unreal\\Windows\\cubetown",
+  "rollback_path": "C:\\Users\\jorda\\Documents\\Codex\\backups\\shadowbearer-v25r26-20260823-112700\\cubetown",
+  "candidate": {
+    "relative_path": "CandidateBuilds/Shadowbearer-Dawns-Return-V25R26/cubetown",
+    "file_count": 31,
+    "byte_count": 1090103193,
+    "unexpected_foreign_game_binaries": 0
+  },
+  "installed": {
+    "file_count": 31,
+    "byte_count": 1090103165,
+    "marker": "PHANTOM_V25R26_INSTALLED.txt"
+  },
+  "startup_contract": {
+    "movement_skip": "WASD or arrow keys exit the prologue directly into gameplay",
+    "explicit_skip": "Escape or gamepad Start exits the prologue directly into gameplay",
+    "story_advance": "E, Space, left mouse, or gamepad A advances one story beat",
+    "input_recovery": "Cinematic completion resets ignored move and look input, restores GameOnly input mode, hides the cursor, enables movement tick, and restores walking movement mode",
+    "proof_save_isolation": "Shadowbearer capture and runtime-proof overrides return before any SaveProgress write"
+  },
+  "canonical_world_map": {
+    "source": "Docs/Shadowbearer/ArtBible/Shadowbearer_WorldMap_Canonical.png",
+    "app_asset": "app/assets/phantomplay/shadowbearer-world-map.png",
+    "unreal_asset": "/Game/Phantom/VisualTargets/Shadowbearer_WorldMap_Canonical",
+    "source_sha256": "316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C"
+  },
+  "authority_sha256": {
+    "director_cpp": "D5AC5C0E4E53962588D04097610D9D4620CAC10ACE9D04A79AACFB53232E9AA2",
+    "director_header": "3581584894DB53A5C110E23CC17357D808440700D9C0A2E139CFD1C90828F909",
+    "playability_validator": "28CFDB790CB80822D2B5C83AC72CC208D56BD9ACC5D7F9963ECC563E80DE52AB",
+    "packaged_runtime_gate": "DAB480EEE82E9414E86710FE80782BEA6BC2672C4B9F391BA55566B7BB7FECF3",
+    "promotion_tool": "20558483B2CAEDB2DAB15F8F6746F3F6769E70D2583E696B01F0C53C49C87EA6"
+  },
+  "package_sha256": {
+    "Cubetown.exe": "693F901BF7B4F9DF9E2FF7954E66BF0443F431A16EE5F6E265351C430A6FF2D5",
+    "Cubetown-Win64-Shipping.exe": "2F35E4BD276B81792D29F9F99BF2DB16D9F2ED3A0E9AA5A30086A4B53F436AFF",
+    "PhantomGames-Windows.pak": "1FC03E9702BDF06F86521256F71AB8C9FA49A92FF836752B4D2A95CD9CC464DD",
+    "PhantomGames-Windows.ucas": "1F99C3F4956128CB733454B0EF0C8E420CBD563656BB451BDA0C307EDCA46B5D",
+    "PhantomGames-Windows.utoc": "E1CFF531220A5CEA971902E68F493D297C815DC47880D606A48BA59E4B524FBA"
+  },
+  "runtime_proof": {
+    "candidate": "SHADOWBEARER STARTUP + LOCOMOTION + CHARACTER INTEGRITY RUNTIME PASS gameplay_ready=true prologue_exit=true move_input_ignored=false distance=2340.4 max_speed=600.0 yaw_travel=204.1 pitch_range=56.0 animation_mask=0x0f followers=6 followers_bound=true fallback_hidden=true bone_cosmetic_bound=true headwear_radius=60.4 capsule=40.0x94.0",
+    "installed": "SHADOWBEARER STARTUP + LOCOMOTION + CHARACTER INTEGRITY RUNTIME PASS gameplay_ready=true prologue_exit=true move_input_ignored=false distance=2343.6 max_speed=600.0 yaw_travel=204.1 pitch_range=56.0 animation_mask=0x0f followers=6 followers_bound=true fallback_hidden=true bone_cosmetic_bound=true headwear_radius=60.4 capsule=40.0x94.0",
+    "promotion_gate_recheck": "SHADOWBEARER STARTUP + LOCOMOTION + CHARACTER INTEGRITY RUNTIME PASS gameplay_ready=true prologue_exit=true move_input_ignored=false distance=2359.2 max_speed=600.0 yaw_travel=204.2 pitch_range=56.0 animation_mask=0x0f followers=6 followers_bound=true fallback_hidden=true bone_cosmetic_bound=true headwear_radius=60.4 capsule=40.0x94.0",
+    "player_save_last_write_utc": "2026-08-23T16:14:50.1300709Z",
+    "candidate_proof_utc": "2026-08-23T16:25:59.2136308Z",
+    "installed_proof_utc": "2026-08-23T16:27:46.2747406Z",
+    "promotion_gate_recheck_utc": "2026-08-23T16:38:40.2782611Z"
+  },
+  "verification": {
+    "canonical_story_static_validator": "pass",
+    "native_playability_static_validator": "pass",
+    "unreal_editor_module_compile": "pass",
+    "shipping_cook_and_package": "pass",
+    "candidate_packaged_runtime_proof": "pass",
+    "installed_packaged_runtime_proof": "pass",
+    "candidate_to_installed_critical_hashes": "pass",
+    "player_save_unchanged_by_runtime_proof": "pass",
+    "rollback_preserved": true,
+    "visible_interactive_playtest": "not_run_owner_requested_do_not_play"
+  }
+}

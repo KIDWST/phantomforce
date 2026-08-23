@@ -3,8 +3,8 @@
   "game_id": "cubetown",
   "title": "Shadowbearer: Dawn's Return",
   "production_status": "Promoted Unreal Engine 5.8 native adventure; the internal compatibility id remains cubetown for saves and the installed route",
-  "current_floor": "V25R25 Shadowbearer: Dawn's Return promoted release; preserve the complete Dawn-to-First-Eclipse story, native runtime, public identity, canonical illustrated world map, package evidence, and rollback record",
-  "next_target": "Future successors build from the promoted V25R25 floor in an isolated candidate; V25R25 remains the no-regression floor until a newer candidate is verified and promoted",
+  "current_floor": "V25R26 Shadowbearer: Dawn's Return promoted release; preserve the complete Dawn-to-First-Eclipse story, native runtime, public identity, canonical illustrated world map, startup-to-gameplay input guarantee, packaged runtime evidence, and rollback record",
+  "next_target": "Future successors build from the promoted V25R26 floor in an isolated candidate; V25R26 remains the no-regression floor until a newer candidate passes both candidate and installed packaged-runtime proof and is promoted",
   "core_fantasy": "A handcrafted storybook action-adventure where Zane survives Shadowfall, projects light to make shadow physically real, restores five fallen guardians and their armaments, confronts Aktarus at the Black Meridian, and carries light and darkness into Dawn's Return.",
   "design_pillars": [
     "Zane is a readable production adventure character with complete locomotion, guard, dodge, attack, hit, and traversal presentation — never a default pawn or permanently idling mesh.",
@@ -47,5 +47,5 @@
     "interact": "E",
     "inventory_map_journal": "Tab / M / J"
   },
-  "release_policy": "V25R25 is documented as promoted on 2026-08-23 with the canonical map SHA-256 316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C, a Shadowbearer-only candidate, matching installed package hashes, stable compatibility path, and rollback path. Future revisions must package to a new isolated candidate, pass focused gates, preserve the exact map or an explicitly approved successor, and retain rollback readiness before replacing this floor."
+  "release_policy": "V25R26 is documented as promoted on 2026-08-23 with the canonical map SHA-256 316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C, a Shadowbearer-only candidate, matching installed package hashes, stable compatibility path, rollback path, save-isolated proof mode, and fresh candidate plus installed Shipping-runtime proof that exits the prologue, releases move input, moves, turns, jumps, lands, animates, and preserves character integrity. Future revisions must package to a new isolated candidate, pass focused gates and both runtime proofs, preserve the exact map or an explicitly approved successor, and retain rollback readiness before replacing this floor."
 }

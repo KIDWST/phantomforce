@@ -46,7 +46,12 @@ def main() -> None:
         "HOLD SHADOW IN MEMORY",
         "FirstShadowWreckedCart",
         "FirstShadowFallenPlank",
-        "E / LMB / SPACE / GAMEPAD A   CONTINUE",
+        "WASD / ARROWS / ESC / GAMEPAD START   SKIP TO GAMEPLAY",
+        "E / LMB / SPACE / GAMEPAD A   NEXT STORY BEAT",
+        "bMovementSkipHeld",
+        "bCinematicInputLatch",
+        "SkipStoryCinematic",
+        "gameplay_ready=%s prologue_exit=%s move_input_ignored=%s",
         "AutoAdvanceSeconds",
         "CubetownBuildSchemaVersion = 27",
         "bOutsideCanonicalOpening",
@@ -120,7 +125,8 @@ def main() -> None:
     print("opening_shadow_puzzle", "rotate+align+solidify+persistent")
     print("opening_world", "5-authored-districts+cross-streets+140-nature-cluster-actors+bounded-poi-clusters+grounded-villagers+measured-asset-bounds")
     print("character_integrity", "leader-parented+shared-bone-buffer+physics-disabled+root-bound-headwear+deforming-cloak")
-    print("cinematic_controls", "mouse+keyboard+gamepad")
+    print("cinematic_controls", "direct-key-fallback+movement-to-skip+mouse+keyboard+gamepad")
+    print("runtime_startup_proof", "must-exit-prologue+release-move-input+walk+sprint+jump+animate")
 
 
 if __name__ == "__main__":

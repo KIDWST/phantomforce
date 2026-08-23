@@ -4,13 +4,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Revision = 'V25R25'
+$Revision = 'V25R26'
 $ProjectRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
-$CandidateRoot = [IO.Path]::GetFullPath((Join-Path $ProjectRoot 'CandidateBuilds\Shadowbearer-Dawns-Return-V25R25\cubetown'))
+$CandidateRoot = [IO.Path]::GetFullPath((Join-Path $ProjectRoot 'CandidateBuilds\Shadowbearer-Dawns-Return-V25R26\cubetown'))
 $WindowsRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'PhantomPlay\Games\Unreal\Windows'))
 $InstalledRoot = [IO.Path]::GetFullPath((Join-Path $WindowsRoot 'cubetown'))
 $BuildsetPath = [IO.Path]::GetFullPath((Join-Path $WindowsRoot 'PHANTOMPLAY_BUILDSET.json'))
 $BackupParent = [IO.Path]::GetFullPath((Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Codex\backups'))
+$RuntimeProofTool = Join-Path $PSScriptRoot 'TestShadowbearerPackagedRuntime.ps1'
 
 function Assert-Within([string]$Path, [string]$Parent, [string]$Label) {
     $Resolved = [IO.Path]::GetFullPath($Path).TrimEnd('\')
@@ -42,6 +43,11 @@ if ($MarkerText -notmatch "PHANTOM $Revision CANDIDATE" -or $MarkerText -notmatc
 $Foreign = @(Get-ChildItem -LiteralPath $CandidateRoot -Recurse -File -Filter '*-Win64-Shipping.exe' |
     Where-Object { $_.Name -ne 'Cubetown-Win64-Shipping.exe' })
 if ($Foreign.Count -gt 0) { throw "Candidate contains foreign game binaries: $($Foreign.Name -join ', ')" }
+if (-not (Test-Path -LiteralPath $RuntimeProofTool -PathType Leaf)) { throw "Runtime proof tool missing: $RuntimeProofTool" }
+$CandidateRuntimeProof = (& $RuntimeProofTool -Root $CandidateRoot | ConvertFrom-Json)
+if ($CandidateRuntimeProof.status -ne 'passed' -or -not $CandidateRuntimeProof.player_saves_unchanged) {
+    throw 'Candidate packaged-runtime proof did not pass.'
+}
 
 $Previous = Get-Content -LiteralPath $BuildsetPath -Raw | ConvertFrom-Json
 foreach ($Game in @($Previous.games | Where-Object { $_.id -ne 'cubetown' })) {
@@ -55,7 +61,7 @@ foreach ($Game in @($Previous.games | Where-Object { $_.id -ne 'cubetown' })) {
 }
 
 $Timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$BackupRoot = Assert-Within (Join-Path $BackupParent "shadowbearer-v25r25-$Timestamp") $BackupParent 'Rollback checkpoint'
+$BackupRoot = Assert-Within (Join-Path $BackupParent "shadowbearer-v25r26-$Timestamp") $BackupParent 'Rollback checkpoint'
 $BackupGame = Assert-Within (Join-Path $BackupRoot 'cubetown') $BackupRoot 'Rollback game tree'
 New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
 Copy-Item -LiteralPath $BuildsetPath -Destination (Join-Path $BackupRoot 'PHANTOMPLAY_BUILDSET.json')
@@ -86,6 +92,10 @@ try {
     $Pak = Join-Path $InstalledRoot 'PhantomGames\Content\Paks\PhantomGames-Windows.pak'
     $Ucas = Join-Path $InstalledRoot 'PhantomGames\Content\Paks\PhantomGames-Windows.ucas'
     $Utoc = Join-Path $InstalledRoot 'PhantomGames\Content\Paks\PhantomGames-Windows.utoc'
+    $InstalledRuntimeProof = (& $RuntimeProofTool -Root $InstalledRoot | ConvertFrom-Json)
+    if ($InstalledRuntimeProof.status -ne 'passed' -or -not $InstalledRuntimeProof.player_saves_unchanged) {
+        throw 'Installed packaged-runtime proof did not pass.'
+    }
     $Result = [ordered]@{
         id = 'cubetown'
         public_title = "Shadowbearer: Dawn's Return"
@@ -113,6 +123,9 @@ try {
         verification = [ordered]@{
             shadowbearer_shipping_package = 'passed'
             shadowbearer_installed_hashes = 'passed'
+            shadowbearer_candidate_runtime = $CandidateRuntimeProof.proof
+            shadowbearer_installed_runtime = $InstalledRuntimeProof.proof
+            player_saves_unchanged = $true
             retained_game_hashes = 'passed'
             native_only = $true
         }

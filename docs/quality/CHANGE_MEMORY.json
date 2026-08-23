@@ -2577,23 +2577,43 @@
     {
       "id": "shadowbearer-dawns-return-promoted-floor",
       "status": "active",
-      "title": "Shadowbearer: Dawn's Return V25R25 remains the promoted canonical-map native adventure",
-      "ownerDecision": "The former Cubetown compatibility slot now publicly ships as Shadowbearer: Dawn's Return. V25R25 is its documented promoted floor, using the stable internal cubetown identifier only for saves, launcher compatibility, and the installed path. The complete Dawn, Omen, Shadowfall, Restoring, and Restored arc; Bramblewick residents; Pale Warden opening; five Returned guardians; Aktarus history; Black Meridian finale; First Eclipse postgame; production adventure character; and truthful web/desktop/server identity must remain together. The owner-approved canonical map with SHA-256 316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C is displayed directly from the M-key overlay and defines the macro-geography of Velmor Keep, Ashenwold, The Sunken Court, Stonehelm Mountains, Duscreach Desert, The Shattered Coast, and The Black Spire. Story locations nest within that geography, optional world bosses do not replace the release-critical story arc, and a text-only or regenerated placeholder map cannot silently replace the approved art. The older public CubeTown/Maker identity cannot silently replace the promoted Shadowbearer release.",
+      "title": "Shadowbearer: Dawn's Return V25R26 remains the playable promoted canonical-map native adventure",
+      "ownerDecision": "The former Cubetown compatibility slot now publicly ships as Shadowbearer: Dawn's Return. V25R26 is its documented promoted floor, using the stable internal cubetown identifier only for saves, launcher compatibility, and the installed path. Startup must never strand the player in a cinematic: WASD or arrows skip directly into gameplay, Escape or gamepad Start skips, E, Space, left click, or gamepad A advances a beat, and completion explicitly restores game-only move and look input. Promotion requires fresh packaged-runtime proof from both the isolated candidate and the installed build that the prologue exits, move input is released, the hero moves, turns, jumps, lands, animates, and retains the production character, while proof mode remains unable to mutate the player's save. The complete Dawn, Omen, Shadowfall, Restoring, and Restored arc; Bramblewick residents; Pale Warden opening; five Returned guardians; Aktarus history; Black Meridian finale; First Eclipse postgame; production adventure character; and truthful web/desktop/server identity must remain together. The owner-approved canonical map with SHA-256 316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C is displayed directly from the M-key overlay and defines the macro-geography of Velmor Keep, Ashenwold, The Sunken Court, Stonehelm Mountains, Duscreach Desert, The Shattered Coast, and The Black Spire. Story locations nest within that geography, optional world bosses do not replace the release-critical story arc, and a text-only or regenerated placeholder map cannot silently replace the approved art. The older public CubeTown/Maker identity cannot silently replace the promoted Shadowbearer release.",
       "requiredPatterns": [
         {
-          "file": "packages/phantom-games-unreal/Docs/Shadowbearer/SHADOWBEARER_V25R25_RELEASE.json",
-          "pattern": "\"release\": \"V25R25\"[\\s\\S]*\"public_title\": \"Shadowbearer: Dawn's Return\"[\\s\\S]*\"internal_compatibility_id\": \"cubetown\"[\\s\\S]*\"promoted_at\": \"2026-08-23\"[\\s\\S]*\"rollback_path\"[\\s\\S]*316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C",
-          "description": "The authoritative release record retains the V25R25 promoted floor, canonical map hash, stable compatibility id, and rollback evidence."
+          "file": "packages/phantom-games-unreal/Docs/Shadowbearer/SHADOWBEARER_V25R26_RELEASE.json",
+          "pattern": "\"release\": \"V25R26\"[\\s\\S]*\"public_title\": \"Shadowbearer: Dawn's Return\"[\\s\\S]*\"internal_compatibility_id\": \"cubetown\"[\\s\\S]*\"promoted_at\": \"2026-08-23\"[\\s\\S]*\"rollback_path\"[\\s\\S]*316F4351143C36886B350D7AEA41D66F2CDC38E836A05AD900ECC0A40DF30E1C[\\s\\S]*\"installed_packaged_runtime_proof\": \"pass\"",
+          "description": "The authoritative release record retains the V25R26 playable promoted floor, canonical map hash, stable compatibility id, dual packaged-runtime proof, save isolation, and rollback evidence."
         },
         {
           "file": "docs/phantomplay-production/creative-bibles/cubetown.json",
-          "pattern": "Shadowbearer: Dawn's Return[\\s\\S]*internal compatibility id[\\s\\S]*V25R25[\\s\\S]*canonical illustrated world map[\\s\\S]*Dawn[\\s\\S]*Shadowfall[\\s\\S]*First Eclipse[\\s\\S]*shadowbearer-world-map[.]png[\\s\\S]*Shadowbearer_WorldMap_Canonical[.]uasset",
+          "pattern": "Shadowbearer: Dawn's Return[\\s\\S]*internal compatibility id[\\s\\S]*V25R26[\\s\\S]*canonical illustrated world map[\\s\\S]*Dawn[\\s\\S]*Shadowfall[\\s\\S]*First Eclipse[\\s\\S]*shadowbearer-world-map[.]png[\\s\\S]*Shadowbearer_WorldMap_Canonical[.]uasset",
           "description": "The compatibility-slot creative bible reflects the current public game, complete story floor, and canonical map assets."
         },
         {
           "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp",
           "pattern": "AdvanceAktarusPhase[\\s\\S]*SK_Rogue\\.SK_Rogue[\\s\\S]*Shadowbearer_WorldMap_Canonical[\\s\\S]*bFirstEclipseUnlocked[\\s\\S]*BuildShadowbearerOpening[\\s\\S]*SpawnPaleWarden",
           "description": "The promoted native runtime retains the production adventure character, canonical map overlay, and complete Shadowbearer progression."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp",
+          "pattern": "SHADOWBEARER STARTUP \\+ LOCOMOTION \\+ CHARACTER INTEGRITY RUNTIME[\\s\\S]*SkipStoryCinematicInput[\\s\\S]*WASD / ARROWS / ESC / GAMEPAD START[\\s\\S]*ResetIgnoreMoveInput[\\s\\S]*SetInputMode\\(FInputModeGameOnly",
+          "description": "The startup escape controls, explicit input restoration, and packaged playability proof remain part of the native runtime."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Source/PhantomGames/Private/Cubetown/CubetownDirector.cpp",
+          "pattern": "void ACubetownDirector::SaveProgress\\(\\)[\\s\\S]{0,320}if \\(bShadowbearerCaptureOverride\\) return",
+          "description": "Automated capture and runtime proof cannot overwrite the player's real save."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Tools/TestShadowbearerPackagedRuntime.ps1",
+          "pattern": "ShadowbearerCaptureState=prologue[\\s\\S]*PhantomLocomotionProof[\\s\\S]*WaitForExit[\\s\\S]*gameplay_ready=true prologue_exit=true move_input_ignored=false[\\s\\S]*player save directory",
+          "description": "Promotion has a bounded real-Shipping startup, locomotion, character, and save-integrity gate."
+        },
+        {
+          "file": "packages/phantom-games-unreal/Tools/PromoteShadowbearerV25R16.ps1",
+          "pattern": "CandidateRuntimeProof[\\s\\S]*Move-Item[\\s\\S]*InstalledRuntimeProof[\\s\\S]*prior install restored",
+          "description": "Promotion proves both candidate and installed binaries and rolls back the copied install if the installed proof fails."
         },
         {
           "file": "app/js/phantomplay.js",

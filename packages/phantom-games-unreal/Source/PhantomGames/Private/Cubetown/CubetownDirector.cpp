@@ -1628,6 +1628,45 @@ void ACubetownHero::Tick(float DeltaSeconds)
         const bool bGameplayCapture = FParse::Param(FCommandLine::Get(), TEXT("PhantomGameplayCapture")) && !bLocomotionProof;
         const FCubetownCaptureView CaptureView = GetCubetownCaptureView();
         const bool bLairCapture = CaptureView.bLair;
+        ACubetownDirector* ActiveDirector=CubetownDirector(this);
+
+        // Never strand a player behind a cinematic input lock. Unreal's legacy action bindings can
+        // be lost when a packaged viewport is focused at a non-native DPI, so cinematic control has
+        // a direct key-state path as well. Movement intent means "start playing now"; advance keys
+        // move one story beat, and Escape / controller Start skips the current sequence completely.
+        if (ActiveDirector && ActiveDirector->IsStoryCinematicActive())
+        {
+            const bool bMovementSkipHeld =
+                PlayerController->IsInputKeyDown(EKeys::W) || PlayerController->IsInputKeyDown(EKeys::A) ||
+                PlayerController->IsInputKeyDown(EKeys::S) || PlayerController->IsInputKeyDown(EKeys::D) ||
+                PlayerController->IsInputKeyDown(EKeys::Up) || PlayerController->IsInputKeyDown(EKeys::Down) ||
+                PlayerController->IsInputKeyDown(EKeys::Left) || PlayerController->IsInputKeyDown(EKeys::Right);
+            const bool bExplicitSkipHeld = PlayerController->IsInputKeyDown(EKeys::Escape) ||
+                PlayerController->IsInputKeyDown(EKeys::Gamepad_Special_Right);
+            const bool bAdvanceHeld = PlayerController->IsInputKeyDown(EKeys::E) ||
+                PlayerController->IsInputKeyDown(EKeys::SpaceBar) ||
+                PlayerController->IsInputKeyDown(EKeys::LeftMouseButton) ||
+                PlayerController->IsInputKeyDown(EKeys::Gamepad_FaceButton_Bottom);
+            const bool bProofSkip = bLocomotionProof && LocomotionProofElapsed >= 0.65f;
+            if (!bCinematicInputLatch)
+            {
+                if (bMovementSkipHeld || bExplicitSkipHeld || bProofSkip)
+                {
+                    ActiveDirector->SkipStoryCinematic();
+                    bLocomotionProofExitedPrologue = bLocomotionProof && ActiveDirector->HasSeenPrologue();
+                    if (bLocomotionProof) LocomotionProofStart = GetActorLocation();
+                }
+                else if (bAdvanceHeld)
+                {
+                    ActiveDirector->AdvanceStoryCinematic();
+                }
+            }
+            bCinematicInputLatch = bMovementSkipHeld || bExplicitSkipHeld || bAdvanceHeld || bProofSkip;
+        }
+        else
+        {
+            bCinematicInputLatch = false;
+        }
         if (bLocomotionProof)
         {
             if (!bLocomotionProofInitialized)
@@ -1683,7 +1722,6 @@ void ACubetownHero::Tick(float DeltaSeconds)
         ViewRotation.Pitch = FMath::Clamp(FRotator::NormalizeAxis(ViewRotation.Pitch), -82.0f, -6.0f);
         ViewRotation.Roll = 0.0f;
         PlayerController->SetControlRotation(ViewRotation);
-        const ACubetownDirector* ActiveDirector=CubetownDirector(this);
         if(SpringArm && !bLocomotionProof && (!ActiveDirector || !ActiveDirector->IsBuildMode()))
         {
             const FVector ViewForward=FRotationMatrix(FRotator(0.0f,ViewRotation.Yaw,0.0f)).GetUnitAxis(EAxis::X);
@@ -1792,12 +1830,21 @@ void ACubetownHero::Tick(float DeltaSeconds)
         const bool bCharacterIntegrityPassed = GetMesh() && GetMesh()->IsVisible() &&
             GetMesh()->GetSkeletalMeshAsset() && !GetMesh()->IsSimulatingPhysics() &&
             bFollowersBound && FollowerCount >= 6 && bFallbackCosmeticsHidden && bBoneCosmeticBound;
+        ACubetownDirector* ProofDirector = CubetownDirector(this);
+        APlayerController* ProofController = Cast<APlayerController>(GetController());
+        const bool bGameplayReady = ProofDirector && ProofController &&
+            !ProofDirector->IsStoryCinematicActive() && ProofDirector->HasSeenPrologue() &&
+            !ProofController->IsMoveInputIgnored() &&
+            GetCharacterMovement() && GetCharacterMovement()->MovementMode != MOVE_None;
         const bool bPassed = Distance > 700.0f && LocomotionProofMaxSpeed > 500.0f &&
             LocomotionProofYawTravel > 150.0f && PitchRange > 35.0f && bAnimationsPassed &&
-            bCharacterIntegrityPassed;
+            bCharacterIntegrityPassed && bGameplayReady && bLocomotionProofExitedPrologue;
         const FString ProofResult = FString::Printf(
-            TEXT("SHADOWBEARER LOCOMOTION + CHARACTER INTEGRITY RUNTIME %s distance=%.1f max_speed=%.1f yaw_travel=%.1f pitch_range=%.1f animation_mask=0x%02x followers=%d followers_bound=%s fallback_hidden=%s bone_cosmetic_bound=%s headwear_radius=%.1f capsule=%.1fx%.1f"),
-            bPassed ? TEXT("PASS") : TEXT("FAIL"), Distance, LocomotionProofMaxSpeed,
+            TEXT("SHADOWBEARER STARTUP + LOCOMOTION + CHARACTER INTEGRITY RUNTIME %s gameplay_ready=%s prologue_exit=%s move_input_ignored=%s distance=%.1f max_speed=%.1f yaw_travel=%.1f pitch_range=%.1f animation_mask=0x%02x followers=%d followers_bound=%s fallback_hidden=%s bone_cosmetic_bound=%s headwear_radius=%.1f capsule=%.1fx%.1f"),
+            bPassed ? TEXT("PASS") : TEXT("FAIL"), bGameplayReady ? TEXT("true") : TEXT("false"),
+            bLocomotionProofExitedPrologue ? TEXT("true") : TEXT("false"),
+            ProofController && ProofController->IsMoveInputIgnored() ? TEXT("true") : TEXT("false"),
+            Distance, LocomotionProofMaxSpeed,
             LocomotionProofYawTravel, PitchRange, LocomotionProofAnimationMask,
             FollowerCount, bFollowersBound ? TEXT("true") : TEXT("false"),
             bFallbackCosmeticsHidden ? TEXT("true") : TEXT("false"),
@@ -1864,6 +1911,7 @@ void ACubetownHero::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
     PlayerInputComponent->BindKey(EKeys::RightMouseButton, IE_Released, this, &ACubetownHero::StopGuard);
     PlayerInputComponent->BindKey(EKeys::E, IE_Pressed, this, &ACubetownHero::Interact);
     PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &ACubetownHero::JumpOrClimb);
+    PlayerInputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ACubetownHero::SkipStoryCinematicInput);
     PlayerInputComponent->BindKey(EKeys::F, IE_Pressed, this, &ACubetownHero::ToggleLockOn);
     PlayerInputComponent->BindKey(EKeys::Q, IE_Pressed, this, &ACubetownHero::StartCreationSelect);
     PlayerInputComponent->BindKey(EKeys::Q, IE_Released, this, &ACubetownHero::FinishCreationSelect);
@@ -1882,7 +1930,6 @@ void ACubetownHero::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
     PlayerInputComponent->BindKey(EKeys::LeftControl, IE_Pressed, this, &ACubetownHero::ToggleCrouch);
     PlayerInputComponent->BindKey(EKeys::LeftShift, IE_Pressed, this, &ACubetownHero::StartSprint);
     PlayerInputComponent->BindKey(EKeys::LeftShift, IE_Released, this, &ACubetownHero::StopSprint);
-    PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &ACubetownHero::JumpOrClimb);
     PlayerInputComponent->BindKey(EKeys::V, IE_Pressed, this, &ACubetownHero::RecenterCamera);
     PlayerInputComponent->BindKey(EKeys::T, IE_Pressed, this, &ACubetownHero::UseArmament);
     PlayerInputComponent->BindKey(EKeys::H, IE_Pressed, this, &ACubetownHero::ToggleVestige);
@@ -1911,6 +1958,7 @@ void ACubetownHero::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
     PlayerInputComponent->BindKey(EKeys::Gamepad_FaceButton_Top, IE_Pressed, this, &ACubetownHero::HeavyAttack);
     PlayerInputComponent->BindKey(EKeys::Gamepad_FaceButton_Right, IE_Pressed, this, &ACubetownHero::Dash);
     PlayerInputComponent->BindKey(EKeys::Gamepad_FaceButton_Bottom, IE_Pressed, this, &ACubetownHero::JumpOrClimb);
+    PlayerInputComponent->BindKey(EKeys::Gamepad_Special_Right, IE_Pressed, this, &ACubetownHero::SkipStoryCinematicInput);
     PlayerInputComponent->BindKey(EKeys::Gamepad_FaceButton_Left, IE_Pressed, this, &ACubetownHero::StartCreationSelect);
     PlayerInputComponent->BindKey(EKeys::Gamepad_FaceButton_Left, IE_Released, this, &ACubetownHero::FinishCreationSelect);
     PlayerInputComponent->BindKey(EKeys::Gamepad_LeftThumbstick, IE_Pressed, this, &ACubetownHero::StartSprint);
@@ -2092,7 +2140,7 @@ void ACubetownHero::PrimaryAction()
 {
     if (ACubetownDirector* Director=CubetownDirector(this))
     {
-        if(Director->IsStoryCinematicActive()){Director->AdvanceStoryCinematic();return;}
+        if(Director->IsStoryCinematicActive()){bCinematicInputLatch=true;Director->AdvanceStoryCinematic();return;}
         if(Director->IsBuildMode())
         {
             Director->CommitBuildTool(Cast<APlayerController>(GetController()));
@@ -2170,7 +2218,7 @@ void ACubetownHero::Interact()
 {
     if (ACubetownDirector* Director = CubetownDirector(this))
     {
-        if(Director->IsStoryCinematicActive()){Director->AdvanceStoryCinematic();return;}
+        if(Director->IsStoryCinematicActive()){bCinematicInputLatch=true;Director->AdvanceStoryCinematic();return;}
         if(Director->IsBuildMode()) Director->RotateBuildPreview(15.0f);
         else Director->InteractNearby(GetActorLocation());
     }
@@ -2304,7 +2352,7 @@ void ACubetownHero::JumpOrClimb()
 {
     if(ACubetownDirector* D=CubetownDirector(this))
     {
-        if(D->IsStoryCinematicActive()){D->AdvanceStoryCinematic();return;}
+        if(D->IsStoryCinematicActive()){bCinematicInputLatch=true;D->AdvanceStoryCinematic();return;}
         if(D->IsBuildMode())return;
     }
     if(!GetWorld()){Jump();return;}
@@ -2320,6 +2368,15 @@ void ACubetownHero::JumpOrClimb()
         }
     }
     Jump();
+}
+
+void ACubetownHero::SkipStoryCinematicInput()
+{
+    if (ACubetownDirector* Director = CubetownDirector(this))
+    {
+        bCinematicInputLatch = true;
+        Director->SkipStoryCinematic();
+    }
 }
 
 void ACubetownHero::ToggleLockOn()
@@ -2428,13 +2485,14 @@ void ACubetownHUD::DrawHUD()
         DrawText(Director->GetStoryCinematicKicker(),Teal,Width-S(760),S(27),Small,S(0.74f));
 
         const float CardW=FMath::Min(Width-S(88),S(1600));
-        const float CardH=S(300);
+        const float CardH=FMath::Min(S(260),Height*0.30f);
         const float CardX=(Width-CardW)*0.5f;
-        const float CardY=Height-CardH-S(34);
+        const float CardY=FMath::Max(S(92),Height-CardH-S(20));
         DrawRect(FLinearColor(0.004f,0.008f,0.014f,0.96f),CardX,CardY,CardW,CardH);
         DrawLine(CardX,CardY,CardX+CardW,CardY,Teal,S(2.0f));
         DrawLine(CardX,CardY+CardH,CardX+CardW,CardY+CardH,FLinearColor(0.12f,0.25f,0.24f,0.9f),S(1.0f));
-        DrawText(Director->GetStoryCinematicTitle(),Gold,CardX+S(38),CardY+S(34),Medium,S(0.98f));
+        DrawText(Director->GetStoryCinematicTitle(),Gold,CardX+S(38),CardY+S(25),Medium,S(0.88f));
+        DrawText(TEXT("WASD / ARROWS / ESC / GAMEPAD START   SKIP TO GAMEPLAY"),Gold,CardX+S(38),CardY+S(68),Small,S(0.76f));
 
         const FString FullLine=Director->GetStoryCinematicLine();
         FString LineA=FullLine,LineB;
@@ -2445,12 +2503,12 @@ void ACubetownHUD::DrawHUD()
             LineA=FullLine.Left(BreakAt).TrimEnd();
             LineB=FullLine.Mid(BreakAt).TrimStart();
         }
-        DrawText(LineA,Cream,CardX+S(38),CardY+S(104),Medium,S(0.67f));
-        if(!LineB.IsEmpty())DrawText(LineB,Cream,CardX+S(38),CardY+S(144),Medium,S(0.67f));
+        DrawText(LineA,Cream,CardX+S(38),CardY+S(112),Medium,S(0.62f));
+        if(!LineB.IsEmpty())DrawText(LineB,Cream,CardX+S(38),CardY+S(148),Medium,S(0.62f));
         const float BarW=CardW-S(76);
-        DrawRect(FLinearColor(0.10f,0.12f,0.16f,0.95f),CardX+S(38),CardY+CardH-S(30),BarW,S(5));
-        DrawRect(Teal,CardX+S(38),CardY+CardH-S(30),BarW*Director->GetStoryCinematicProgress(),S(5));
-        DrawText(TEXT("E / LMB / SPACE / GAMEPAD A   CONTINUE"),FLinearColor(0.70f,0.80f,0.80f),CardX+S(38),CardY+CardH-S(68),Small,S(0.72f));
+        DrawRect(FLinearColor(0.10f,0.12f,0.16f,0.95f),CardX+S(38),CardY+CardH-S(22),BarW,S(5));
+        DrawRect(Teal,CardX+S(38),CardY+CardH-S(22),BarW*Director->GetStoryCinematicProgress(),S(5));
+        DrawText(TEXT("E / LMB / SPACE / GAMEPAD A   NEXT STORY BEAT"),FLinearColor(0.70f,0.80f,0.80f),CardX+S(38),CardY+CardH-S(54),Small,S(0.70f));
         return;
     }
     const bool bUseDioramaHUD = true;
@@ -4303,6 +4361,12 @@ void ACubetownDirector::AdvanceStoryCinematic()
     if(CinematicBeat>=Count)CompleteStoryCinematic();
 }
 
+void ACubetownDirector::SkipStoryCinematic()
+{
+    if (ActiveCinematic == EShadowbearerCinematic::None) return;
+    CompleteStoryCinematic();
+}
+
 void ACubetownDirector::UpdateStoryCinematic(float DeltaSeconds)
 {
     if(ActiveCinematic==EShadowbearerCinematic::None)return;
@@ -4330,7 +4394,21 @@ void ACubetownDirector::CompleteStoryCinematic()
 {
     const EShadowbearerCinematic Finished=ActiveCinematic;
     ActiveCinematic=EShadowbearerCinematic::None;CinematicBeat=0;CinematicBeatSeconds=0.0f;
-    if(APlayerController* PC=GetWorld()?GetWorld()->GetFirstPlayerController():nullptr){PC->ResetIgnoreMoveInput();PC->ResetIgnoreLookInput();}
+    if(APlayerController* PC=GetWorld()?GetWorld()->GetFirstPlayerController():nullptr)
+    {
+        PC->ResetIgnoreMoveInput();
+        PC->ResetIgnoreLookInput();
+        PC->bShowMouseCursor=false;
+        PC->SetInputMode(FInputModeGameOnly());
+    }
+    if(ACubetownHero* Hero=Cast<ACubetownHero>(UGameplayStatics::GetPlayerCharacter(this,0)))
+    {
+        if(UCharacterMovementComponent* Movement=Hero->GetCharacterMovement())
+        {
+            Movement->SetComponentTickEnabled(true);
+            Movement->SetMovementMode(MOVE_Walking);
+        }
+    }
     if(Finished==EShadowbearerCinematic::Prologue)
     {
         bPrologueSeen=true;CanonicalChapter=FMath::Max(CanonicalChapter,1);RefreshStoryQuest();SaveProgress();return;
@@ -5803,6 +5881,10 @@ void ACubetownDirector::LoadProgress()
 
 void ACubetownDirector::SaveProgress()
 {
+    // Automated capture and packaged-runtime proof modes must never mutate the
+    // player's real Shadowbearer save while exercising startup and locomotion.
+    if (bShadowbearerCaptureOverride) return;
+
     UCubetownSaveGame* Save = Cast<UCubetownSaveGame>(UGameplayStatics::CreateSaveGameObject(UCubetownSaveGame::StaticClass()));
     if (!Save) return;
     Save->Inventory = Inventory;

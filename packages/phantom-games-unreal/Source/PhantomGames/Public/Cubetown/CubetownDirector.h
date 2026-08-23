@@ -556,6 +556,8 @@ private:
     bool bLocomotionProofInitialized = false;
     bool bLocomotionProofJumped = false;
     bool bLocomotionProofReported = false;
+    bool bLocomotionProofExitedPrologue = false;
+    bool bCinematicInputLatch = false;
     int32 ComboStep = 0;
     uint8 LocomotionProofAnimationMask = 0;
     float LocomotionProofElapsed = 0.0f;
@@ -614,6 +616,7 @@ private:
     void ToggleCrouch();
     void RecenterCamera();
     void JumpOrClimb();
+    void SkipStoryCinematicInput();
     void UseArmament();
     void ToggleVestige();
 };
@@ -712,7 +715,9 @@ public:
     int32 GetCanonicalChapter() const { return CanonicalChapter; }
     int32 GetReturnedSoulCount() const;
     bool HasFirstEclipse() const { return bFirstEclipseUnlocked; }
+    bool HasSeenPrologue() const { return bPrologueSeen; }
     void AdvanceStoryCinematic();
+    void SkipStoryCinematic();
     void UseEquippedArmament(const FVector& Origin, AActor* DamageCauser);
     void ToggleVestigeForm();
 
