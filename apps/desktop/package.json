@@ -2,7 +2,7 @@
   "name": "phantombot",
   "productName": "PhantomBot",
   "private": true,
-  "version": "0.17.0",
+  "version": "0.17.2",
   "description": "PhantomBot standalone desktop, powered by the Hermes Agent kernel.",
   "author": "PhantomForce",
   "repository": {

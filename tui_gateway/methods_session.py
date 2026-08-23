@@ -13,6 +13,11 @@ _profile_scoped = _registry.profile_scoped
 
 @method("session.create")
 def _(rid, params: dict) -> dict:
+    client_request_id = str(params.get("client_request_id") or "").strip()
+    cached = _cached_session_create_result(client_request_id)
+    if cached is not None:
+        return _ok(rid, cached)
+
     sid = uuid.uuid4().hex[:8]
     key = _new_session_key()
     cols = int(params.get("cols", 80))
@@ -125,39 +130,39 @@ def _(rid, params: dict) -> dict:
     _schedule_agent_build(sid)
     _schedule_session_cap_enforcement()  # trim detached idle sessions over the cap
 
-    return _ok(
-        rid,
-        {
-            "session_id": sid,
-            "stored_session_id": key,
-            "message_count": len(history),
-            "messages": _history_to_messages(history),
-            "info": {
-                # Reflect the per-session model override (desktop composer pick)
-                # in the immediate response so the client doesn't briefly clobber
-                # its sticky pick with the global default before the deferred
-                # build's session.info lands.
-                "model": (
-                    session_model_override.get("model")
-                    if session_model_override
-                    else _resolve_model()
-                ),
-                **(
-                    {"provider": session_model_override["provider"]}
-                    if session_model_override and session_model_override.get("provider")
-                    else {}
-                ),
-                "tools": {},
-                "skills": {},
-                "cwd": _sessions[sid]["cwd"],
-                "branch": _git_branch_for_cwd(_sessions[sid]["cwd"]),
-                "project": _project_info_for_cwd(_sessions[sid]["cwd"]),
-                "lazy": True,
-                "desktop_contract": DESKTOP_BACKEND_CONTRACT,
-                "profile_name": _response_profile_name(profile),
-            },
+    result = {
+        "session_id": sid,
+        "stored_session_id": key,
+        "message_count": len(history),
+        "messages": _history_to_messages(history),
+        "info": {
+            # Reflect the per-session model override (desktop composer pick)
+            # in the immediate response so the client doesn't briefly clobber
+            # its sticky pick with the global default before the deferred
+            # build's session.info lands.
+            "model": (
+                session_model_override.get("model")
+                if session_model_override
+                else _resolve_model()
+            ),
+            **(
+                {"provider": session_model_override["provider"]}
+                if session_model_override and session_model_override.get("provider")
+                else {}
+            ),
+            "tools": {},
+            "skills": {},
+            "cwd": _sessions[sid]["cwd"],
+            "branch": _git_branch_for_cwd(_sessions[sid]["cwd"]),
+            "project": _project_info_for_cwd(_sessions[sid]["cwd"]),
+            "lazy": True,
+            "desktop_contract": DESKTOP_BACKEND_CONTRACT,
+            "profile_name": _response_profile_name(profile),
         },
-    )
+    }
+    _cache_session_create_result(client_request_id, result)
+
+    return _ok(rid, result)
 
 
 @method("session.list")

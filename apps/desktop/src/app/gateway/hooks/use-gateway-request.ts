@@ -3,9 +3,17 @@ import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useRef } from 'react'
 
 import type { HermesGateway } from '@/hermes'
-import { $gateway, ensureActiveGatewayOpen, isActivePrimary } from '@/store/gateway'
+import { $gateway, ensureActiveGatewayOpen, forceReconnectActiveGateway, isActivePrimary } from '@/store/gateway'
 import { $activeGatewayProfile } from '@/store/profile'
 import { $gatewayState, setConnection } from '@/store/session'
+
+const SESSION_CREATE_REQUEST_TIMEOUT_MS = 15_000
+
+function newClientRequestId(): string {
+  return typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `session-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
 
 export function useGatewayRequest() {
   const gatewayState = useStore($gatewayState)
@@ -45,19 +53,24 @@ export function useGatewayRequest() {
     []
   )
 
-  const ensureGatewayOpen = useCallback(async () => {
+  const ensureGatewayOpen = useCallback(async (force = false) => {
     const existing = gatewayRef.current
 
     if (!existing) {
       return null
     }
 
-    if (gatewayStateRef.current === 'open') {
+    if (!force && gatewayStateRef.current === 'open') {
       return existing
     }
 
     if (reconnectingRef.current) {
       return reconnectingRef.current
+    }
+
+    if (force) {
+      existing.close()
+      gatewayStateRef.current = 'closed'
     }
 
     reconnectingRef.current = (async () => {
@@ -111,19 +124,37 @@ export function useGatewayRequest() {
         throw new Error('Hermes gateway unavailable')
       }
 
+      // session.create is the only retried mutating RPC. Give both attempts the
+      // same idempotency key so a response lost on a stale socket cannot create
+      // a second session when the fresh connection retries.
+      const requestParams =
+        method === 'session.create' && !params.client_request_id
+          ? { ...params, client_request_id: newClientRequestId() }
+          : params
+
+      const requestTimeoutMs =
+        method === 'session.create' && timeoutMs === undefined ? SESSION_CREATE_REQUEST_TIMEOUT_MS : timeoutMs
+
       try {
-        return await gateway.request<T>(method, params, timeoutMs, signal)
+        return await gateway.request<T>(method, requestParams, requestTimeoutMs, signal)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
 
-        if (!/not connected|connection closed/i.test(message)) {
+        const timedOutCreatingSession =
+          method === 'session.create' && /request timed out(?: after .*?)?: session\.create/i.test(message)
+
+        if (!timedOutCreatingSession && !/not connected|connection closed/i.test(message)) {
           throw error
         }
 
         // Primary keeps the OAuth-aware reconnect (remote gateways re-mint a
         // single-use ticket); background profiles are always local pool
         // backends, so the registry handles their reconnect with no reauth.
-        const recovered = isActivePrimary() ? await ensureGatewayOpen() : await ensureActiveGatewayOpen()
+        const recovered = isActivePrimary()
+          ? await ensureGatewayOpen(timedOutCreatingSession)
+          : timedOutCreatingSession
+            ? await forceReconnectActiveGateway()
+            : await ensureActiveGatewayOpen()
 
         if (!recovered) {
           // Prefer the reauth error from the failed reconnect (OAuth session
@@ -138,7 +169,7 @@ export function useGatewayRequest() {
           throw error
         }
 
-        return recovered.request<T>(method, params, timeoutMs, signal)
+        return recovered.request<T>(method, requestParams, requestTimeoutMs, signal)
       }
     },
     [ensureGatewayOpen]

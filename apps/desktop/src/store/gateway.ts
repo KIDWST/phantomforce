@@ -854,6 +854,28 @@ export async function ensureActiveGatewayOpen(): Promise<HermesGateway | null> {
   return isOpen(entry.gateway) ? entry.gateway : null
 }
 
+// A request timeout can leave the browser WebSocket reporting OPEN even though
+// its response path is dead. Force a genuinely fresh secondary connection;
+// ordinary connection-closed recovery keeps using ensureActiveGatewayOpen().
+export async function forceReconnectActiveGateway(): Promise<HermesGateway | null> {
+  if (g.activeKey === g.primaryProfile) {
+    return g.primaryGateway
+  }
+
+  const entry = g.secondaries.get(g.activeKey)
+
+  if (!entry) {
+    return null
+  }
+
+  clearTimer(entry)
+  entry.reconnectAttempt = 0
+  entry.gateway.close()
+  await reconnectSecondary(entry)
+
+  return isOpen(entry.gateway) ? entry.gateway : null
+}
+
 // How long ensureActiveGatewayOpen waits out an in-flight secondary
 // activation before reporting the gateway as unavailable.
 const ACTIVE_GATEWAY_OPEN_WAIT_MS = 8_000

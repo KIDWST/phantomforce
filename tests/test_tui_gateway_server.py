@@ -16900,6 +16900,30 @@ def test_session_create_records_source(monkeypatch):
         server._sessions.clear()
 
 
+def test_session_create_retry_is_idempotent(monkeypatch):
+    """A lost WebSocket response must not turn one New session click into two."""
+    monkeypatch.setattr(server, "_start_agent_build", lambda sid, session: None)
+    server._sessions.clear()
+    server._session_create_requests.clear()
+    params = {"source": "desktop", "client_request_id": "desktop-create-1"}
+
+    try:
+        first = server.handle_request(
+            {"id": "request-before-reconnect", "method": "session.create", "params": params}
+        )
+        retry = server.handle_request(
+            {"id": "request-after-reconnect", "method": "session.create", "params": params}
+        )
+
+        assert first["id"] == "request-before-reconnect"
+        assert retry["id"] == "request-after-reconnect"
+        assert retry["result"] == first["result"]
+        assert list(server._sessions) == [first["result"]["session_id"]]
+    finally:
+        server._sessions.clear()
+        server._session_create_requests.clear()
+
+
 def test_shutdown_sessions_closes_every_session_via_helper(monkeypatch):
     seen = []
     monkeypatch.setattr(

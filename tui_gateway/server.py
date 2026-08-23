@@ -142,6 +142,15 @@ except Exception:
 from tui_gateway.render import make_stream_renderer, render_diff, render_message
 
 _sessions: dict[str, dict] = {}
+# A renderer can lose the response to a successful ``session.create`` when its
+# WebSocket goes stale (sleep/wake, network transition, or a renderer reload).
+# The desktop retries that one RPC after opening a fresh socket.  Keep a small,
+# short-lived result cache so the retry returns the session already created
+# instead of leaking a duplicate draft + worker.
+_session_create_requests: dict[str, tuple[float, dict]] = {}
+_session_create_requests_lock = threading.Lock()
+_SESSION_CREATE_REQUEST_TTL_S = 300.0
+_SESSION_CREATE_REQUEST_MAX = 256
 _methods: dict[str, callable] = {}
 _pending: dict[str, tuple[str, threading.Event]] = {}
 _pending_prompt_payloads: dict[str, tuple[str, dict]] = {}
@@ -2050,6 +2059,42 @@ def _image_meta(path: Path) -> dict:
 
 def _ok(rid, result: dict) -> dict:
     return {"jsonrpc": "2.0", "id": rid, "result": result}
+
+
+def _cached_session_create_result(client_request_id: str) -> dict | None:
+    if not client_request_id:
+        return None
+
+    now = time.monotonic()
+    with _session_create_requests_lock:
+        stale = [
+            key
+            for key, (created_at, _result) in _session_create_requests.items()
+            if now - created_at > _SESSION_CREATE_REQUEST_TTL_S
+        ]
+        for key in stale:
+            _session_create_requests.pop(key, None)
+
+        cached = _session_create_requests.get(client_request_id)
+
+    return copy.deepcopy(cached[1]) if cached else None
+
+
+def _cache_session_create_result(client_request_id: str, result: dict) -> None:
+    if not client_request_id:
+        return
+
+    with _session_create_requests_lock:
+        _session_create_requests[client_request_id] = (
+            time.monotonic(),
+            copy.deepcopy(result),
+        )
+        while len(_session_create_requests) > _SESSION_CREATE_REQUEST_MAX:
+            oldest = min(
+                _session_create_requests,
+                key=lambda key: _session_create_requests[key][0],
+            )
+            _session_create_requests.pop(oldest, None)
 
 
 def _err(rid, code: int, msg: str, data=None) -> dict:
