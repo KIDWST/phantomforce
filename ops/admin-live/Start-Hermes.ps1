@@ -87,14 +87,15 @@ function Restart-StaleDockerDesktop {
   param([string]$DesktopPath)
 
   $installRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $DesktopPath))
-  $allowedNames = @("Docker Desktop.exe", "com.docker.backend.exe", "com.docker.build.exe", "docker.exe")
-  $targets = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.Name -in $allowedNames -and
-    $_.ExecutablePath -and
-    [System.IO.Path]::GetFullPath($_.ExecutablePath).StartsWith($installRoot, [System.StringComparison]::OrdinalIgnoreCase)
+  $allowedNames = @("Docker Desktop", "com.docker.backend", "com.docker.build", "docker")
+  $targets = foreach ($name in $allowedNames) {
+    Get-Process -Name $name -ErrorAction SilentlyContinue | Where-Object {
+      $_.Path -and
+      [System.IO.Path]::GetFullPath($_.Path).StartsWith($installRoot, [System.StringComparison]::OrdinalIgnoreCase)
+    }
   }
   foreach ($target in $targets) {
-    Stop-Process -Id $target.ProcessId -Force -ErrorAction SilentlyContinue
+    Stop-Process -Id $target.Id -Force -ErrorAction SilentlyContinue
   }
   if (@($targets).Count -gt 0) {
     Start-Sleep -Seconds 2
@@ -140,6 +141,38 @@ function Ensure-DockerEngine {
   throw "Docker Desktop did not make its engine available within 150 seconds."
 }
 
+function Test-PostgresProtocol {
+  param(
+    [string]$HostName = "127.0.0.1",
+    [int]$Port = 5432,
+    [int]$TimeoutMs = 2000
+  )
+
+  $client = $null
+  try {
+    $client = [System.Net.Sockets.TcpClient]::new()
+    $connect = $client.ConnectAsync($HostName, $Port)
+    if (-not $connect.Wait($TimeoutMs) -or -not $client.Connected) {
+      return $false
+    }
+
+    # PostgreSQL answers this SSLRequest with S, N, or E. A reserved Docker
+    # proxy port with no database behind it accepts TCP but never answers, so
+    # a plain port check cannot distinguish it from a healthy database.
+    $stream = $client.GetStream()
+    $stream.ReadTimeout = $TimeoutMs
+    $stream.WriteTimeout = $TimeoutMs
+    [byte[]]$sslRequest = @(0, 0, 0, 8, 4, 210, 22, 47)
+    $stream.Write($sslRequest, 0, $sslRequest.Length)
+    $reply = $stream.ReadByte()
+    return $reply -in 69, 78, 83 # E, N, S
+  } catch {
+    return $false
+  } finally {
+    if ($client) { $client.Dispose() }
+  }
+}
+
 function Ensure-LocalDatabase {
   param([hashtable]$ServerEnv)
 
@@ -152,7 +185,7 @@ function Ensure-LocalDatabase {
     return
   }
 
-  if (Test-NetConnection -ComputerName "127.0.0.1" -Port 5432 -InformationLevel Quiet -WarningAction SilentlyContinue) {
+  if (Test-PostgresProtocol -HostName "127.0.0.1" -Port 5432) {
     return
   }
 
@@ -190,7 +223,7 @@ function Ensure-LocalDatabase {
 
   $deadline = (Get-Date).AddSeconds(30)
   do {
-    if (Test-NetConnection -ComputerName "127.0.0.1" -Port 5432 -InformationLevel Quiet -WarningAction SilentlyContinue) {
+    if (Test-PostgresProtocol -HostName "127.0.0.1" -Port 5432) {
       return
     }
     Start-Sleep -Seconds 1

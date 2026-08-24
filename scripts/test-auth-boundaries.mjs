@@ -10,6 +10,7 @@ const store = read("../app/js/store.js");
 const server = read("../server/src/index.ts");
 const publicHosts = read("../server/src/access/public-hosts.ts");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
+const hermesLauncher = read("../ops/admin-live/Start-Hermes.ps1");
 
 assert.match(store, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u, "The customer app host must be explicit in the browser session layer.");
 assert.match(store, /export const isClientPublicHost = \(\) => location\.hostname === CLIENT_PUBLIC_HOST/u, "The browser must detect the customer app host.");
@@ -66,5 +67,8 @@ assert.match(server, /app\.post\("\/auth\/forgot-username"[\s\S]*customerAuthFor
 assert.match(server, /app\.post\("\/auth\/forgot-password"[\s\S]*customerAuthForbiddenOnHost\(request\)[\s\S]*Customer account recovery belongs on app\.phantomforce\.online/u, "Password recovery must be blocked on admin.phantomforce.online.");
 assert.match(server, /app\.post\("\/auth\/reset-password"[\s\S]*customerAuthForbiddenOnHost\(request\)[\s\S]*Customer password reset belongs on app\.phantomforce\.online/u, "Password reset must be blocked on admin.phantomforce.online.");
 assert.match(staticServer, /headers\["x-forwarded-host"\] = originalHost;[\s\S]*headers\["x-original-host"\] = originalHost;/u, "The admin static proxy must preserve the original public host so Hermes can enforce admin/app auth boundaries.");
+assert.match(hermesLauncher, /function Test-PostgresProtocol/u, "The Hermes launcher must verify PostgreSQL itself instead of trusting an occupied TCP port.");
+assert.match(hermesLauncher, /if \(Test-PostgresProtocol -HostName "127\.0\.0\.1" -Port 5432\) \{\s*return/u, "The Hermes launcher must only accept a protocol-responsive local database.");
+assert.doesNotMatch(hermesLauncher, /if \(Test-NetConnection[^\n]*5432[^\n]*\) \{\s*return/u, "A Docker proxy port without a PostgreSQL backend must not be treated as healthy.");
 
 console.log("Auth boundary checks passed.");
