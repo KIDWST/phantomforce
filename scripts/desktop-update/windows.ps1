@@ -90,7 +90,7 @@ $LogDir = Join-Path $HermesHome "logs"
 $LogPath = Join-Path $LogDir "desktop-update-handoff.log"
 $ResultPath = Join-Path $HermesHome ".hermes-update-result.json"
 $script:Ui = $null
-$script:UiStage = "Hermes will open once done."   # until the first gate; matches ui.html
+$script:UiStage = "PhantomBot will open once done."   # until the first gate; matches ui.html
 $script:UiStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 function Write-HandoffLog([string]$Message) {
@@ -324,7 +324,7 @@ function Show-ProgressWindow {
         $bar.MarqueeAnimationSpeed = 30
         $bar.SetBounds(60, 128, 160, 8)
         $title = New-Object System.Windows.Forms.Label
-        $title.Text = "Updating Hermes"
+        $title.Text = "Updating PhantomBot"
         $title.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 12)
         $title.ForeColor = $fore
         $title.TextAlign = "MiddleCenter"
@@ -1019,7 +1019,7 @@ try {
             # Something still maps the venv. --force-ing past it guarantees a
             # half-updated venv (the exact 2026-08-09 Access-denied brick).
             $finalCode = 5
-            $finalMsg = "Update aborted: another process is still holding the Hermes install open (venv\Scripts\hermes.exe locked after 20s). Nothing was changed. Close other Hermes windows/terminals and try again."
+            $finalMsg = "Update aborted: another process is still holding the PhantomBot engine open (venv\Scripts\hermes.exe locked after 20s). Nothing was changed. Close other PhantomBot windows/terminals and try again."
             Write-HandoffLog $finalMsg
             exit $finalCode
         }
@@ -1163,7 +1163,7 @@ try {
         if (-not $cameBack -and $RelaunchExe) {
             # Launch was due and did not verifiably land: truthful result
             # for the next boot, manual state held on screen now.
-            $finalMsg = "Update complete. Reopen Hermes to finish (it could not restart itself)."
+            $finalMsg = "Update complete. Reopen PhantomBot to finish (it could not restart itself)."
             Write-Result $true 0 $finalMsg $true
             Show-ManualFinale $finalMsg
         }

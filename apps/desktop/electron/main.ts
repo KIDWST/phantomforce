@@ -2066,7 +2066,7 @@ async function waitForUpdateToFinish() {
 
       await advanceBootProgress(
         'backend.update-wait',
-        'An update is finishing — Hermes will start automatically when it completes…',
+        'An update is finishing — PhantomBot will start automatically when it completes…',
         12
       )
     },
@@ -3635,7 +3635,7 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
     emitUpdateProgress({
       stage: 'restart',
       message:
-        'Updating Hermes — this window will close and the updater will open. Don’t reopen Hermes yourself; it restarts automatically when the update finishes.',
+        'Updating PhantomBot — this window will close and the updater will open. Don’t reopen PhantomBot yourself; it restarts automatically when the update finishes.',
       percent: 100
     })
     repairMacUpdaterHelper(updater)
@@ -3842,7 +3842,7 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
     const handoffOutcome = await observeUpdaterHandoff(child, UPDATE_HANDOFF_DWELL_MS)
 
     if (!handoffOutcome.ok) {
-      const message = `Update failed to start: ${handoffOutcome.message}. Hermes will keep running — try again, or run \`hermes update\` from a terminal.`
+      const message = `Update failed to start: ${handoffOutcome.message}. PhantomBot will keep running — try again, or run \`hermes update\` from a terminal.`
 
       rememberLog(`[updates] hand-off not viable, aborting quit: ${handoffOutcome.message}`)
       emitUpdateProgress({ stage: 'error', message, percent: null })
@@ -4192,7 +4192,7 @@ async function applyUpdatesPosixHandoff(opts: any) {
   emitUpdateProgress({
     stage: 'restart',
     message:
-      'Updating Hermes — this window will close. Don’t reopen Hermes yourself; it restarts automatically when the update finishes.',
+      'Updating PhantomBot — this window will close. Don’t reopen PhantomBot yourself; it restarts automatically when the update finishes.',
     percent: 100
   })
 
@@ -4205,7 +4205,7 @@ async function applyUpdatesPosixHandoff(opts: any) {
   const handoffOutcome = await observeUpdaterHandoff(child, UPDATE_HANDOFF_DWELL_MS)
 
   if (!handoffOutcome.ok) {
-    const message = `Update failed to start: ${handoffOutcome.message}. Hermes will keep running — try again, or run \`hermes update\` from a terminal.`
+    const message = `Update failed to start: ${handoffOutcome.message}. PhantomBot will keep running — try again, or run \`hermes update\` from a terminal.`
 
     rememberLog(`[updates] posix hand-off not viable, aborting quit: ${handoffOutcome.message}`)
     emitUpdateProgress({ stage: 'error', message, percent: null })
