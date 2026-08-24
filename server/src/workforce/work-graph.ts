@@ -120,6 +120,21 @@ export type WorkGraphDocument = {
   checksum: string;
 };
 
+export type WorkGraphFocus = {
+  kind: "approval" | "blocked" | "task" | "clear";
+  urgency: "now" | "today" | "monitoring";
+  title: string;
+  detail: string;
+  why: string;
+  evidence: string;
+  actionLabel: string | null;
+  actionId: string | null;
+  taskId: string | null;
+  route: "approvals" | "settings" | "workforce" | null;
+  settingsTarget: "connections" | null;
+  canExecute: boolean;
+};
+
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
 const defaultRoot = resolve(repoRoot, "server/.local/work-graph");
@@ -597,6 +612,125 @@ export async function decideAllSafeWorkActions(options: {
   }, options.root);
 }
 
+function actionDisplayTitle(action: WorkGraphAction) {
+  const payload = action.payload;
+  return cleanText(payload.title, 180)
+    || cleanText(payload.subject, 180)
+    || cleanText(payload.name, 180)
+    || cleanText(payload.business, 180)
+    || action.type.replaceAll(".", " ");
+}
+
+function actionPriority(action: WorkGraphAction) {
+  const priority = cleanText(action.payload.priority, 20);
+  const priorityScore = priority === "high" ? 3 : priority === "medium" ? 2 : priority === "low" ? 1 : 0;
+  const externalScore = action.policy.surface === "external" ? 1 : 0;
+  return priorityScore * 10 + externalScore;
+}
+
+function taskDueTimestamp(task: WorkGraphTask) {
+  if (!task.dueAt) return Number.POSITIVE_INFINITY;
+  const timestamp = Date.parse(task.dueAt);
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
+function buildHeartbeatFocus(input: {
+  needsYou: WorkGraphAction[];
+  blocked: WorkGraphAction[];
+  openTasks: WorkGraphTask[];
+  version: number;
+  checksum: string;
+}): WorkGraphFocus {
+  const approval = input.needsYou.slice().sort((left, right) => {
+    const priorityDifference = actionPriority(right) - actionPriority(left);
+    return priorityDifference || left.createdAt.localeCompare(right.createdAt);
+  })[0];
+  if (approval) {
+    const external = approval.policy.surface === "external";
+    return {
+      kind: "approval",
+      urgency: "now",
+      title: actionDisplayTitle(approval),
+      detail: cleanText(approval.rationale, 320) || "This work is ready for owner review.",
+      why: external
+        ? "This changes something outside PhantomForce, so execution is waiting for your approval."
+        : "This is the highest-priority approved path that is waiting on you.",
+      evidence: `Action ${approval.id.slice(0, 8)} is awaiting owner approval.`,
+      actionLabel: "Approve & run",
+      actionId: approval.id,
+      taskId: null,
+      route: "approvals",
+      settingsTarget: null,
+      canExecute: true,
+    };
+  }
+
+  const blockedAction = input.blocked.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  if (blockedAction) {
+    const connectorBlocked = blockedAction.type.startsWith("email.") || blockedAction.type.startsWith("calendar.");
+    return {
+      kind: "blocked",
+      urgency: "now",
+      title: actionDisplayTitle(blockedAction),
+      detail: cleanText(blockedAction.receipt?.blockedReason, 320)
+        || cleanText(blockedAction.receipt?.summary, 320)
+        || "Execution stopped before completion.",
+      why: cleanText(blockedAction.receipt?.remediation, 320) || "Resolve this blocker before the workflow can continue.",
+      evidence: blockedAction.receipt?.id
+        ? `Blocked receipt ${blockedAction.receipt.id.slice(0, 8)} records that nothing was marked complete.`
+        : `Action ${blockedAction.id.slice(0, 8)} remains ${blockedAction.status}.`,
+      actionLabel: connectorBlocked ? "Fix connection" : "Review blocker",
+      actionId: blockedAction.id,
+      taskId: null,
+      route: connectorBlocked ? "settings" : "approvals",
+      settingsTarget: connectorBlocked ? "connections" : null,
+      canExecute: false,
+    };
+  }
+
+  const task = input.openTasks.slice().sort((left, right) => {
+    const dueDifference = taskDueTimestamp(left) - taskDueTimestamp(right);
+    if (dueDifference) return dueDifference;
+    const weight = { high: 3, medium: 2, low: 1 } as const;
+    return weight[right.priority] - weight[left.priority] || left.createdAt.localeCompare(right.createdAt);
+  })[0];
+  if (task) {
+    const dueTimestamp = taskDueTimestamp(task);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    const dueToday = Number.isFinite(dueTimestamp) && dueTimestamp <= endOfToday.getTime();
+    return {
+      kind: "task",
+      urgency: dueToday || task.priority === "high" ? "today" : "monitoring",
+      title: task.title,
+      detail: task.project ? `${task.priority} priority in ${task.project}.` : `${task.priority} priority task.`,
+      why: dueToday ? "This is the nearest due commitment in the work graph." : "This is the next open commitment in the work graph.",
+      evidence: task.dueAt ? `Tracked task ${task.id.slice(0, 8)} is due ${task.dueAt}.` : `Tracked task ${task.id.slice(0, 8)} remains open.`,
+      actionLabel: "Open task",
+      actionId: null,
+      taskId: task.id,
+      route: "workforce",
+      settingsTarget: null,
+      canExecute: false,
+    };
+  }
+
+  return {
+    kind: "clear",
+    urgency: "monitoring",
+    title: "You are clear",
+    detail: "No approval, blocker, or open commitment needs owner attention.",
+    why: "PhantomForce will promote the next verified work item here when one exists.",
+    evidence: `Work graph version ${input.version}, checksum ${input.checksum.slice(0, 12)}.`,
+    actionLabel: null,
+    actionId: null,
+    taskId: null,
+    route: null,
+    settingsTarget: null,
+    canExecute: false,
+  };
+}
+
 export async function getWorkGraphHeartbeat(tenantId: string, actor = "system", root?: string) {
   const document = await getWorkGraphDocument(tenantId, actor, root);
   const needsYou = document.actions.filter((action) => action.status === "awaiting_approval");
@@ -615,6 +749,7 @@ export async function getWorkGraphHeartbeat(tenantId: string, actor = "system", 
     inMotion,
     verified,
     blocked,
+    focus: buildHeartbeatFocus({ needsYou, blocked, openTasks, version: document.version, checksum: document.checksum }),
     nothingSlips: {
       openTaskCount: openTasks.length,
       nextTask: openTasks

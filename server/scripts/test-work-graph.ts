@@ -68,6 +68,11 @@ try {
   assert.equal(draft.result.action.status, "awaiting_approval");
   assert.equal(draft.result.action.receipt, null);
 
+  const approvalFocus = await getWorkGraphHeartbeat(tenantId, actor, root);
+  assert.equal(approvalFocus.focus.kind, "approval");
+  assert.equal(approvalFocus.focus.actionId, draft.result.action.id);
+  assert.equal(approvalFocus.focus.canExecute, true);
+
   const draftDecision = await decideWorkAction({
     tenantId,
     actionId: draft.result.action.id,
@@ -136,10 +141,35 @@ try {
   assert.equal(heartbeat.verified.length, 3);
   assert.equal(heartbeat.blocked.length, 1);
   assert.equal(heartbeat.nothingSlips.openTaskCount, 1);
+  assert.equal(heartbeat.focus.kind, "blocked");
+  assert.equal(heartbeat.focus.actionId, send.result.action.id);
+  assert.equal(heartbeat.focus.route, "settings");
+  assert.equal(heartbeat.focus.settingsTarget, "connections");
+
+  const taskTenant = "tenant-task-focus";
+  await proposeWorkAction({
+    tenantId: taskTenant,
+    actor,
+    root,
+    idempotencyKey: "task:focus:1",
+    action: {
+      type: "task.create",
+      proposedBy: "ai",
+      rationale: "Keep the next commitment visible.",
+      policy: { surface: "internal", reversible: true, requiresApproval: false },
+      payload: { title: "Prepare the owner brief", priority: "high", project: "Command Center" },
+    },
+  });
+  const taskFocus = await getWorkGraphHeartbeat(taskTenant, actor, root);
+  assert.equal(taskFocus.focus.kind, "task");
+  assert.equal(taskFocus.focus.title, "Prepare the owner brief");
+  assert.equal(taskFocus.focus.route, "workforce");
 
   const isolated = await getWorkGraphHeartbeat("tenant-beta", "owner-beta", root);
   assert.equal(isolated.verified.length, 0, "another tenant must not see Alpha actions");
   assert.equal(isolated.blocked.length, 0, "another tenant must not see Alpha failures");
+  assert.equal(isolated.focus.kind, "clear");
+  assert.match(isolated.focus.evidence, /checksum/i);
 
   console.log(JSON.stringify({
     ok: true,
@@ -149,6 +179,7 @@ try {
     tenantIsolation: true,
     idempotency: true,
     hashChain: true,
+    focusStates: ["approval", "blocked", "task", "clear"],
   }, null, 2));
 } finally {
   await rm(root, { recursive: true, force: true });

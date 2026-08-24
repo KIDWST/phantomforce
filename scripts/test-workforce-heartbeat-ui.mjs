@@ -14,6 +14,11 @@ assert.match(main, /\/api\/workforce\/heartbeat/u, "The heartbeat must read auth
 for (const label of ["YOUR PHANTOM WORKFORCE", "What Needs Me", "Review", "Phantom executes", "Verified complete", "Nothing slips"]) {
   assert.ok(main.includes(label), `The heartbeat must expose the ${label} lifecycle state.`);
 }
+for (const label of ["NEXT MOVE", "WHY NOW", "PROOF"]) {
+  assert.ok(main.includes(label), `The heartbeat must expose the ${label} owner focus field.`);
+}
+assert.match(main, /data-workforce-focus-approve/u, "The top priority approval must execute from the heartbeat.");
+assert.match(main, /focus\.settingsTarget/u, "A blocked connector must route directly to connection settings.");
 assert.match(main, /Approve all safe/u, "The owner must be able to approve all safe internal work at once.");
 assert.match(main, /Approve &amp; run/u, "Individual approval must be a clear execution action.");
 assert.match(main, /BLOCKED — EXACT REASON/u, "Blocked work must explain the exact reason.");
@@ -39,8 +44,11 @@ assert.match(graph, /safeTenantId\(tenantId\)/u, "Work storage must be pinned to
 assert.match(graph, /No verified email delivery connector is active for this organization/u, "Email send must fail truthfully when its connector is unavailable.");
 assert.match(graph, /Connect and verify Gmail or Outlook/u, "Blocked email sends must include actionable remediation.");
 assert.match(graph, /status === "awaiting_approval" && action\.policy\.surface === "internal"/u, "Bulk approval must exclude external actions.");
+assert.match(graph, /function buildHeartbeatFocus/u, "The server must compute one authoritative next move.");
+assert.match(graph, /kind: "approval"[\s\S]*kind: "blocked"[\s\S]*kind: "task"[\s\S]*kind: "clear"/u, "The next move must cover every honest owner state.");
 
 assert.match(css, /\.workforce-heartbeat \{[\s\S]*rgba\(93, 255, 179/u, "The heartbeat must use the Phantom green and black visual system.");
+assert.match(css, /\.workforce-next-move/u, "The single next move must have a dedicated visual hierarchy.");
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.workforce-heartbeat-body \{ grid-template-columns: 1fr; \}/u, "The heartbeat must intentionally collapse on smaller screens.");
 assert.doesNotMatch(css.match(/\.workforce-heartbeat \{[\s\S]*?@media \(max-width: 560px\)/u)?.[0] || "", /#[a-f0-9]{0,2}(?:7c3aed|8b5cf6|6366f1)|purple|violet/iu, "The heartbeat cannot introduce purple or blue brand drift.");
 
@@ -51,5 +59,6 @@ console.log(JSON.stringify({
   serverRoutes: 6,
   truthfulExternalBlocking: true,
   tenantIsolationContract: true,
+  authoritativeNextMove: true,
   responsive: true,
 }, null, 2));

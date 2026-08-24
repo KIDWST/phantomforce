@@ -6,57 +6,57 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260822-193";
+} from "./store.js?v=phantom-live-20260822-194";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems, cachedOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260822-193";
+} from "./organizationpulse.js?v=phantom-live-20260822-194";
 import {
   loadSecurityMonitorStatus, cachedSecurityMonitorStatus, securityMonitorIsAdmin, runSecurityMonitorScan, securityMonitorRunning,
-} from "./securitystatus.js?v=phantom-live-20260822-193";
-import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260822-193";
-import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260822-193";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260822-193";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260822-193";
-import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260822-193";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260822-193";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260822-193";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260822-193";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260822-193";
-import { mountPhantomAI, queuePhantomAiPrompt } from "./phantomai.js?v=phantom-live-20260822-193";
-import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260822-193";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260822-193";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260822-193";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260822-193";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260822-193";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260822-193";
-import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260822-193";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260822-193";
-import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260822-193";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260822-193";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260822-193";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260822-193";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260822-193";
-import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260822-193";
+} from "./securitystatus.js?v=phantom-live-20260822-194";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260822-194";
+import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260822-194";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260822-194";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260822-194";
+import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260822-194";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260822-194";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260822-194";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260822-194";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260822-194";
+import { mountPhantomAI, queuePhantomAiPrompt } from "./phantomai.js?v=phantom-live-20260822-194";
+import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260822-194";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260822-194";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260822-194";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260822-194";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260822-194";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260822-194";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260822-194";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260822-194";
+import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260822-194";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260822-194";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260822-194";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260822-194";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260822-194";
+import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260822-194";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260822-193";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260822-193";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260822-193";
+} from "./orgs.js?v=phantom-live-20260822-194";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260822-194";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260822-194";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260822-193";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260822-194";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260822-193";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260822-194";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260822-193";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260822-193";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260822-193";
-import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260822-193";
+} from "./customization.js?v=phantom-live-20260822-194";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260822-194";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260822-194";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260822-194";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -65,17 +65,17 @@ const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 const WORKSPACE_STYLE_BUNDLES = Object.freeze({
   phantomplay: [
-    "/app/phantomplay.css?v=phantom-live-20260822-193",
-    "/app/phantomplay-v2.css?v=phantom-live-20260822-193",
+    "/app/phantomplay.css?v=phantom-live-20260822-194",
+    "/app/phantomplay-v2.css?v=phantom-live-20260822-194",
   ],
-  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260822-193"],
-  phantomai: ["/app/creator-studio.css?v=phantom-live-20260822-193"],
+  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260822-194"],
+  phantomai: ["/app/creator-studio.css?v=phantom-live-20260822-194"],
   phantomhunter: [
-    "/app/phantomhunter.css?v=phantom-live-20260822-193",
-    "/app/phantomhunter-connect.css?v=phantom-live-20260822-193",
+    "/app/phantomhunter.css?v=phantom-live-20260822-194",
+    "/app/phantomhunter-connect.css?v=phantom-live-20260822-194",
   ],
-  media: ["/app/creator-studio.css?v=phantom-live-20260822-193"],
-  content: ["/app/creator-studio.css?v=phantom-live-20260822-193"],
+  media: ["/app/creator-studio.css?v=phantom-live-20260822-194"],
+  content: ["/app/creator-studio.css?v=phantom-live-20260822-194"],
 });
 
 const workspaceStylePromises = new Map();
@@ -162,7 +162,7 @@ function showWorkspaceTransition(transition, phase = "loading") {
   transition.node.setAttribute("role", phase === "error" ? "alert" : "status");
   transition.node.setAttribute("aria-live", phase === "error" ? "assertive" : "polite");
   transition.node.innerHTML = `<div class="workspace-transition-card">
-    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20260822-193" alt=""><i></i><i></i></div>
+    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20260822-194" alt=""><i></i><i></i></div>
     <p>${phase === "error" ? "PHANTOM RECOVERY" : "PHANTOM ROUTING"}</p>
     <h2>${phase === "error" ? "This workspace needs another moment." : `Preparing ${esc(transition.title)}`}</h2>
     <span>${phase === "error" ? "Nothing unfinished was shown. Try the transition again." : "Assembling your workspace."}</span>
@@ -1883,7 +1883,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260822-193";
+const POSE_VERSION = "phantom-live-20260822-194";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2371,6 +2371,30 @@ function workActionTitle(action) {
   return curtainDecisionText(payload.title || payload.subject || action?.type || "Work item", "Work item");
 }
 
+async function decideWorkforceAction(actionId, decision) {
+  if (!actionId || workforceHeartbeatBusy) return;
+  workforceHeartbeatBusy = actionId;
+  renderWorkforceHeartbeat();
+  try {
+    const token = session.token();
+    const response = await fetch(`/api/workforce/actions/${encodeURIComponent(actionId)}/decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ tenant_id: currentTenantId(), decision }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) throw new Error(payload?.error || "Decision could not be completed.");
+    const receipt = payload.action?.receipt;
+    speak(receipt?.summary || `${workActionTitle(payload.action)} is ${payload.action?.status || "updated"}.`, "", payload.action?.status === "blocked" ? "alert" : "bright");
+    await fetchWorkforceHeartbeat(true);
+  } catch (error) {
+    speak(`Work decision failed: ${error?.message || "service unreachable"}. Nothing was marked complete.`, "", "alert");
+  } finally {
+    workforceHeartbeatBusy = "";
+    renderWorkforceHeartbeat();
+  }
+}
+
 function renderWorkforceHeartbeat() {
   const host = $("[data-workforce-heartbeat]");
   if (!host) return;
@@ -2398,6 +2422,7 @@ function renderWorkforceHeartbeat() {
   const needs = heartbeat.needsYou || [];
   const verified = heartbeat.verified || [];
   const blocked = heartbeat.blocked || [];
+  const focus = heartbeat.focus || null;
   const openTasks = Number(heartbeat.nothingSlips?.openTaskCount || 0);
   const primaryState = needs.length
     ? `${needs.length} decision${needs.length === 1 ? "" : "s"} need you`
@@ -2412,6 +2437,25 @@ function renderWorkforceHeartbeat() {
         <button type="button" data-open-ws="approvals">Open review desk</button>
       </div>
     </div>
+    ${focus ? `
+      <section class="workforce-next-move is-${esc(focus.kind || "clear")}" aria-label="Next move">
+        <div class="workforce-next-move-rank"><span>NEXT MOVE</span><b>${esc(String(focus.urgency || "monitoring").toUpperCase())}</b></div>
+        <div class="workforce-next-move-copy">
+          <h3>${esc(focus.title || "You are clear")}</h3>
+          <p>${esc(focus.detail || "No owner action is required.")}</p>
+          <dl>
+            <div><dt>WHY NOW</dt><dd>${esc(focus.why || "This is the highest-priority verified item in the work graph.")}</dd></div>
+            <div><dt>PROOF</dt><dd>${esc(focus.evidence || `Work graph version ${heartbeat.version || "current"}.`)}</dd></div>
+          </dl>
+        </div>
+        <div class="workforce-next-move-action">
+          ${focus.kind === "approval" && focus.actionId
+            ? `<button class="is-primary" type="button" data-workforce-focus-approve="${esc(focus.actionId)}" ${workforceHeartbeatBusy ? "disabled" : ""}>${esc(focus.actionLabel || "Approve & run")}</button>`
+            : focus.route
+              ? `<button type="button" data-open-ws="${esc(focus.route)}" ${focus.settingsTarget ? `data-settings-target="${esc(focus.settingsTarget)}"` : ""}>${esc(focus.actionLabel || "Open")}</button>`
+              : `<span>NO ACTION REQUIRED</span>`}
+        </div>
+      </section>` : ""}
     <div class="workforce-heartbeat-flow" aria-label="Work lifecycle">
       <span class="${needs.length ? "is-live" : ""}"><i>01</i><b>Review</b><small>${needs.length || "clear"}</small></span>
       <span class="${(heartbeat.inMotion || []).length ? "is-live" : ""}"><i>02</i><b>Phantom executes</b><small>${(heartbeat.inMotion || []).length || "ready"}</small></span>
@@ -2440,30 +2484,13 @@ function renderWorkforceHeartbeat() {
     </div>`;
 
   host.querySelectorAll("[data-work-action-decision]").forEach((button) => {
-    button.addEventListener("click", async () => {
+    button.addEventListener("click", () => {
       const card = button.closest("[data-work-action-id]");
-      if (!card || workforceHeartbeatBusy) return;
-      workforceHeartbeatBusy = card.dataset.workActionId;
-      renderWorkforceHeartbeat();
-      try {
-        const token = session.token();
-        const response = await fetch(`/api/workforce/actions/${encodeURIComponent(card.dataset.workActionId)}/decision`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ tenant_id: currentTenantId(), decision: button.dataset.workActionDecision }),
-        });
-        const payload = await response.json().catch(() => null);
-        if (!response.ok || !payload?.ok) throw new Error(payload?.error || "Decision could not be completed.");
-        const receipt = payload.action?.receipt;
-        speak(receipt?.summary || `${workActionTitle(payload.action)} is ${payload.action?.status || "updated"}.`, "", payload.action?.status === "blocked" ? "alert" : "bright");
-        await fetchWorkforceHeartbeat(true);
-      } catch (error) {
-        speak(`Work decision failed: ${error?.message || "service unreachable"}. Nothing was marked complete.`, "", "alert");
-      } finally {
-        workforceHeartbeatBusy = "";
-        renderWorkforceHeartbeat();
-      }
+      if (card) decideWorkforceAction(card.dataset.workActionId, button.dataset.workActionDecision);
     });
+  });
+  host.querySelector("[data-workforce-focus-approve]")?.addEventListener("click", (event) => {
+    decideWorkforceAction(event.currentTarget.dataset.workforceFocusApprove, "approve");
   });
   host.querySelector("[data-workforce-approve-all]")?.addEventListener("click", async () => {
     if (workforceHeartbeatBusy) return;
