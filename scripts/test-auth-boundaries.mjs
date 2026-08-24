@@ -70,5 +70,6 @@ assert.match(staticServer, /headers\["x-forwarded-host"\] = originalHost;[\s\S]*
 assert.match(hermesLauncher, /function Test-PostgresProtocol/u, "The Hermes launcher must verify PostgreSQL itself instead of trusting an occupied TCP port.");
 assert.match(hermesLauncher, /if \(Test-PostgresProtocol -HostName "127\.0\.0\.1" -Port 5432\) \{\s*return/u, "The Hermes launcher must only accept a protocol-responsive local database.");
 assert.doesNotMatch(hermesLauncher, /if \(Test-NetConnection[^\n]*5432[^\n]*\) \{\s*return/u, "A Docker proxy port without a PostgreSQL backend must not be treated as healthy.");
+assert.match(hermesLauncher, /\$containerDeadline = \(Get-Date\)\.AddSeconds\(30\)[\s\S]*container inspect[\s\S]*while \(\(Get-Date\) -lt \$containerDeadline\)/u, "The launcher must wait for Docker to restore saved containers before declaring PostgreSQL missing.");
 
 console.log("Auth boundary checks passed.");

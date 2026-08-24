@@ -204,8 +204,19 @@ function Ensure-LocalDatabase {
   } else {
     "phantomforce-postgres-launch"
   }
-  $running = & $docker.Source container inspect --format "{{.State.Running}}" $container 2>$null
-  if ($LASTEXITCODE -ne 0) {
+  # Docker can report its engine ready a few seconds before saved containers
+  # are visible. Wait through that startup window instead of falsely treating
+  # the production database as deleted.
+  $containerDeadline = (Get-Date).AddSeconds(30)
+  $inspectExit = 1
+  $running = $null
+  do {
+    $running = & $docker.Source container inspect --format "{{.State.Running}}" $container 2>$null
+    $inspectExit = $LASTEXITCODE
+    if ($inspectExit -eq 0) { break }
+    Start-Sleep -Seconds 1
+  } while ((Get-Date) -lt $containerDeadline)
+  if ($inspectExit -ne 0) {
     throw "Database auth requires the missing PostgreSQL container '$container'."
   }
 
