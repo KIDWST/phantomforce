@@ -70,6 +70,19 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Verified Next Move command center (2026-08-24)** — commit `4bf102e4`,
+  browser build `phantom-live-20260822-194`. The owner heartbeat now ranks the
+  single highest-value approval, blocker, or task from the server work graph;
+  explains why it matters; shows the supporting receipt; and either completes
+  the approved action or opens the exact workspace needed to unblock it. A
+  clear queue reports `NO ACTION REQUIRED` from the same authoritative source.
+  Release-critical passed 40/40, change-memory passed 425 checks, Vespergate
+  passed 196/196, focused work-graph/UI tests passed, and phone/desktop Chrome
+  visual QA found no overflow or clipping. Four unrelated Shadowbearer
+  generated folders that had blocked the serve-only checkout were preserved in
+  recovery stash `recovery/deployment-shadowbearer-v25r17-r20-before-4bf102e4`;
+  the deployment, Hermes service, public build, and startup watchdog now agree
+  on the canonical release.
 - **PhantomPlay connection-status repair (2026-08-22)** — aligns the
   desktop connection-vault and live-model request windows with real OpenRouter
   validation time, refreshes saved connection state whenever Settings opens,
