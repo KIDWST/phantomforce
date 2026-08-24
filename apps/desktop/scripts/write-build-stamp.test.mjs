@@ -80,6 +80,21 @@ test('resolveStamp prefers CI over local git over fallback', () => {
   assert.equal(local.dirty, false)
 })
 
+test('resolveStamp accepts an explicit permanent product release branch', () => {
+  const stamp = resolveStamp({
+    env: { PHANTOMBOT_PRODUCT_BRANCH: 'phantombot/stable' },
+    execFn: cmd => {
+      if (cmd === 'git rev-parse HEAD') return '9'.repeat(40)
+      if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'fix/local-build'
+      if (cmd === 'git status --porcelain -uno') return ''
+      return null
+    }
+  })
+
+  assert.equal(stamp.branch, 'phantombot/stable')
+  assert.equal(stamp.commit, '9'.repeat(40))
+})
+
 test('resolveStamp falls back when neither CI nor git is available', () => {
   const stamp = resolveStamp({ env: {}, execFn: () => null })
   assert.deepEqual(stamp, {

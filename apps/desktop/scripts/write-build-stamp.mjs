@@ -110,7 +110,10 @@ export function resolveStamp({
   execFn = tryExec,
   fallbackBranch = FALLBACK_BRANCH
 } = {}) {
-  return fromCI(env) || fromLocalGit(repoRoot, execFn) || fromFallback(fallbackBranch)
+  const resolved = fromCI(env) || fromLocalGit(repoRoot, execFn) || fromFallback(fallbackBranch)
+  const productBranch = String(env.PHANTOMBOT_PRODUCT_BRANCH || '').trim()
+
+  return productBranch ? { ...resolved, branch: productBranch } : resolved
 }
 
 export function isFallbackCommit(commit) {

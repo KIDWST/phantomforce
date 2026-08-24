@@ -79,17 +79,12 @@ describe('local desktop pack stays out of the publish path', () => {
     // and app-builder-lib does not walk up to the workspace root.
     process.env.GITHUB_TOKEN = 'x'
 
-    const configs = await getPublishConfigs(
-      fakePackager(desktopPkg),
-      null,
-      null,
-      /* errorIfCannot */ true
-    )
+    const configs = await getPublishConfigs(fakePackager(desktopPkg), null, null, /* errorIfCannot */ true)
 
     assert.ok(Array.isArray(configs) && configs.length > 0)
     assert.equal(configs[0].provider, 'github')
-    assert.equal(configs[0].owner, 'NousResearch')
-    assert.equal(configs[0].repo, 'hermes-agent')
+    assert.equal(configs[0].owner, 'KIDWST')
+    assert.equal(configs[0].repo, 'phantomforce')
   })
 
   test('a package without the repository field is what breaks resolution', async () => {

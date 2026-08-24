@@ -2,12 +2,12 @@
   "name": "phantombot",
   "productName": "PhantomBot",
   "private": true,
-  "version": "0.17.2",
+  "version": "0.17.3",
   "description": "PhantomBot standalone desktop, powered by the Hermes Agent kernel.",
   "author": "PhantomForce",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NousResearch/hermes-agent.git"
+    "url": "git+https://github.com/KIDWST/phantomforce.git"
   },
   "type": "module",
   "main": "dist/electron-main.mjs",

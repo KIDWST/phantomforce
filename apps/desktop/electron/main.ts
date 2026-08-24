@@ -230,6 +230,7 @@ import {
 } from './primary-backend-startup'
 import { rehomePrimaryConnection } from './primary-connection-rehome'
 import { PRODUCT_IDENTITY } from './product-identity'
+import { gitUrlRewriteEnvironment, healedProductBranch, resolveProductUpdateTarget } from './product-update-target'
 import {
   assertLocalProfileCanStart,
   decideProfileDeleteAction,
@@ -2601,14 +2602,15 @@ function recentHermesLog() {
 // ─── Self-update (git-pull against the running backend's hermes root) ──────
 
 function readDesktopUpdateConfig() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(DESKTOP_UPDATE_CONFIG_PATH, 'utf8'))
-    const branch = typeof parsed?.branch === 'string' ? parsed.branch.trim() : ''
+  let parsed = null
 
-    return { branch: branch || DEFAULT_UPDATE_BRANCH }
+  try {
+    parsed = JSON.parse(fs.readFileSync(DESKTOP_UPDATE_CONFIG_PATH, 'utf8'))
   } catch {
-    return { branch: DEFAULT_UPDATE_BRANCH }
+    // The packaged install stamp is the authoritative default below.
   }
+
+  return resolveProductUpdateTarget({ config: parsed, installStamp: INSTALL_STAMP, packaged: IS_PACKAGED })
 }
 
 // Atomic file write: temp + rename (atomic on all platforms). Prevents
@@ -2728,10 +2730,31 @@ function runGit(args, options: any = {}): Promise<{ code: number; stdout: string
 
 const firstLine = text => (text || '').split('\n').find(Boolean) || ''
 
-async function getOriginUrl(updateRoot) {
-  const origin = await runGit(['remote', 'get-url', 'origin'], { cwd: updateRoot })
+async function getOriginUrl(updateRoot, env: NodeJS.ProcessEnv = {}) {
+  const origin = await runGit(['remote', 'get-url', 'origin'], { cwd: updateRoot, env })
 
   return origin.code === 0 ? origin.stdout.trim() : ''
+}
+
+async function resolveUpdateGitTarget(updateRoot) {
+  const configured = readDesktopUpdateConfig()
+  const checkoutOrigin = await getOriginUrl(updateRoot)
+  const sourceOriginUrl = checkoutOrigin || configured.sourceOriginUrl
+
+  const gitEnv = gitUrlRewriteEnvironment(process.env, {
+    fromUrl: sourceOriginUrl,
+    toUrl: configured.repositoryUrl
+  })
+
+  return { ...configured, sourceOriginUrl, gitEnv }
+}
+
+function runUpdateGit(args, updateRoot, target, options: any = {}) {
+  return runGit(args, {
+    ...options,
+    cwd: updateRoot,
+    env: { ...(options.env || {}), ...(target?.gitEnv || {}) }
+  })
 }
 
 function emitUpdateProgress(payload) {
@@ -2749,32 +2772,43 @@ function emitUpdateProgress(payload) {
 // installed clients. Read-only ls-remote probe; only flips on a definitive
 // "ref absent" (exit 2), never on a transient network error, so a flaky
 // connection can't strand a user on the wrong branch.
-async function resolveHealedBranch(updateRoot, branch) {
+async function resolveHealedBranch(updateRoot, branch, target: any = null) {
   if (!branch || branch === 'main') {
     return branch || 'main'
   }
 
-  const originUrl = await getOriginUrl(updateRoot)
+  const originUrl = await getOriginUrl(updateRoot, target?.gitEnv || {})
   const remote = isOfficialSshRemote(originUrl) ? OFFICIAL_REPO_HTTPS_URL : 'origin'
-  const probe = await runGit(['ls-remote', '--exit-code', '--heads', remote, branch], { cwd: updateRoot })
+  const probe = await runUpdateGit(['ls-remote', '--exit-code', '--heads', remote, branch], updateRoot, target)
 
   if (probe.code !== 2) {
     return branch
   }
 
-  rememberLog(`[updates] origin/${branch} is gone (merged?); falling back to main`)
-  const config = readDesktopUpdateConfig()
+  const fallback = healedProductBranch({
+    branch,
+    productRepository: Boolean(target?.repositoryUrl),
+    remoteBranchExists: false
+  })
 
-  if (config.branch !== 'main') {
-    writeDesktopUpdateConfig({ ...config, branch: 'main' })
+  if (fallback === branch) {
+    return branch
   }
 
-  return 'main'
+  rememberLog(`[updates] origin/${branch} is gone (merged?); falling back to ${fallback}`)
+  const config = readDesktopUpdateConfig()
+
+  if (config.branch !== fallback) {
+    writeDesktopUpdateConfig({ branch: fallback })
+  }
+
+  return fallback
 }
 
 async function checkUpdates() {
   const updateRoot = resolveUpdateRoot()
-  let { branch } = readDesktopUpdateConfig()
+  const target = await resolveUpdateGitTarget(updateRoot)
+  let { branch } = target
   const gitDir = path.join(updateRoot, '.git')
 
   if (!directoryExists(gitDir)) {
@@ -2787,27 +2821,27 @@ async function checkUpdates() {
     }
   }
 
-  branch = await resolveHealedBranch(updateRoot, branch)
-  const originUrl = await getOriginUrl(updateRoot)
+  branch = await resolveHealedBranch(updateRoot, branch, target)
+  const originUrl = await getOriginUrl(updateRoot, target.gitEnv)
 
   if (isOfficialSshRemote(originUrl)) {
-    const git = args => runGit(args, { cwd: updateRoot }).then(r => r.stdout.trim())
+    const git = args => runUpdateGit(args, updateRoot, target).then(r => r.stdout.trim())
 
-    const [currentSha, target, dirtyStr, currentBranch] = await Promise.all([
+    const [currentSha, targetProbe, dirtyStr, currentBranch] = await Promise.all([
       git(['rev-parse', 'HEAD']),
-      runGit(['ls-remote', OFFICIAL_REPO_HTTPS_URL, `refs/heads/${branch}`], { cwd: updateRoot }),
+      runUpdateGit(['ls-remote', OFFICIAL_REPO_HTTPS_URL, `refs/heads/${branch}`], updateRoot, target),
       git(['status', '--porcelain']),
       git(['rev-parse', '--abbrev-ref', 'HEAD'])
     ])
 
-    const targetSha = firstLine(target.stdout).split(/\s+/)[0] || ''
+    const targetSha = firstLine(targetProbe.stdout).split(/\s+/)[0] || ''
 
-    if (target.code !== 0 || !targetSha) {
+    if (targetProbe.code !== 0 || !targetSha) {
       return {
         supported: true,
         branch,
         error: 'fetch-failed',
-        message: firstLine(target.stderr) || 'git ls-remote failed.',
+        message: firstLine(targetProbe.stderr) || 'git ls-remote failed.',
         hermesRoot: updateRoot,
         fetchedAt: Date.now()
       }
@@ -2849,7 +2883,7 @@ async function checkUpdates() {
   // check reports 'fetch-failed' forever — git never removes these itself.
   await clearStaleGitLocks(updateRoot)
 
-  const fetched = await runGit(['fetch', '--quiet', 'origin', branch], { cwd: updateRoot })
+  const fetched = await runUpdateGit(['fetch', '--quiet', 'origin', branch], updateRoot, target)
 
   if (fetched.code !== 0) {
     return {
@@ -2862,7 +2896,7 @@ async function checkUpdates() {
     }
   }
 
-  const git = args => runGit(args, { cwd: updateRoot }).then(r => r.stdout.trim())
+  const git = args => runUpdateGit(args, updateRoot, target).then(r => r.stdout.trim())
 
   const [currentSha, targetSha, dirtyStr, currentBranch, shallowStr] = await Promise.all([
     git(['rev-parse', 'HEAD']),
@@ -2883,7 +2917,7 @@ async function checkUpdates() {
   const targetIsAncestorOfHead =
     isShallow &&
     currentSha !== targetSha &&
-    (await runGit(['merge-base', '--is-ancestor', `origin/${branch}`, 'HEAD'], { cwd: updateRoot })).code === 0
+    (await runUpdateGit(['merge-base', '--is-ancestor', `origin/${branch}`, 'HEAD'], updateRoot, target)).code === 0
 
   let behind = resolveBehindCount({
     countStr,
@@ -2905,7 +2939,7 @@ async function checkUpdates() {
   // clone): still list what origin offers — resolveCommitLogSelection keeps
   // the shallow log to the fetched tip so the range walk can't enumerate the
   // contaminated ancestry — so "See what's new" stays useful and honest.
-  const commits = behind !== 0 ? await readCommitLog(updateRoot, branch, isShallow) : []
+  const commits = behind !== 0 ? await readCommitLog(updateRoot, branch, isShallow, target) : []
 
   return {
     supported: true,
@@ -2976,14 +3010,15 @@ async function fetchCompareBehindCount({ currentSha, originUrl, targetSha }) {
   }
 }
 
-async function readCommitLog(cwd, branch, isShallow) {
+async function readCommitLog(cwd, branch, isShallow, target: any = null) {
   const SEP = '\x1f'
   const REC = '\x1e'
   const { limit, revision } = resolveCommitLogSelection({ branch, isShallow })
 
-  const { stdout } = await runGit(
+  const { stdout } = await runUpdateGit(
     ['log', revision, `--pretty=format:%H${SEP}%s${SEP}%an${SEP}%at${REC}`, '-n', String(limit)],
-    { cwd }
+    cwd,
+    target
   )
 
   return stdout
@@ -3008,6 +3043,24 @@ let updateInFlight = false
 // set, window-all-closed calls app.quit() on every platform so the process
 // actually dies and the hand-off script can proceed immediately.
 let isQuittingForHandoff = false
+
+// A detached updater cannot make progress until this Electron process is
+// genuinely gone. `app.quit()` is graceful and therefore interceptable by a
+// teardown listener; a regression in any listener used to leave the process
+// alive until windows.ps1 failed closed after 30 seconds. Give normal teardown
+// a generous bounded window, then force the already-approved hand-off exit.
+function quitForUpdateHandoff() {
+  isQuittingForHandoff = true
+
+  const hardExit = setTimeout(() => {
+    rememberLog('[updates] graceful hand-off exit exceeded 10s; forcing Electron exit')
+    flushDesktopLogBufferSync()
+    app.exit(0)
+  }, 10_000)
+
+  app.once('quit', () => clearTimeout(hardExit))
+  app.quit()
+}
 
 // Quit-guard latches: one while the confirmation is on screen (a second
 // Cmd-Q must not stack dialogs), one after the user has said "quit anyway"
@@ -3530,6 +3583,7 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
       // when the script exists. Only when the checkout predates the script do
       // we surface the manual one-liner.
       const updateRoot = resolveUpdateRoot()
+      const updateTarget = await resolveUpdateGitTarget(updateRoot)
 
       if (!resolveUpdateScriptHandoff(updateRoot)) {
         // They DO have a working `hermes` on PATH / in the venv, so the
@@ -3546,7 +3600,7 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
           const current = (head.stdout || '').trim()
 
           if (head.code === 0 && current && current !== 'HEAD') {
-            const branch = await resolveHealedBranch(updateRoot, current)
+            const branch = await resolveHealedBranch(updateRoot, current, updateTarget)
 
             if (branch !== 'main') {
               command = `hermes update --branch ${branch}`
@@ -3587,8 +3641,8 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
     repairMacUpdaterHelper(updater)
 
     const updateRoot = resolveUpdateRoot()
-    const { branch: configuredBranch } = readDesktopUpdateConfig()
-    const branch = await resolveHealedBranch(updateRoot, configuredBranch || DEFAULT_UPDATE_BRANCH)
+    const updateTarget = await resolveUpdateGitTarget(updateRoot)
+    const branch = await resolveHealedBranch(updateRoot, updateTarget.branch || DEFAULT_UPDATE_BRANCH, updateTarget)
     const updaterArgs = ['--update', '--branch', branch]
     const targetApp = IS_MAC ? runningAppBundle() : null
 
@@ -3698,6 +3752,8 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
         updateRoot,
         '-Branch',
         branch,
+        ...(updateTarget.repositoryUrl ? ['-RepositoryUrl', updateTarget.repositoryUrl] : []),
+        ...(updateTarget.sourceOriginUrl ? ['-SourceOriginUrl', updateTarget.sourceOriginUrl] : []),
         '-DesktopPid',
         String(process.pid),
         '-RelaunchExe',
@@ -3728,7 +3784,7 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
       }
 
       rememberLog(
-        `[updates] launched repo hand-off script: ${scriptHandoff.scriptPath} (branch ${branch}); exiting desktop to release venv shim`
+        `[updates] launched repo hand-off script: ${scriptHandoff.scriptPath} (branch ${branch}, source ${updateTarget.repositoryUrl ? 'PhantomBot product' : 'checkout origin'}); exiting desktop to release venv shim`
       )
     } else {
       child = spawnUpdaterProcess(updater, updaterArgs, {
@@ -3795,10 +3851,15 @@ async function applyUpdates(opts: { stopSafeBlockers?: boolean } = {}) {
       return { ok: false, error: 'updater-spawn-failed', message }
     }
 
-    isQuittingForHandoff = true
+    // Finish the bounded backend coordinator before `before-quit` runs. The
+    // old path had already killed the backend but then started a second wait
+    // during quit; on Windows that could keep Electron alive past the
+    // hand-off script's 30-second gate.
+    await backendShutdown.run()
+    backendQuitTeardownDone = true
     setTimeout(
       () => {
-        app.quit()
+        quitForUpdateHandoff()
       },
       Math.max(0, UPDATE_HANDOFF_DWELL_MS - (Date.now() - dwellStartedAt))
     )
@@ -3839,11 +3900,11 @@ async function handOffWindowsBootstrapRecovery(reason) {
   }
 
   const updateRoot = resolveUpdateRoot()
-  const { branch: configuredBranch } = readDesktopUpdateConfig()
+  const updateTarget = await resolveUpdateGitTarget(updateRoot)
 
   const branch = directoryExists(path.join(updateRoot, '.git'))
-    ? await resolveHealedBranch(updateRoot, configuredBranch || DEFAULT_UPDATE_BRANCH)
-    : configuredBranch || DEFAULT_UPDATE_BRANCH
+    ? await resolveHealedBranch(updateRoot, updateTarget.branch || DEFAULT_UPDATE_BRANCH, updateTarget)
+    : updateTarget.branch || DEFAULT_UPDATE_BRANCH
 
   const venvBin = path.join(updateRoot, 'venv', IS_WINDOWS ? 'Scripts' : 'bin')
   const venvHermes = path.join(venvBin, IS_WINDOWS ? 'hermes.exe' : 'hermes')
@@ -3975,40 +4036,53 @@ function preflightStateDb(hermesHome, rememberLog) {
         )
       }
 
-      // Emergency timestamped backup, separate from the Python-level snapshot.
-      const ts = new Date().toISOString().replace(/[:.]/g, '-')
-
-      const emergencyPath = path.join(hermesHome, `state.db.pre-update-emergency-${ts}.bak`)
-
+      // Emergency snapshot, separate from the Python-level backup. A large
+      // state.db can be several gigabytes; creating another full copy on every
+      // retry made a failed update progressively slower and consumed tens of
+      // gigabytes. Reuse a recent size-matched snapshot for six hours, and keep
+      // at most one emergency copy. The updater still performs its own normal
+      // pre-update backup after this guard.
       try {
-        fs.copyFileSync(stateDbPath, emergencyPath)
-        const emergStat = fs.statSync(emergencyPath)
+        const backups = fs
+          .readdirSync(hermesHome)
+          .filter(f => f.startsWith('state.db.pre-update-emergency-') && f.endsWith('.bak'))
+          .map(name => ({ name, path: path.join(hermesHome, name), stat: fs.statSync(path.join(hermesHome, name)) }))
+          .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
 
-        rememberLog(`[updates] emergency state.db backup: ${emergencyPath} ` + `(${emergStat.size} bytes)`)
+        const reusable = backups.find(
+          backup => backup.stat.size === stat.size && Date.now() - backup.stat.mtimeMs <= 6 * 60 * 60 * 1000
+        )
 
-        // Prune to the 2 most recent emergency backups.
-        try {
-          const homeDir = fs.readdirSync(hermesHome)
-
-          const backups = homeDir
-            .filter(
-              f =>
-                f.startsWith('state.db.pre-update-emergency-') &&
-                f.endsWith('.bak') &&
-                f !== path.basename(emergencyPath)
-            )
-            .sort()
-            .reverse()
-
-          for (const old of backups.slice(2)) {
+        if (reusable) {
+          rememberLog(
+            `[updates] reusing recent emergency state.db backup: ${reusable.path} (${reusable.stat.size} bytes)`
+          )
+        } else {
+          // Prune before copying so a retry never needs free space for three
+          // complete databases at once.
+          for (const old of backups) {
             try {
-              fs.unlinkSync(path.join(hermesHome, old))
+              fs.unlinkSync(old.path)
             } catch {
               void 0
             }
           }
-        } catch {
-          void 0
+
+          const ts = new Date().toISOString().replace(/[:.]/g, '-')
+          const emergencyPath = path.join(hermesHome, `state.db.pre-update-emergency-${ts}.bak`)
+
+          fs.copyFileSync(stateDbPath, emergencyPath)
+          const emergStat = fs.statSync(emergencyPath)
+
+          rememberLog(`[updates] emergency state.db backup: ${emergencyPath} (${emergStat.size} bytes)`)
+        }
+
+        for (const old of backups.filter(backup => !reusable || backup.path !== reusable.path)) {
+          try {
+            fs.unlinkSync(old.path)
+          } catch {
+            void 0
+          }
         }
       } catch (copyErr) {
         rememberLog(`[updates] emergency state.db backup failed: ${copyErr.message}`)
@@ -11272,7 +11346,7 @@ function spawnSecondaryWindow({ sessionId, watch }: { sessionId?: string; watch?
     height: SESSION_WINDOW_MIN_HEIGHT,
     minWidth: SESSION_WINDOW_MIN_WIDTH,
     minHeight: SESSION_WINDOW_MIN_HEIGHT,
-    title: 'Hermes',
+    title: APP_NAME,
     titleBarStyle: 'hidden',
     titleBarOverlay: getTitleBarOverlayOptions(),
     trafficLightPosition: IS_MAC ? WINDOW_BUTTON_POSITION : undefined,

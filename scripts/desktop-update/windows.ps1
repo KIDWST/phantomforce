@@ -21,6 +21,8 @@
 #     -File scripts\desktop-update\windows.ps1
 #     -InstallRoot <path>   repo checkout (HERMES_HOME\hermes-agent)
 #     -Branch <ref>         branch to update against
+#     [-RepositoryUrl <url>] PhantomBot product repository (process-scoped)
+#     [-SourceOriginUrl <url>] checkout origin rewritten to RepositoryUrl
 #     -DesktopPid <pid>     the Electron main process to wait out
 #     [-RelaunchExe <path>] Hermes.exe to start when done (omit = no relaunch)
 #     [-NoUi]               headless (tests); default shows a progress window
@@ -44,6 +46,8 @@
 param(
     [string]$InstallRoot,
     [string]$Branch = "main",
+    [string]$RepositoryUrl = "",
+    [string]$SourceOriginUrl = "",
     [int]$DesktopPid = 0,
     [string]$RelaunchExe = "",
     [switch]$NoUi,
@@ -949,7 +953,7 @@ try {
     New-Item -ItemType Directory -Path $LogDir -Force -ErrorAction SilentlyContinue | Out-Null
     Remove-Item -LiteralPath $ResultPath -Force -ErrorAction SilentlyContinue
     Show-ProgressWindow
-    Write-HandoffLog "hand-off start: root=$InstallRoot branch=$Branch desktopPid=$DesktopPid pid=$PID"
+    Write-HandoffLog "hand-off start: root=$InstallRoot branch=$Branch source=$(if ($RepositoryUrl) { 'PhantomBot product' } else { 'checkout origin' }) desktopPid=$DesktopPid pid=$PID"
 
     # -- 0. Claim the update marker with OUR pid ---------------------------
     try {
@@ -1066,6 +1070,25 @@ try {
         Write-HandoffLog $finalMsg
         exit $finalCode
     }
+
+    # PhantomBot packages carry a product repository and release branch in
+    # install-stamp.json. The kernel checkout may still have upstream Hermes as
+    # its on-disk `origin`; never mutate the user's git config just to update the
+    # app. A process-scoped url.*.insteadOf rule makes every git child spawned by
+    # `hermes update` resolve that logical origin to the PhantomBot product repo.
+    # The rule disappears when this hand-off process exits.
+    if ($RepositoryUrl -and $SourceOriginUrl -and $RepositoryUrl.TrimEnd('/', '.') -ne $SourceOriginUrl.TrimEnd('/', '.')) {
+        $gitConfigCount = 0
+        [void][int]::TryParse($env:GIT_CONFIG_COUNT, [ref]$gitConfigCount)
+        if ($gitConfigCount -lt 0) { $gitConfigCount = 0 }
+        [Environment]::SetEnvironmentVariable("GIT_CONFIG_KEY_$gitConfigCount", "url.$RepositoryUrl.insteadOf", "Process")
+        [Environment]::SetEnvironmentVariable("GIT_CONFIG_VALUE_$gitConfigCount", $SourceOriginUrl, "Process")
+        [Environment]::SetEnvironmentVariable("GIT_CONFIG_COUNT", [string]($gitConfigCount + 1), "Process")
+        $env:PHANTOMBOT_PRODUCT_REPOSITORY = $RepositoryUrl
+        $env:PHANTOMBOT_PRODUCT_BRANCH = $Branch
+        Write-HandoffLog "activated process-scoped PhantomBot product release lane ($Branch)"
+    }
+
     $updateArgs = @("-m", "hermes_cli.main", "update", "--yes", "--gateway", "--force", "--branch", $Branch)
     # --keep-stash: never re-apply local source edits after the update (they
     # stay parked in git stash). Probe --help first: the flag ships with newer

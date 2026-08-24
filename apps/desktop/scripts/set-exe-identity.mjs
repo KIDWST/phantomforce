@@ -31,12 +31,12 @@
 //   node scripts/set-exe-identity.mjs <path-to-exe>
 //
 // Exits 0 on success, non-zero on failure when run as a CLI. As a hook,
-// stampExeIdentity() resolves on success and rejects on failure; the caller
-// (after-pack.mjs) swallows the rejection so a stamp failure never fails an
-// otherwise-good build (worst case: stock icon, not a broken app).
+// stampExeIdentity() resolves on success and rejects on failure. The packaging
+// hook propagates that rejection: shipping a stock Electron icon is a broken
+// PhantomBot build, not a cosmetic downgrade.
 
 import { resolve, join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readSync } from 'node:fs'
 
 import { rcedit } from 'rcedit'
 
@@ -45,8 +45,7 @@ import PACKAGE_JSON from '../package.json' with { type: 'json' }
 
 const PRODUCT_NAME = PACKAGE_JSON.build?.productName || PACKAGE_JSON.productName || PACKAGE_JSON.name
 const COMPANY_NAME =
-  (typeof PACKAGE_JSON.author === 'string' ? PACKAGE_JSON.author : PACKAGE_JSON.author?.name) ||
-  'PhantomForce'
+  (typeof PACKAGE_JSON.author === 'string' ? PACKAGE_JSON.author : PACKAGE_JSON.author?.name) || 'PhantomForce'
 
 // Stamp the product icon + identity onto `exe`. Resolves on success, throws on
 // failure. `desktopRoot` defaults to this script's package root so the icon and
@@ -60,6 +59,19 @@ async function stampExeIdentity(exe, desktopRoot = resolve(import.meta.dirname, 
   const icon = join(desktopRoot, 'assets', 'icon.ico')
   if (!existsSync(icon)) {
     throw new Error(`icon not found: ${icon}`)
+  }
+
+  const fd = openSync(icon, 'r')
+  const icoHeader = Buffer.alloc(6)
+
+  try {
+    readSync(fd, icoHeader, 0, icoHeader.length, 0)
+  } finally {
+    closeSync(fd)
+  }
+
+  if (icoHeader.readUInt16LE(0) !== 0 || icoHeader.readUInt16LE(2) !== 1 || icoHeader.readUInt16LE(4) < 1) {
+    throw new Error(`invalid Windows icon file: ${icon}`)
   }
 
   console.log(`[set-exe-identity] stamping ${exe}`)
