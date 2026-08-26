@@ -1,13 +1,12 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260822-197";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260822-197";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260822-197";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260822-197";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260822-197";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260822-197";
-import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260822-197";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260822-198";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260822-198";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260822-198";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260822-198";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260822-198";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260822-198";
 import {
   AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
@@ -23,7 +22,7 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260822-197";
+} from "./ai-runtime.js?v=phantom-live-20260822-198";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -40,7 +39,6 @@ const SETTINGS_TABS = [
   { id: "plan", label: "Plan & access", category: "Workspace" },
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
   { id: "modules", label: "Workspace Modules", category: "Workspace" },
-  { id: "companion", label: "Companion", category: "Workspace" },
   { id: "media", label: "Connections", category: "Connections" },
   { id: "bridge", label: "Bridges", category: "Connections" },
 ];
@@ -1728,88 +1726,6 @@ function renderBridgesTab(settings) {
     </div>`;
 }
 
-function renderCompanionTab() {
-  const companion = loadCompanionPrefs();
-  return `
-    <div class="set-section">
-      <div class="set-section-head">
-        <div>
-          <p class="set-eyebrow">Living Phantom</p>
-          <h3>Companion controls</h3>
-          <p class="set-note">The Phantom can be dragged, resized, and remembered independently on each page. Automatic wandering is optional, so it stays easy to grab and control.</p>
-        </div>
-        <button class="btn btn-quiet" type="button" data-companion-reset>Reset companion</button>
-      </div>
-      <div class="set-grid set-grid-two">
-        <label class="set-inline"><input type="checkbox" data-companion-toggle="enabled" ${companion.enabled ? "checked" : ""}/> Enable companion</label>
-        <label class="set-inline"><input type="checkbox" data-companion-toggle="visible" ${companion.visible ? "checked" : ""}/> Visible</label>
-        <label class="set-inline"><input type="checkbox" data-companion-toggle="startDocked" ${companion.startDocked ? "checked" : ""}/> Start docked</label>
-        <label class="set-inline"><input type="checkbox" data-companion-toggle="roamingEnabled" ${companion.roamingEnabled ? "checked" : ""}/> Free movement</label>
-        <label class="set-inline"><input type="checkbox" data-companion-toggle="autoWander" ${companion.autoWander ? "checked" : ""}/> Wander around page</label>
-        <label class="set-inline"><input type="checkbox" data-companion-toggle="rememberPagePositions" ${companion.rememberPagePositions ? "checked" : ""}/> Remember per page</label>
-        <label class="set-inline"><input type="checkbox" data-companion-toggle="speechEnabled" ${companion.speechEnabled ? "checked" : ""}/> Speech bubbles</label>
-        <label class="set-inline"><input type="checkbox" data-companion-toggle="notificationReactions" ${companion.notificationReactions ? "checked" : ""}/> Notification reactions</label>
-        <label class="set-field">
-          <span>Motion</span>
-          <select data-companion-field="motionLevel">${optionList([
-            { id: "full", label: "Full motion" },
-            { id: "subtle", label: "Subtle motion" },
-            { id: "reduced", label: "Reduced motion" },
-            { id: "none", label: "No idle motion" },
-          ], companion.motionLevel)}</select>
-        </label>
-        <label class="set-field">
-          <span>Size</span>
-          <select data-companion-field="size">${optionList([
-            { id: "compact", label: "Compact" },
-            { id: "standard", label: "Standard" },
-            { id: "large", label: "Large" },
-          ], companion.size)}</select>
-        </label>
-        <label class="set-field">
-          <span>Home dock</span>
-          <select data-companion-field="dockLocation">${optionList([
-            { id: "bottom-left", label: "Bottom left" },
-            { id: "bottom-right", label: "Bottom right" },
-            { id: "sidebar", label: "Sidebar" },
-          ], companion.dockLocation)}</select>
-        </label>
-        <label class="set-field">
-          <span>Personality</span>
-          <select data-companion-field="personality">${optionList([
-            { id: "professional", label: "Professional" },
-            { id: "friendly", label: "Friendly" },
-            { id: "playful", label: "Playful" },
-            { id: "quiet", label: "Quiet" },
-          ], companion.personality)}</select>
-        </label>
-        <label class="set-field">
-          <span>Idle frequency</span>
-          <select data-companion-field="idleFrequency">${optionList([
-            { id: "low", label: "Low" },
-            { id: "normal", label: "Normal" },
-            { id: "off", label: "Off" },
-          ], companion.idleFrequency)}</select>
-        </label>
-        <label class="set-field">
-          <span>Greeting</span>
-          <select data-companion-field="greetingFrequency">${optionList([
-            { id: "session", label: "Once per session" },
-            { id: "daily", label: "Once per day" },
-            { id: "off", label: "Off" },
-          ], companion.greetingFrequency)}</select>
-        </label>
-      </div>
-      <div class="set-actions-row">
-        <button class="btn btn-quiet" type="button" data-companion-clear-hide>Show again this session</button>
-        <button class="btn btn-quiet" type="button" data-companion-reset-placements>Reset page positions</button>
-        <button class="btn btn-quiet" type="button" data-companion-quiet>Quiet docked mode</button>
-        <button class="btn btn-quiet" type="button" data-companion-disable>Disable companion</button>
-      </div>
-      <p class="set-note">Drag Phantom to place him, use the corner grip to resize, or right-click him for quick controls. Essential notifications still stay in the normal notification menu if the companion is hidden or disabled.</p>
-    </div>`;
-}
-
 const PLAN_FEATURE_LABELS = {
   chat: "AI chat",
   mediaLab: "Media Lab",
@@ -2137,7 +2053,6 @@ export function renderOperatorSettings(el, opts = {}) {
     plan: () => `<div id="${planMountId}" class="set-workspace-mount"></div>`,
     workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
     modules: () => `<div id="${modulesMountId}" class="set-workspace-mount"></div>`,
-    companion: () => renderCompanionTab(),
     media: () => `<div id="${mediaMountId}"></div>`,
   };
 
@@ -2365,60 +2280,6 @@ export function renderOperatorSettings(el, opts = {}) {
       .catch(() => { if (el.isConnected) renderOperatorSettings(el, opts); });
     renderOperatorSettings(el, opts);
   };
-
-  const saveCompanionAndRender = (patch) => {
-    const next = { ...DEFAULT_COMPANION_PREFS, ...loadCompanionPrefs(), ...(patch || {}) };
-    if (patch?.roamingEnabled) next.startDocked = false;
-    if (patch?.autoWander) {
-      next.roamingEnabled = true;
-      next.startDocked = false;
-    }
-    if (patch?.startDocked) {
-      next.roamingEnabled = false;
-      next.autoWander = false;
-    }
-    saveCompanionPrefs(next);
-    renderOperatorSettings(el, opts);
-  };
-
-  el.querySelectorAll("[data-companion-toggle]").forEach((input) => {
-    input.onchange = () => saveCompanionAndRender({ [input.dataset.companionToggle]: input.checked });
-  });
-
-  el.querySelectorAll("[data-companion-field]").forEach((field) => {
-    field.onchange = () => saveCompanionAndRender({ [field.dataset.companionField]: field.value });
-  });
-
-  const companionReset = el.querySelector("[data-companion-reset]");
-  if (companionReset) companionReset.onclick = () => {
-    resetCompanionPrefs();
-    renderOperatorSettings(el, opts);
-  };
-  const companionClearHide = el.querySelector("[data-companion-clear-hide]");
-  if (companionClearHide) companionClearHide.onclick = () => {
-    clearCompanionSessionHide();
-    renderOperatorSettings(el, opts);
-  };
-  const companionResetPlacements = el.querySelector("[data-companion-reset-placements]");
-  if (companionResetPlacements) companionResetPlacements.onclick = () => {
-    clearCompanionPagePlacements();
-    renderOperatorSettings(el, opts);
-  };
-  const companionQuiet = el.querySelector("[data-companion-quiet]");
-  if (companionQuiet) companionQuiet.onclick = () => saveCompanionAndRender({
-    enabled: true,
-    visible: true,
-    startDocked: true,
-    roamingEnabled: false,
-    autoWander: false,
-    dockLocation: "sidebar",
-    motionLevel: "reduced",
-    personality: "quiet",
-    speechEnabled: false,
-    idleFrequency: "off",
-  });
-  const companionDisable = el.querySelector("[data-companion-disable]");
-  if (companionDisable) companionDisable.onclick = () => saveCompanionAndRender({ enabled: false });
 
   const loop = loadPhantomLoop();
   const saveLoopAndRender = (patch, advPatch) => {

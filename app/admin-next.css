@@ -1655,7 +1655,6 @@ html:not([data-org-color-mode="light"]) :where(
   .os-menu-popover,
   .user-menu,
   .notif-menu,
-  .buddy-menu,
   .phantombot-model-menu
 ) {
   color-scheme: dark;
@@ -1666,7 +1665,6 @@ html[data-org-color-mode="light"] :where(
   .os-menu-popover,
   .user-menu,
   .notif-menu,
-  .buddy-menu,
   .phantombot-model-menu
 ) {
   color-scheme: light;

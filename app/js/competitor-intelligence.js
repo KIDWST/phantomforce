@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, isLiveAdminHost, session } from "./store.js?v=phantom-live-20260822-197";
+import { currentTenantId, friendlyBackendError, isLiveAdminHost, session } from "./store.js?v=phantom-live-20260822-198";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [["radar", "Radar"], ["competitors", "Competitors"], ["sources", "Sources & settings"]];

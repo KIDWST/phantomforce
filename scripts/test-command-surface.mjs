@@ -10,6 +10,7 @@ const creatorStudioCss = readFileSync(new URL("../app/creator-studio.css", impor
 const mediaLab = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const contentHub = readFileSync(new URL("../app/js/contenthub.js", import.meta.url), "utf8");
 const phantomAi = readFileSync(new URL("../app/js/phantomai.js", import.meta.url), "utf8");
+const settings = readFileSync(new URL("../app/js/settings.js", import.meta.url), "utf8");
 const pageWorker = readFileSync(new URL("../app/js/pageworker.js", import.meta.url), "utf8");
 const flowMap = readFileSync(new URL("../app/js/flowmap.js", import.meta.url), "utf8");
 const productionCore = readFileSync(new URL("../app/js/production-core.js", import.meta.url), "utf8");
@@ -19,15 +20,16 @@ const count = (source, pattern) => source.match(pattern)?.length || 0;
 
 // Full chat (log + composer) moved off the dashboard into its own PhantomBot
 // tab (app/js/phantomai.js, the "phantomai" workspace, reachable from the
-// sidebar and the command rail). The dashboard does not mount another pet,
-// composer, or log that competes with the one shell-level movable companion
-// and the PhantomBot tab. An earlier pass
+// sidebar and the command rail). The dashboard does not mount a decorative pet,
+// composer, or log that competes with the PhantomBot tab. An earlier pass
 // reused the old full companion.js chat-header widget (mountCompanion) here
 // under a "hero2-phantompet" CSS class, which read as an embedded chatbot
 // with no chat body under it — that regression is what this assertion now
 // guards against explicitly.
 assert.doesNotMatch(index, /phantompet-presence|data-phantompet-canvas/u, "Dashboard must not mount a second PhantomPet renderer.");
-assert.match(main, /setTimeout\(\(\) => mountBuddy\(\), 1600\)/u, "The shell must mount the one movable PhantomPet companion.");
+assert.doesNotMatch(main, /mountBuddy|buddyReact|\.\/buddy\.js|data-buddy/u, "The platform shell must not mount or reactivate the removed Phantom pet.");
+assert.doesNotMatch(settings, /renderCompanionTab|data-companion-|companion-preferences|id: "companion"/u, "Settings must not expose controls for the removed Phantom pet.");
+assert.doesNotMatch(`${css}\n${commandOsCss}`, /\.buddy(?:\b|-)|data-buddy|buddy(?:Vanish|Pop|MobilePop)/u, "Removed pet styling must not reserve space or overlay the platform.");
 assert.doesNotMatch(index, /data-chatbox/u, "Dashboard must not re-embed companion.js's mountCompanion chat-header widget.");
 assert.equal(count(index, /data-command-form/gu), 0, "Dashboard must not re-embed a command composer; PhantomBot is its own tab now.");
 assert.equal(count(index, /data-chat-log/gu), 0, "Dashboard must not re-embed a chat log; PhantomBot is its own tab now.");
@@ -93,7 +95,7 @@ assert.match(main, /renderDashboardBrief\(\);/u, "Console render must refresh th
 // (setChatboxMinimized, bindChatboxMobility, CHATBOX_POSITION_KEY, the
 // Ctrl-backtick summon hotkey, etc.) only ever operated on the removed
 // [data-chatbox] element. It has been deleted along with that element —
-// see the single movable-companion assertion above — rather than left bound to
+// see the removed-pet assertions above — rather than left bound to
 // nothing.
 assert.doesNotMatch(main, /bindChatboxMobility/u, "Dead chatbox drag/hotkey subsystem must not come back once its target element is gone.");
 assert.match(main, /const bottomItems = items;/u, "The dedicated utility zone must remain the full navigation launcher while the main sidebar shows open tabs.");
@@ -118,8 +120,6 @@ assert.match(css, /Final compact nav guard:[\s\S]*?@media \(max-width: 900px\)[\
 assert.match(css, /@media \(max-width: 767px\)[\s\S]*?\.sidebar\s*\{[\s\S]*?display:\s*none\s*!important[\s\S]*?\.sidebar\.is-expanded\s*\{[\s\S]*?display:\s*flex\s*!important/u, "Phone sidebar must be drawer-only so it cannot duplicate the bottom nav.");
 assert.match(css, /\.sidebar:not\(\.is-expanded\)\s*\{\s*display:\s*none\s*!important;\s*\}/u, "Final phone chrome must keep the sidebar hidden until More opens it.");
 assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.ch-card-h\s*\{[\s\S]*?flex-direction:\s*column/u, "Analytics mobile card headers must stack instead of squeezing copy into one-word columns.");
-assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.buddy\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?pointer-events:\s*none/u, "Phone companion must not sit on top of mobile controls.");
-assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.buddy-say\s*\{[\s\S]*?display:\s*none/u, "Phone companion speech must not create off-screen overflow.");
 assert.match(css, /\.dashboard-brief\s*\{/u, "Compact business brief must have dashboard styling.");
 assert.match(css, /\.dashboard-brief-metrics\s*\{/u, "Business snapshot must have a stable responsive layout.");
 assert.match(css, /\.chatbox\.is-minimized\s*\{/u, "Phantom Console must have a real collapsed state.");

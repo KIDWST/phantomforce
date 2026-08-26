@@ -372,7 +372,6 @@ function auditPage() {
   const dashboardHero = consoleRoot?.querySelector(".hero2");
   const workforceHeartbeat = document.querySelector(".workforce-heartbeat");
   const missionRail = consoleRoot?.querySelector(".console-rail");
-  const dashboardPet = document.querySelector("[data-buddy]");
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
   const featuredProductMedia = document.querySelector(".ps-spotlight-panel");
@@ -712,7 +711,6 @@ function auditPage() {
       visibleDecisionCards: decisionCards.filter(isVisible).length,
       decisionListHorizontalOverflow: decisionList ? decisionList.scrollWidth > decisionList.clientWidth + 2 : false,
       reviewAllVisible: isVisible(decisionReviewAll),
-      petBottom: dashboardPet && isVisible(dashboardPet) ? Math.round(dashboardPet.getBoundingClientRect().bottom) : null,
       petRendererCount: document.querySelectorAll("[data-buddy], .phantompet-presence").length,
     },
     phantomBot: {
@@ -1085,6 +1083,7 @@ function assertCase(result) {
       assert.equal(audit.mobileDrawer?.focusRestored, true, `${label} ${viewport.width}: Escape must restore focus to the More control.`);
       assert.deepEqual(audit.dashboardCollisions, [], `${label} ${viewport.width}: dashboard brief, decisions and console must remain separate in the mobile document flow.`);
       assert.equal(audit.dashboard.reviewAllVisible, true, `${label} ${viewport.width}: decision preview must link to the complete queue.`);
+      assert.equal(audit.dashboard.petRendererCount, 0, `${label} ${viewport.width}: the removed Phantom pet must not render on the dashboard.`);
       if (viewport.width <= 680) {
         assert.equal(audit.dashboard.intelBandColumns, 1, `${label} ${viewport.width}: phone Business Signals must not retain the desktop header/card columns.`);
         assert.equal(audit.dashboard.intelGridColumns, 1, `${label} ${viewport.width}: phone Business Signals cards must form one readable list.`);
@@ -1094,11 +1093,6 @@ function assertCase(result) {
         );
         assert.equal(audit.dashboard.decisionListHorizontalOverflow, false, `${label} ${viewport.width}: decision preview must not create a sideways phone scroller.`);
         assert.equal(audit.dashboard.visibleDecisionCards, 1, `${label} ${viewport.width}: phone home must show one priority decision before Phantom.`);
-        assert.ok(
-          audit.dashboard.petBottom !== null && audit.nav.mobileTop !== null && audit.dashboard.petBottom <= audit.nav.mobileTop + 2,
-          `${label} ${viewport.width}: the movable PhantomPet must be fully tappable above the fixed mobile dock on initial load.`
-        );
-        assert.equal(audit.dashboard.petRendererCount, 1, `${label} ${viewport.width}: exactly one PhantomPet renderer may exist.`);
       }
       assert.ok(
         audit.dashboard.intelTop === null || (audit.dashboard.heroTop !== null && audit.dashboard.intelTop > audit.dashboard.heroTop + 20),

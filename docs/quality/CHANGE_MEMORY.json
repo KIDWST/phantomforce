@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-08-23",
+  "lastUpdated": "2026-08-26",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
@@ -79,13 +79,13 @@
     {
       "id": "phantompet-full-presence-and-vespergate-current-build",
       "status": "active",
-      "title": "PhantomPet stays single, full-body, wheel-sized, and Vespergate keeps its restored living-world build",
-      "ownerDecision": "PhantomPet has exactly one renderer on desktop and mobile: the movable shell-level painted full-body companion. The Overview must not mount a second hard-coded pet, and compact layouts must not hide the remaining real companion after that duplicate is removed. Scrolling directly over PhantomPet makes it larger or smaller and saves that size for the page; a visible resize dot, corner grip, or drag-to-resize control must never replace that interaction. Vespergate must launch the same current 3.1.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app. Its illustrated pointed-hood bearer, readable villagers, living-world detail, richer rooms, checkpoints, encounter objectives, mastery, map, touch controls, and save migration must remain together; an old catalog response, cached desktop shell, or smaller legacy source must not replace them.",
+      "title": "The shell pet stays removed and Vespergate keeps its restored living-world build",
+      "ownerDecision": "PhantomForce no longer mounts a movable shell-level pet on Overview or any other workspace. Its controller, placement preferences, settings tab, reaction calls, overlay styles, and cached renderer hooks remain removed so the platform stays clean and unobstructed. The animated Phantom inside PhantomBot remains because it communicates real chat state and is not a floating platform pet. Vespergate must launch the same current 3.1.0 build from the browser catalog, authenticated server catalog, and installed PhantomPlay desktop app. Its illustrated pointed-hood bearer, readable villagers, living-world detail, richer rooms, checkpoints, encounter objectives, mastery, map, touch controls, and save migration must remain together; an old catalog response, cached desktop shell, or smaller legacy source must not replace them.",
       "requiredPatterns": [
         {
-          "file": "app/js/buddy.js",
-          "pattern": "scroll to resize[\\s\\S]*canvas\\.addEventListener\\(\\\"wheel\\\",[\\s\\S]*manualSizePx = clampNumber[\\s\\S]*saveCurrentPagePlacement\\(\\)[\\s\\S]*\\{ passive: false, signal \\}",
-          "description": "Scrolling over PhantomPet remains the direct, page-persistent size control."
+          "file": "scripts/test-phantom-presence-recovery.mjs",
+          "pattern": "shell pet removed",
+          "description": "The regression gate verifies that the shell pet files, mounts, settings, and styles stay removed."
         },
         {
           "file": "app/js/phantomplay.js",
@@ -127,37 +127,32 @@
         {
           "file": "app/index.html",
           "pattern": "phantompet-presence|data-phantompet-canvas|phantompet-orb",
-          "description": "The removed Overview pet, including its old circular form, cannot return beside the movable companion."
+          "description": "The removed Overview pet, including its old circular form, cannot return."
         },
         {
           "file": "app/js/main.js",
-          "pattern": "mountPhantomPresence\\(\\$\\(\\\"\\[data-phantompet-canvas\\]\\\"\\)",
-          "description": "The dashboard cannot start the removed second PhantomPet renderer."
+          "pattern": "mountBuddy|buddyReact|data-buddy|mountPhantomPresence\\(\\$\\(\\\"\\[data-phantompet-canvas\\]\\\"\\)",
+          "description": "The application shell cannot mount or reactivate any floating pet renderer."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "renderCompanionTab|data-companion-|companion-preferences|id:\\s*[\\\"']companion[\\\"']",
+          "description": "Settings cannot restore the removed pet controls or placement preferences."
         },
         {
           "file": "app/phantom.css",
-          "pattern": "\\.phantompet-presence(?:-wrap|-canvas|-status|-tip)?",
-          "description": "Base styles cannot repaint the removed Overview PhantomPet."
+          "pattern": "\\.phantompet-presence(?:-wrap|-canvas|-status|-tip)?|\\.buddy(?:[\\s.#:\\[]|$)|data-buddy|buddyVanish|buddyPop|buddyMobilePop",
+          "description": "Base styles cannot repaint or reserve space for the removed shell pet."
         },
         {
           "file": "app/command-os.css",
-          "pattern": "\\.phantompet-presence(?:-wrap|-canvas|-status|-tip)?",
-          "description": "Command OS styles cannot repaint the removed Overview PhantomPet."
+          "pattern": "\\.phantompet-presence(?:-wrap|-canvas|-status|-tip)?|\\.buddy(?:[\\s.#:\\[]|$)|data-buddy|buddyVanish|buddyPop|buddyMobilePop",
+          "description": "Command OS styles cannot repaint or reserve space for the removed shell pet."
         },
         {
-          "file": "app/phantom.css",
-          "pattern": "@media \\(max-width:\\s*720px\\)\\s*\\{[\\s\\S]{0,300}\\.buddy\\s*\\{[\\s\\S]{0,120}opacity:\\s*0",
-          "description": "Compact layouts cannot hide the one remaining movable PhantomPet."
-        },
-        {
-          "file": "app/js/buddy.js",
-          "pattern": "data-buddy-resize|resizeHandle|corner grip",
-          "description": "A visible drag-to-resize dot or grip cannot replace scroll-wheel resizing."
-        },
-        {
-          "file": "app/phantom.css",
-          "pattern": "\\.buddy-resize|\\.buddy\\.is-resizing",
-          "description": "The removed PhantomPet resize dot cannot be painted by CSS."
+          "file": "app/admin-next.css",
+          "pattern": "\\.buddy-menu",
+          "description": "Shared admin styling cannot restore the pet context menu."
         },
         {
           "file": "server/src/phantom-ai/phantomplay.ts",

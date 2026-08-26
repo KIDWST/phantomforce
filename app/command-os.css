@@ -3593,10 +3593,6 @@ body:has(.workspace-page[data-workspace-page="phantomai"]) .os-command-rail .os-
   display: none !important;
 }
 
-body:has(.workspace-page[data-workspace-page="phantomai"]) .buddy {
-  display: none !important;
-}
-
 body:has(.workspace-page[data-workspace-page="phantomai"]) .phantom.command-os-enabled {
   padding-bottom: 0;
 }
