@@ -718,6 +718,147 @@ html[data-command-os="2040"] .phantombot-code pre {
   font-size: 10px;
 }
 
+html[data-command-os="2040"] .phantomai-runtime-receipt.is-complete b,
+html[data-command-os="2040"] .phantomai-runtime-receipt.is-streaming b {
+  color: var(--pbot-live);
+}
+
+html[data-command-os="2040"] .phantomai-runtime-receipt.is-interrupted b,
+html[data-command-os="2040"] .phantomai-runtime-receipt.is-stopped b {
+  color: var(--pbot-warn);
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live {
+  display: grid;
+  gap: 8px;
+  margin: 5px 0 12px;
+  padding: 9px 10px;
+  border: 1px solid rgba(24, 242, 143, .16);
+  border-radius: 9px;
+  background:
+    linear-gradient(135deg, rgba(24, 242, 143, .055), transparent 58%),
+    rgba(2, 9, 5, .72);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025);
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live > header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #aaf2cf;
+  font: 700 7px/1 "Spline Sans Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live > header span i,
+html[data-command-os="2040"] .phantombot-hermes-live li > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pbot-live);
+  box-shadow: 0 0 9px rgba(24, 242, 143, .52);
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live.is-live > header span i {
+  animation: phantombot-hermes-pulse 1.25s ease-in-out infinite;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live > header b {
+  overflow: hidden;
+  color: var(--pbot-muted);
+  font-size: 8px;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live > header time {
+  color: var(--pbot-faint);
+  font: 600 7px/1 "Spline Sans Mono", monospace;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live li {
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 132px;
+  padding: 6px 8px;
+  border: 1px solid rgba(153, 196, 174, .11);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, .2);
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live li > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live li b,
+html[data-command-os="2040"] .phantombot-hermes-live li small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live li b {
+  color: var(--pbot-text);
+  font-size: 8px;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live li small {
+  color: var(--pbot-faint);
+  font-size: 7px;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live li.is-complete > i {
+  background: #74dca9;
+  box-shadow: none;
+}
+
+html[data-command-os="2040"] .phantombot-hermes-live li.is-failed > i,
+html[data-command-os="2040"] .phantombot-hermes-live li.is-stopped > i {
+  background: var(--pbot-warn);
+  box-shadow: none;
+}
+
+html[data-command-os="2040"] .phantomai-chat-reply.is-streaming::after {
+  display: inline-block;
+  width: 6px;
+  height: 1em;
+  margin-left: 3px;
+  background: var(--pbot-live);
+  content: "";
+  vertical-align: -.12em;
+  animation: phantombot-hermes-cursor .72s steps(1) infinite;
+}
+
+@keyframes phantombot-hermes-pulse {
+  50% { opacity: .4; transform: scale(.72); }
+}
+
+@keyframes phantombot-hermes-cursor {
+  50% { opacity: 0; }
+}
+
 html[data-command-os="2040"] .phantombot-next-moves {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1588,7 +1729,9 @@ html[data-command-os="2040"] .phantombot-os select:focus-visible {
   html[data-command-os="2040"] .phantombot-constellation > ol li[data-state="active"] > i,
   html[data-command-os="2040"] .phantombot-brain-mesh article[data-state="checking"] > i,
   html[data-command-os="2040"] .phantombot-constellation > footer [data-phantombot-brain-mesh][data-state="checking"] > i,
-  html[data-command-os="2040"] .phantombot-mission-dossier > ol li[data-state="active"] > i {
+  html[data-command-os="2040"] .phantombot-mission-dossier > ol li[data-state="active"] > i,
+  html[data-command-os="2040"] .phantombot-hermes-live.is-live > header span i,
+  html[data-command-os="2040"] .phantomai-chat-reply.is-streaming::after {
     transition: none;
     animation: none;
   }

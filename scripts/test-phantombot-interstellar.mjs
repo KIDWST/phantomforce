@@ -42,7 +42,14 @@ assert.match(settings, /loadHermesBackend\(\{ force: true \}\)/u, "PhantomBot mu
 assert.ok(settings.includes(expectedHermesModel), "GLM 5.3 must be available in the current PhantomBot model defaults.");
 assert.match(runtime, /\/phantom-ai\/hermes\/backend/u, "The shared web runtime must load Hermes capabilities from the server.");
 assert.match(bot, /\/phantom-ai\/hermes\/chat/u, "Ordinary PhantomBot chat must use Hermes as its primary backend.");
+assert.match(bot, /\/phantom-ai\/hermes\/chat\/stream[\s\S]*response\.body\.getReader\(\)/u, "Ordinary PhantomBot chat must consume the native Hermes event stream.");
+assert.match(bot, /new AbortController\(\)[\s\S]*runningRequest\.controller/u, "Live Hermes runs must own a browser cancellation controller.");
+assert.match(bot, /request\.controller\?\.abort\(\)/u, "The shared stop control must cancel its active Hermes stream.");
+assert.match(bot, /assistant\.delta/u, "The shared UI must stream answer deltas.");
+assert.match(bot, /function updateHermesActivity/u, "The shared UI must derive truthful tool activity from Hermes events.");
+assert.match(bot, /phantombot-hermes-live/u, "The shared UI must render Hermes execution activity.");
 assert.match(server, /app\.post\("\/phantom-ai\/hermes\/chat"/u, "The server must expose authenticated Hermes-native chat.");
+assert.match(server, /app\.post\("\/phantom-ai\/hermes\/chat\/stream"[\s\S]*text\/event-stream[\s\S]*runHermesBackendChatStream/u, "The server must expose an authenticated, non-buffered Hermes stream proxy.");
 assert.match(hermesBackend, /\/api\/model\/options/u, "PhantomBot models must come from Hermes model options, not a hard-coded picker.");
 assert.match(hermesBackend, /\/v1\/toolsets/u, "PhantomBot must mirror Hermes toolsets.");
 assert.match(hermesBackend, /require_model_lock: true/u, "Explicit PhantomBot models must be locked and confirmed by Hermes.");
@@ -54,6 +61,7 @@ for (const selector of [
   ".phantombot-constellation",
   ".phantombot-mission-dossier",
   ".phantombot-brain-mesh",
+  ".phantombot-hermes-live",
 ]) {
   assert.match(css, new RegExp(selector.replaceAll(".", "\\.")), `${selector} must have dedicated shared styling.`);
 }
@@ -64,4 +72,4 @@ assert.equal((css.match(/\{/gu) || []).length, (css.match(/\}/gu) || []).length,
 assert.match(desktop, /https:\/\/admin\.phantomforce\.online\/app\/index\.html/u, "The desktop shell must load the same hosted app surface as web.");
 assert.match(desktop, /await mainWindow\.loadURL\(target\.url\)/u, "Desktop must continue loading the shared PhantomBot bundle rather than a divergent UI.");
 
-console.log("PhantomBot interstellar mission checks passed: evidence-grounded constellation, portable continuity, parallel paths, live brain mesh, and desktop/web parity.");
+console.log("PhantomBot interstellar mission checks passed: evidence-grounded constellation, portable continuity, parallel paths, live Hermes streaming, visible tool activity, true cancellation, and desktop/web parity.");

@@ -70,6 +70,20 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **PhantomBot Hermes live execution stream (2026-08-26)** — browser build
+  `phantom-live-20260822-196`. Ordinary signed-in PhantomBot conversation now
+  consumes Hermes' native session event stream instead of waiting on one
+  buffered answer. The shared web/desktop UI paints answer deltas, current
+  stage, elapsed time, and sanitized reasoning/tool activity; Stop aborts the
+  browser request, closes the server proxy, and interrupts the upstream Hermes
+  run while preserving a truthful partial answer. The server strips tool
+  arguments, hidden reasoning, private runtime fields, and cross-chunk secret
+  shapes before events reach the browser, while retaining the authenticated
+  buffered Hermes route as a compatibility fallback. Release-critical passed
+  40/40, responsive Chrome passed 126/126 across 21 workspaces and six
+  viewports, PhantomBot desktop passed 17/17, change-memory passed 432 checks,
+  and focused stream tests proved GLM 5.3 locking, eight event states,
+  argument/reasoning redaction, split-secret protection, and cancellation.
 - **PhantomBot live Hermes brain + GLM 5.3 parity (2026-08-26)** — browser
   build `phantom-live-20260822-195`. Ordinary PhantomBot conversation now runs
   through the real Hermes backend instead of the disconnected legacy browser
@@ -392,7 +406,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260822-195`**.
+- Current cache-bust build id: **`phantom-live-20260822-196`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

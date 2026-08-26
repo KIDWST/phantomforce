@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260822-195";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260822-196";
 
 function headers() {
   const token = session.token();

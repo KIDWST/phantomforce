@@ -2648,17 +2648,17 @@
       "id": "phantombot-hermes-backend-parity-glm53",
       "status": "active",
       "title": "PhantomBot stays connected to the live Hermes brain and exposes GLM 5.3",
-      "ownerDecision": "PhantomBot on web and desktop is a direct, truthful interface to the active Hermes backend. It discovers authenticated Hermes providers and their real model catalogs, exposes GLM 5.3 when Hermes can use it, preserves Hermes memory, skills, tools, and approval gates, and keeps a stable task session instead of silently falling back to a disconnected browser-only brain. Explicit model choices must lock the matching Hermes provider and model. The shared browser bundle is the desktop bundle, so model choice, status, and behavior must remain the same on both surfaces. GLM 5.2 may remain labeled as a legacy compatibility option but cannot return as the default OpenRouter model.",
+      "ownerDecision": "PhantomBot on web and desktop is a direct, truthful interface to the active Hermes backend. It discovers authenticated Hermes providers and their real model catalogs, exposes GLM 5.3 when Hermes can use it, preserves Hermes memory, skills, tools, and approval gates, and keeps a stable task session instead of silently falling back to a disconnected browser-only brain. Ordinary chat streams native Hermes answer deltas and sanitized tool status in real time, can be stopped from the shared composer, and must never expose tool arguments, hidden reasoning, private paths, credentials, or other backend-only fields. Explicit model choices must lock the matching Hermes provider and model. The shared browser bundle is the desktop bundle, so model choice, status, and behavior must remain the same on both surfaces. GLM 5.2 may remain labeled as a legacy compatibility option but cannot return as the default OpenRouter model.",
       "requiredPatterns": [
         {
           "file": "server/src/phantom-ai/hermes-backend-client.ts",
-          "pattern": "/api/model/options[\\s\\S]*/v1/toolsets[\\s\\S]*/v1/skills[\\s\\S]*require_model_lock: true[\\s\\S]*/api/sessions",
-          "description": "The server reads Hermes model, tool, and skill truth and preserves explicit native model locking and sessions."
+          "pattern": "/api/model/options[\\s\\S]*/v1/toolsets[\\s\\S]*/v1/skills[\\s\\S]*require_model_lock: true[\\s\\S]*/api/sessions[\\s\\S]*normalizeHermesStreamEvent[\\s\\S]*/chat/stream",
+          "description": "The server reads Hermes model, tool, and skill truth, preserves explicit native model locking and sessions, and sanitizes native stream events."
         },
         {
           "file": "server/src/index.ts",
-          "pattern": "/phantom-ai/hermes/backend[\\s\\S]*/phantom-ai/hermes/chat[\\s\\S]*runHermesBackendChat",
-          "description": "Authenticated clients retain the safe Hermes inventory and chat proxy routes."
+          "pattern": "/phantom-ai/hermes/backend[\\s\\S]*/phantom-ai/hermes/chat[\\s\\S]*/phantom-ai/hermes/chat/stream[\\s\\S]*runHermesBackendChatStream",
+          "description": "Authenticated clients retain the safe Hermes inventory, buffered fallback, and non-buffered stream proxy routes."
         },
         {
           "file": "app/js/settings.js",
@@ -2667,13 +2667,13 @@
         },
         {
           "file": "app/js/phantomai.js",
-          "pattern": "HERMES BRAIN[\\s\\S]*/phantom-ai/hermes/chat[\\s\\S]*source: \\\"hermes_backend\\\"",
-          "description": "Normal PhantomBot conversation uses the Hermes backend and records its real runtime source."
+          "pattern": "/phantom-ai/hermes/chat/stream[\\s\\S]*HERMES BRAIN[\\s\\S]*request\\.controller\\?\\.abort\\(\\)[\\s\\S]*source: \\\"hermes_backend\\\"[\\s\\S]*updateHermesActivity[\\s\\S]*assistant\\.delta",
+          "description": "Normal PhantomBot conversation streams Hermes output, renders safe activity, supports cancellation, and records its real runtime source."
         },
         {
           "file": "scripts/test-phantombot-interstellar.mjs",
-          "pattern": "expectedHermesModel = \\\"z-ai/glm-5\\.3\\\"[\\s\\S]*require_model_lock[\\s\\S]*desktop/web parity",
-          "description": "The focused product gate protects GLM 5.3 discovery, model locking, and desktop/web parity."
+          "pattern": "expectedHermesModel = \\\"z-ai/glm-5\\.3\\\"[\\s\\S]*require_model_lock[\\s\\S]*live Hermes streaming[\\s\\S]*desktop/web parity",
+          "description": "The focused product gate protects GLM 5.3 discovery, model locking, live streaming, cancellation, and desktop/web parity."
         }
       ],
       "forbiddenPatterns": [

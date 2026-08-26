@@ -484,6 +484,7 @@ import {
 import {
   getHermesBackendInventory,
   runHermesBackendChat,
+  runHermesBackendChatStream,
 } from "./phantom-ai/hermes-backend-client.js";
 import { registerHermesOperatorStream } from "./phantom-ai/hermes-operator-stream.js";
 import { MAX_PROMPT_CHARS, verifyPromptIntegrity } from "./phantom-ai/prompt-integrity.js";
@@ -9572,6 +9573,76 @@ app.post("/phantom-ai/hermes/chat", async (request, reply) => {
       secret_returned: false,
     });
   }
+});
+
+app.post("/phantom-ai/hermes/chat/stream", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = HermesBackendChatSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: "bad_request", detail: parsed.error.flatten() });
+  const integrity = verifyPromptIntegrity(parsed.data.prompt, parsed.data.prompt_integrity);
+  if (!integrity.ok) {
+    return reply.code(integrity.state === "rejected" ? 413 : 400).send({
+      ok: false,
+      error: "prompt_integrity_error",
+      integrity_state: integrity.state,
+      detail: integrity.error,
+    });
+  }
+  const verdict = await screenText(parsed.data.prompt, "hermes_backend_chat_stream_request");
+  if (verdict.classification === "block") {
+    return reply.code(400).send({
+      ok: false,
+      error: "blocked_by_prompt_guard",
+      violation_types: verdict.violation_types,
+      detail: verdict.reason,
+    });
+  }
+
+  const controller = new AbortController();
+  const abortUpstream = () => controller.abort();
+  reply.raw.once("close", abortUpstream);
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  reply.raw.flushHeaders?.();
+  const emit = (event: string, data: Record<string, unknown>) => {
+    if (!reply.raw.destroyed && !reply.raw.writableEnded) {
+      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    }
+  };
+
+  try {
+    const tenantId = customizationTenantForSession(session);
+    await runHermesBackendChatStream({
+      tenantId,
+      actorId: session.id,
+      taskId: parsed.data.task_id,
+      prompt: parsed.data.prompt,
+      providerId: parsed.data.provider_id,
+      modelId: parsed.data.model_id,
+      effort: parsed.data.effort,
+    }, {
+      signal: controller.signal,
+      onEvent: ({ event, data }) => emit(event, data),
+    });
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      emit("error", {
+        message: error instanceof Error ? error.message : "Hermes backend chat failed.",
+        secret_returned: false,
+      });
+      emit("done", { completed: false });
+    }
+  } finally {
+    reply.raw.off("close", abortUpstream);
+    if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end();
+  }
+  return reply;
 });
 
 app.post("/phantom-ai/hermes-acp/sessions", async (request, reply) => {

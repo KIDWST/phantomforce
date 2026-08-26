@@ -14,16 +14,16 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260822-195";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260822-195";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260822-195";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260822-195";
-import { esc } from "./workspaces.js?v=phantom-live-20260822-195";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260822-195";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260822-195";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260822-195";
-import { setCompanionState } from "./companion.js?v=phantom-live-20260822-195";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260822-195";
+} from "./store.js?v=phantom-live-20260822-196";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260822-196";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260822-196";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260822-196";
+import { esc } from "./workspaces.js?v=phantom-live-20260822-196";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260822-196";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260822-196";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260822-196";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260822-196";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260822-196";
 import {
   getOperatorBrainChoices,
   getOperatorBrainMesh,
@@ -31,12 +31,12 @@ import {
   getOperatorInfrastructureStatus,
   hydrateOperatorBrainMesh,
   setOperatorBrainChoice,
-} from "./settings.js?v=phantom-live-20260822-195";
+} from "./settings.js?v=phantom-live-20260822-196";
 import {
   buildPromptIntegrityEnvelope,
   MAX_PROMPT_CHARS,
   promptSizeError,
-} from "./prompt-integrity.js?v=phantom-live-20260822-195";
+} from "./prompt-integrity.js?v=phantom-live-20260822-196";
 
 const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -277,6 +277,94 @@ async function operatorApi(path, options = {}) {
     }));
   }
   return payload;
+}
+
+async function streamHermesChat(body, { signal, onEvent }) {
+  const token = session.token();
+  const response = await fetch("/phantom-ai/hermes/chat/stream", {
+    method: "POST",
+    signal,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(friendlyBackendError(response.status, payload?.error, {
+      authMessage: "Sign in to use PhantomBot's Hermes runtime.",
+      fallbackPrefix: "Hermes live response failed",
+    }));
+  }
+  if (!response.body) throw new Error("Hermes live responses are unavailable in this browser.");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    let boundary = buffer.search(/\r?\n\r?\n/u);
+    while (boundary >= 0) {
+      const frame = buffer.slice(0, boundary);
+      const separator = /^\r\n/u.test(buffer.slice(boundary)) ? 4 : 2;
+      buffer = buffer.slice(boundary + separator);
+      let event = "message";
+      const data = [];
+      frame.split(/\r?\n/u).forEach((line) => {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+      });
+      if (data.length) {
+        const payload = JSON.parse(data.join("\n"));
+        if (event === "error") {
+          await reader.cancel().catch(() => {});
+          throw new Error(cleanText(payload?.message || "Hermes could not complete this run.", 500));
+        }
+        await onEvent(event, payload || {});
+      }
+      boundary = buffer.search(/\r?\n\r?\n/u);
+    }
+    if (done) break;
+  }
+}
+
+function readableToolName(value) {
+  return cleanText(value || "Hermes tool", 100)
+    .replace(/^mcp__/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function updateHermesActivity(message, event, payload = {}) {
+  const runtime = message.aiRuntime || (message.aiRuntime = { source: "hermes_backend", activity: [] });
+  const activity = Array.isArray(runtime.activity) ? runtime.activity : (runtime.activity = []);
+  runtime.stage = cleanText(payload.stage || runtime.stage || "Hermes connected", 100);
+  if (event === "reasoning") {
+    runtime.stage = "Hermes reasoning";
+    if (!activity.some((item) => item.kind === "reasoning")) {
+      activity.push({ id: `reasoning-${payload.seq || Date.now()}`, kind: "reasoning", name: "Hermes reasoning", state: "running", detail: "Planning the strongest answer" });
+    }
+  }
+  if (event === "tool.started") {
+    const name = readableToolName(payload.tool_name);
+    runtime.stage = `Using ${name}`;
+    activity.push({ id: `tool-${payload.seq || Date.now()}`, kind: "tool", name, state: "running", detail: cleanText(payload.preview || "Running", 180) });
+  }
+  if (event === "tool.completed" || event === "tool.failed") {
+    const name = readableToolName(payload.tool_name);
+    const active = [...activity].reverse().find((item) => item.kind === "tool" && item.name === name && item.state === "running");
+    const state = event === "tool.completed" ? "complete" : "failed";
+    if (active) Object.assign(active, { state, detail: cleanText(payload.preview || (state === "complete" ? "Complete" : "Failed"), 180) });
+    else activity.push({ id: `tool-${payload.seq || Date.now()}`, kind: "tool", name, state, detail: cleanText(payload.preview || state, 180) });
+  }
+  if (event === "assistant.delta") runtime.stage = activity.some((item) => item.kind === "tool") ? "Composing with live results" : "Streaming response";
+  if (event === "run.completed") {
+    runtime.stage = "Complete";
+    activity.forEach((item) => { if (item.state === "running") item.state = "complete"; });
+  }
+  runtime.activity = activity.slice(-16);
 }
 
 function operatorStatusText(operator) {
@@ -1333,22 +1421,39 @@ function richTextHtml(value) {
   return blocks.join("");
 }
 
+function hermesActivityHtml(runtime, pending = false) {
+  if (!runtime || runtime.source !== "hermes_backend") return "";
+  const activity = Array.isArray(runtime.activity) ? runtime.activity.slice(-8) : [];
+  const stage = cleanText(runtime.stage || (pending ? "Hermes connected" : "Complete"), 100);
+  const elapsed = Number(runtime.elapsedMs) > 0 ? `${(Number(runtime.elapsedMs) / 1000).toFixed(1)}s` : "";
+  return `<section class="phantombot-hermes-live ${pending ? "is-live" : "is-settled"}" aria-label="Hermes live execution">
+    <header><span><i></i>Hermes live</span><b>${esc(stage)}</b>${elapsed ? `<time>${esc(elapsed)}</time>` : ""}</header>
+    ${activity.length ? `<ol>${activity.map((item) => `<li class="is-${esc(["running", "complete", "failed", "stopped"].includes(item.state) ? item.state : "running")}"><i></i><span><b>${esc(item.name || "Hermes")}</b><small>${esc(item.detail || item.state || "Running")}</small></span></li>`).join("")}</ol>` : ""}
+  </section>`;
+}
+
 function assistantTurnHtml(message, messageIndex) {
   if (message.pending) {
+    const streamedReply = message.say
+      ? `<div class="phantomai-chat-reply phantomai-rich-text is-streaming">${richTextHtml(message.say)}</div>`
+      : `<div class="phantombot-thinking"><i></i><i></i><i></i></div>`;
     return `
       <article class="phantombot-turn is-assistant is-thinking" aria-label="PhantomBot is thinking">
         <div class="phantombot-avatar"><img src="/app/assets/brand-phantom-favicon.png" alt="" /></div>
         <div class="phantombot-turn-content">
-          <header><b>PhantomBot</b><span>${message.operator ? "Working" : "Thinking"}</span></header>
-          ${message.operator ? operatorTimelineHtml(message.operator) : `<div class="phantombot-thinking"><i></i><i></i><i></i></div>`}
+          <header><b>PhantomBot</b><span>${message.operator ? "Working" : (message.aiRuntime?.stage || "Thinking")}</span></header>
+          ${message.operator ? operatorTimelineHtml(message.operator) : `${hermesActivityHtml(message.aiRuntime, true)}${streamedReply}`}
         </div>
       </article>`;
   }
   const accountLimit = message.error && /usage limit|quota|rate limit|too many requests|429|subscription limit/i.test(String(message.say || ""));
   const runtime = message.aiRuntime;
   const runtimeProviderNames = { local_ollama: "Local / Ollama", codex_cli: "Codex", claude_cli: "Claude", openrouter_glm: "OpenRouter", chatgpt_bridge: "ChatGPT Bridge", deterministic_tool: "Built-in tool" };
+  const runtimeProvider = runtime?.responding_provider_id || runtime?.provider || "";
+  const runtimeModel = runtime?.responding_model_id || runtime?.model || "";
+  const runtimeState = runtime?.state || (runtime?.source === "hermes_backend" ? "complete" : "degraded");
   const runtimeReceipt = runtime
-    ? `<p class="phantomai-runtime-receipt is-${esc(runtime.state || "degraded")}"><b>${esc(String(runtime.state || "degraded").toUpperCase())}</b><span>${esc(runtimeProviderNames[runtime.responding_provider_id] || runtime.responding_provider_id || "Unknown provider")} · ${esc(runtime.responding_model_id || "model not reported")}${runtime.fallback_used ? " · fallback used" : ""}</span></p>`
+    ? `<p class="phantomai-runtime-receipt is-${esc(runtimeState)}"><b>${esc(String(runtimeState).toUpperCase())}</b><span>${esc(runtimeProviderNames[runtimeProvider] || runtimeProvider || "Hermes")} · ${esc(runtimeModel || "automatic model")}${runtime.fallback_used ? " · fallback used" : ""}</span></p>`
     : "";
   return `
     <article class="phantombot-turn is-assistant ${message.error ? "is-error" : ""}">
@@ -1356,6 +1461,7 @@ function assistantTurnHtml(message, messageIndex) {
       <div class="phantombot-turn-content">
         <header><b>PhantomBot</b>${message.background ? "<span>Working in background</span>" : ""}</header>
         ${runtimeReceipt}
+        ${hermesActivityHtml(runtime)}
         <div class="phantomai-chat-reply phantomai-rich-text">${richTextHtml(message.say)}</div>
         ${operatorTimelineHtml(message.operator)}
         ${message.background ? `<p class="phantomai-chat-status">The task is still running. Results will stay attached to this workspace.</p>` : ""}
@@ -1655,6 +1761,7 @@ function updateSessionClock() {
 function stopRunningRequest() {
   if (!runningRequest) return;
   const request = runningRequest;
+  request.controller?.abort();
   runningRequest = null;
   const task = taskState.tasks.find((item) => item.id === request.taskId);
   const message = task?.messages.find((item) => item.id === request.messageId);
@@ -1665,8 +1772,14 @@ function stopRunningRequest() {
       }).catch(() => {});
     }
     message.pending = false;
-    message.error = true;
-    message.say = "Stopped before the response finished.";
+    message.error = false;
+    message.say = message.say || "Stopped before the response finished.";
+    if (message.aiRuntime?.source === "hermes_backend") {
+      message.aiRuntime.state = "stopped";
+      message.aiRuntime.stage = "Stopped by you";
+      message.aiRuntime.elapsedMs = Math.max(0, Date.now() - Number(message.aiRuntime.startedAt || Date.now()));
+      (message.aiRuntime.activity || []).forEach((item) => { if (item.state === "running") item.state = "stopped"; });
+    }
     task.updatedAt = new Date().toISOString();
   }
   setBusy(false);
@@ -1748,7 +1861,7 @@ function mountChatTab() {
     paint(true);
 
     const requestId = uid("pbrequest");
-    runningRequest = { id: requestId, taskId: task.id, messageId: message.id };
+    runningRequest = { id: requestId, taskId: task.id, messageId: message.id, controller: null };
     setBusy(true);
     try {
       const outbound = composeMessage(prompt, attachments);
@@ -1782,32 +1895,93 @@ function mountChatTab() {
       let result = null;
       if (session.token()) {
         const hermesSelection = getOperatorHermesRuntimeSelection();
+        const hermesBody = {
+          task_id: task.id,
+          prompt: outbound,
+          effort: task.effort === "thinking" ? "reasoning" : (task.effort || "instant"),
+          prompt_integrity: promptIntegrity,
+          ...(hermesSelection.providerId && hermesSelection.modelId ? {
+            provider_id: hermesSelection.providerId,
+            model_id: hermesSelection.modelId,
+          } : {}),
+        };
+        const streamController = new AbortController();
+        if (runningRequest?.id === requestId) runningRequest.controller = streamController;
+        message.aiRuntime = {
+          source: "hermes_backend",
+          state: "streaming",
+          provider: hermesSelection.providerId || "Hermes",
+          model: hermesSelection.modelId || "Hermes automatic",
+          sessionId: "",
+          tools: true,
+          stage: "Connecting to Hermes",
+          activity: [],
+          startedAt: Date.now(),
+        };
+        let receivedLiveOutput = false;
+        let lastStreamPaint = 0;
         try {
-          const hermes = await operatorApi("/phantom-ai/hermes/chat", {
-            method: "POST",
-            body: JSON.stringify({
-              task_id: task.id,
-              prompt: outbound,
-              effort: task.effort === "thinking" ? "reasoning" : (task.effort || "instant"),
-              prompt_integrity: promptIntegrity,
-              ...(hermesSelection.providerId && hermesSelection.modelId ? {
-                provider_id: hermesSelection.providerId,
-                model_id: hermesSelection.modelId,
-              } : {}),
-            }),
-          });
-          result = {
-            say: hermes?.result?.say || "",
-            aiRuntime: {
-              source: "hermes_backend",
-              provider: hermes?.result?.provider_id || "Hermes",
-              model: hermes?.result?.model_id || "Hermes automatic",
-              sessionId: hermes?.result?.session_id || "",
-              tools: true,
+          await streamHermesChat(hermesBody, {
+            signal: streamController.signal,
+            onEvent: async (event, payload) => {
+              if (runningRequest?.id !== requestId) return;
+              receivedLiveOutput = true;
+              updateHermesActivity(message, event, payload);
+              if (payload.session_id) message.aiRuntime.sessionId = cleanText(payload.session_id, 180);
+              if (event === "assistant.delta") message.say += cleanText(payload.delta, 64_000);
+              if (event === "assistant.completed" && payload.content) message.say = cleanText(payload.content, 128_000);
+              if (payload.runtime?.provider) message.aiRuntime.provider = cleanText(payload.runtime.provider, 80);
+              if (payload.runtime?.model) message.aiRuntime.model = cleanText(payload.runtime.model, 160);
+              if (event === "run.completed") {
+                message.aiRuntime.state = "complete";
+                message.aiRuntime.usage = payload.usage || {};
+                message.aiRuntime.elapsedMs = Math.max(0, Date.now() - message.aiRuntime.startedAt);
+              }
+              const now = Date.now();
+              if (event !== "assistant.delta" || now - lastStreamPaint >= 70) {
+                lastStreamPaint = now;
+                paint(true);
+              }
             },
+          });
+          if (!message.say) throw new Error("Hermes completed without a usable response.");
+          result = {
+            say: message.say,
+            aiRuntime: message.aiRuntime,
           };
         } catch (error) {
-          setComposerStatus(`Hermes unavailable; using the Phantom fallback. ${cleanText(error?.message || "", 140)}`, "error", 6000);
+          if (error?.name === "AbortError" || runningRequest?.id !== requestId) return;
+          if (receivedLiveOutput && message.say) {
+            message.aiRuntime.state = "interrupted";
+            message.aiRuntime.stage = "Interrupted after partial response";
+            message.aiRuntime.elapsedMs = Math.max(0, Date.now() - message.aiRuntime.startedAt);
+            result = { say: message.say, aiRuntime: message.aiRuntime, partial: true };
+          } else {
+            setComposerStatus(`Hermes live stream unavailable; retrying through its standard route. ${cleanText(error?.message || "", 140)}`, "error", 6000);
+            try {
+              const hermes = await operatorApi("/phantom-ai/hermes/chat", {
+                method: "POST",
+                body: JSON.stringify(hermesBody),
+              });
+              result = {
+                say: hermes?.result?.say || "",
+                aiRuntime: {
+                  source: "hermes_backend",
+                  state: "complete",
+                  provider: hermes?.result?.provider_id || "Hermes",
+                  model: hermes?.result?.model_id || "Hermes automatic",
+                  sessionId: hermes?.result?.session_id || "",
+                  tools: true,
+                  stage: "Complete through standard route",
+                  activity: [],
+                  startedAt: message.aiRuntime.startedAt,
+                  elapsedMs: Math.max(0, Date.now() - message.aiRuntime.startedAt),
+                },
+              };
+            } catch (fallbackError) {
+              setComposerStatus(`Hermes unavailable; using the Phantom fallback. ${cleanText(fallbackError?.message || "", 140)}`, "error", 6000);
+            }
+          }
         }
       }
       if (!result?.say) {
@@ -1840,11 +2014,12 @@ function mountChatTab() {
       targetMessage.background = backgroundNoteFor(result);
       targetMessage.aiRuntime = result?.aiRuntime || null;
       targetMessage.pending = false;
-      targetMessage.error = !result?.say;
+      targetMessage.error = !result?.say || result?.partial === true;
       targetTask.updatedAt = new Date().toISOString();
       rememberConversation({ prompt: displayQ, reply: targetMessage.say, mode: "phantombot-task", route: result?.open || "" });
       if (readRepliesAloud && !targetMessage.error) speakText(targetMessage.say);
-    } catch {
+    } catch (error) {
+      if (error?.name === "AbortError" || runningRequest?.id !== requestId) return;
       const targetTask = taskState.tasks.find((item) => item.id === task.id);
       const targetMessage = targetTask?.messages.find((item) => item.id === message.id);
       if (targetMessage) {
@@ -1999,7 +2174,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260822-195")
+  import("./brain.js?v=phantom-live-20260822-196")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }

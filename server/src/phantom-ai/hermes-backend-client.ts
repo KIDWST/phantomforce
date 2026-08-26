@@ -84,6 +84,19 @@ export type HermesBackendChatResult = {
   secret_returned: false;
 };
 
+export type HermesBackendStreamEvent = {
+  event: "run.started" | "reasoning" | "assistant.delta" | "tool.started" | "tool.completed" | "tool.failed" | "assistant.completed" | "run.completed" | "error" | "done";
+  data: Record<string, unknown>;
+};
+
+type HermesPreparedChat = {
+  sessionId: string;
+  provider: HermesBackendProvider | null;
+  modelId: string;
+  selectedRuntime: Record<string, unknown>;
+  inventory: HermesBackendInventory;
+};
+
 let cachedInventory: { expiresAt: number; value: HermesBackendInventory } | null = null;
 
 function clean(value: unknown, max = 240) {
@@ -298,7 +311,7 @@ function modelOptions(effort: HermesBackendChatInput["effort"]) {
   return { reasoning: { enabled: true, effort: "medium" } };
 }
 
-export async function runHermesBackendChat(input: HermesBackendChatInput, options: { env?: NodeJS.ProcessEnv; fetchImpl?: FetchLike } = {}): Promise<HermesBackendChatResult> {
+async function prepareHermesBackendChat(input: HermesBackendChatInput, options: { env?: NodeJS.ProcessEnv; fetchImpl?: FetchLike } = {}): Promise<HermesPreparedChat> {
   const prompt = String(input.prompt ?? "").replace(/\u0000/g, "").trim();
   if (!prompt) throw Object.assign(new Error("A PhantomBot prompt is required."), { status: 400 });
   const inventory = await getHermesBackendInventory({ env: options.env, fetchImpl: options.fetchImpl });
@@ -306,7 +319,7 @@ export async function runHermesBackendChat(input: HermesBackendChatInput, option
 
   const providerId = clean(input.providerId, 80).toLowerCase();
   const modelId = clean(input.modelId, 160);
-  const provider = providerId ? inventory.providers.find((item) => item.id === providerId && item.authenticated) : null;
+  const provider = providerId ? inventory.providers.find((item) => item.id === providerId && item.authenticated) ?? null : null;
   if ((providerId || modelId) && (!provider || !modelId || !provider.models.some((model) => model.id === modelId))) {
     throw Object.assign(new Error("That model is not available through the active Hermes backend."), { status: 409 });
   }
@@ -337,15 +350,214 @@ export async function runHermesBackendChat(input: HermesBackendChatInput, option
       body: selectedRuntime,
     });
   }
+  return { sessionId, provider, modelId, selectedRuntime, inventory };
+}
 
-  const completion = await hermesRequest(`/api/sessions/${encodeURIComponent(sessionId)}/chat`, {
+function safeRuntime(value: unknown) {
+  const runtime = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    provider: clean(runtime.provider, 80),
+    model: clean(runtime.model, 160),
+    model_lock: clean(runtime.model_lock, 40),
+    route_source: clean(runtime.route_source, 80),
+  };
+}
+
+function safeUsage(value: unknown) {
+  const usage = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const allowed = ["input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "api_calls", "cost_usd"];
+  return Object.fromEntries(allowed.flatMap((key) => {
+    const amount = Number(usage[key]);
+    return Number.isFinite(amount) && amount >= 0 ? [[key, amount]] : [];
+  }));
+}
+
+function normalizeHermesStreamEvent(event: string, payload: Record<string, unknown>): HermesBackendStreamEvent | null {
+  const base = {
+    session_id: clean(payload.session_id, 180),
+    run_id: clean(payload.run_id, 180),
+    seq: Number.isFinite(Number(payload.seq)) ? Number(payload.seq) : 0,
+  };
+  if (event === "run.started") return { event, data: { ...base, runtime: safeRuntime(payload.runtime) } };
+  if (event === "tool.progress") return { event: "reasoning", data: { ...base, stage: "Hermes reasoning" } };
+  if (event === "assistant.delta") {
+    const delta = String(payload.delta ?? "").slice(0, 64_000);
+    return delta ? { event, data: { ...base, delta } } : null;
+  }
+  if (event === "tool.started" || event === "tool.completed" || event === "tool.failed") {
+    return {
+      event,
+      data: {
+        ...base,
+        tool_name: clean(payload.tool_name || "Hermes tool", 100),
+        preview: clean(payload.preview || (event === "tool.started" ? "Running" : event === "tool.completed" ? "Complete" : "Failed"), 220),
+      },
+    };
+  }
+  if (event === "assistant.completed") {
+    return {
+      event,
+      data: {
+        ...base,
+        content: redactSensitiveText(String(payload.content ?? "")).slice(0, 128_000),
+        runtime: safeRuntime(payload.runtime),
+        interrupted: Boolean(payload.interrupted),
+      },
+    };
+  }
+  if (event === "run.completed") {
+    return {
+      event,
+      data: {
+        ...base,
+        usage: safeUsage(payload.usage),
+        runtime: safeRuntime(payload.runtime),
+        pending_steer: clean(payload.pending_steer, 500),
+      },
+    };
+  }
+  if (event === "error") return { event, data: { ...base, message: clean(payload.message || "Hermes could not complete this run.", 500) } };
+  if (event === "done") return { event, data: base };
+  return null;
+}
+
+function parseSseFrame(frame: string) {
+  let event = "message";
+  const data: string[] = [];
+  for (const line of frame.split(/\r?\n/u)) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+  }
+  if (!data.length) return null;
+  try {
+    const payload = JSON.parse(data.join("\n")) as Record<string, unknown>;
+    return normalizeHermesStreamEvent(event, payload);
+  } catch {
+    return null;
+  }
+}
+
+export async function runHermesBackendChatStream(
+  input: HermesBackendChatInput,
+  options: {
+    env?: NodeJS.ProcessEnv;
+    fetchImpl?: FetchLike;
+    signal?: AbortSignal;
+    onEvent: (event: HermesBackendStreamEvent) => void | Promise<void>;
+  },
+) {
+  const prepared = await prepareHermesBackendChat(input, options);
+  const env = options.env ?? process.env;
+  const apiKey = await hermesApiKey(env);
+  if (!apiKey) throw new Error("Hermes API authentication is not configured on this host.");
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  else options.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, CHAT_TIMEOUT_MS);
+  try {
+    const response = await (options.fetchImpl ?? fetch)(`${hermesBaseUrl(env)}/api/sessions/${encodeURIComponent(prepared.sessionId)}/chat/stream`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify({
+        message: String(input.prompt ?? "").replace(/\u0000/g, "").trim(),
+        instructions: "Answer as PhantomBot through the active Hermes runtime. Use the available Hermes tools when they materially improve the result.",
+        ...prepared.selectedRuntime,
+      }),
+    });
+    if (!response.ok || !response.body) {
+      const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+      const nested = payload.error && typeof payload.error === "object"
+        ? (payload.error as Record<string, unknown>).message
+        : payload.error;
+      throw Object.assign(new Error(clean(nested || `Hermes backend stream failed (${response.status}).`, 500)), { status: response.status || 502 });
+    }
+    let buffer = "";
+    let assistantSafetyBuffer = "";
+    const decoder = new TextDecoder();
+    const reader = response.body.getReader();
+    const forward = async (normalized: HermesBackendStreamEvent) => {
+      if (normalized.event === "assistant.delta") {
+        assistantSafetyBuffer += String(normalized.data.delta ?? "");
+        const safeWindow = Math.max(0, assistantSafetyBuffer.length - 128);
+        const boundary = assistantSafetyBuffer.slice(0, safeWindow).search(/\s(?=[^\s]*$)/u);
+        if (boundary >= 0) {
+          const chunk = assistantSafetyBuffer.slice(0, boundary + 1);
+          assistantSafetyBuffer = assistantSafetyBuffer.slice(boundary + 1);
+          await options.onEvent({ ...normalized, data: { ...normalized.data, delta: redactSensitiveText(chunk) } });
+        }
+        return;
+      }
+      if (assistantSafetyBuffer && (normalized.event === "assistant.completed" || normalized.event === "run.completed" || normalized.event === "error" || normalized.event === "done")) {
+        await options.onEvent({
+          event: "assistant.delta",
+          data: { ...normalized.data, delta: redactSensitiveText(assistantSafetyBuffer) },
+        });
+        assistantSafetyBuffer = "";
+      }
+      await options.onEvent(normalized);
+    };
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      let boundary = buffer.search(/\r?\n\r?\n/u);
+      while (boundary >= 0) {
+        const frame = buffer.slice(0, boundary);
+        const separator = /^\r\n/u.test(buffer.slice(boundary)) ? 4 : 2;
+        buffer = buffer.slice(boundary + separator);
+        const normalized = parseSseFrame(frame);
+        if (normalized) await forward(normalized);
+        boundary = buffer.search(/\r?\n\r?\n/u);
+      }
+      if (done) break;
+    }
+    if (buffer.trim()) {
+      const normalized = parseSseFrame(buffer);
+      if (normalized) await forward(normalized);
+    }
+    if (assistantSafetyBuffer) {
+      await options.onEvent({ event: "assistant.delta", data: { delta: redactSensitiveText(assistantSafetyBuffer) } });
+    }
+    return {
+      session_id: prepared.sessionId,
+      provider_id: prepared.provider?.id || prepared.inventory.current_provider,
+      model_id: prepared.modelId || prepared.inventory.current_model,
+      source: "hermes_backend" as const,
+      secret_returned: false as const,
+    };
+  } catch (error) {
+    if ((error as Error).name === "AbortError") {
+      if (options.signal?.aborted && !timedOut) throw Object.assign(new Error("Hermes response was stopped."), { status: 499, code: "ABORT_ERR" });
+      throw Object.assign(new Error("Hermes backend did not respond in time."), { status: 504 });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    options.signal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
+export async function runHermesBackendChat(input: HermesBackendChatInput, options: { env?: NodeJS.ProcessEnv; fetchImpl?: FetchLike } = {}): Promise<HermesBackendChatResult> {
+  const prompt = String(input.prompt ?? "").replace(/\u0000/g, "").trim();
+  const prepared = await prepareHermesBackendChat(input, options);
+
+  const completion = await hermesRequest(`/api/sessions/${encodeURIComponent(prepared.sessionId)}/chat`, {
     ...options,
     timeoutMs: CHAT_TIMEOUT_MS,
     method: "POST",
     body: {
       message: prompt,
       instructions: "Answer as PhantomBot through the active Hermes runtime. Use the available Hermes tools when they materially improve the result.",
-      ...selectedRuntime,
+      ...prepared.selectedRuntime,
     },
   });
   const message = completion.payload.message && typeof completion.payload.message === "object"
@@ -360,12 +572,12 @@ export async function runHermesBackendChat(input: HermesBackendChatInput, option
   const say = String(message.content ?? "").trim();
   if (!say) throw Object.assign(new Error("Hermes completed without a usable response."), { status: 502 });
   return {
-    session_id: clean(completion.payload.session_id || sessionId, 180),
+    session_id: clean(completion.payload.session_id || prepared.sessionId, 180),
     say,
     runtime,
     usage,
-    provider_id: clean(runtime.provider || provider?.id || inventory.current_provider, 80),
-    model_id: clean(runtime.model || modelId || inventory.current_model, 160),
+    provider_id: clean(runtime.provider || prepared.provider?.id || prepared.inventory.current_provider, 80),
+    model_id: clean(runtime.model || prepared.modelId || prepared.inventory.current_model, 160),
     source: "hermes_backend",
     secret_returned: false,
   };
