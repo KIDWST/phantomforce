@@ -370,6 +370,8 @@ function auditPage() {
   const dashboardBrief = document.querySelector(".dashboard-brief");
   const decisionDeck = document.querySelector(".decision-deck");
   const dashboardHero = consoleRoot?.querySelector(".hero2");
+  const workforceHeartbeat = document.querySelector(".workforce-heartbeat");
+  const missionRail = consoleRoot?.querySelector(".console-rail");
   const dashboardPet = document.querySelector("[data-buddy]");
   const productCards = [...document.querySelectorAll(".ps-product")];
   const productMedia = [...document.querySelectorAll(".ps-product-media")];
@@ -565,7 +567,7 @@ function auditPage() {
       height: Math.round(rect.height),
     };
   });
-  const dashboardSurfaces = [dashboardBrief, decisionDeck, dashboardHero].filter(isVisible);
+  const dashboardSurfaces = [dashboardBrief, decisionDeck, dashboardHero, workforceHeartbeat].filter(isVisible);
   const decisionList = document.querySelector(".decision-list");
   const decisionCards = [...document.querySelectorAll(".decision-card")];
   const decisionReviewAll = document.querySelector(".decision-review-all");
@@ -578,7 +580,9 @@ function auditPage() {
       const b = second.getBoundingClientRect();
       const overlapWidth = Math.min(a.right, b.right) - Math.max(a.left, b.left);
       const overlapHeight = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-      if (overlapWidth > 2 && overlapHeight > 2) {
+      const intentionalHeroOverlay = vw > 900
+        && ((first === dashboardBrief && second === dashboardHero) || (first === dashboardHero && second === dashboardBrief));
+      if (!intentionalHeroOverlay && overlapWidth > 2 && overlapHeight > 2) {
         dashboardCollisions.push(`${selectorName(first)} overlaps ${selectorName(second)}`);
       }
     }
@@ -696,6 +700,11 @@ function auditPage() {
     dashboard: {
       briefTop: dashboardBrief ? Math.round(dashboardBrief.getBoundingClientRect().top) : null,
       heroTop: dashboardHero ? Math.round(dashboardHero.getBoundingClientRect().top) : null,
+      heroBottom: dashboardHero ? Math.round(dashboardHero.getBoundingClientRect().bottom) : null,
+      workforceTop: workforceHeartbeat ? Math.round(workforceHeartbeat.getBoundingClientRect().top) : null,
+      workforceVisible: isVisible(workforceHeartbeat),
+      missionRailVisible: isVisible(missionRail),
+      centerWidth: consoleRoot?.querySelector(".console-center") ? Math.round(consoleRoot.querySelector(".console-center").getBoundingClientRect().width) : null,
       intelTop: dashboardIntel ? Math.round(dashboardIntel.getBoundingClientRect().top) : null,
       intelBandColumns: dashboardIntel ? getComputedStyle(dashboardIntel).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length : null,
       intelGridColumns: dashboardIntelGrid ? getComputedStyle(dashboardIntelGrid).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length : null,
@@ -1113,6 +1122,19 @@ function assertCase(result) {
       }
     }
     if (page === "dashboard") {
+      assert.deepEqual(audit.dashboardCollisions, [], `${label} ${viewport.width}: dashboard hero, workforce and decision surfaces must not overlap.`);
+      assert.equal(audit.dashboard.workforceVisible, true, `${label} ${viewport.width}: the workforce heartbeat must remain visible on desktop.`);
+      assert.ok(
+        audit.dashboard.heroBottom !== null && audit.dashboard.workforceTop !== null && audit.dashboard.workforceTop >= audit.dashboard.heroBottom,
+        `${label} ${viewport.width}: the workforce heartbeat must begin after the hero instead of covering it.`
+      );
+      if (viewport.width <= 1320) {
+        assert.equal(audit.dashboard.missionRailVisible, false, `${label} ${viewport.width}: the mission stream must default to its drawer at compact desktop widths.`);
+        assert.ok(
+          audit.dashboard.centerWidth !== null && audit.dashboard.centerWidth >= viewport.width - 4,
+          `${label} ${viewport.width}: the overview center must use the full compact desktop viewport.`
+        );
+      }
       assert.equal(audit.dashboardGateway?.triggered, true, `${label} ${viewport.width}: the footer Gateway control must be available.`);
       assert.equal(audit.dashboardGateway?.routed, true, `${label} ${viewport.width}: the footer Gateway control must open the dedicated Gateway & Brain page.`);
       assert.equal(audit.dashboardGateway?.visible, true, `${label} ${viewport.width}: the full Gateway control center must render for browser verification.`);

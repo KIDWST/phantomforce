@@ -7574,3 +7574,128 @@ html[data-command-os="2040"] .phantombot-session-clock {
     opacity: 0.7;
   }
 }
+
+/* Overview layout contract: the workforce heartbeat supersedes the legacy
+   desktop decision strip and must always occupy its own document region. */
+@media (min-width: 901px) {
+  html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console:not(.console-workspace) {
+    position: relative !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console-center {
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console-center > .hero2 {
+    order: 1 !important;
+    flex: 0 0 clamp(400px, calc(100dvh - 360px), 640px) !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 400px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console-center > .workforce-heartbeat {
+    order: 2 !important;
+    flex: 0 0 auto !important;
+    margin: 16px 18px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console-center:has(> .workforce-heartbeat) > .decision-deck:not([hidden]) {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console-center > .dashboard-intel-band {
+    order: 3 !important;
+    display: grid !important;
+    flex: 0 0 auto !important;
+    grid-row: auto !important;
+  }
+}
+
+/* A 4K display at Windows 250-300% scaling presents a compact CSS viewport.
+   Use the whole center and move the mission stream to its existing drawer. */
+@media (min-width: 901px) and (max-width: 1320px) {
+  html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console:not(.console-workspace) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console-center {
+    width: 100% !important;
+    border-right: 0 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .console-rail {
+    position: absolute !important;
+    top: 14px !important;
+    right: 14px !important;
+    bottom: 14px !important;
+    z-index: 55 !important;
+    width: min(360px, calc(100vw - 28px)) !important;
+    height: auto !important;
+    border: 1px solid rgba(126, 158, 185, 0.2) !important;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.58) !important;
+    transform: translateX(calc(100% + 32px)) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: transform 220ms ease, opacity 180ms ease !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled.os-mission-open .console:not(.console-workspace) .console-rail {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-mission-peek {
+    display: block !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav {
+    justify-content: flex-start !important;
+    min-width: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav > button {
+    flex: 0 0 auto !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
+    display: grid !important;
+    grid-template-columns: minmax(170px, 1.35fr) minmax(120px, 0.9fr) minmax(120px, 0.9fr) minmax(190px, 1.3fr) minmax(150px, 1fr) !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > span,
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > button {
+    width: auto !important;
+    min-width: 0 !important;
+    padding-inline: 10px !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > [data-os-model-status] {
+    min-width: 0 !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > [data-nav-id="memory"],
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > [data-nav-id="settings"] {
+    display: none !important;
+  }
+
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line .os-system-time {
+    margin-left: 0 !important;
+  }
+}
