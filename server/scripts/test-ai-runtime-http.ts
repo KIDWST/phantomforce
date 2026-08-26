@@ -120,6 +120,7 @@ const models = {
   claude_cli: "sonnet",
   openrouter_glm: "openrouter/auto",
   chatgpt_bridge: "chatgpt-standard",
+  hermes: "automatic",
 };
 
 const phantomBotRoute = {

@@ -38,7 +38,8 @@ try {
   assert.equal(initial.source, "default");
   assert.equal(initial.config.primary_provider_id, "deepseek_api");
   assert.equal(initial.config.models.deepseek_api, "deepseek-v4-flash");
-  assert.equal(initial.config.phantom_bot.primary_provider_id, "local_ollama");
+  assert.equal(initial.config.phantom_bot.primary_provider_id, "hermes");
+  assert.equal(initial.config.phantom_bot.models.hermes, "automatic");
   assert.equal(initial.config.models.local_ollama, "local-auto");
 
   const saved = await saveAiRuntimeConfig({
@@ -105,7 +106,7 @@ try {
   const orgB = await getAiRuntimeConfig("org-b", "owner-b", root);
   assert.equal(orgB.source, "default");
   assert.equal(orgB.config.primary_provider_id, "deepseek_api");
-  assert.equal(orgB.config.phantom_bot.primary_provider_id, "local_ollama");
+  assert.equal(orgB.config.phantom_bot.primary_provider_id, "hermes");
 
   const serialized = await readFile(join(root, "org-a.json"), "utf8");
   assert.doesNotMatch(serialized, /api[_-]?key|bearer|password|cookie|token/i);

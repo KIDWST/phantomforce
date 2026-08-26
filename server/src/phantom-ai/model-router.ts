@@ -21,7 +21,7 @@ import type {
   SensitivityLevel,
 } from "./types.js";
 
-export const DEFAULT_OPENROUTER_MODEL = "z-ai/glm-5.2";
+export const DEFAULT_OPENROUTER_MODEL = "z-ai/glm-5.3";
 
 const DEFAULT_RULES = [
   "Normal customers interact with Phantom AI, not raw providers.",
@@ -96,10 +96,10 @@ export function getProviderSetupStatus(env: NodeJS.ProcessEnv = process.env): Pr
       live_transport_enabled: openRouterTransportEnabled,
       live_call_ready: openRouterLiveReady,
       detail: openRouterLiveReady
-        ? "GLM 5.2 is ready for admin-selected low-risk Phantom AI chat through OpenRouter."
+        ? "GLM 5.3 is ready for admin-selected low-risk Phantom AI chat through OpenRouter."
         : openRouterConfigured
-          ? "OpenRouter key is configured. Set live provider and OpenRouter transport flags to enable GLM 5.2 chat."
-        : "OpenRouter account/API key is required before GLM 5.2 can run through Phantom AI.",
+          ? "OpenRouter key is configured. Set live provider and OpenRouter transport flags to enable GLM 5.3 chat."
+        : "OpenRouter account/API key is required before GLM 5.3 can run through Phantom AI.",
     },
     claude_api: {
       configured: claudeConfigured,

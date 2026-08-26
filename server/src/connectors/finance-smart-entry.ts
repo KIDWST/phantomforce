@@ -138,7 +138,7 @@ export type ReceiptDraft = {
   confidence: "high" | "medium" | "low";
 };
 
-const RECEIPT_MODEL_ID = "z-ai/glm-5.2";
+const RECEIPT_MODEL_ID = "z-ai/glm-5.3";
 const RECEIPT_EXTRACTION_PROMPT =
   'Read this receipt image and return ONLY a JSON object (no prose, no markdown fences) with exactly these keys: ' +
   '{"vendor": string, "amount": number, "direction": "income" or "expense", "date": "YYYY-MM-DD", "categoryGuess": string, "confidence": "high" or "medium" or "low"}. ' +

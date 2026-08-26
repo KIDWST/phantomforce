@@ -102,7 +102,7 @@ assert(!serializedSecretFirewall.includes(fakeCard), "Firewall result must not i
 const directResult = evaluateProviderInvocationFirewall({
   requested_provider_id: "openrouter_glm",
   requested_route: "openrouter_glm",
-  requested_model_id: "z-ai/glm-5.2",
+  requested_model_id: "z-ai/glm-5.3",
   redacted_context_summary: "Redacted summary for direct firewall test.",
   estimated_tokens: 1200,
   estimated_cost_usd: 0.01,

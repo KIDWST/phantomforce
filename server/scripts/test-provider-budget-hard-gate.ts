@@ -22,7 +22,7 @@ function baseGate(overrides = {}) {
     tenant_id: "demo-trainer",
     business_name: "West Loop Strength Lab",
     provider_id: "openrouter_glm",
-    model_id: "z-ai/glm-5.2",
+    model_id: "z-ai/glm-5.3",
     estimated_tokens: 1200,
     estimated_cost_usd: 0.02,
     current_daily_spend_usd: 0,
@@ -113,7 +113,7 @@ const serializedPreview = JSON.stringify(routedPreview);
 
 assert(firewallGate.status === "blocked", "Router firewall hard budget gate must block.");
 assert(firewallGate.provider_id === "openrouter_glm", "Hard gate must preserve provider id for admin proof.");
-assert(firewallGate.model_id === "z-ai/glm-5.2", "Hard gate must preserve model id for admin proof.");
+assert(firewallGate.model_id === "z-ai/glm-5.3", "Hard gate must preserve model id for admin proof.");
 assert(firewallGate.route_allowed === false, "Router hard gate must not allow route.");
 assert(firewallGate.live_call_allowed === false, "Router hard gate must not allow live calls.");
 assert(routedPreview.provider_invocation.live_call_allowed === false, "Provider firewall must still block live calls.");

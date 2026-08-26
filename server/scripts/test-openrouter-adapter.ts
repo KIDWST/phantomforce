@@ -70,13 +70,13 @@ assert(firewall.live_call_allowed === false, "Provider invocation firewall must 
 assert(firewall.execution_disabled === true, "Provider invocation firewall must keep execution disabled.");
 assert(adapter !== null, "OpenRouter route should include adapter dry-run metadata.");
 assert(adapter.provider_id === OPENROUTER_GLM_PROVIDER_ID, "Adapter provider id should be OpenRouter GLM.");
-assert(adapter.model_id === OPENROUTER_GLM_52_MODEL_ID, "Adapter model id should be GLM 5.2.");
+assert(adapter.model_id === OPENROUTER_GLM_52_MODEL_ID, "Adapter model id should be GLM 5.3.");
 assert(adapter.adapter_status === "blocked_dry_run", "Adapter must be blocked dry-run only.");
 assert(
   adapter.transport_contract.endpoint === OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
   "Transport contract should target OpenRouter chat completions.",
 );
-assert(adapter.transport_contract.model_id === OPENROUTER_GLM_52_MODEL_ID, "Transport contract should use GLM 5.2.");
+assert(adapter.transport_contract.model_id === OPENROUTER_GLM_52_MODEL_ID, "Transport contract should use GLM 5.3.");
 assert(adapter.transport_contract.transport_enabled === false, "Transport contract must stay disabled.");
 assert(adapter.transport_contract.network_client_implemented === false, "Transport contract must not implement a network client.");
 assert(adapter.transport_contract.request_body_prepared === false, "Transport contract must not prepare request body.");

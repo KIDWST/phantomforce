@@ -1,18 +1,21 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260822-194";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260822-194";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260822-194";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260822-194";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260822-194";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260822-194";
-import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260822-194";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260822-195";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260822-195";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260822-195";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260822-195";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260822-195";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260822-195";
+import { DEFAULT_COMPANION_PREFS, clearCompanionPagePlacements, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260822-195";
 import {
   AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
+  getHermesBackendModels,
+  getHermesBackendState,
   getAiProviderModelCatalog,
   loadAiRuntimeConfig,
+  loadHermesBackend,
   loadAiRuntimeUsage,
   loadAiProviderModels,
   persistAiRuntimeConfig,
@@ -20,7 +23,7 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260822-194";
+} from "./ai-runtime.js?v=phantom-live-20260822-195";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -69,13 +72,21 @@ const KIMI_OLLAMA_ALIASES = new Set(["kimi-k3-hf", KIMI_OLLAMA_MODEL]);
 
 const PROVIDERS = [
   {
+    id: "hermes",
+    name: "Hermes Live",
+    short: "H",
+    role: "The live Hermes brain, model catalog, memory, skills, and tools",
+    models: ["automatic"],
+    allowCustomModel: false,
+    recommended: true,
+  },
+  {
     id: "deepseek",
     name: "DeepSeek V4 Flash",
     short: "DS",
     role: "Fast organization-wide reasoning, planning, and platform control",
     models: ["deepseek-v4-flash"],
     allowCustomModel: true,
-    recommended: true,
   },
   {
     id: "claude",
@@ -105,7 +116,7 @@ const PROVIDERS = [
     name: "OpenRouter",
     short: "OR",
     role: "Cloud model routing and flexible fallbacks",
-    models: ["openrouter/auto", "z-ai/glm-5.2", "openrouter/free"],
+    models: ["openrouter/auto", "z-ai/glm-5.3", "openrouter/free"],
     allowCustomModel: true,
   },
   {
@@ -209,6 +220,10 @@ const PROVIDER_MODES = [
 ];
 
 function providerModels(provider) {
+  if (provider.id === "hermes") {
+    const discovered = getHermesBackendModels().map((model) => model.selectionId).filter(Boolean);
+    return [...new Set(["automatic", ...discovered])];
+  }
   if (provider.id === "openrouter") {
     const discovered = getAiProviderModelCatalog("openrouter_glm").models.map((model) => model.id).filter(Boolean);
     return [...new Set([...provider.models, ...discovered])];
@@ -220,13 +235,49 @@ function providerModels(provider) {
   return [...new Set(["local-auto", ...installed])];
 }
 
+function splitHermesSelection(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized || normalized === "automatic") return { providerId: "", modelId: "" };
+  const separator = normalized.indexOf("::");
+  if (separator <= 0) return { providerId: "", modelId: "" };
+  return {
+    providerId: normalized.slice(0, separator),
+    modelId: normalized.slice(separator + 2),
+  };
+}
+
+function hermesModelMeta(value) {
+  const backend = getHermesBackendState();
+  const selection = splitHermesSelection(value);
+  if (!selection.providerId) {
+    const currentProvider = backend.providers.find((provider) => provider.id === backend.currentProvider);
+    return `Hermes automatic · ${currentProvider?.name || backend.currentProvider || "current provider"}`;
+  }
+  const provider = backend.providers.find((item) => item.id === selection.providerId);
+  const model = provider?.models?.find((item) => item.id === selection.modelId);
+  const capabilities = [model?.reasoning ? "reasoning" : "", model?.fast ? "fast lane" : ""].filter(Boolean).join(" · ");
+  return `${provider?.name || selection.providerId}${capabilities ? ` · ${capabilities}` : ""}`;
+}
+
+function operatorModelLabel(providerId, model) {
+  if (providerId === "local") return localModelLabel(model);
+  if (providerId !== "hermes") return modelDisplayLabel(model);
+  const backend = getHermesBackendState();
+  const selection = splitHermesSelection(model);
+  if (!selection.providerId) {
+    return backend.currentModel ? `Automatic · ${modelDisplayLabel(backend.currentModel)}` : "Automatic · Hermes default";
+  }
+  return modelDisplayLabel(selection.modelId);
+}
+
 const DEFAULT_MODELS = {
   deepseek: "deepseek-v4-flash",
   claude: "default",
   private: "gpt-5.5",
   chatgpt: "chatgpt-standard",
-  openrouter: "openrouter/auto",
+  openrouter: "z-ai/glm-5.3",
   local: "local-auto",
+  hermes: "automatic",
 };
 
 const DEFAULT_SETTINGS = {
@@ -236,9 +287,9 @@ const DEFAULT_SETTINGS = {
   brainMode: "subscription",
   models: { ...DEFAULT_MODELS },
   phantomBot: {
-    provider: "local",
+    provider: "hermes",
     providerMode: "smart",
-    selectedProviders: ["local", "chatgpt"],
+    selectedProviders: ["hermes", "local", "chatgpt"],
     models: { ...DEFAULT_MODELS },
   },
   responseStyle: "operator",
@@ -379,7 +430,17 @@ export function getOperatorInfrastructureStatus(surface = "platform") {
   const activeModel = route.models[activeProvider.id] || activeModels[0] || activeProvider.models[0] || "";
   const modelLabel = activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel);
   const runtime = getAiRuntimeState();
-  const allowedStates = (runtime.providerManager?.providers || []).filter((provider) => route.selectedProviders.includes(provider.display_id));
+  const hermesRuntime = runtimeProviderStatus("hermes");
+  const hermesState = {
+    display_id: "hermes",
+    status: hermesRuntime.state === "real" ? "online" : hermesRuntime.state === "unavailable" ? "offline" : "unknown",
+    truth_state: hermesRuntime.state === "real" ? "verified" : hermesRuntime.state === "configured" ? "configured" : "unknown",
+    detail: hermesRuntime.detail,
+  };
+  const allowedStates = [
+    ...(runtime.providerManager?.providers || []),
+    ...(route.selectedProviders.includes("hermes") ? [hermesState] : []),
+  ].filter((provider) => route.selectedProviders.includes(provider.display_id));
   const activeState = allowedStates.find((provider) => provider.display_id === route.provider);
   if (!activeProvider?.id || !activeModel) {
     return {
@@ -506,8 +567,22 @@ async function refreshBridgeStatuses(el, opts) {
 export function getOperatorBrainMesh() {
   const settings = loadOperatorSettings();
   const overview = configuredConnectionOverview(settings);
+  const hermes = getHermesBackendState();
   const chatGpt = agentAssistBridgeStatus.status || {};
   const higgsfield = higgsfieldBridgeStatus.status || {};
+  const activeHermesProviders = hermes.providers.filter((provider) => provider.authenticated);
+  const activeHermesToolsets = hermes.toolsets.filter((toolset) => toolset.enabled && toolset.configured);
+  const hermesNode = {
+    id: "backend-hermes",
+    name: "Hermes Backend",
+    state: hermes.loading ? "checking" : hermes.online ? "connected" : hermes.error ? "attention" : "setup",
+    status: hermes.loading ? "Syncing" : hermes.online ? `Live · ${hermes.version || "connected"}` : "Unavailable",
+    detail: hermes.online
+      ? `${activeHermesProviders.length} providers · ${hermes.toolsAvailable} tools · ${hermes.skills.count || 0} skills · ${modelDisplayLabel(hermes.currentModel || "automatic")}`
+      : hermes.error || "Start the Hermes API server to restore its models, memory, skills, and tools.",
+    capabilities: activeHermesToolsets.map((toolset) => toolset.label),
+    settingsTab: "model",
+  };
   const bridges = [
     {
       id: "bridge-chatgpt",
@@ -542,16 +617,16 @@ export function getOperatorBrainMesh() {
       settingsTab: "bridge",
     },
   ];
-  const nodes = [...overview.brainRoutes, ...bridges];
+  const nodes = [hermesNode, ...overview.brainRoutes, ...bridges];
   const activeCount = nodes.filter((node) => node.state === "connected").length;
   const attentionCount = nodes.filter((node) => node.state === "attention").length;
   return {
-    loaded: Boolean(agentAssistBridgeStatus.loaded && higgsfieldBridgeStatus.loaded),
-    loading: Boolean(agentAssistBridgeStatus.loading || higgsfieldBridgeStatus.loading),
+    loaded: Boolean(hermes.loaded && agentAssistBridgeStatus.loaded && higgsfieldBridgeStatus.loaded),
+    loading: Boolean(hermes.loading || agentAssistBridgeStatus.loading || higgsfieldBridgeStatus.loading),
     activeCount,
     attentionCount,
     totalCount: nodes.length,
-    routes: overview.brainRoutes,
+    routes: [hermesNode, ...overview.brainRoutes],
     bridges,
     nodes,
   };
@@ -565,6 +640,7 @@ export async function hydrateOperatorBrainMesh() {
       : Promise.resolve(),
     refreshAgentAssistBridge(null, null, false),
     refreshHiggsfieldBridge(null, null, false),
+    loadHermesBackend({ force: true }).catch(() => null),
   ]);
   return getOperatorBrainMesh();
 }
@@ -585,6 +661,18 @@ function higgsfieldStatusLabel(status) {
 }
 
 function runtimeProviderStatus(providerId) {
+  if (providerId === "hermes") {
+    const backend = getHermesBackendState();
+    if (backend.loading) return { state: "checking", label: "Syncing", detail: "Reading the live Hermes model and tool registry." };
+    if (backend.online) {
+      return {
+        state: "real",
+        label: `Live · ${backend.toolsAvailable} tools`,
+        detail: `${backend.providers.filter((provider) => provider.authenticated).length} active provider${backend.providers.filter((provider) => provider.authenticated).length === 1 ? "" : "s"} · ${backend.skills.count || 0} skills · Hermes ${backend.version || "connected"}`,
+      };
+    }
+    return { state: "unavailable", label: "Hermes offline", detail: backend.error || "The Hermes backend could not be reached from this host." };
+  }
   const runtime = getAiRuntimeState();
   const provider = runtime.providerManager?.providers?.find((item) => item.display_id === providerId);
   if (!provider) return { state: runtime.loading ? "checking" : "unknown", label: runtime.loading ? "Checking" : "Not checked", detail: runtime.error || "Run a provider check to confirm availability." };
@@ -606,7 +694,7 @@ export function getOperatorBrainChoices() {
       ? { provider: "Phantom Blend", model: `${bot.selectedProviders.length} providers`, automatic: false }
       : {
           provider: activeProvider.name,
-          model: activeProvider.id === "local" ? localModelLabel(explicitModel) : modelDisplayLabel(explicitModel),
+          model: operatorModelLabel(activeProvider.id, explicitModel),
           automatic: false,
         };
   return {
@@ -630,12 +718,30 @@ export function getOperatorBrainChoices() {
         detail: runtime.detail,
         models: models.map((model) => ({
           id: model,
-          label: provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model),
+           label: operatorModelLabel(provider.id, model),
+           meta: provider.id === "hermes" ? hermesModelMeta(model) : "",
           selected: bot.providerMode === "single" && bot.provider === provider.id && selectedModel === model,
         })),
       };
     }),
   };
+}
+
+export function getOperatorHermesRuntimeSelection() {
+  const settings = loadOperatorSettings();
+  const bot = settings.phantomBot;
+  if (bot.providerMode === "smart" || bot.providerMode === "multiple") {
+    return { providerId: "", modelId: "", automatic: true };
+  }
+  const selectedModel = String(bot.models?.[bot.provider] || "").trim();
+  if (bot.provider === "hermes") {
+    const selection = splitHermesSelection(selectedModel);
+    return { ...selection, automatic: !selection.providerId };
+  }
+  if (bot.provider === "openrouter" && selectedModel && selectedModel !== "openrouter/auto") {
+    return { providerId: "openrouter", modelId: selectedModel, automatic: false };
+  }
+  return { providerId: "", modelId: "", automatic: true };
 }
 
 export async function setOperatorBrainChoice({ automatic = false, provider: providerId = "", model = "" } = {}) {
@@ -1471,6 +1577,19 @@ function configuredConnectionOverview(settings) {
       settingsTab: "model",
     }];
   });
+  const hermes = getHermesBackendState();
+  if (hermes.online) {
+    const activeProviders = hermes.providers.filter((provider) => provider.authenticated).length;
+    connections.unshift({
+      id: "backend-hermes",
+      name: "Hermes Backend",
+      state: "connected",
+      status: "Active",
+      detail: `${activeProviders} provider${activeProviders === 1 ? "" : "s"} · ${hermes.toolsAvailable} tools · ${hermes.skills.count || 0} skills`,
+      message: `${modelDisplayLabel(hermes.currentModel || "automatic")} · Hermes ${hermes.version || "connected"}`,
+      settingsTab: "model",
+    });
+  }
   const chatGpt = agentAssistBridgeStatus.status || {};
   if (chatGpt.executable) {
     connections.push({

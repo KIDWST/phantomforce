@@ -1,11 +1,11 @@
 import {
   store, uid, visible, moneyView, todaysPlan, currentWs, wsName, pushActivity,
   workspaceStorageGetItem, workspaceStorageSetItem, session,
-} from "./store.js?v=phantom-live-20260822-194";
+} from "./store.js?v=phantom-live-20260822-195";
 import {
   brainContractAttentionItems, cachedBrainContract, cachedOrganizationPulse,
   loadBrainContract, loadOrganizationPulse, organizationPulseState,
-} from "./organizationpulse.js?v=phantom-live-20260822-194";
+} from "./organizationpulse.js?v=phantom-live-20260822-195";
 
 const PLANNER_ITEMS_KEY = "pf.aiPlanner.items.v1";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));

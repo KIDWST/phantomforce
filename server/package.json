@@ -66,6 +66,7 @@
     "test:hermes-engineering-tools": "tsx scripts/test-hermes-engineering-tools.ts",
     "test:hermes-operator-stream": "tsx scripts/test-hermes-operator-stream.ts",
     "test:hermes-ecosystem-knowledge": "tsx scripts/test-hermes-ecosystem-knowledge.ts",
+    "test:hermes-backend-client": "tsx scripts/test-hermes-backend-client.ts",
     "test:phantom-capability-registry": "tsx scripts/test-phantom-capability-registry.ts",
     "test:phantom-hunter": "tsx scripts/test-phantom-hunter.ts",
     "test:hermes-acp-live": "tsx scripts/test-hermes-acp-live.ts",

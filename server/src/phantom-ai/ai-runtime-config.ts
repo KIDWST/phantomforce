@@ -10,6 +10,7 @@ export const AI_RUNTIME_PROVIDER_IDS = [
   "claude_cli",
   "openrouter_glm",
   "chatgpt_bridge",
+  "hermes",
 ] as const;
 
 export type AiRuntimeProviderId = (typeof AI_RUNTIME_PROVIDER_IDS)[number];
@@ -55,8 +56,9 @@ const DEFAULT_MODELS: Record<AiRuntimeProviderId, string> = {
   local_ollama: "local-auto",
   codex_cli: "gpt-5.5",
   claude_cli: "default",
-  openrouter_glm: "openrouter/auto",
+  openrouter_glm: "z-ai/glm-5.3",
   chatgpt_bridge: "chatgpt-standard",
+  hermes: "automatic",
 };
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -75,7 +77,7 @@ function isProviderId(value: unknown): value is AiRuntimeProviderId {
 function normalizeModel(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
   const model = value.trim();
-  if (!model || model.length > 100 || !/^[\w./:@+~-]+$/.test(model)) return fallback;
+  if (!model || model.length > 180 || !/^[\w./:@+~-]+$/.test(model)) return fallback;
   return model;
 }
 
@@ -109,8 +111,8 @@ export function defaultAiRuntimeConfig(tenantId: string, actor = "system"): AiRu
     ...platformRoute,
     phantom_bot: {
       mode: "smart",
-      primary_provider_id: "local_ollama",
-      allowed_provider_ids: ["local_ollama", "chatgpt_bridge"],
+      primary_provider_id: "hermes",
+      allowed_provider_ids: ["hermes", "local_ollama", "chatgpt_bridge"],
       models: { ...DEFAULT_MODELS },
       fallback_enabled: true,
     },

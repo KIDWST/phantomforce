@@ -481,6 +481,10 @@ import {
   listHermesOperatorSessions,
   reopenHermesOperatorSession,
 } from "./phantom-ai/hermes-acp-operator.js";
+import {
+  getHermesBackendInventory,
+  runHermesBackendChat,
+} from "./phantom-ai/hermes-backend-client.js";
 import { registerHermesOperatorStream } from "./phantom-ai/hermes-operator-stream.js";
 import { MAX_PROMPT_CHARS, verifyPromptIntegrity } from "./phantom-ai/prompt-integrity.js";
 import {
@@ -796,7 +800,7 @@ const CustomerConnectionStartSchema = z.object({
   connector_id: z.enum(CUSTOMER_CONNECTOR_IDS),
 });
 const AiRuntimeProviderIdSchema = z.enum(AI_RUNTIME_PROVIDER_IDS);
-const AiRuntimeModelIdSchema = z.string().trim().min(1).max(100).regex(/^[\w./:@+~-]+$/);
+const AiRuntimeModelIdSchema = z.string().trim().min(1).max(180).regex(/^[\w./:@+~-]+$/);
 const AiRuntimeQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
 const AiRuntimeUsageQuerySchema = AiRuntimeQuerySchema.extend({
   range: z.enum(["7d", "30d", "90d"]).optional().default("30d"),
@@ -813,6 +817,7 @@ const AiRuntimeRouteUpdateSchema = z.object({
     claude_cli: AiRuntimeModelIdSchema,
     openrouter_glm: AiRuntimeModelIdSchema,
     chatgpt_bridge: AiRuntimeModelIdSchema,
+    hermes: AiRuntimeModelIdSchema.optional().default("automatic"),
   }),
   fallback_enabled: z.boolean(),
 });
@@ -4766,7 +4771,7 @@ function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
   if (providerId === "codex_cli") return "Codex CLI";
   if (providerId === "claude_cli") return "Claude CLI";
   if (providerId === "chatgpt_bridge") return "ChatGPT Bridge";
-  if (providerId === "openrouter_glm") return "OpenRouter GLM 5.2";
+  if (providerId === "openrouter_glm") return "OpenRouter GLM 5.3";
   return "Phantom Instant";
 }
 
@@ -5962,7 +5967,7 @@ app.get("/phantom-ai/provider-policy/status", async (request, reply) => {
     tenant_id: "phantomforce-admin",
     business_name: "PhantomForce",
     provider_id: "openrouter_glm",
-    model_id: "z-ai/glm-5.2",
+    model_id: "z-ai/glm-5.3",
     estimated_tokens: 0,
     estimated_cost_usd: null,
     approval_status: "pending",
@@ -6047,7 +6052,7 @@ app.post("/phantom-ai/provider-funding/approval-contract/preview", async (reques
   const businessName =
     typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "PhantomForce";
   const providerId = "openrouter_glm";
-  const modelId = "z-ai/glm-5.2";
+  const modelId = "z-ai/glm-5.3";
   const policy = getProviderBudgetPolicyStatus();
   const fundingState = body.funding_state === "funded" ? "funded" : "unfunded";
   const approvalState = body.approval_state === "approved" ? "approved" : "not_approved";
@@ -7828,7 +7833,7 @@ const PHANTOMPLAY_AI_MODEL_FALLBACKS: Record<PhantomPlayAiProviderId, PhantomPla
     { id: "opus", name: "Claude Opus" },
   ],
   openrouter: [
-    { id: "z-ai/glm-5.2", name: "GLM 5.2" },
+    { id: "z-ai/glm-5.3", name: "GLM 5.3" },
     { id: "openrouter/free", name: "OpenRouter Free Router" },
     { id: "anthropic/claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
     { id: "google/gemini-3-pro", name: "Gemini 3 Pro" },
@@ -9486,6 +9491,21 @@ const HermesOperatorStartSchema = z.object({
   prompt_integrity: z.unknown(),
 });
 
+const HermesBackendQuerySchema = z.object({
+  refresh: z.enum(["true", "false"]).optional().default("false"),
+});
+
+const HermesBackendChatSchema = z.object({
+  task_id: z.string().trim().min(1).max(160),
+  prompt: z.string().trim().min(1).max(MAX_PROMPT_CHARS),
+  provider_id: z.string().trim().min(1).max(80).regex(/^[a-zA-Z0-9_.-]+$/).optional(),
+  model_id: z.string().trim().min(1).max(160).regex(/^[\w./:@+~-]+$/).optional(),
+  effort: z.enum(["instant", "reasoning", "deep"]).optional().default("reasoning"),
+  prompt_integrity: z.unknown(),
+}).refine((value) => Boolean(value.provider_id) === Boolean(value.model_id), {
+  message: "provider_id and model_id must be supplied together.",
+});
+
 async function resolveOperatorStreamToken(token: string): Promise<AccessSession | null> {
   const sid = verifyAccessSessionTokenSid(token);
   if (!sid) return null;
@@ -9499,6 +9519,60 @@ async function resolveOperatorStreamToken(token: string): Promise<AccessSession 
 }
 
 registerHermesOperatorStream(app, { resolveToken: resolveOperatorStreamToken });
+
+app.get("/phantom-ai/hermes/backend", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = HermesBackendQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: "bad_request", detail: parsed.error.flatten() });
+  const backend = await getHermesBackendInventory({ force: parsed.data.refresh === "true" });
+  return reply.code(backend.online ? 200 : 503).send({ ok: backend.online, backend });
+});
+
+app.post("/phantom-ai/hermes/chat", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = HermesBackendChatSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: "bad_request", detail: parsed.error.flatten() });
+  const integrity = verifyPromptIntegrity(parsed.data.prompt, parsed.data.prompt_integrity);
+  if (!integrity.ok) {
+    return reply.code(integrity.state === "rejected" ? 413 : 400).send({
+      ok: false,
+      error: "prompt_integrity_error",
+      integrity_state: integrity.state,
+      detail: integrity.error,
+    });
+  }
+  const verdict = await screenText(parsed.data.prompt, "hermes_backend_chat_request");
+  if (verdict.classification === "block") {
+    return reply.code(400).send({
+      ok: false,
+      error: "blocked_by_prompt_guard",
+      violation_types: verdict.violation_types,
+      detail: verdict.reason,
+    });
+  }
+  try {
+    const tenantId = customizationTenantForSession(session);
+    const result = await runHermesBackendChat({
+      tenantId,
+      actorId: session.id,
+      taskId: parsed.data.task_id,
+      prompt: parsed.data.prompt,
+      providerId: parsed.data.provider_id,
+      modelId: parsed.data.model_id,
+      effort: parsed.data.effort,
+    });
+    return reply.send({ ok: true, result });
+  } catch (error) {
+    const status = typeof (error as { status?: unknown }).status === "number" ? Number((error as { status: number }).status) : 502;
+    return reply.code(status).send({
+      ok: false,
+      error: error instanceof Error ? error.message : "Hermes backend chat failed.",
+      secret_returned: false,
+    });
+  }
+});
 
 app.post("/phantom-ai/hermes-acp/sessions", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
@@ -12403,22 +12477,23 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     : "unknown";
   const runtimeRoute = runtimeConfig ? aiRuntimeRouteForSurface(runtimeConfig, runtimeSurface) : null;
   const runtimePrimaryProviderId = runtimeRoute?.primary_provider_id as AiRuntimeProviderId | undefined;
-  const adminModelLane = runtimePrimaryProviderId
-    ? adminPhantomAiLaneForProviderId(runtimePrimaryProviderId)
+  const fallbackPrimaryProviderId = runtimePrimaryProviderId === "hermes" ? undefined : runtimePrimaryProviderId;
+  const adminModelLane = fallbackPrimaryProviderId
+    ? adminPhantomAiLaneForProviderId(fallbackPrimaryProviderId)
     : parseAdminPhantomAiModelLane(body.admin_model ?? body.model_lane ?? body.provider);
   const adminProviderRoute = adminPhantomAiProviderRoute(adminModelLane);
   const adminModelLabel = adminPhantomAiModelLabel(adminModelLane);
   const adminExecutionMode = body.execution_mode === "auto" ? "auto" : "approval";
   const adminRouteTier = parseAdminPhantomAiRouteTier(body.route_tier);
-  const requestedModelId = runtimeRoute && runtimePrimaryProviderId
-    ? parseRequestedAdminModel(aiRuntimeProviderModel(runtimeRoute, runtimePrimaryProviderId))
+  const requestedModelId = runtimeRoute && fallbackPrimaryProviderId
+    ? parseRequestedAdminModel(aiRuntimeProviderModel(runtimeRoute, fallbackPrimaryProviderId))
     : parseRequestedAdminModel(body.requested_model);
   const maxProviderMs = parseAdminMaxProviderMs(body.max_provider_ms);
   const allowProviderFallback = runtimeRoute
     ? runtimeRoute.fallback_enabled && runtimeRoute.mode !== "single"
     : parseAllowProviderFallback(body.allow_provider_fallback, adminRouteTier);
   const requestedAllowedAdminProviders = runtimeRoute
-    ? runtimeRoute.allowed_provider_ids
+    ? runtimeRoute.allowed_provider_ids.filter((providerId): providerId is AdminProviderId => providerId !== "hermes")
     : parseAllowedAdminProviders(body.allowed_providers);
   /* Ghost Mode overrides whatever the client asked for - it is a hard,
      server-side privacy floor, not a preference the request body can widen. */
@@ -13203,15 +13278,15 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       user_request_summary: redactSensitiveText(normalized.user_request).replace(/\s+/g, " ").slice(0, 240),
       result_summary: redactSensitiveText(
         openrouter.provider_called
-          ? "GLM 5.2 responded through OpenRouter for an admin-selected Phantom AI chat."
-          : `GLM 5.2 did not run: ${openrouter.blocked_reason ?? openrouter.error_message ?? "blocked"}`,
+          ? "GLM 5.3 responded through OpenRouter for an admin-selected Phantom AI chat."
+          : `GLM 5.3 did not run: ${openrouter.blocked_reason ?? openrouter.error_message ?? "blocked"}`,
       ).slice(0, 360),
       approval_required: approvalRequired,
       approval_status: approvalRequired ? "pending" : "not_required",
       risks: preview.decision.risks.map((risk) => redactSensitiveText(risk)).slice(0, 8),
       next_action: openrouter.provider_called
-        ? "Review the GLM 5.2 draft inside Phantom AI. External actions still require approval."
-        : "Finish OpenRouter server setup, then retry the admin-selected GLM 5.2 lane.",
+        ? "Review the GLM 5.3 draft inside Phantom AI. External actions still require approval."
+        : "Finish OpenRouter server setup, then retry the admin-selected GLM 5.3 lane.",
       agent_run_id: `phantom-ai-chat-${normalized.request_id}`,
       parent_task_id: normalized.request_id,
     };

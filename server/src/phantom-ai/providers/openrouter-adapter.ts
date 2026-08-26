@@ -10,7 +10,9 @@ import type {
 } from "../types.js";
 
 export const OPENROUTER_GLM_PROVIDER_ID = "openrouter_glm" as const;
-export const OPENROUTER_GLM_52_MODEL_ID = "z-ai/glm-5.2" as const;
+export const OPENROUTER_GLM_53_MODEL_ID = "z-ai/glm-5.3" as const;
+/** @deprecated Compatibility alias for older callers. */
+export const OPENROUTER_GLM_52_MODEL_ID = OPENROUTER_GLM_53_MODEL_ID;
 export const OPENROUTER_CHAT_COMPLETIONS_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions" as const;
 
 const MAX_PROMPT_SUMMARY_CHARS = 1200;
@@ -174,11 +176,11 @@ export function buildOpenRouterGlmAdapterDryRunPreview(input: {
       provider_called: false,
       network_call_performed: false,
       http_request_prepared: false,
-      output_text: "OpenRouter GLM 5.2 adapter preview only. No provider call or HTTP request was made.",
+      output_text: "OpenRouter GLM 5.3 adapter preview only. No provider call or HTTP request was made.",
       raw_response: null,
     },
     admin_debug_summary: redactSensitiveText(
-      `OpenRouter GLM 5.2 adapter dry-run for ${OPENROUTER_GLM_52_MODEL_ID}; readiness configured=${readinessConfigured}; readiness live=${readinessLiveAllowed}; policy route_allowed=false.`,
+      `OpenRouter GLM 5.3 adapter dry-run for ${OPENROUTER_GLM_52_MODEL_ID}; readiness configured=${readinessConfigured}; readiness live=${readinessLiveAllowed}; policy route_allowed=false.`,
     ),
     client_safe_summary: "Phantom AI previewed this safely. No external AI provider was called.",
     safety_flags: {

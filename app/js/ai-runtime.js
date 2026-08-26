@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260822-194";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260822-195";
 
 export const AI_PUBLIC_TO_BACKEND = Object.freeze({
   deepseek: "deepseek_api",
@@ -7,6 +7,7 @@ export const AI_PUBLIC_TO_BACKEND = Object.freeze({
   claude: "claude_cli",
   openrouter: "openrouter_glm",
   chatgpt: "chatgpt_bridge",
+  hermes: "hermes",
 });
 
 export const AI_BACKEND_TO_PUBLIC = Object.freeze(Object.fromEntries(
@@ -18,8 +19,9 @@ const BACKEND_DEFAULT_MODELS = Object.freeze({
   local_ollama: "local-auto",
   codex_cli: "gpt-5.5",
   claude_cli: "default",
-  openrouter_glm: "openrouter/auto",
+  openrouter_glm: "z-ai/glm-5.3",
   chatgpt_bridge: "chatgpt-standard",
+  hermes: "automatic",
 });
 
 const runtimeState = {
@@ -54,6 +56,23 @@ const providerModelCatalogs = {
     models: [],
   },
 };
+
+const hermesBackendState = {
+  loaded: false,
+  loading: false,
+  error: null,
+  online: false,
+  version: "",
+  currentProvider: "",
+  currentModel: "",
+  providers: [],
+  toolsets: [],
+  toolsAvailable: 0,
+  skills: { count: 0, names: [] },
+  features: [],
+};
+
+let pendingHermesBackendLoad = null;
 
 let pendingSave = Promise.resolve(null);
 let pendingLoad = null;
@@ -137,6 +156,7 @@ export function buildAiRuntimeRequest(settings, surface) {
     claude: "claude_cli",
     openrouter: "glm_5_2",
     chatgpt: "chatgpt_bridge",
+    hermes: "hermes",
   };
   return {
     runtime_config: true,
@@ -324,6 +344,59 @@ export function getAiProviderModelCatalog(providerId) {
   return state
     ? { ...state, models: state.models.map((model) => ({ ...model, pricing: { ...(model.pricing || {}) } })) }
     : { loaded: false, loading: false, error: "This provider does not publish a model catalogue.", configured: false, dynamic: false, models: [] };
+}
+
+export function getHermesBackendState() {
+  return structuredClone(hermesBackendState);
+}
+
+function applyHermesBackend(payload) {
+  const backend = payload?.backend || {};
+  hermesBackendState.loaded = true;
+  hermesBackendState.loading = false;
+  hermesBackendState.error = backend.error || null;
+  hermesBackendState.online = Boolean(backend.online);
+  hermesBackendState.version = String(backend.version || "");
+  hermesBackendState.currentProvider = String(backend.current_provider || "");
+  hermesBackendState.currentModel = String(backend.current_model || "");
+  hermesBackendState.providers = Array.isArray(backend.providers) ? backend.providers : [];
+  hermesBackendState.toolsets = Array.isArray(backend.toolsets) ? backend.toolsets : [];
+  hermesBackendState.toolsAvailable = Number(backend.tools_available || 0);
+  hermesBackendState.skills = backend.skills && typeof backend.skills === "object" ? backend.skills : { count: 0, names: [] };
+  hermesBackendState.features = Array.isArray(backend.features) ? backend.features : [];
+  return getHermesBackendState();
+}
+
+export function loadHermesBackend({ force = false } = {}) {
+  if (hermesBackendState.loading && pendingHermesBackendLoad) return pendingHermesBackendLoad;
+  if (!force && hermesBackendState.loaded && hermesBackendState.online) return Promise.resolve(getHermesBackendState());
+  hermesBackendState.loading = true;
+  hermesBackendState.error = null;
+  const operation = request(`/phantom-ai/hermes/backend?refresh=${force ? "true" : "false"}`, { timeoutMs: 30_000 })
+    .then(applyHermesBackend)
+    .catch((error) => {
+      hermesBackendState.loaded = true;
+      hermesBackendState.loading = false;
+      hermesBackendState.online = false;
+      hermesBackendState.error = error instanceof Error ? error.message : "Hermes backend is unavailable.";
+      throw error;
+    });
+  pendingHermesBackendLoad = operation;
+  void operation.finally(() => {
+    if (pendingHermesBackendLoad === operation) pendingHermesBackendLoad = null;
+  }).catch(() => null);
+  return operation;
+}
+
+export function getHermesBackendModels() {
+  return hermesBackendState.providers
+    .filter((provider) => provider?.authenticated)
+    .flatMap((provider) => (Array.isArray(provider.models) ? provider.models : []).map((model) => ({
+      ...model,
+      providerId: provider.id,
+      providerName: provider.name,
+      selectionId: `${provider.id}::${model.id}`,
+    })));
 }
 
 export async function loadAiProviderModels(providerId, { force = false } = {}) {

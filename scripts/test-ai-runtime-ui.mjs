@@ -24,7 +24,7 @@ const credentials = read("../server/src/phantom-ai/ai-provider-credentials.ts");
 const analytics = read("../server/src/phantom-ai/ai-provider-analytics.ts");
 const settingsSkin = read("../app/admin-next.css");
 
-for (const id of ["deepseek_api", "local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge"]) {
+for (const id of ["deepseek_api", "local_ollama", "codex_cli", "claude_cli", "openrouter_glm", "chatgpt_bridge", "hermes"]) {
   assert.match(runtime, new RegExp(`\\b${id}\\b`, "u"), `${id} must be part of the unified browser runtime.`);
 }
 assert.match(runtime, /phantom_bot:\s*buildRouteConfig\(settings\.phantomBot \|\| settings\)/u, "The saved runtime must carry a separate PhantomBot route.");
@@ -39,6 +39,8 @@ assert.match(settings, /name:\s*"Claude"/u, "The user-facing provider list must 
 assert.match(settings, /name:\s*"OpenRouter"/u, "The user-facing provider list must expose OpenRouter by name.");
 assert.match(settings, /name:\s*"Phantom V1"/u, "The user-facing provider list must expose the local Phantom/Ollama lane.");
 assert.match(settings, /name:\s*"DeepSeek V4 Flash"/u, "The AI control center must expose DeepSeek V4 Flash.");
+assert.match(settings, /name:\s*"Hermes Live"/u, "The AI control center must expose the live Hermes brain.");
+assert.match(settings, /z-ai\/glm-5\.3/u, "The AI control center must expose GLM 5.3.");
 assert.match(settings, /providerId:\s*"deepseek_api"/u, "DeepSeek must have a server-backed credential setup control.");
 assert.match(settings, /providerId:\s*"openrouter_glm"/u, "OpenRouter must have a server-backed credential setup control.");
 assert.match(settings, /Platform brain/u, "Settings must label the organization-wide platform brain.");

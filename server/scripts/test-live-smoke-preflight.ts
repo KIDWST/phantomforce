@@ -47,7 +47,7 @@ try {
       env: {
         PHANTOM_MODEL_ROUTER_MODE: "openrouter",
         OPENROUTER_API_KEY: fakeKey,
-        OPENROUTER_MODEL: "z-ai/glm-5.2",
+        OPENROUTER_MODEL: "z-ai/glm-5.3",
         PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
         PHANTOM_HERMES_LEDGER_PATH: ledgerPath,
       },

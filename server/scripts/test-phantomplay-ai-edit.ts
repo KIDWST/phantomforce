@@ -108,7 +108,7 @@ const configuredFallback = await requestPhantomPlayAiEdit(
   {
     ...baseInput,
     provider: "openrouter",
-    model: "z-ai/glm-5.2",
+    model: "z-ai/glm-5.3",
     fallbackProvider: "claude",
     allowFallbacks: true,
   },

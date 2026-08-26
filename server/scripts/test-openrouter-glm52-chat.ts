@@ -52,7 +52,7 @@ const fakeFetch: typeof fetch = async (url, init) => {
       choices: [
         {
           message: {
-            content: "GLM 5.2 response: prioritize the owner-safe follow-up, then draft tomorrow's content plan.",
+            content: "GLM 5.3 response: prioritize the owner-safe follow-up, then draft tomorrow's content plan.",
           },
         },
       ],
@@ -163,7 +163,7 @@ assert(called.approval_executed === false, "Transport must not execute approvals
 assert(called.external_action_executed === false, "Transport must not execute external actions.");
 assert(calls.length === 2, "Configured live transport should call fake fetch twice total.");
 assert(calls[0]?.url === OPENROUTER_CHAT_COMPLETIONS_ENDPOINT, "Transport should target OpenRouter chat completions.");
-assert(calls[0]?.body.model === OPENROUTER_GLM_52_MODEL_ID, "Transport body should use GLM 5.2.");
+assert(calls[0]?.body.model === OPENROUTER_GLM_52_MODEL_ID, "Transport body should use GLM 5.3.");
 assert(Array.isArray(calls[0]?.body.messages), "Transport body should include chat messages.");
 
 const serializedResult = JSON.stringify(called);

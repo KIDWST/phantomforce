@@ -59,7 +59,7 @@ try {
       env: {
         PHANTOM_MODEL_ROUTER_MODE: "openrouter",
         OPENROUTER_API_KEY: fakeProviderKey,
-        OPENROUTER_MODEL: "z-ai/glm-5.2",
+        OPENROUTER_MODEL: "z-ai/glm-5.3",
         PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
         PHANTOM_HERMES_LEDGER_PATH: ledgerPath,
         PHANTOM_HERMES_APPROVAL_QUEUE_PATH: queuePath,
@@ -85,7 +85,7 @@ try {
   assert(persistence.record.production_ledger_written === false, "Receipt store must not write a production ledger.");
   assert(persistence.record.production_write_allowed === false, "Receipt store must not allow production writes.");
   assert(persistence.record.provider.provider_name === "OpenRouter", "Receipt store must keep provider linkage.");
-  assert(persistence.record.provider.model_id === "z-ai/glm-5.2", "Receipt store must keep GLM model linkage.");
+  assert(persistence.record.provider.model_id === "z-ai/glm-5.3", "Receipt store must keep GLM model linkage.");
   assert(persistence.record.live_smoke_preflight_id === preflight.preflight_id, "Receipt store must link preflight.");
   assert(persistence.record.budget_gate_status === preflight.budget_gate.status, "Receipt store must link budget gate.");
   assert(

@@ -52,7 +52,7 @@ try {
       env: {
         PHANTOM_MODEL_ROUTER_MODE: "openrouter",
         [providerKeyEnvName]: fakeProviderKey,
-        OPENROUTER_MODEL: "z-ai/glm-5.2",
+        OPENROUTER_MODEL: "z-ai/glm-5.3",
         PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
         PHANTOM_HERMES_LEDGER_PATH: ledgerPath,
       },
@@ -64,7 +64,7 @@ try {
 
   assert(contract.status === "blocked_contract_only", "Receipt contract must stay blocked.");
   assert(contract.provider.provider_name === "OpenRouter", "Receipt provider name must be OpenRouter.");
-  assert(contract.provider.model_id === "z-ai/glm-5.2", "Receipt model metadata must be GLM 5.2.");
+  assert(contract.provider.model_id === "z-ai/glm-5.3", "Receipt model metadata must be GLM 5.3.");
   assert(contract.endpoint_contract.endpoint === OPENROUTER_CHAT_COMPLETIONS_ENDPOINT, "Receipt must link endpoint contract.");
   assert(contract.endpoint_contract.transport_enabled === false, "Receipt endpoint transport must be disabled.");
   assert(contract.endpoint_contract.network_client_implemented === false, "Receipt endpoint must not implement network client.");

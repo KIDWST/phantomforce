@@ -14,28 +14,29 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260822-194";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260822-194";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260822-194";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260822-194";
-import { esc } from "./workspaces.js?v=phantom-live-20260822-194";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260822-194";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260822-194";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260822-194";
-import { setCompanionState } from "./companion.js?v=phantom-live-20260822-194";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260822-194";
+} from "./store.js?v=phantom-live-20260822-195";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260822-195";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260822-195";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260822-195";
+import { esc } from "./workspaces.js?v=phantom-live-20260822-195";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260822-195";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260822-195";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260822-195";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260822-195";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260822-195";
 import {
   getOperatorBrainChoices,
   getOperatorBrainMesh,
+  getOperatorHermesRuntimeSelection,
   getOperatorInfrastructureStatus,
   hydrateOperatorBrainMesh,
   setOperatorBrainChoice,
-} from "./settings.js?v=phantom-live-20260822-194";
+} from "./settings.js?v=phantom-live-20260822-195";
 import {
   buildPromptIntegrityEnvelope,
   MAX_PROMPT_CHARS,
   promptSizeError,
-} from "./prompt-integrity.js?v=phantom-live-20260822-194";
+} from "./prompt-integrity.js?v=phantom-live-20260822-195";
 
 const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -271,7 +272,7 @@ async function operatorApi(path, options = {}) {
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(friendlyBackendError(response.status, payload?.error, {
-      authMessage: "Sign in with an admin account to run governed engineering work.",
+      authMessage: "Sign in to use PhantomBot's Hermes runtime.",
       fallbackPrefix: "Hermes operator request failed",
     }));
   }
@@ -965,7 +966,7 @@ function paintModelMenu() {
   if (!menu) return;
   const choices = getOperatorBrainChoices();
   menu.innerHTML = `
-    <header><span>ORGANIZATION BRAIN</span><b>Choose what powers PhantomForce</b></header>
+    <header><span>HERMES BRAIN</span><b>Choose from the models Hermes can actually use</b></header>
     <button type="button" class="phantombot-brain-choice ${choices.automatic.selected ? "is-active" : ""}" role="menuitemradio" aria-checked="${choices.automatic.selected}" data-phantombot-brain-auto>
       <span><b>Phantom Hybrid · Automatic</b><small>${esc(choices.automatic.label)} · routes each request to the best available brain</small></span><i>${choices.automatic.selected ? "✓" : ""}</i>
     </button>
@@ -973,7 +974,7 @@ function paintModelMenu() {
       ${choices.providers.map((provider) => `<section class="is-${esc(provider.state)}">
         <p><span>${esc(provider.name)}</span><em>${esc(provider.status)}</em></p>
         ${provider.models.map((model) => `<button type="button" class="phantombot-brain-choice ${model.selected ? "is-active" : ""}" role="menuitemradio" aria-checked="${model.selected}" data-phantombot-brain-provider="${esc(provider.id)}" data-phantombot-brain-model="${esc(model.id)}">
-          <span><b>${esc(model.label)}</b><small>${esc(provider.detail)}</small></span><i>${model.selected ? "✓" : ""}</i>
+          <span><b>${esc(model.label)}</b><small>${esc(model.meta || provider.detail)}</small></span><i>${model.selected ? "✓" : ""}</i>
         </button>`).join("")}
       </section>`).join("")}
     </div>
@@ -1778,8 +1779,41 @@ function mountChatTab() {
         if (readRepliesAloud && !message.error) speakText(message.say);
         return;
       }
-      const result = await handleSmartCommand(outbound, { effort: task.effort || "instant" })
-        .catch(() => handleCommand(outbound));
+      let result = null;
+      if (session.token()) {
+        const hermesSelection = getOperatorHermesRuntimeSelection();
+        try {
+          const hermes = await operatorApi("/phantom-ai/hermes/chat", {
+            method: "POST",
+            body: JSON.stringify({
+              task_id: task.id,
+              prompt: outbound,
+              effort: task.effort === "thinking" ? "reasoning" : (task.effort || "instant"),
+              prompt_integrity: promptIntegrity,
+              ...(hermesSelection.providerId && hermesSelection.modelId ? {
+                provider_id: hermesSelection.providerId,
+                model_id: hermesSelection.modelId,
+              } : {}),
+            }),
+          });
+          result = {
+            say: hermes?.result?.say || "",
+            aiRuntime: {
+              source: "hermes_backend",
+              provider: hermes?.result?.provider_id || "Hermes",
+              model: hermes?.result?.model_id || "Hermes automatic",
+              sessionId: hermes?.result?.session_id || "",
+              tools: true,
+            },
+          };
+        } catch (error) {
+          setComposerStatus(`Hermes unavailable; using the Phantom fallback. ${cleanText(error?.message || "", 140)}`, "error", 6000);
+        }
+      }
+      if (!result?.say) {
+        result = await handleSmartCommand(outbound, { effort: task.effort || "instant" })
+          .catch(() => handleCommand(outbound));
+      }
       const targetTask = taskState.tasks.find((item) => item.id === task.id);
       const targetMessage = targetTask?.messages.find((item) => item.id === message.id);
       if (!targetMessage || runningRequest?.id !== requestId) return;
@@ -1965,7 +1999,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260822-194")
+  import("./brain.js?v=phantom-live-20260822-195")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }

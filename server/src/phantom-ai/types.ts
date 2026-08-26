@@ -673,7 +673,7 @@ export type LiveSmokePreflightReport = {
 
 export type OpenRouterGlmTransportContract = {
   provider_id: "openrouter_glm";
-  model_id: "z-ai/glm-5.2";
+  model_id: "z-ai/glm-5.3";
   contract_status: "disabled_contract_only";
   endpoint: "https://openrouter.ai/api/v1/chat/completions";
   method: "POST";
@@ -685,7 +685,7 @@ export type OpenRouterGlmTransportContract = {
     x_title: "planned_admin_config_only";
   };
   request_body_shape: {
-    model: "z-ai/glm-5.2";
+    model: "z-ai/glm-5.3";
     messages: "redacted_messages_required";
     temperature: "optional_number";
     max_tokens: "optional_number";
@@ -726,7 +726,7 @@ export type OpenRouterGlmTransportContract = {
 export type HermesLiveCallReceiptProviderMetadata = {
   provider_id: "openrouter_glm";
   provider_name: "OpenRouter";
-  model_id: "z-ai/glm-5.2";
+  model_id: "z-ai/glm-5.3";
 };
 
 export type HermesLiveCallReceiptEndpointLinkage = {
@@ -1091,7 +1091,7 @@ export type ProviderInvocationFirewallInput = {
 
 export type OpenRouterGlmAdapterDryRunResult = {
   provider_id: "openrouter_glm";
-  model_id: "z-ai/glm-5.2";
+  model_id: "z-ai/glm-5.3";
   adapter_status: "blocked_dry_run";
   request_id: string;
   redacted_prompt_summary: string;
@@ -1125,7 +1125,7 @@ export type OpenRouterGlmAdapterDryRunResult = {
   dry_run_request_envelope: {
     envelope_id: string;
     provider_id: "openrouter_glm";
-    model_id: "z-ai/glm-5.2";
+    model_id: "z-ai/glm-5.3";
     request_id: string;
     redacted_prompt_summary: string;
     estimated_tokens: number;

@@ -5,8 +5,12 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const main = read("../app/js/main.js");
 const bot = read("../app/js/phantomai.js");
 const settings = read("../app/js/settings.js");
+const runtime = read("../app/js/ai-runtime.js");
+const server = read("../server/src/index.ts");
+const hermesBackend = read("../server/src/phantom-ai/hermes-backend-client.ts");
 const css = read("../app/phantombot-next.css");
 const desktop = read("../packages/phantombot-desktop/src/main.cjs");
+const expectedHermesModel = "z-ai/glm-5.3";
 
 for (const selector of [
   "data-phantombot-constellation",
@@ -34,6 +38,14 @@ assert.doesNotMatch(bot, /data-phantombot-mission-next[^\n]{0,260}(?:requestSubm
 
 assert.match(settings, /export function getOperatorBrainMesh/u, "Settings must expose the canonical brain and bridge mesh.");
 assert.match(settings, /export async function hydrateOperatorBrainMesh[\s\S]*refreshAgentAssistBridge[\s\S]*refreshHiggsfieldBridge/u, "The mesh must hydrate from the real ChatGPT and Higgsfield status routes.");
+assert.match(settings, /loadHermesBackend\(\{ force: true \}\)/u, "PhantomBot must force-refresh the live Hermes model and tool inventory.");
+assert.ok(settings.includes(expectedHermesModel), "GLM 5.3 must be available in the current PhantomBot model defaults.");
+assert.match(runtime, /\/phantom-ai\/hermes\/backend/u, "The shared web runtime must load Hermes capabilities from the server.");
+assert.match(bot, /\/phantom-ai\/hermes\/chat/u, "Ordinary PhantomBot chat must use Hermes as its primary backend.");
+assert.match(server, /app\.post\("\/phantom-ai\/hermes\/chat"/u, "The server must expose authenticated Hermes-native chat.");
+assert.match(hermesBackend, /\/api\/model\/options/u, "PhantomBot models must come from Hermes model options, not a hard-coded picker.");
+assert.match(hermesBackend, /\/v1\/toolsets/u, "PhantomBot must mirror Hermes toolsets.");
+assert.match(hermesBackend, /require_model_lock: true/u, "Explicit PhantomBot models must be locked and confirmed by Hermes.");
 assert.match(settings, /nodes\.filter\(\(node\) => node\.state === "connected"\)/u, "Active mesh counts must come from confirmed connected nodes.");
 assert.match(bot, /hydrateOperatorBrainMesh\(\)[\s\S]*paintSessionHud\(\)[\s\S]*paintDetailDrawer\(\)/u, "PhantomBot must repaint when real mesh health arrives.");
 assert.match(bot, /data-phantombot-manage-mesh[\s\S]*pf\.settings\.tab\.v1", "bridge"/u, "The mission layer must route mesh configuration to the dedicated Bridges section.");

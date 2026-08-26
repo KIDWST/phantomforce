@@ -1,4 +1,4 @@
-import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260822-194";
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260822-195";
 
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
@@ -1367,7 +1367,7 @@ const MODEL_DISPLAY_LABELS = {
   "private-default": "Codex default", "private-high": "Codex high reasoning", "private-fast": "Codex fast",
   "gpt-5.5": "GPT-5.5", "gpt-5.6-sol": "GPT-5.6 Codex", "gpt-5.5-instant": "GPT-5.5 Instant",
   "openrouter/auto": "Auto Router", "openrouter/free": "Free Router",
-  "z-ai/glm-5.2": "GLM 5.2", "kimi-k3-hf": "Kimi K3 — Hugging Face Direct", "kimi-k3-hf:latest": "Kimi K3 — Hugging Face Direct", "local-auto": "Auto-detect Ollama", "local-ollama": "Ollama auto", "local-glm": "Local GLM",
+  "z-ai/glm-5.3": "GLM 5.3", "z-ai/glm-5.2": "GLM 5.2 (legacy)", "kimi-k3-hf": "Kimi K3 — Hugging Face Direct", "kimi-k3-hf:latest": "Kimi K3 — Hugging Face Direct", "local-auto": "Auto-detect Ollama", "local-ollama": "Ollama auto", "local-glm": "Local GLM",
   "llama3": "Fast", "mistral": "Balanced", "custom-local": "Custom",
   "custom": "Custom",
 };
@@ -1388,7 +1388,7 @@ export const PHANTOM_LANE_TARGETS = [
   { id: "claude_cli", name: "Claude CLI", provider: "phantom", models: ["claude-cli", "claude-sonnet", "claude-opus"] },
   { id: "private", name: "Codex CLI (legacy alias)", provider: "phantom", models: ["private-default", "private-high", "private-fast"] },
   { id: "chatgpt_bridge", name: "ChatGPT Assist Bridge", provider: "chatgpt_plus", models: ["chatgpt-instant", "chatgpt-standard", "chatgpt-deep"] },
-  { id: "glm_5_2", name: "GLM / OpenRouter Route", provider: "openrouter_glm", models: ["z-ai/glm-5.2", "openrouter-auto", "local-glm"] },
+  { id: "glm_5_2", name: "GLM / OpenRouter Route", provider: "openrouter_glm", models: ["z-ai/glm-5.3", "z-ai/glm-5.2", "openrouter-auto", "local-glm"] },
   { id: "local_ollama", name: "Ollama / Local PC", provider: "local_ollama", models: ["local-auto"], allowCustomModel: true },
 ];
 export function phantomLaneTargetName(id) {

@@ -2643,6 +2643,51 @@
           "description": "The retired public CubeTown title cannot return through the server catalog."
         }
       ]
+    },
+    {
+      "id": "phantombot-hermes-backend-parity-glm53",
+      "status": "active",
+      "title": "PhantomBot stays connected to the live Hermes brain and exposes GLM 5.3",
+      "ownerDecision": "PhantomBot on web and desktop is a direct, truthful interface to the active Hermes backend. It discovers authenticated Hermes providers and their real model catalogs, exposes GLM 5.3 when Hermes can use it, preserves Hermes memory, skills, tools, and approval gates, and keeps a stable task session instead of silently falling back to a disconnected browser-only brain. Explicit model choices must lock the matching Hermes provider and model. The shared browser bundle is the desktop bundle, so model choice, status, and behavior must remain the same on both surfaces. GLM 5.2 may remain labeled as a legacy compatibility option but cannot return as the default OpenRouter model.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/phantom-ai/hermes-backend-client.ts",
+          "pattern": "/api/model/options[\\s\\S]*/v1/toolsets[\\s\\S]*/v1/skills[\\s\\S]*require_model_lock: true[\\s\\S]*/api/sessions",
+          "description": "The server reads Hermes model, tool, and skill truth and preserves explicit native model locking and sessions."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "/phantom-ai/hermes/backend[\\s\\S]*/phantom-ai/hermes/chat[\\s\\S]*runHermesBackendChat",
+          "description": "Authenticated clients retain the safe Hermes inventory and chat proxy routes."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "name: \\\"Hermes Live\\\"[\\s\\S]*getHermesBackendModels[\\s\\S]*loadHermesBackend\\(\\{ force: true \\}\\)",
+          "description": "Settings builds the PhantomBot model picker and active brain status from a freshly synchronized Hermes catalog."
+        },
+        {
+          "file": "app/js/phantomai.js",
+          "pattern": "HERMES BRAIN[\\s\\S]*/phantom-ai/hermes/chat[\\s\\S]*source: \\\"hermes_backend\\\"",
+          "description": "Normal PhantomBot conversation uses the Hermes backend and records its real runtime source."
+        },
+        {
+          "file": "scripts/test-phantombot-interstellar.mjs",
+          "pattern": "expectedHermesModel = \\\"z-ai/glm-5\\.3\\\"[\\s\\S]*require_model_lock[\\s\\S]*desktop/web parity",
+          "description": "The focused product gate protects GLM 5.3 discovery, model locking, and desktop/web parity."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "server/src/phantom-ai/ai-runtime-config.ts",
+          "pattern": "openrouter_glm:\\s*\\\"z-ai/glm-5\\.2\\\"",
+          "description": "GLM 5.2 cannot return as the server runtime default."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "openrouter:\\s*\\\"z-ai/glm-5\\.2\\\"",
+          "description": "GLM 5.2 cannot return as the visible PhantomBot/OpenRouter default."
+        }
+      ]
     }
   ]
 }

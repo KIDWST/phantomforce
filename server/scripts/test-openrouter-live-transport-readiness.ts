@@ -106,7 +106,7 @@ assert(adapter.dry_run_response.provider_called === false, "Adapter must not cal
 assert(adapter.dry_run_response.network_call_performed === false, "Adapter must not call network.");
 assert(adapter.dry_run_response.http_request_prepared === false, "Adapter must not prepare HTTP request.");
 assert(contract.endpoint === OPENROUTER_CHAT_COMPLETIONS_ENDPOINT, "Contract should target OpenRouter chat completions.");
-assert(contract.model_id === OPENROUTER_GLM_52_MODEL_ID, "Contract should target GLM 5.2.");
+assert(contract.model_id === OPENROUTER_GLM_52_MODEL_ID, "Contract should target GLM 5.3.");
 assert(contract.transport_enabled === false, "Contract transport must remain disabled.");
 assert(contract.network_client_implemented === false, "Contract must not implement a network client.");
 assert(contract.request_body_prepared === false, "Contract must not prepare a request body.");

@@ -70,6 +70,18 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **PhantomBot live Hermes brain + GLM 5.3 parity (2026-08-26)** — browser
+  build `phantom-live-20260822-195`. Ordinary PhantomBot conversation now runs
+  through the real Hermes backend instead of the disconnected legacy browser
+  lane, while governed engineering keeps its existing Hermes ACP workflow.
+  The shared web/desktop model picker force-refreshes authenticated Hermes
+  providers, exposes GLM 5.3, preserves a stable task session, confirms explicit
+  provider/model locks, and displays live provider, tool, and skill truth in the
+  brain mesh and Connections center. A real Hermes 0.20.4 request completed on
+  `z-ai/glm-5.3` with 37 tools and 98 skills visible; secrets remained server-side.
+  Release-critical passed 40/40, change-memory passed 432 checks, focused Hermes,
+  AI-runtime, intent, chat-quality, and desktop 17/17 gates passed, and the
+  filesystem secret scan found zero verified or unverified findings.
 - **Verified Next Move command center (2026-08-24)** — commit `4bf102e4`,
   browser build `phantom-live-20260822-194`. The owner heartbeat now ranks the
   single highest-value approval, blocker, or task from the server work graph;
@@ -380,7 +392,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260719-49`**.
+- Current cache-bust build id: **`phantom-live-20260822-195`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,
