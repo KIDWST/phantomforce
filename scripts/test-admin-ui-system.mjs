@@ -47,6 +47,12 @@ assert.match(main, /async function openWorkspace[\s\S]*await ensureWorkspaceStyl
 assert.match(main, /data-workspace-transition[\s\S]*beginWorkspaceTransition[\s\S]*failWorkspaceTransition/u, "Slow and failed routes must use the branded transition and truthful retry surface.");
 assert.match(commandCss, /Workspace handoff[\s\S]*\.workspace-transition[\s\S]*\.workspace-transition-mark[\s\S]*prefers-reduced-motion/u, "The branded route transition must be responsive and reduced-motion safe.");
 
+const powerOnScan = commandCss.match(/\.os-poweron-scan\s*\{([\s\S]*?)\}/u)?.[1] || "";
+assert.match(powerOnScan, /inset:\s*0/u, "The power-on scan field must cover the full viewport.");
+assert.match(powerOnScan, /width:\s*100%/u, "The power-on scan field must span the full viewport width.");
+assert.match(powerOnScan, /height:\s*100%/u, "The power-on scan field must span the full viewport height.");
+assert.doesNotMatch(powerOnScan, /height:\s*40%/u, "The power-on scan cannot regress to a shallow horizontal band.");
+
 const adminCssPosition = index.indexOf("/app/admin-next.css");
 const integrityCssPosition = index.indexOf("/app/workspace-mobile-integrity.css");
 const phantomBotCssPosition = index.indexOf("/app/phantombot-next.css");

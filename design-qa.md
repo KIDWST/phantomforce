@@ -129,6 +129,54 @@ Side-by-side comparison: `docs/quality/command-os-comparison.png`
 
 final result: passed
 
+## PhantomForceOS full-viewport power-on scan - 2026-08-28
+
+- Source visual truth: `C:\Users\jorda\AppData\Local\Temp\codex-clipboard-1f69e729-d463-4db2-9ec6-ba73b17ea2cc.png`
+- Implementation screenshot: `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live\qa-poweron-fullscreen-implementation.png`
+- Combined comparison: `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live\qa-poweron-fullscreen-comparison.png`
+- Source pixels: 3840 x 2160 browser capture; the 3840 x 1920 app viewport below browser chrome was normalized to 1280 x 640.
+- Implementation pixels: 1280 x 720 screenshot at a 1280 x 720 CSS viewport and device pixel ratio 3; the centered 1280 x 640 app region was used in the comparison.
+- State: authenticated local visual shell with the power-on telemetry sequence active. The local API was intentionally disconnected so the visual shell could be tested without using a production account.
+
+### Full-view comparison evidence
+
+- The left side of the combined comparison shows the reported defect: the green scan field is a shallow horizontal band with hard black regions above and below it.
+- The right side shows the corrected field extending through the entire visible app viewport with no horizontal cut-off, black lower half, or exposed edge.
+- The telemetry remains centered and legible while the ambient green treatment now reads as a screen-wide power-on state.
+
+### Focused region comparison evidence
+
+- The animated scan layer measured 1311.13 x 737.51 CSS pixels while scaled during its animation against a 1280 x 720 viewport, placing it beyond every viewport edge.
+- Its computed inset was `0px`, document width equaled viewport width, and document height equaled viewport height; no overflow or clipped persistent controls were introduced.
+- A separate zoomed crop was not needed because the full-view comparison keeps the telemetry and every viewport edge readable at the same time.
+
+### Required fidelity surfaces
+
+- Fonts and typography: the existing Instrument Sans and Spline Sans Mono hierarchy, weights, tracking, and line spacing are unchanged.
+- Spacing and layout rhythm: the centered telemetry block, row spacing, dividers, and status-chip alignment are unchanged.
+- Colors and visual tokens: the existing black, mint, blue-label, and neutral-text tokens are preserved; only the scan field's coverage and falloff changed.
+- Image quality and asset fidelity: no image, logo, icon, or decorative asset was replaced or approximated.
+- Copy and content: all five system checks, values, `OK` labels, product mark, and completion message are unchanged.
+
+### Comparison history
+
+1. Initial P1 finding: `.os-poweron-scan` was fixed at `height: 40%` and animated vertically, creating a visibly unfinished green band across only part of the screen.
+2. Fix: changed the scan field to `inset: 0`, `width: 100%`, and `height: 100%`, with a full-viewport ambient animation instead of offscreen vertical travel.
+3. Post-fix evidence: the browser-measured layer exceeds the 1280 x 720 viewport during animation, the combined comparison shows edge-to-edge coverage, and the production stylesheet serves the corrected rules.
+
+### Browser and regression checks
+
+- Production index and corrected stylesheet returned HTTP 200 and the production index references the new cache key.
+- Production browser console: no warnings or errors.
+- Local visual QA emitted one expected API-unavailable warning because the QA server intentionally pointed at a dead API; there were no stylesheet, module, layout, or interaction errors.
+- Admin UI system, Nexus hardening, CSS block balance, and the new full-viewport scan regression assertions passed.
+
+### Findings
+
+- No actionable P0, P1, or P2 differences remain for the requested full-screen scan correction.
+
+final result: passed
+
 ## Mobile dashboard scaling follow-up - 2026-07-22
 
 - Source screenshot: `C:\Users\jorda\.codex\codex-remote-attachments\019f8846-e05f-76b3-8d34-eeb34265ae6d\72B6570D-39C0-4626-8C6E-6B3662E36018\1-Photo-1.jpg`
