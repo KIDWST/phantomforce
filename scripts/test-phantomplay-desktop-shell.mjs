@@ -54,7 +54,7 @@ for (const [label, source, contract] of [
   ["Windows uninstall icon", windowsInstaller, "!define MUI_UNICON"],
   ["Windows Apps display icon", windowsInstaller, '"DisplayIcon" "$INSTDIR\\{{main_binary_name}},0"'],
   ["Windows shortcut icon", windowsInstaller, '"" "$INSTDIR\\{{main_binary_name}}" 0'],
-  ["canonical Shadowbearer desktop title", mainSource, '"Shadowbearer: Dawn\'s Return"'],
+  ["canonical Shadowbearer desktop title", mainSource, '"Shadowbearer: Dawn\'s Light"'],
   ["shared public project title helper", mainSource, "fn public_game_title(game: &GameEntry) -> &str"],
   ["project rail uses public titles", studioSource, '"{public_game_title(&game)}"'],
   ["workspace chrome uses public titles", studioSource, '"{public_game_title(game)}"'],

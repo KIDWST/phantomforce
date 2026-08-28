@@ -377,8 +377,8 @@ assert.match(imBaked, /Story Shift[\s\S]*Rush Counter/u, "I'm Baked must provide
 assert.match(imBaked, /function makeOrder\(\)[\s\S]*function scoreCake\(\)/u, "I'm Baked must generate and score customer orders.");
 assert.match(imBaked, /phase==='build'[\s\S]*phase==='bake'[\s\S]*phase==='decorate'[\s\S]*phase==='serve'/u, "I'm Baked must implement build, bake, decorate, and serve stations.");
 
-assert.match(module, /id:\s*"phantom-strike"[\s\S]*native\/phantom-strike\?engine=unreal&version=5\.8[\s\S]*version:\s*"5\.8\.0-unreal"/u, "Frontend catalog must launch the canonical Unreal Phantom Strike build.");
-assert.match(flagshipCatalog, /id:\s*"phantom-strike"[\s\S]*unrealPlayerUrl\("phantom-strike"\)[\s\S]*version:\s*"5\.8\.0-unreal"/u, "Server catalog must route Phantom Strike to the canonical Unreal player.");
+assert.match(module, /id:\s*"phantom-strike"[\s\S]*native\/phantom-strike\?engine=unreal&version=5\.8[\s\S]*version:\s*"1\.4\.0-blackridge · V38R10"/u, "Frontend catalog must launch and label the verified PhantomStrike V38R10 build.");
+assert.match(flagshipCatalog, /id:\s*"phantom-strike"[\s\S]*unrealPlayerUrl\("phantom-strike"\)[\s\S]*version:\s*"1\.4\.0-blackridge · V38R10"/u, "Server catalog must route and label the verified PhantomStrike V38R10 build.");
 assert.match(phantomStrike, /LineTraceSingleByChannel[\s\S]*ApplyPointDamage/u, "Phantom Strike must use real hit tracing and damage.");
 assert.match(phantomStrike, /SpawnWave[\s\S]*EPhantomStrikeEnemyRole::Heavy/u, "Phantom Strike must retain escalating enemy waves and archetypes.");
 assert.match(phantomStrike, /bTriggerHeld[\s\S]*bAiming[\s\S]*StrikeReloadDuration/u, "Phantom Strike must retain automatic fire, aiming, and reload handling.");

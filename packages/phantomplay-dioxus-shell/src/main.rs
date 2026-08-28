@@ -50,6 +50,22 @@ const PHANTOMFORGE_UNREAL_GAME_IDS: [&str; 4] = [
     "phantom-legends",
     "cubetown",
 ];
+
+#[derive(Clone, Debug, Deserialize)]
+struct LiveBuildsetGame {
+    id: String,
+    public_title: Option<String>,
+    public_version: Option<String>,
+    revision: Option<String>,
+    file_count: Option<usize>,
+    total_bytes: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LiveBuildset {
+    engine: Option<String>,
+    games: Option<Vec<LiveBuildsetGame>>,
+}
 const PHANTOMPLAY_INDEX: &str = r#"<!doctype html>
 <html lang="en">
 <head>
@@ -145,6 +161,56 @@ fn unreal_builds_dir() -> PathBuf {
     select_unreal_builds_dir(configured, installed, unreal_project_dir())
 }
 
+fn unreal_buildset_path() -> PathBuf {
+    unreal_builds_dir().join("PHANTOMPLAY_BUILDSET.json")
+}
+
+fn read_unreal_buildset() -> Option<LiveBuildset> {
+    let text = fs::read_to_string(unreal_buildset_path()).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+fn live_buildset_game(game_id: &str) -> Option<LiveBuildsetGame> {
+    read_unreal_buildset()?
+        .games?
+        .into_iter()
+        .find(|game| game.id == game_id)
+}
+
+fn live_revision_label(game: &LiveBuildsetGame) -> Option<String> {
+    let revision = game.revision.as_deref()?.trim();
+    if revision.is_empty() {
+        return None;
+    }
+    match game
+        .public_version
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        Some(public_version) => Some(format!("{public_version} · {revision}")),
+        None => Some(revision.to_string()),
+    }
+}
+
+fn live_unreal_engine_label(game_id: &str) -> String {
+    let engine = read_unreal_buildset()
+        .and_then(|buildset| buildset.engine)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "Unreal Engine 5.8".to_string());
+    if let Some(game) = live_buildset_game(game_id)
+        && let Some(revision) = game
+            .revision
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+    {
+        return format!("{engine} · {revision}");
+    }
+    engine
+}
+
 fn phantomforge_unreal_game(game_id: &str) -> bool {
     PHANTOMFORGE_UNREAL_GAME_IDS.contains(&game_id)
 }
@@ -200,16 +266,36 @@ fn flagship_game_blurb(game_id: &str) -> Option<GameBlurb> {
             "Build a lasting stronghold, command workers and armies, conquer a living fantasy map, and return stronger after every campaign.",
         ),
         "cubetown" => (
-            "Shadowbearer: Dawn's Return",
+            "Shadowbearer: Dawn's Light",
             "Storybook action-adventure of light, shadow, and remembered worlds",
-            "Begin in Bramblewick before Shadowfall, survive the Pale Warden, restore five fallen guardians and their armaments, uncover Aktarus's history, and carry both light and darkness through the Black Meridian into Dawn's Return.",
+            "Begin in Bramblewick before Shadowfall, survive the Pale Warden, restore five fallen guardians and their armaments, uncover Aktarus's history, and carry both light and darkness through the Black Meridian into Dawn's Light.",
         ),
         _ => return None,
     };
+    let live = live_buildset_game(game_id);
+    let title = live
+        .as_ref()
+        .and_then(|game| game.public_title.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(title);
+    let revision = live.as_ref().and_then(live_revision_label);
+    let genre = revision
+        .as_ref()
+        .map(|label| format!("{genre} · installed {label}"))
+        .unwrap_or_else(|| genre.to_string());
+    let fantasy = revision
+        .as_ref()
+        .map(|label| {
+            format!(
+                "{fantasy} PhantomPlay is launching the verified installed payload {label}, read from the live Unreal buildset marker instead of stale catalog copy."
+            )
+        })
+        .unwrap_or_else(|| fantasy.to_string());
     Some(GameBlurb {
         title: title.to_string(),
-        genre: genre.to_string(),
-        fantasy: fantasy.to_string(),
+        genre,
+        fantasy,
     })
 }
 
@@ -1072,12 +1158,21 @@ fn apply_native_runtime(game_id: &str, runtime: &mut GameRuntimeProfile) {
     let sources = native_source_files(game_id);
     if phantomforge_unreal_game(game_id) {
         runtime.renderer = "Unreal Engine 5".to_string();
-        runtime.engine = "Unreal Engine 5.8".to_string();
-        runtime.file_count = sources.len();
-        runtime.total_bytes = sources
-            .iter()
-            .filter_map(|file| fs::metadata(file).ok().map(|meta| meta.len()))
-            .sum::<u64>();
+        runtime.engine = live_unreal_engine_label(game_id);
+        let live = live_buildset_game(game_id);
+        runtime.file_count = live
+            .as_ref()
+            .and_then(|game| game.file_count)
+            .unwrap_or(sources.len());
+        runtime.total_bytes = live
+            .as_ref()
+            .and_then(|game| game.total_bytes)
+            .unwrap_or_else(|| {
+                sources
+                    .iter()
+                    .filter_map(|file| fs::metadata(file).ok().map(|meta| meta.len()))
+                    .sum::<u64>()
+            });
         runtime.network_hooks = false;
         runtime.host_bridge = true;
         runtime.native = true;
@@ -2202,7 +2297,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{game_id} must exist"));
             assert!(game.is_dir);
             assert_eq!(game.runtime.renderer, "Unreal Engine 5");
-            assert_eq!(game.runtime.engine, "Unreal Engine 5.8");
+            assert!(game.runtime.engine.starts_with("Unreal Engine 5."));
             assert!(game.runtime.file_count >= 5);
             assert!(game.runtime.total_bytes > 10_000);
             assert!(game.runtime.host_bridge);
@@ -2220,7 +2315,7 @@ mod tests {
                 .find(|game| game.id == game_id)
                 .unwrap_or_else(|| panic!("{game_id} must exist"));
             assert_eq!(game.runtime.renderer, "Unreal Engine 5");
-            assert_eq!(game.runtime.engine, "Unreal Engine 5.8");
+            assert!(game.runtime.engine.starts_with("Unreal Engine 5."));
             assert!(game.runtime.native);
             let labels: Vec<String> = list_files(game)
                 .into_iter()
@@ -2265,10 +2360,10 @@ mod tests {
             .iter()
             .find(|game| game.id == "cubetown")
             .expect("cubetown must remain in the catalog");
-        assert_eq!(public_game_title(cubetown), "Shadowbearer: Dawn's Return");
+        assert_eq!(public_game_title(cubetown), "Shadowbearer: Dawn's Light");
         assert_ne!(public_game_title(cubetown), "Cubetown");
         assert_eq!(cubetown.runtime.renderer, "Unreal Engine 5");
-        assert_eq!(cubetown.runtime.engine, "Unreal Engine 5.8");
+        assert!(cubetown.runtime.engine.starts_with("Unreal Engine 5."));
         assert!(cubetown.runtime.native);
         assert!(game_entry_path(cubetown).is_none());
         let labels: Vec<String> = list_files(cubetown)
