@@ -2,9 +2,10 @@ param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
   [int]$Port = 5177,
   [int]$HermesPort = 5190,
-  # Startup handles reboot recovery immediately. This recurring pass keeps the
-  # live checkout and both local services healthy without constant polling.
-  [int]$EveryMinutes = 60
+  # Startup handles reboot recovery immediately. The account/API plane is
+  # checked every five minutes so an unexpected Hermes exit cannot leave the
+  # production sign-in gate unavailable for an hour.
+  [int]$EveryMinutes = 5
 )
 
 $ErrorActionPreference = "Stop"

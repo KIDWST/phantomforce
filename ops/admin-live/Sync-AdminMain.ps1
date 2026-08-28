@@ -113,13 +113,26 @@ try {
     return
   }
 
-  Invoke-Git fetch --quiet origin main | Out-Null
   $local = (Invoke-Git rev-parse HEAD).Trim()
-  $remote = (Invoke-Git rev-parse origin/main).Trim()
+  $gitFetchAvailable = $true
+  try {
+    Invoke-Git fetch --quiet origin main | Out-Null
+  } catch {
+    # GitHub/DNS is not a dependency of the live account system. The previous
+    # flow exited here, which also skipped the local UI/API health repair and
+    # could leave production sign-in down until connectivity returned.
+    $gitFetchAvailable = $false
+    $gitError = ($_.Exception.Message -replace "[\r\n]+", " ").Trim()
+    Write-SyncLog "git sync unavailable; continuing local health repair: $gitError"
+    Write-Warning "Git sync is unavailable; continuing with the current verified checkout and repairing local services."
+  }
 
-  if ($local -ne $remote) {
-    Invoke-Git merge --ff-only origin/main | Out-Null
-    $local = (Invoke-Git rev-parse HEAD).Trim()
+  if ($gitFetchAvailable) {
+    $remote = (Invoke-Git rev-parse origin/main).Trim()
+    if ($local -ne $remote) {
+      Invoke-Git merge --ff-only origin/main | Out-Null
+      $local = (Invoke-Git rev-parse HEAD).Trim()
+    }
   }
 
   Write-Manifest -Commit $local -Branch $branch

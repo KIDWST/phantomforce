@@ -313,9 +313,10 @@ try {
 Set-Content -LiteralPath (Join-Path $stateDir "hermes.pid") -Value ([string]$proc.Id) -Encoding ascii
 
 # Wait for the source-backed TypeScript service to actually bind before
-# reporting success. Cold starts after database recovery can take longer than
-# the old fixed three-second pause.
-$bindDeadline = (Get-Date).AddSeconds(15)
+# reporting success. A cold database + TypeScript start routinely exceeds 15
+# seconds on the owner workstation, so do not report a false startup failure
+# while the healthy process is still initializing.
+$bindDeadline = (Get-Date).AddSeconds(45)
 $active = @()
 do {
   Start-Sleep -Milliseconds 500

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { closeSync, createReadStream, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -27,6 +27,121 @@ const repoRoot = path.resolve(argValue("--root", process.env.PF_ADMIN_REPO_ROOT 
 const port = Number(argValue("--port", process.env.PF_ADMIN_PORT || "5177"));
 const host = argValue("--host", process.env.PF_ADMIN_HOST || "127.0.0.1");
 const apiOrigin = argValue("--api", process.env.PF_ADMIN_API_ORIGIN || "http://127.0.0.1:5190").replace(/\/$/, "");
+const apiPort = (() => {
+  try {
+    const parsed = new URL(apiOrigin);
+    return parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+  } catch {
+    return "5190";
+  }
+})();
+const hermesStartScript = path.join(__dirname, "Start-Hermes.ps1");
+const windowsPowerShellPath = path.join(
+  process.env.SystemRoot || "C:\\Windows",
+  "System32",
+  "WindowsPowerShell",
+  "v1.0",
+  "powershell.exe",
+);
+const powershellPath = [
+  process.env.PF_ADMIN_PWSH_PATH,
+  ...String(process.env.PATH || "")
+    .split(path.delimiter)
+    .map((entry) => entry.replace(/^"|"$/g, "").trim())
+    .filter(Boolean)
+    .map((entry) => path.join(entry, "pwsh.exe")),
+  windowsPowerShellPath,
+].find((candidate) => candidate && existsSync(candidate)) || windowsPowerShellPath;
+const apiRecoveryLogDir = path.join(process.env.LOCALAPPDATA || repoRoot, "PhantomForce", "admin-live");
+let apiRecoveryPromise = null;
+let lastApiRecoveryAt = 0;
+const apiRecoveryState = { result: "never", error: "" };
+
+async function apiHealthy() {
+  try {
+    const response = await fetch(`${apiOrigin}/health`, {
+      headers: { "Cache-Control": "no-cache" },
+      signal: AbortSignal.timeout(1800),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function recoverAdminApi() {
+  if (await apiHealthy()) return true;
+  if (apiRecoveryPromise) return apiRecoveryPromise;
+  if (Date.now() - lastApiRecoveryAt < 30_000) return false;
+  if (process.platform !== "win32" || !existsSync(hermesStartScript) || !existsSync(powershellPath)) return false;
+
+  lastApiRecoveryAt = Date.now();
+  apiRecoveryPromise = (async () => {
+    apiRecoveryState.result = "starting";
+    apiRecoveryState.error = "";
+    let stdoutFd = null;
+    let stderrFd = null;
+    try {
+      mkdirSync(apiRecoveryLogDir, { recursive: true });
+      stdoutFd = openSync(path.join(apiRecoveryLogDir, "api-recovery.out.log"), "a");
+      stderrFd = openSync(path.join(apiRecoveryLogDir, "api-recovery.err.log"), "a");
+    } catch {
+      stdoutFd = null;
+      stderrFd = null;
+    }
+    const child = spawn(powershellPath, [
+      "-NoProfile",
+      "-WindowStyle", "Hidden",
+      "-ExecutionPolicy", "Bypass",
+      "-File", hermesStartScript,
+      "-RepoRoot", repoRoot,
+      "-Port", apiPort,
+      "-StopExisting",
+    ], {
+      cwd: repoRoot,
+      stdio: ["ignore", stdoutFd ?? "ignore", stderrFd ?? "ignore"],
+      windowsHide: true,
+    });
+    const closeLogs = () => {
+      for (const fd of [stdoutFd, stderrFd]) {
+        if (fd !== null) {
+          try { closeSync(fd); } catch {}
+        }
+      }
+      stdoutFd = null;
+      stderrFd = null;
+    };
+    child.once("error", (error) => {
+      apiRecoveryState.result = "spawn-failed";
+      apiRecoveryState.error = String(error?.message || error).slice(0, 240);
+      closeLogs();
+    });
+    child.once("close", (code) => {
+      if (code !== 0 && apiRecoveryState.result === "starting") {
+        apiRecoveryState.result = "launcher-failed";
+        apiRecoveryState.error = `Start-Hermes exited with code ${code}.`;
+      }
+      closeLogs();
+    });
+
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 750));
+      if (await apiHealthy()) {
+        apiRecoveryState.result = "recovered";
+        apiRecoveryState.error = "";
+        return true;
+      }
+      if (apiRecoveryState.result === "spawn-failed") return false;
+    }
+    apiRecoveryState.result = "timed-out";
+    apiRecoveryState.error = "Hermes did not answer /health within 60 seconds.";
+    return false;
+  })().finally(() => {
+    apiRecoveryPromise = null;
+  });
+  return apiRecoveryPromise;
+}
 
 /* ---------------- Creative Engine transport ----------------
    PRIMARY route: PhantomForce UI -> this backend -> Hermes -> Higgsfield
@@ -174,9 +289,18 @@ async function proxyToApi(req, res) {
   delete headers.host;
   delete headers["content-length"];
 
-  try {
-    const body = req.method === "GET" || req.method === "HEAD" ? undefined : await readRequestBody(req);
-    const upstream = await fetch(target, { method: req.method, headers, body });
+  const body = req.method === "GET" || req.method === "HEAD" ? undefined : await readRequestBody(req).catch(() => null);
+  if (body === null) {
+    send(res, 413, JSON.stringify({ ok: false, error: "Request body is too large." }), "application/json; charset=utf-8");
+    return;
+  }
+
+  const forward = () => fetch(target, {
+    method: req.method,
+    headers,
+    body,
+  });
+  const relay = async (upstream) => {
     const responseHeaders = { ...Object.fromEntries(upstream.headers), ...securityHeaders() };
     responseHeaders["cache-control"] = "no-store";
     res.writeHead(upstream.status, responseHeaders);
@@ -186,7 +310,21 @@ async function proxyToApi(req, res) {
     }
     const buffer = Buffer.from(await upstream.arrayBuffer());
     res.end(buffer);
+  };
+
+  try {
+    await relay(await forward());
   } catch (error) {
+    const recovered = await recoverAdminApi();
+    const safeToRetry = req.method === "GET" || req.method === "HEAD";
+    if (recovered && safeToRetry) {
+      try {
+        await relay(await forward());
+        return;
+      } catch {
+        // The bounded recovery failed; return the normal availability error.
+      }
+    }
     send(res, 502, JSON.stringify({ ok: false, error: "Admin API unavailable." }), "application/json; charset=utf-8");
   }
 }
@@ -849,6 +987,10 @@ createServer(async (req, res) => {
       root: repoRoot,
       source_hash: sourceHash,
       api_origin: apiOrigin,
+      api_recovery_supported: process.platform === "win32" && existsSync(hermesStartScript) && existsSync(powershellPath),
+      api_recovery_shell: path.basename(powershellPath),
+      api_recovery_last_result: apiRecoveryState.result,
+      ...(apiRecoveryState.error ? { api_recovery_error: apiRecoveryState.error } : {}),
       jobs_running: jobsRunning,
       creative_transport: creativeEngine.transport,
       cli_fallback_enabled: creativeEngine.cliFallbackEnabled,
