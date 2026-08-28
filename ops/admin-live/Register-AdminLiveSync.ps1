@@ -11,20 +11,28 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repo = (Resolve-Path $RepoRoot).Path
-$ps = (Get-Command powershell.exe -ErrorAction Stop).Source
+$bundledPwsh = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies\native\powershell\pwsh.exe"
+$pwshCommand = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+$ps = if (Test-Path -LiteralPath $bundledPwsh) {
+  $bundledPwsh
+} elseif ($pwshCommand) {
+  $pwshCommand.Source
+} else {
+  (Get-Command powershell.exe -ErrorAction Stop).Source
+}
 $startScript = Join-Path $PSScriptRoot "Start-AdminLive.ps1"
 $hermesScript = Join-Path $PSScriptRoot "Start-Hermes.ps1"
 $syncScript = Join-Path $PSScriptRoot "Sync-AdminMain.ps1"
 
 $startArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$startScript`" -RepoRoot `"$repo`" -Port $Port -StopExisting"
 $hermesArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$hermesScript`" -RepoRoot `"$repo`" -Port $HermesPort -StopExisting"
-$syncArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$syncScript`" -RepoRoot `"$repo`" -Port $Port -HermesPort $HermesPort"
 
 # Task Scheduler's own "Hidden" task-setting only hides the task from the
 # Task Scheduler UI — it does NOT suppress the console window the launched
-# powershell.exe pops up. Route both actions through a wscript/VBS launcher
-# (WshShell.Run with window style 0) instead: that starts the process already
-# hidden, so nothing ever flashes on screen, even for the every-N-minutes sync.
+# shell can pop up. Route the login-only starters through hidden VBS launchers.
+# The recurring sync uses pwsh directly with a short generated runner: unlike
+# the legacy WScript process tree, it exits cleanly so later repair passes are
+# never suppressed by a task stuck in Running.
 $stateDir = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live"
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 
@@ -40,14 +48,21 @@ WshShell.Run "$vbsCommand", 0, True
 
 $startVbs = Join-Path $stateDir "run-admin-live-start.vbs"
 $hermesVbs = Join-Path $stateDir "run-hermes-start.vbs"
-$syncVbs = Join-Path $PSScriptRoot "Run-AdminMainSyncHidden.vbs"
+$syncRunner = Join-Path $stateDir "Run-AdminMainSync.ps1"
 New-HiddenLauncher -VbsPath $startVbs -Command "$ps $startArgs"
 New-HiddenLauncher -VbsPath $hermesVbs -Command "$ps $hermesArgs"
+$runnerSync = $syncScript.Replace("'", "''")
+$runnerRepo = $repo.Replace("'", "''")
+$runnerBody = @"
+`$ErrorActionPreference = "Stop"
+& '$runnerSync' -RepoRoot '$runnerRepo' -Port $Port -HermesPort $HermesPort
+"@
+Set-Content -LiteralPath $syncRunner -Value $runnerBody -Encoding utf8
 
 $wscript = (Get-Command wscript.exe -ErrorAction Stop).Source
 $startAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$startVbs`""
 $hermesAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$hermesVbs`""
-$syncAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$syncVbs`""
+$syncAction = New-ScheduledTaskAction -Execute $ps -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$syncRunner`""
 
 $startTrigger = New-ScheduledTaskTrigger -AtLogOn
 $hermesTrigger = New-ScheduledTaskTrigger -AtLogOn
@@ -61,16 +76,16 @@ $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.Wind
 try {
   Register-ScheduledTask -TaskName "PhantomForce Admin Live Server" -Action $startAction -Trigger $startTrigger -Settings $settings -Principal $principal -Description "Starts the local static admin server for admin.phantomforce.online." -Force -ErrorAction Stop | Out-Null
   Register-ScheduledTask -TaskName "PhantomForce Hermes API" -Action $hermesAction -Trigger $hermesTrigger -Settings $settings -Principal $principal -Description "Starts the Hermes API backend (5190) so new server routes go live." -Force -ErrorAction Stop | Out-Null
-  Register-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger @($syncLogonTrigger, $syncTimerTrigger) -Settings $settings -Principal $principal -Description "At login and hourly, fast-forwards PhantomForce main and repairs the UI, API, database dependency, and health checks." -Force -ErrorAction Stop | Out-Null
+  Register-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger @($syncLogonTrigger, $syncTimerTrigger) -Settings $settings -Principal $principal -Description "At login and every $EveryMinutes minutes, fast-forwards PhantomForce main and repairs the UI, API, database dependency, and health checks." -Force -ErrorAction Stop | Out-Null
 } catch {
   # Standard users may be allowed to update an existing task but denied new
-  # task creation. One combined login/hourly sync is sufficient because its
+  # task creation. One combined login/recurring sync is sufficient because its
   # health pass starts and repairs both the UI and API.
   try {
     Get-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -ErrorAction Stop | Out-Null
     Set-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger @($syncLogonTrigger, $syncTimerTrigger) -Settings $settings -ErrorAction Stop | Out-Null
     Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "PhantomForceAdminLiveSync" -ErrorAction SilentlyContinue
-    Write-Output "Updated the combined PhantomForce login + hourly self-repair task."
+    Write-Output "Updated the combined PhantomForce login + recurring self-repair task."
     exit 0
   } catch {
     $watchScript = Join-Path $PSScriptRoot "Watch-AdminMain.ps1"

@@ -6,6 +6,7 @@ Dim scriptDir
 Dim repoRoot
 Dim syncScript
 Dim powershell
+Dim bundledPwsh
 Dim command
 
 Set fso = CreateObject("Scripting.FileSystemObject")
@@ -13,7 +14,12 @@ Set shell = CreateObject("WScript.Shell")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 repoRoot = fso.GetParentFolderName(fso.GetParentFolderName(scriptDir))
 syncScript = scriptDir & "\Sync-AdminMain.ps1"
-powershell = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+bundledPwsh = shell.ExpandEnvironmentStrings("%USERPROFILE%") & "\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\powershell\pwsh.exe"
+If fso.FileExists(bundledPwsh) Then
+  powershell = bundledPwsh
+Else
+  powershell = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+End If
 command = """" & powershell & """ -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & syncScript & """ -RepoRoot """ & repoRoot & """ -Port 5177 -HermesPort 5190"
 
 ' The sync script owns an exclusive lock, so the scheduler wrapper does not
