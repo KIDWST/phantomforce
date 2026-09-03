@@ -1,9 +1,10 @@
+use super::phantom_engine::PhantomEngineWorkspace;
 use super::studio_icons::{
-    Activity, Bot, Bug, Check, CircleAlert, CirclePlay, CodeXml, Columns2, Cpu, Database, Eye,
-    EyeOff, FileCode, Files, FolderOpen, FolderPlus, Gauge, HardDrive, Import, Keyboard, Maximize2,
-    Minimize2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, PlugZap,
-    Puzzle, Radio, RefreshCw, Save, Search, Settings2, ShieldCheck, SlidersHorizontal, Star,
-    WandSparkles, Wifi, WifiOff, X,
+    Activity, BadgeCheck, Bot, Bug, Check, CircleAlert, CirclePlay, CodeXml, Columns2, Cpu,
+    Database, Eye, EyeOff, FileCode, Files, FolderOpen, FolderPlus, Gauge, HardDrive, Import,
+    Keyboard, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
+    Play, PlugZap, Puzzle, Radio, RefreshCw, Save, Search, Settings2, ShieldCheck,
+    SlidersHorizontal, Star, WandSparkles, Wifi, WifiOff, X,
 };
 use super::*;
 use serde::{Deserialize, Serialize};
@@ -13,9 +14,9 @@ const CONNECTION_VAULT_TIMEOUT_SECONDS: u64 = 45;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum WorkspaceView {
+    Engine,
     Play,
     Code,
-    Split,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -173,15 +174,14 @@ fn normalize_api_origin(value: &str) -> String {
 
 fn normalize_default_view(value: &str) -> String {
     match value {
-        "code" | "split" => value.to_string(),
+        "engine" => value.to_string(),
         _ => "play".to_string(),
     }
 }
 
 fn workspace_view_from_setting(value: &str) -> WorkspaceView {
     match normalize_default_view(value).as_str() {
-        "code" => WorkspaceView::Code,
-        "split" => WorkspaceView::Split,
+        "engine" => WorkspaceView::Engine,
         _ => WorkspaceView::Play,
     }
 }
@@ -788,6 +788,23 @@ fn ai_project_cwd(project_root: &Path) -> PathBuf {
     }
 }
 
+fn engine_development_path(path: &Path) -> Option<PathBuf> {
+    let live = phantomplay_live_root();
+    let canonical_live = std::fs::canonicalize(&live).unwrap_or(live.clone());
+    let canonical_path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if let Ok(relative) = path
+        .strip_prefix(&live)
+        .or_else(|_| canonical_path.strip_prefix(&canonical_live))
+    {
+        let development = std::env::var_os("PHANTOMPLAY_DEVELOPMENT_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(super::repo_root)
+            .join(relative);
+        return development.exists().then_some(development);
+    }
+    Some(path.to_path_buf())
+}
+
 fn validate_ai_edit_candidate(path: &Path, original: &str, revised: &str) -> Result<(), String> {
     if revised.trim().is_empty() {
         return Err("Phantom AI returned an empty file, so nothing was saved.".to_string());
@@ -1001,11 +1018,7 @@ pub(crate) fn Studio() -> Element {
                 status,
             );
         }
-        let title = game
-            .blurb
-            .as_ref()
-            .map(|blurb| blurb.title.as_str())
-            .unwrap_or(game.id.as_str());
+        let title = public_game_title(&game);
         status.set(if game_entry_path(&game).is_some() {
             format!("Playing {title} inside PhantomPlay. Auto reload is active.")
         } else {
@@ -1149,16 +1162,19 @@ pub(crate) fn Studio() -> Element {
         playing_entry.set(entry_path.as_ref().map(|_| game_entry_name(&game)));
         reload_token.set(reload_token().wrapping_add(1));
         workspace_view.set(WorkspaceView::Play);
-        let title = game
-            .blurb
-            .as_ref()
-            .map(|blurb| blurb.title.as_str())
-            .unwrap_or(game.id.as_str());
+        let title = public_game_title(&game);
+        let installed_label = installed_build_label(&game)
+            .map(|label| format!(" [{label}]"))
+            .unwrap_or_default();
+        let installed_path = installed_player_path(&game)
+            .or_else(|| unreal_player_path(&game.id))
+            .map(|path| format!(" from {}", path.display()))
+            .unwrap_or_default();
         if game.runtime.native {
             match launch_native_game(&game.id) {
                 Ok(receipt) => status.set(format!(
-                    "{title} launched in {} (PID {}). Its independent native window is now playing.",
-                    receipt.engine, receipt.pid
+                    "{title}{installed_label} launched in {} (PID {}){installed_path}. Its independent native window is now playing.",
+                    receipt.engine, receipt.pid,
                 )),
                 Err(error) => status.set(format!(
                     "{title} requires its assigned native build. {error} No legacy fallback was launched for this game."
@@ -1355,6 +1371,38 @@ pub(crate) fn Studio() -> Element {
     let selected_label = selected_file()
         .and_then(|index| files().get(index).map(|(_, label)| label.clone()))
         .unwrap_or_else(|| "No file".to_string());
+    let engine_project_root = project
+        .as_ref()
+        .and_then(|game| {
+            selected_file()
+                .and_then(|index| files().get(index).map(|(path, _)| path.clone()))
+                .map(|path| ai_project_cwd(&project_history_root(game, &path)))
+                .or_else(|| game.path.exists().then(|| ai_project_cwd(&game.path)))
+        })
+        .and_then(|path| engine_development_path(&path))
+        .map(|path| path.display().to_string())
+        .unwrap_or_default();
+    let engine_project_id = project
+        .as_ref()
+        .map(|game| game.id.clone())
+        .unwrap_or_else(|| "no-project".to_string());
+    let engine_project_title = project
+        .as_ref()
+        .map(|game| public_game_title(game).to_string())
+        .unwrap_or_else(|| "Choose a project".to_string());
+    let engine_project_engine = project
+        .as_ref()
+        .map(|game| game.runtime.engine.clone())
+        .unwrap_or_else(|| "Detected by Phantom Engine".to_string());
+    let engine_project_files = files()
+        .iter()
+        .filter_map(|(path, _)| engine_development_path(path))
+        .filter_map(|path| {
+            path.strip_prefix(&engine_project_root)
+                .ok()
+                .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        })
+        .collect::<Vec<_>>();
     let filter_term = store_query().trim().to_lowercase();
     let visible_project_count = games()
         .iter()
@@ -1369,7 +1417,12 @@ pub(crate) fn Studio() -> Element {
         })
         .count();
     let shell_class = format!(
-        "studio-shell{}{}{}{}{}",
+        "studio-shell{}{}{}{}{}{}",
+        if workspace_view() == WorkspaceView::Engine {
+            " engine-mode"
+        } else {
+            ""
+        },
         if focus_mode() { " focus-mode" } else { "" },
         if project_rail_open() {
             ""
@@ -1422,50 +1475,27 @@ pub(crate) fn Studio() -> Element {
                     }
                 }
 
-                nav { class: "view-switcher", aria_label: "Workspace view",
-                    button {
-                        class: if workspace_view() == WorkspaceView::Play { "is-active" } else { "" },
-                        title: "Play the selected project",
-                        onclick: move |_| {
-                            workspace_view.set(WorkspaceView::Play);
-                            if let Some(index) = selected_game() {
-                                if games().get(index).is_some_and(|game| game.runtime.native) {
-                                    launch_game(index);
-                                }
-                            } else {
-                                status.set("Choose a project to play.".to_string());
-                            }
-                        },
-                        CirclePlay { size: 15 }
-                        span { "Play" }
-                    }
-                    button {
-                        class: if workspace_view() == WorkspaceView::Code { "is-active" } else { "" },
-                        title: "Open the source editor",
-                        onclick: move |_| {
-                            workspace_view.set(WorkspaceView::Code);
-                            if selected_game().is_none() {
-                                status.set("Choose a project to open its source files.".to_string());
-                            }
-                        },
-                        CodeXml { size: 15 }
-                        span { "Code" }
-                    }
-                    button {
-                        class: if workspace_view() == WorkspaceView::Split { "is-active" } else { "" },
-                        title: "Open runtime and source side by side",
-                        onclick: move |_| {
-                            workspace_view.set(WorkspaceView::Split);
-                            if selected_game().is_none() {
-                                status.set("Choose a project to open split view.".to_string());
-                            }
-                        },
-                        Columns2 { size: 15 }
-                        span { "Split" }
-                    }
-                }
+                div { class: "topbar-spacer" }
 
                 div { class: "topbar-actions",
+                    nav { class: "view-switcher", aria_label: "Play or Engine",
+                        button {
+                            class: if workspace_view() == WorkspaceView::Play { "is-active" } else { "" },
+                            title: "Play the selected project",
+                            onclick: move |_| {
+                                workspace_view.set(WorkspaceView::Play);
+                            },
+                            CirclePlay { size: 15 }
+                            span { "Play" }
+                        }
+                        button {
+                            class: if workspace_view() == WorkspaceView::Engine { "is-active" } else { "" },
+                            title: "Tell Phantom Engine what to build",
+                            onclick: move |_| workspace_view.set(WorkspaceView::Engine),
+                            Cpu { size: 15 }
+                            span { "Engine" }
+                        }
+                    }
                     div {
                         class: match api_online() {
                             Some(true) => "service-state is-online",
@@ -1671,6 +1701,11 @@ pub(crate) fn Studio() -> Element {
                                     }
                                     div { class: "project-meta",
                                         span { class: "renderer-badge", "{game.runtime.renderer}" }
+                                        if let Some(build) = game.installed.as_ref() {
+                                            if !build.revision.trim().is_empty() {
+                                                span { class: "revision-badge", "{build.revision}" }
+                                            }
+                                        }
                                         div { class: "project-actions",
                                             button {
                                                 class: "mini-action",
@@ -1779,6 +1814,9 @@ pub(crate) fn Studio() -> Element {
                                 if let Some(game) = project.as_ref() {
                                     span { class: "workspace-chip is-renderer", "{game.runtime.renderer}" }
                                     span { class: "workspace-chip", "{game.runtime.engine}" }
+                                    if let Some(build_label) = installed_build_label(game) {
+                                        span { class: "workspace-chip is-build", "{build_label}" }
+                                    }
                                     span { class: "workspace-chip", "{game.runtime.size_label()}" }
                                 }
                             }
@@ -1855,7 +1893,27 @@ pub(crate) fn Studio() -> Element {
                         }
                     }
 
-                    if workspace_view() == WorkspaceView::Play {
+                    if workspace_view() == WorkspaceView::Engine {
+                        PhantomEngineWorkspace {
+                            project_id: engine_project_id,
+                            project_title: engine_project_title,
+                            project_root: engine_project_root,
+                            project_engine: engine_project_engine,
+                            project_files: engine_project_files,
+                            api_origin: api_origin(),
+                            ai_provider: ai_provider(),
+                            ai_model: ai_model(),
+                            fallback_provider: fallback_provider(),
+                            allow_fallbacks: allow_fallbacks(),
+                            timeout_ms: request_timeout_seconds() * 1_000,
+                            api_online: api_online(),
+                            has_unsaved_changes: dirty(),
+                            on_open_settings: move |_| {
+                                settings_section.set(SettingsSection::Connections);
+                                settings_open.set(true);
+                            },
+                        }
+                    } else if workspace_view() == WorkspaceView::Play {
                         section { class: "game-viewport",
                             if let Some(entry) = playing_entry() {
                                 Player {
@@ -2215,6 +2273,13 @@ pub(crate) fn Studio() -> Element {
                                     Cpu { size: 15 }
                                     span { "Engine" }
                                     strong { "{game.runtime.engine}" }
+                                }
+                                div { class: "metric",
+                                    BadgeCheck { size: 15 }
+                                    span { "Installed build" }
+                                    strong {
+                                        {installed_build_label(game).unwrap_or_else(|| "Not installed".to_string())}
+                                    }
                                 }
                                 div { class: "metric",
                                     Files { size: 15 }
@@ -2835,8 +2900,7 @@ pub(crate) fn Studio() -> Element {
                                                 save_studio_settings(&settings);
                                             },
                                             option { value: "play", "Play" }
-                                            option { value: "code", "Code" }
-                                            option { value: "split", "Split" }
+                                            option { value: "engine", "Phantom Engine" }
                                         }
                                     }
                                     for (label, description, enabled, setting_id) in [
@@ -2915,6 +2979,20 @@ pub(crate) fn Studio() -> Element {
                                         article { span { "LIVE PROJECT ROOT" } strong { "{phantomplay_live_root().display()}" } }
                                         article { span { "CURRENT PROJECT" } strong { if let Some(game) = project.as_ref() { "{public_game_title(game)}" } else { "None selected" } } }
                                         article { span { "RENDERER" } strong { if let Some(game) = project.as_ref() { "{game.runtime.renderer}" } else { "Waiting" } } }
+                                        article { span { "INSTALLED BUILD" } strong {
+                                            {project.as_ref()
+                                                .and_then(installed_build_label)
+                                                .unwrap_or_else(|| "Waiting".to_string())}
+                                        } }
+                                        article { span { "PLAYER PATH" } strong {
+                                            {project.as_ref()
+                                                .and_then(|game| {
+                                                    installed_player_path(game)
+                                                        .or_else(|| unreal_player_path(&game.id))
+                                                })
+                                                    .map(|path| path.display().to_string())
+                                                    .unwrap_or_else(|| "Waiting".to_string())}
+                                        } }
                                         article { span { "API STATE" } strong { {match api_online() { Some(true) => "Online", Some(false) => "Offline", None => "Checking" }} } }
                                     }
                                 } else {
@@ -2994,7 +3072,11 @@ pub(crate) fn Studio() -> Element {
                     FolderOpen { size: 12 }
                     span {
                         if let Some(game) = project.as_ref() {
-                            "{public_game_title(game)}"
+                            if let Some(build) = installed_build_label(game) {
+                                "{public_game_title(game)} · {build}"
+                            } else {
+                                "{public_game_title(game)}"
+                            }
                         } else {
                             "workspace"
                         }
@@ -3061,7 +3143,7 @@ const STUDIO_STYLE: &str = r#"
         position: relative;
         z-index: 5;
         display: grid;
-        grid-template-columns: minmax(260px, 1fr) auto minmax(330px, 1fr);
+        grid-template-columns: minmax(230px, 1fr) minmax(0, 1fr) auto;
         align-items: center;
         gap: 16px;
         padding: 0 14px;
@@ -3142,9 +3224,9 @@ const STUDIO_STYLE: &str = r#"
     }
     .view-switcher {
         display: grid;
-        grid-template-columns: repeat(3, minmax(82px, 1fr));
-        min-width: 276px;
-        height: 44px;
+        grid-template-columns: repeat(2, minmax(76px, 1fr));
+        min-width: 164px;
+        height: 38px;
         padding: 3px;
         border: 1px solid #354250;
         border-radius: 7px;
@@ -3474,6 +3556,17 @@ const STUDIO_STYLE: &str = r#"
         border-color: rgba(86, 199, 255, 0.28);
         color: #9edfff;
     }
+    .revision-badge {
+        max-width: 76px;
+        overflow: hidden;
+        padding: 2px 5px;
+        border: 1px solid rgba(79, 241, 168, 0.30);
+        border-radius: 4px;
+        color: #78efb7;
+        font: 700 8px "Cascadia Code", Consolas, monospace;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     .project-actions {
         display: flex;
         gap: 4px;
@@ -3631,6 +3724,10 @@ const STUDIO_STYLE: &str = r#"
     .workspace-chip.is-renderer {
         border-color: rgba(86, 199, 255, 0.25);
         color: #8bd9ff;
+    }
+    .workspace-chip.is-build {
+        border-color: rgba(79, 241, 168, 0.28);
+        color: #78efb7;
     }
     .workspace-toolbar-actions {
         flex: 0 0 auto;
@@ -4763,6 +4860,18 @@ const STUDIO_STYLE: &str = r#"
     .focus-mode .studio-layout {
         grid-template-columns: minmax(0, 1fr);
     }
+    .engine-mode .file-browser,
+    .engine-mode .tool-dock,
+    .engine-mode .workspace-toolbar {
+        display: none;
+    }
+    .engine-mode .studio-layout {
+        grid-template-columns: 250px minmax(0, 1fr);
+    }
+    .engine-mode.project-rail-collapsed .studio-layout { grid-template-columns: minmax(0, 1fr); }
+    .engine-mode .workspace {
+        grid-template-rows: minmax(0, 1fr);
+    }
     .focus-mode .rail-toggle { display: none; }
 
     @media (max-width: 1420px) {
@@ -4777,7 +4886,7 @@ const STUDIO_STYLE: &str = r#"
         .project-rail-collapsed .studio-layout { grid-template-columns: minmax(0, 1fr) 260px; }
         .tool-dock-collapsed .studio-layout { grid-template-columns: 196px minmax(0, 1fr); }
         .topbar { grid-template-columns: minmax(180px, 1fr) auto minmax(220px, 1fr); gap: 8px; }
-        .view-switcher { min-width: 248px; grid-template-columns: repeat(3, minmax(72px, 1fr)); }
+        .view-switcher { min-width: 152px; grid-template-columns: repeat(2, minmax(70px, 1fr)); }
         .service-state span { display: none; }
         .service-state { width: 32px; justify-content: center; padding: 0; }
         .project-copy p { display: none; }
@@ -4798,7 +4907,7 @@ const STUDIO_STYLE: &str = r#"
         .tool-dock-collapsed .studio-layout { grid-template-columns: 172px minmax(0, 1fr); }
         .brand-lockup span, .service-state, .save-state span, .toolbar-button span { display: none; }
         .topbar { grid-template-columns: minmax(100px, 1fr) auto minmax(100px, 1fr); }
-        .view-switcher { min-width: 210px; }
+        .view-switcher { min-width: 142px; }
         .workspace-toolbar { padding-left: 10px; gap: 8px; }
         .workspace-toolbar-actions { gap: 4px; }
     }
@@ -4958,8 +5067,9 @@ mod tests {
 
     #[test]
     fn workspace_default_view_normalizes_unknown_values() {
-        assert_eq!(workspace_view_from_setting("code"), WorkspaceView::Code);
-        assert_eq!(workspace_view_from_setting("split"), WorkspaceView::Split);
+        assert_eq!(workspace_view_from_setting("engine"), WorkspaceView::Engine);
+        assert_eq!(workspace_view_from_setting("code"), WorkspaceView::Play);
+        assert_eq!(workspace_view_from_setting("split"), WorkspaceView::Play);
         assert_eq!(workspace_view_from_setting("unknown"), WorkspaceView::Play);
     }
 

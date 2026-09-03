@@ -386,6 +386,7 @@ import {
 import { registerPhantomPlayFlagshipGames } from "./phantom-ai/phantomplay-flagship.js";
 import { registerPhantomPlayDevRooms, devRoomStats } from "./phantomplay-devroom.js";
 import { requestPhantomPlayAiEdit } from "./phantomplay-ai-edit.js";
+import { registerPhantomPlayEngineRoutes } from "./phantomplay-engine-routes.js";
 import {
   getPhantomPlayDeveloperAnalytics,
   getPhantomPlayDiscovery,
@@ -8060,6 +8061,11 @@ app.post("/api/phantomplay/ai-edit", { bodyLimit: 4 * 1024 * 1024 }, async (requ
     });
   }
   return { ok: true, newContent: result.newContent, changed: result.changed, provider: result.provider, model: result.model };
+});
+
+registerPhantomPlayEngineRoutes(app, {
+  localAllowed: phantomPlayDesktopLocalAllowed,
+  credential: phantomPlayDesktopOpenRouterCredential,
 });
 
 function phantomPlayV2Gate(reply: FastifyReply) {

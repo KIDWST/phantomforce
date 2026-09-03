@@ -41,6 +41,7 @@ const checks = [
   "test:agent-run-lifecycle",
   "test:managed-growth-report",
   "test:phantomplay",
+  "test:phantomplay-engine",
   "test:phantomstore",
 ];
 

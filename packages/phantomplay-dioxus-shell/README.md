@@ -8,10 +8,13 @@ identity.
 
 The studio uses per-project runtime routing:
 
-- **Play** renders browser games in the workspace and launches native games in their own resizable
-  process window.
+- **Play / Engine** are the two primary modes in the top-right corner. Switching modes does not
+  launch native games; Run launches the selected title deliberately.
+- **Engine** accepts plain-language project commands and runs a hidden, project-scoped Codex worker.
+  OpenRouter/local models can plan through existing connections. Progress, cancellation, file changes,
+  command evidence and exact errors are visible without using the manual scene tools.
 - **Code** edits the selected project's real source files.
-- **Split** keeps the game and editor visible together.
+- **Advanced controls** retains the experimental 3D/Canvas scene workbench; it is not the default workflow.
 - **Phantom AI** lets the developer choose Auto, Codex, Claude, OpenRouter, or local Ollama plus
   an optional model override. It sends the active-file request through `/api/phantomplay/ai-edit`,
   records the accepted change in recoverable project history, and reloads the game.
@@ -29,6 +32,15 @@ The studio uses per-project runtime routing:
 The project catalog is read directly from `app/games` plus registered flagship projects.
 Games and shared files are served from disk through the restricted `phantomplay-game://` protocol,
 and selected-project changes trigger automatic reload.
+
+Engine jobs target development sources, never the live deployment directory. Set
+`PHANTOMPLAY_DEVELOPMENT_ROOT` if the source repository moved after packaging. Jobs do not automatically
+publish, purchase assets, or claim visual acceptance. Receipts are not backups. See
+`docs/architecture/PHANTOM_ENGINE_ARCHITECTURE.md` for supported capabilities and remaining limitations.
+
+`--offscreen-test` creates a hidden native window for isolated WebView2 automation. It must be paired
+with separate `PHANTOMPLAY_DATA_ROOT`, `PHANTOMPLAY_WEBVIEW_DATA_DIR` and test project paths; do not use
+player profiles for automated smoke tests.
 
 ## Runtime Boundaries
 

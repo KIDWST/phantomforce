@@ -39,6 +39,7 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
+mod phantom_engine;
 mod project_history;
 mod studio;
 
@@ -321,8 +322,80 @@ struct GameEntry {
     path: PathBuf,
     is_dir: bool,
     blurb: Option<GameBlurb>,
+    installed: Option<InstalledGameBuild>,
     runtime: GameRuntimeProfile,
     meta: StudioGameMeta,
+}
+
+#[derive(Clone, PartialEq, Debug, Deserialize)]
+struct InstalledGameBuild {
+    id: String,
+    #[serde(default)]
+    public_title: String,
+    #[serde(default)]
+    public_version: String,
+    #[serde(default)]
+    revision: String,
+    #[serde(default)]
+    executable: String,
+}
+
+#[derive(Default, Deserialize)]
+struct InstalledBuildset {
+    #[serde(default)]
+    games: Vec<InstalledGameBuild>,
+}
+
+fn installed_game_builds() -> BTreeMap<String, InstalledGameBuild> {
+    let path = unreal_builds_dir().join("PHANTOMPLAY_BUILDSET.json");
+    fs::read_to_string(path)
+        .ok()
+        .map(|text| parse_installed_game_builds(&text))
+        .unwrap_or_default()
+}
+
+fn parse_installed_game_builds(text: &str) -> BTreeMap<String, InstalledGameBuild> {
+    let Ok(buildset) = serde_json::from_str::<InstalledBuildset>(text) else {
+        return BTreeMap::new();
+    };
+    buildset
+        .games
+        .into_iter()
+        .filter(|build| !build.id.trim().is_empty())
+        .map(|build| (build.id.clone(), build))
+        .collect()
+}
+
+fn installed_build_label(game: &GameEntry) -> Option<String> {
+    let build = game.installed.as_ref()?;
+    match (
+        build.revision.trim().is_empty(),
+        build.public_version.trim().is_empty(),
+    ) {
+        (false, false) => Some(format!("{} · {}", build.revision, build.public_version)),
+        (false, true) => Some(build.revision.clone()),
+        (true, false) => Some(build.public_version.clone()),
+        (true, true) => None,
+    }
+}
+
+fn installed_player_path(game: &GameEntry) -> Option<PathBuf> {
+    let build = game.installed.as_ref()?;
+    let executable = Path::new(build.executable.trim());
+    if executable.as_os_str().is_empty()
+        || executable.is_absolute()
+        || executable.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        })
+    {
+        return None;
+    }
+    Some(unreal_builds_dir().join(&game.id).join(executable))
 }
 
 /// Real store-card copy, pulled from each game's own `phantomGameKernel`
@@ -337,9 +410,11 @@ struct GameBlurb {
 }
 
 fn public_game_title(game: &GameEntry) -> &str {
-    game.blurb
+    game.installed
         .as_ref()
-        .map(|blurb| blurb.title.as_str())
+        .map(|build| build.public_title.trim())
+        .filter(|title| !title.is_empty())
+        .or_else(|| game.blurb.as_ref().map(|blurb| blurb.title.as_str()))
         .unwrap_or(game.id.as_str())
 }
 
@@ -1275,6 +1350,7 @@ fn extract_game_blurb(entry_file: &Path) -> Option<GameBlurb> {
 fn list_games() -> Vec<GameEntry> {
     let dir = games_dir();
     let mut games = Vec::new();
+    let installed_builds = installed_game_builds();
     let mut directory_game_ids = BTreeMap::new();
     for game_id in PHANTOMFORGE_UNREAL_GAME_IDS {
         directory_game_ids.insert(game_id.to_string(), true);
@@ -1320,10 +1396,11 @@ fn list_games() -> Vec<GameEntry> {
             apply_native_runtime(&name, &mut runtime);
             let meta = studio_game_meta(&name, blurb.as_ref());
             games.push(GameEntry {
-                id: name,
+                id: name.clone(),
                 path,
                 is_dir: true,
                 blurb,
+                installed: installed_builds.get(&name).cloned(),
                 runtime,
                 meta,
             });
@@ -1341,10 +1418,11 @@ fn list_games() -> Vec<GameEntry> {
             apply_native_runtime(&id, &mut runtime);
             let meta = studio_game_meta(&id, blurb.as_ref());
             games.push(GameEntry {
-                id,
+                id: id.clone(),
                 path,
                 is_dir: false,
                 blurb,
+                installed: installed_builds.get(&id).cloned(),
                 runtime,
                 meta,
             });
@@ -1363,6 +1441,7 @@ fn list_games() -> Vec<GameEntry> {
             is_dir: true,
             meta: studio_game_meta(game_id, blurb.as_ref()),
             blurb,
+            installed: installed_builds.get(game_id).cloned(),
             runtime,
         });
     }
@@ -1899,6 +1978,202 @@ async fn request_ai_edit_at(
     }
 }
 
+#[derive(Serialize)]
+pub(crate) struct EngineCommandRequestBody {
+    #[serde(rename = "gameId")]
+    pub(crate) game_id: String,
+    #[serde(rename = "projectTitle")]
+    pub(crate) project_title: String,
+    pub(crate) cwd: String,
+    pub(crate) engine: String,
+    #[serde(rename = "projectFiles")]
+    pub(crate) project_files: Vec<String>,
+    pub(crate) instruction: String,
+    pub(crate) provider: String,
+    pub(crate) model: String,
+    #[serde(rename = "fallbackProvider")]
+    pub(crate) fallback_provider: String,
+    #[serde(rename = "allowFallbacks")]
+    pub(crate) allow_fallbacks: bool,
+    #[serde(rename = "timeoutMs")]
+    pub(crate) timeout_ms: u64,
+}
+
+#[derive(Deserialize, Default)]
+struct EngineCommandResponseBody {
+    ok: bool,
+    status: Option<String>,
+    summary: Option<String>,
+    #[serde(rename = "plannerProvider")]
+    planner_provider: Option<String>,
+    #[serde(rename = "plannerModel")]
+    planner_model: Option<String>,
+    #[serde(rename = "executorProvider")]
+    executor_provider: Option<String>,
+    #[serde(rename = "executorModel")]
+    executor_model: Option<String>,
+    #[serde(rename = "changedFiles", default)]
+    changed_files: Vec<String>,
+    #[serde(rename = "receiptPath")]
+    receipt_path: Option<String>,
+    error: Option<String>,
+    #[serde(default)]
+    commands: Vec<EngineCommandEvidence>,
+    #[serde(rename = "snapshotComplete", default)]
+    snapshot_complete: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EngineCommandEvidence {
+    pub(crate) command: String,
+    #[serde(rename = "exitCode")]
+    pub(crate) exit_code: Option<i32>,
+    pub(crate) output: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EngineCommandOutput {
+    pub(crate) run_id: String,
+    pub(crate) status: String,
+    pub(crate) summary: String,
+    pub(crate) planner_provider: String,
+    pub(crate) planner_model: String,
+    pub(crate) executor_provider: String,
+    pub(crate) executor_model: String,
+    pub(crate) changed_files: Vec<String>,
+    pub(crate) receipt_path: String,
+    pub(crate) commands: Vec<EngineCommandEvidence>,
+    pub(crate) snapshot_complete: bool,
+}
+
+pub(crate) async fn request_engine_command_at(
+    api_origin: &str,
+    body: EngineCommandRequestBody,
+    mut progress: impl FnMut(String, String),
+) -> Result<EngineCommandOutput, String> {
+    let base = format!(
+        "{}/api/phantomplay/engine/commands",
+        api_origin.trim_end_matches('/')
+    );
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let response = client.post(&base).header("x-phantom-engine-client", "desktop-v1")
+        .header("x-phantom-engine-request", format!("native-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()))
+        .json(&body).send().await.map_err(|error| format!("Could not submit to the local Engine: {error}. Check Connections; do not assume the job started."))?;
+    let accepted: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|error| format!("Unreadable Engine response: {error}"))?;
+    if accepted["ok"] != true {
+        return Err(accepted["error"]
+            .as_str()
+            .unwrap_or("Engine rejected the command.")
+            .to_string());
+    }
+    let run_id = accepted["runId"]
+        .as_str()
+        .ok_or("Engine did not return a run ID.")?
+        .to_string();
+    progress(run_id.clone(), "Worker accepted the command.".to_string());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3600);
+    let mut failures = 0;
+    let parsed: EngineCommandResponseBody = loop {
+        if std::time::Instant::now() >= deadline {
+            return Err(format!(
+                "Monitoring timed out for {run_id}; this does not mean the worker stopped. Check the project receipt before submitting another command."
+            ));
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let response = match client
+            .get(format!("{base}/{run_id}"))
+            .header("x-phantom-engine-client", "desktop-v1")
+            .send()
+            .await
+        {
+            Ok(response) => {
+                failures = 0;
+                response
+            }
+            Err(error) => {
+                failures += 1;
+                if failures >= 5 {
+                    return Err(format!(
+                        "Lost contact with run {run_id}: {error}. It may still be running. Inspect project receipts before retrying."
+                    ));
+                }
+                continue;
+            }
+        };
+        let state: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|error| format!("Unreadable status for {run_id}: {error}"))?;
+        if state["ok"] != true {
+            return Err(state["error"]
+                .as_str()
+                .unwrap_or("Run no longer tracked; inspect the project before retrying.")
+                .to_string());
+        }
+        progress(
+            run_id.clone(),
+            state["phase"].as_str().unwrap_or("Working…").to_string(),
+        );
+        if state["status"] == "finished" {
+            break serde_json::from_value(state["result"].clone())
+                .map_err(|error| format!("Unreadable receipt: {error}"))?;
+        }
+    };
+    if !parsed.ok {
+        return Err(parsed.error.unwrap_or_else(|| {
+            "Worker stopped without a result. Inspect the project.".to_string()
+        }));
+    }
+    Ok(EngineCommandOutput {
+        run_id,
+        status: parsed
+            .status
+            .unwrap_or_else(|| "review_required".to_string()),
+        summary: parsed
+            .summary
+            .unwrap_or_else(|| "Review changed files and command evidence.".to_string()),
+        planner_provider: parsed
+            .planner_provider
+            .unwrap_or_else(|| "unknown".to_string()),
+        planner_model: parsed
+            .planner_model
+            .unwrap_or_else(|| "default".to_string()),
+        executor_provider: parsed
+            .executor_provider
+            .unwrap_or_else(|| "codex".to_string()),
+        executor_model: parsed
+            .executor_model
+            .unwrap_or_else(|| "default".to_string()),
+        changed_files: parsed.changed_files,
+        receipt_path: parsed.receipt_path.unwrap_or_default(),
+        commands: parsed.commands,
+        snapshot_complete: parsed.snapshot_complete,
+    })
+}
+
+pub(crate) async fn cancel_engine_command_at(api_origin: &str, run_id: &str) -> Result<(), String> {
+    let response = reqwest::Client::new()
+        .post(format!(
+            "{}/api/phantomplay/engine/commands/{run_id}/cancel",
+            api_origin.trim_end_matches('/')
+        ))
+        .header("x-phantom-engine-client", "desktop-v1")
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+    if !response.status().is_success() {
+        return Err("Could not stop the run; inspect its status before retrying.".to_string());
+    }
+    Ok(())
+}
+
 async fn check_api_health_at(api_origin: &str) -> bool {
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
@@ -2059,11 +2334,13 @@ fn main() {
                 .unwrap()
         };
 
+    let offscreen = std::env::args().any(|arg| arg == "--offscreen-test");
     let window = dioxus::desktop::WindowBuilder::new()
         .with_title("PhantomPlay")
         .with_inner_size(dioxus::desktop::LogicalSize::new(1440.0, 900.0))
         .with_min_inner_size(dioxus::desktop::LogicalSize::new(1100.0, 700.0))
-        .with_maximized(true);
+        .with_visible(!offscreen)
+        .with_maximized(!offscreen);
     #[cfg(target_os = "windows")]
     let window = {
         use dioxus::desktop::tao::platform::windows::WindowBuilderExtWindows;
@@ -2405,6 +2682,18 @@ mod tests {
             override_dir
         );
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn installed_buildset_identity_is_the_public_ui_source_of_truth() {
+        let builds = parse_installed_game_builds(
+            r#"{"games":[{"id":"phantom-strike","public_title":"PhantomStrike","public_version":"1.4.0-blackridge","revision":"V38R7","executable":"PhantomStrike.exe"},{"id":"cubetown","public_title":"Shadowbearer: Dawn's Light","public_version":"1.2.0-dawns-light","revision":"V27R15","executable":"Cubetown.exe"}]}"#,
+        );
+        let strike = builds.get("phantom-strike").expect("strike build");
+        assert_eq!(strike.revision, "V38R7");
+        let shadow = builds.get("cubetown").expect("shadow build");
+        assert_eq!(shadow.public_title, "Shadowbearer: Dawn's Light");
+        assert_eq!(shadow.public_version, "1.2.0-dawns-light");
     }
 
     #[test]

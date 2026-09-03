@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-08-26",
+  "lastUpdated": "2026-09-03",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
@@ -2612,12 +2612,12 @@
         },
         {
           "file": "app/js/phantomplay.js",
-          "pattern": "id: \"cubetown\"[\\s\\S]{0,1800}title: \"Shadowbearer: Dawn's Return\"[\\s\\S]{0,1800}version: \"1.0.1-dawns-return\"",
+          "pattern": "id: \"cubetown\"[\\s\\S]{0,1800}title: \"Shadowbearer: Dawn's Light\"[\\s\\S]{0,1800}version: \"1.2.0-dawns-light · V28R6\"",
           "description": "The web catalog exposes the current public title and version through the stable native route."
         },
         {
           "file": "server/src/phantom-ai/phantomplay-flagship.ts",
-          "pattern": "id: \"cubetown\"[\\s\\S]{0,1800}title: \"Shadowbearer: Dawn's Return\"[\\s\\S]{0,1800}version: \"1.0.1-dawns-return\"",
+          "pattern": "id: \"cubetown\"[\\s\\S]{0,1800}title: \"Shadowbearer: Dawn's Light\"[\\s\\S]{0,1800}version: \"1.2.0-dawns-light · V28R6\"",
           "description": "The authenticated server catalog matches the promoted Shadowbearer identity."
         },
         {

@@ -28,6 +28,7 @@
     "test:phantomplay-discovery": "npm run test:phantomplay-discovery --workspace @phantomforce/server",
     "test:phantomplay-game-identities": "npm run test:phantomplay-game-identities --workspace @phantomforce/server",
     "test:phantomplay-desktop-shell": "node scripts/test-phantomplay-desktop-shell.mjs",
+    "test:phantomplay-engine": "npm run test:phantomplay-engine-agent --workspace @phantomforce/server",
     "test:phantomplay-mods": "node scripts/test-phantomplay-desktop-mods.mjs",
     "test:phantomplay-native-mods": "node scripts/test-phantomplay-native-mods.mjs",
     "test:competitor-intelligence": "node scripts/test-competitor-intelligence.mjs && npm run test:competitor-intelligence --workspace @phantomforce/server",

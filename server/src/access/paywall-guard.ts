@@ -41,6 +41,8 @@ export function requiresWrite(method: string, url: string): boolean {
   if (
     path === "/api/phantomplay/ai-edit"
     || path === "/api/phantomplay/connections/openrouter"
+    || path === "/api/phantomplay/engine/commands"
+    || /^\/api\/phantomplay\/engine\/commands\/pe-[a-f0-9-]+\/cancel$/u.test(path)
   ) return false;
 
   return true; // fail closed: everything else that mutates needs write access
