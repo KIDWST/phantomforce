@@ -1,8 +1,31 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-09-03",
+  "lastUpdated": "2026-09-04",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
+    {
+      "id": "phantomplay-migrated-live-catalog",
+      "status": "active",
+      "title": "Installed PhantomPlay discovers the complete G drive deployment",
+      "ownerDecision": "Codex projects moved to G. PhantomPlay must not silently reopen the incomplete C deployment or rely on a test environment override to see current games.",
+      "requiredPatterns": [
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/main.rs",
+          "pattern": "fn resolve_live_root",
+          "description": "Catalog resolution validates a complete deployment and retains explicit overrides."
+        },
+        {
+          "file": "packages/phantomplay-dioxus-shell/src/main.rs",
+          "pattern": "fn migrated_live_root_wins_over_legacy_and_empty_overrides",
+          "description": "Behavioral coverage protects G preference, legacy fallback and empty overrides."
+        },
+        {
+          "file": "scripts/test-phantom-engine-offscreen.cjs",
+          "pattern": "Catalog verification must not edit real projects",
+          "description": "The hidden installed-app catalog check cannot run a worker on player projects."
+        }
+      ]
+    },
     {
       "id": "phantom-workforce-authoritative-heartbeat",
       "status": "active",

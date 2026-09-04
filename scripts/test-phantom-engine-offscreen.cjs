@@ -7,6 +7,8 @@ const { pathToFileURL } = require('node:url');
 (async () => {
   const { chromium } = require(process.env.PHANTOM_PLAYWRIGHT || 'C:/Users/jorda/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
   const repo = path.resolve(__dirname, '..');
+  const realCatalog = process.argv.includes('--catalog');
+  assert(!(realCatalog && process.argv.includes('--live')), 'Catalog verification must not edit real projects');
   const base = process.env.PHANTOM_ENGINE_TEST_OUTPUT || 'G:/Codex/artifacts/phantom-engine/2026-09-03';
   await fs.mkdir(base, { recursive: true });
   const proof = await fs.mkdtemp(path.join(base, 'native-proof-'));
@@ -29,7 +31,8 @@ const { pathToFileURL } = require('node:url');
   const port = 19543;
   const child = spawn(exe, ['--offscreen-test'], { windowsHide: true, stdio: 'ignore', env: { ...process.env,
     PHANTOMPLAY_DATA_ROOT: data, PHANTOMPLAY_WEBVIEW_DATA_DIR: path.join(proof, 'webview'),
-    PHANTOMPLAY_LIVE_ROOT: path.join(proof, 'workspace'), PHANTOMPLAY_DEVELOPMENT_ROOT: path.join(proof, 'workspace'),
+    PHANTOMPLAY_LIVE_ROOT: realCatalog ? '' : path.join(proof, 'workspace'),
+    PHANTOMPLAY_DEVELOPMENT_ROOT: realCatalog ? repo : path.join(proof, 'workspace'),
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=' + port,
   } });
   let browser;
@@ -50,8 +53,14 @@ const { pathToFileURL } = require('node:url');
     assert(page);
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.locator('.pe-engine-shell').waitFor({ timeout: 30_000 });
+    if (realCatalog) {
+      assert(await page.locator('.project-row').count() >= 20, 'Default installed catalog is missing');
+      const catalog = await page.locator('.project-list').innerText();
+      assert.match(catalog, /Shadowbearer/i);
+      assert.match(catalog, /PhantomStrike/i);
+    }
     await page.locator('.project-row').first().click();
-    await page.locator('.pe-active-project strong').filter({ hasText: /Fixture|operator/i }).waitFor();
+    if (!realCatalog) await page.locator('.pe-active-project strong').filter({ hasText: /Fixture|operator/i }).waitFor();
     await page.locator('.pe-mission-composer textarea').fill('Fix game.js so damage subtracts from health and clamps to zero. Keep game.test.js unchanged. Run node --test and report the result.');
     await page.getByRole('button', { name: 'BUILD IT', exact: true }).waitFor();
     await page.waitForFunction(() => !document.querySelector('.pe-run-agent').disabled);
@@ -75,7 +84,7 @@ const { pathToFileURL } = require('node:url');
     await page.getByText('PHANTOMPLAY CONTROL CENTER', { exact: true }).waitFor();
     await page.screenshot({ path: path.join(proof, 'engine-connections.png') });
     assert.equal(errors.length, 0, errors.join('\n'));
-    await fs.writeFile(path.join(proof, 'verification.json'), JSON.stringify({ exe, api, offscreen: true, liveExecution: process.argv.includes('--live'), project, nav, size, errors }, null, 2));
+    await fs.writeFile(path.join(proof, 'verification.json'), JSON.stringify({ exe, api, offscreen: true, realCatalog, liveExecution: process.argv.includes('--live'), project: realCatalog ? null : project, nav, size, errors }, null, 2));
     console.log('PASS: native hidden WebView UI, corner navigation, project selection, command composer, Connections' + (process.argv.includes('--live') ? ', real execution and independently passing tests' : '') + '. Evidence: ' + proof);
   } finally {
     if (browser) await browser.close();

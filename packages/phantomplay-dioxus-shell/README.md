@@ -30,6 +30,9 @@ The studio uses per-project runtime routing:
 - **Focus** hides the side rails around an embedded browser preview.
 
 The project catalog is read directly from `app/games` plus registered flagship projects.
+Without an explicit `PHANTOMPLAY_LIVE_ROOT`, the desktop prefers the complete deployment at
+`G:\Codex\Documents\Codex\deployments\phantomforce-live`; the legacy C: directory is used only if
+it still contains the game catalog and backend source. An empty override does not disable discovery.
 Games and shared files are served from disk through the restricted `phantomplay-game://` protocol,
 and selected-project changes trigger automatic reload.
 

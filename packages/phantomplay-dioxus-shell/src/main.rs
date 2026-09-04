@@ -98,11 +98,27 @@ fn phantomplay_api_origin() -> String {
 }
 
 fn phantomplay_live_root() -> PathBuf {
-    std::env::var("PHANTOMPLAY_LIVE_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(r"C:\Users\jorda\Documents\Codex\deployments\phantomforce-live")
-        })
+    resolve_live_root(
+        std::env::var_os("PHANTOMPLAY_LIVE_ROOT").map(PathBuf::from),
+        &[
+            PathBuf::from(r"G:\Codex\Documents\Codex\deployments\phantomforce-live"),
+            PathBuf::from(r"C:\Users\jorda\Documents\Codex\deployments\phantomforce-live"),
+        ],
+    )
+}
+
+fn resolve_live_root(explicit: Option<PathBuf>, candidates: &[PathBuf]) -> PathBuf {
+    if let Some(root) = explicit.filter(|root| !root.as_os_str().is_empty()) {
+        return root;
+    }
+    // A leftover directory from migration is not a usable deployment. Prefer
+    // the complete G: installation, while retaining an intact legacy fallback.
+    candidates
+        .iter()
+        .find(|root| root.join("app/games").is_dir() && root.join("server/src/index.ts").is_file())
+        .or_else(|| candidates.first())
+        .cloned()
+        .unwrap_or_default()
 }
 
 fn games_dir() -> PathBuf {
@@ -2377,6 +2393,29 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrated_live_root_wins_over_legacy_and_empty_overrides() {
+        let temp = tempfile::tempdir().unwrap();
+        let migrated = temp.path().join("migrated");
+        let legacy = temp.path().join("legacy");
+        for root in [&migrated, &legacy] {
+            fs::create_dir_all(root.join("app/games")).unwrap();
+            fs::create_dir_all(root.join("server/src")).unwrap();
+            fs::write(root.join("server/src/index.ts"), "export {};").unwrap();
+        }
+        let candidates = [migrated.clone(), legacy.clone()];
+        assert_eq!(resolve_live_root(None, &candidates), migrated);
+        assert_eq!(
+            resolve_live_root(Some(PathBuf::new()), &candidates),
+            migrated
+        );
+        assert_eq!(resolve_live_root(Some(legacy.clone()), &candidates), legacy);
+        fs::remove_file(migrated.join("server/src/index.ts")).unwrap();
+        assert_eq!(resolve_live_root(None, &candidates), legacy);
+        fs::remove_file(legacy.join("server/src/index.ts")).unwrap();
+        assert_eq!(resolve_live_root(None, &candidates), migrated);
+    }
 
     #[test]
     fn discovers_real_games_from_the_live_checkout() {

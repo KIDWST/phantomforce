@@ -18,13 +18,16 @@
 ## Source of truth
 - The canonical repo is **`github.com/KIDWST/phantomforce`**, branch **`main`**.
 - The canonical Windows editing checkout is
-  `C:\Users\jorda\Documents\Codex\worktrees\phantomforce-current`.
+  `G:\Codex\Documents\Codex\worktrees\phantomforce-current` (migrated at the owner's request).
   The machine serving **`admin.phantomforce.online`**, **`app.phantomforce.online`**,
   and **`127.0.0.1:5177`** uses the clean deployment checkout at
-  `C:\Users\jorda\Documents\Codex\deployments\phantomforce-live`. The scheduled
+  `G:\Codex\Documents\Codex\deployments\phantomforce-live`. The scheduled
   sync fast-forwards that checkout to `origin/main`; do not serve an arbitrary
   feature worktree. Before declaring a change live, verify `/health` reports the
   deployment root and its commit matches `origin/main`.
+- The C: deployment is an incomplete migration remnant, not an alternate live
+  source. Do not restore/reset it or point launchers back to it. The native app
+  must discover the complete G: deployment without test-only path overrides.
 - The deployment checkout is **serve/sync only**. Never run Unreal Editor,
   cook/package jobs, asset generators, recovery pipelines, or feature editing
   from `...\Codex\deployments\phantomforce-live`. Use a dedicated development
@@ -44,7 +47,7 @@
 - Before telling the owner "this is live" or before debugging a stale-looking admin
   UI, run the source doctor from the dedicated deployment checkout:
   ```powershell
-  cd C:\Users\jorda\Documents\Codex\deployments\phantomforce-live
+  cd G:\Codex\Documents\Codex\deployments\phantomforce-live
   powershell -NoProfile -ExecutionPolicy Bypass -File ops\admin-live\Test-LiveAdminSource.ps1
   ```
   It checks branch, `origin/main`, sync manifest, live build id, local service
@@ -70,6 +73,18 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **AI-first Phantom Engine and G: migration repair (2026-09-04)** — core
+  commit `f9f24db5` implements a top-right Play/Engine switch, plain-language
+  commands, scoped background Codex execution, existing provider planning,
+  cancellation, and durable evidence of real edits/commands. The installed
+  0.3.10 app completed an isolated real edit against the G: live backend and
+  independently passed its test, with hidden native screenshots inspected.
+  0.3.11 adds migrated catalog discovery and a read-only real-catalog smoke.
+  Launcher backups and proof are under `G:\Codex\rollbacks\phantomplay` and
+  `G:\Codex\artifacts\phantom-engine`. The strict source doctor still reports
+  missing login-task coverage: Windows denied modifying the existing task;
+  its helper path and the existing five-minute watchdog were repaired. Do not
+  claim that startup gate passed or that this is a complete Unreal replacement.
 - **PhantomBot Hermes live execution stream (2026-08-26)** — browser build
   `phantom-live-20260822-196`. Ordinary signed-in PhantomBot conversation now
   consumes Hermes' native session event stream instead of waiting on one
