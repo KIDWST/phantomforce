@@ -1868,6 +1868,7 @@ fn switch_project_template(
 
 #[component]
 pub(crate) fn PhantomEngineWorkspace(
+    project_selected: bool,
     project_id: String,
     project_title: String,
     project_root: String,
@@ -1882,6 +1883,8 @@ pub(crate) fn PhantomEngineWorkspace(
     api_online: Option<bool>,
     has_unsaved_changes: bool,
     on_open_settings: EventHandler<()>,
+    on_choose_project: EventHandler<()>,
+    on_add_project: EventHandler<()>,
 ) -> Element {
     let mut command = use_signal(String::new);
     let mut busy = use_signal(|| false);
@@ -1922,9 +1925,9 @@ pub(crate) fn PhantomEngineWorkspace(
                     span { class: "pe-kernel-badge", "OPERATOR 0.2" }
                 }
                 div { class: "pe-active-project",
-                    span { "ACTIVE PROJECT" }
+                    span { if project_selected { "EDITING GAME" } else { "NO GAME SELECTED" } }
                     strong { "{project_title}" }
-                    small { "{project_engine}" }
+                    if project_selected { small { "{project_engine}" } }
                 }
                 div { class: "pe-operator-actions",
                     button {
@@ -1940,12 +1943,54 @@ pub(crate) fn PhantomEngineWorkspace(
                 }
             }
 
-            if advanced() {
+            if !project_selected {
+                main { class: "pe-project-gate",
+                    section {
+                        span { class: "pe-gate-kicker", "START HERE" }
+                        h1 { "Choose the game Phantom should edit." }
+                        p { "No game is selected. Pick an existing game from the Project Library, or add a new game folder. Phantom Engine will not change anything until the active game is clear." }
+                        div { class: "pe-gate-actions",
+                            button {
+                                class: "pe-run-agent",
+                                onclick: move |_| on_choose_project.call(()),
+                                "SELECT A GAME"
+                            }
+                            button {
+                                class: "pe-settings-link",
+                                onclick: move |_| on_add_project.call(()),
+                                "CREATE / IMPORT GAME"
+                            }
+                        }
+                        small { "After selection, the exact game name, engine, and development folder will stay visible above every command." }
+                    }
+                }
+            } else if advanced() {
                 div { class: "pe-manual-host",
                     AdvancedEngineWorkbench {}
                 }
             } else {
                 main { class: "pe-operator-home",
+                    section { class: "pe-project-context",
+                        div {
+                            span { "PHANTOM WILL EDIT" }
+                            strong { "{project_title}" }
+                            small { "{project_engine} · {root_label}" }
+                        }
+                        nav { aria_label: "Active game actions",
+                            button {
+                                class: "pe-settings-link",
+                                disabled: busy(),
+                                onclick: move |_| on_choose_project.call(()),
+                                "CHANGE GAME"
+                            }
+                            button {
+                                class: "pe-settings-link",
+                                disabled: busy(),
+                                onclick: move |_| on_add_project.call(()),
+                                "ADD GAME"
+                            }
+                        }
+                    }
                     section { class: "pe-operator-hero",
                         div { class: "pe-eyebrow",
                             span { class: if api_online == Some(false) { "pe-health-dot is-offline" } else { "pe-health-dot" } }
@@ -2817,11 +2862,35 @@ const PHANTOM_ENGINE_STYLE: &str = r#"
     }
     .pe-settings-link:hover, .pe-advanced-toggle:hover, .pe-advanced-toggle.is-active { border-color: rgba(82, 237, 169, .42); color: #61efac; }
     .pe-manual-host { min-height: 0; overflow: hidden; }
+    .pe-project-gate {
+        display: grid; place-items: center; min-height: 0; overflow: auto; padding: 28px;
+        background: radial-gradient(circle at 50% 42%, rgba(74,232,165,.08), transparent 34%);
+    }
+    .pe-project-gate > section {
+        width: min(700px, 100%); padding: clamp(28px, 5vw, 58px); border: 1px solid #2c4139; border-radius: 16px;
+        background: rgba(8,15,18,.94); box-shadow: 0 30px 90px rgba(0,0,0,.38); text-align: center;
+    }
+    .pe-gate-kicker { color: #5ce9aa; font: 800 9px "Cascadia Code", monospace; letter-spacing: .16em; }
+    .pe-project-gate h1 { margin: 15px 0 10px; color: #f2faf6; font: 720 clamp(30px, 4vw, 48px)/1.02 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -.04em; }
+    .pe-project-gate p { max-width: 590px; margin: 0 auto; color: #8b9b9f; font-size: 14px; line-height: 1.65; }
+    .pe-project-gate small { display: block; margin-top: 18px; color: #60716e; font: 9px/1.5 "Cascadia Code", monospace; }
+    .pe-gate-actions { display: flex; justify-content: center; gap: 9px; margin-top: 25px; }
+    .pe-gate-actions .pe-run-agent, .pe-gate-actions .pe-settings-link { min-height: 42px; padding: 0 18px; }
     .pe-operator-home {
         display: flex; flex-direction: column;
         min-height: 0; overflow: auto; padding: clamp(22px, 3.5vw, 54px);
         scrollbar-color: #294038 #080d10;
     }
+    .pe-project-context {
+        display: flex; align-items: center; justify-content: space-between; gap: 18px; width: min(1060px, 100%);
+        margin: 0 auto 24px; padding: 13px 14px 13px 17px; border: 1px solid rgba(88,235,170,.34); border-radius: 9px;
+        background: linear-gradient(90deg, rgba(49,191,130,.12), rgba(8,15,18,.82)); box-shadow: inset 3px 0 #59e8a8;
+    }
+    .pe-project-context > div { display: grid; min-width: 0; gap: 3px; }
+    .pe-project-context nav { display: flex; flex-shrink: 0; gap: 7px; }
+    .pe-project-context span { color: #5be8a8; font: 800 8px "Cascadia Code", monospace; letter-spacing: .12em; }
+    .pe-project-context strong { overflow: hidden; color: #f0faf5; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+    .pe-project-context small { overflow: hidden; color: #71847d; font: 8px "Cascadia Code", monospace; text-overflow: ellipsis; white-space: nowrap; }
     .pe-operator-hero { width: min(1060px, 100%); margin: 0 auto; }
     .pe-eyebrow { display: flex; align-items: center; gap: 8px; color: #6f8179; font: 700 9px "Cascadia Code", monospace; letter-spacing: .09em; }
     .pe-eyebrow i { color: #31423b; font-style: normal; }
@@ -2901,6 +2970,9 @@ const PHANTOM_ENGINE_STYLE: &str = r#"
         .pe-auto-pipeline { display: none; }
         .pe-run-agent { width: 100%; }
         .pe-changed-files { grid-template-columns: 1fr; }
+        .pe-gate-actions, .pe-project-context { align-items: stretch; flex-direction: column; }
+        .pe-project-context nav { width: 100%; }
+        .pe-project-context .pe-settings-link { flex: 1; }
     }
     .phantom-engine {
         display: grid;

@@ -53,6 +53,10 @@ const { pathToFileURL } = require('node:url');
     assert(page);
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.locator('.pe-engine-shell').waitFor({ timeout: 30_000 });
+    await page.getByText('Choose the game Phantom should edit.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'SELECT A GAME', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'CREATE / IMPORT GAME', exact: true }).waitFor();
+    await page.screenshot({ path: path.join(proof, 'engine-select-game.png') });
     if (realCatalog) {
       assert(await page.locator('.project-row').count() >= 20, 'Default installed catalog is missing');
       const catalog = await page.locator('.project-list').innerText();
@@ -60,6 +64,7 @@ const { pathToFileURL } = require('node:url');
       assert.match(catalog, /PhantomStrike/i);
     }
     await page.locator('.project-row').first().click();
+    await page.getByText('PHANTOM WILL EDIT', { exact: true }).waitFor();
     if (!realCatalog) await page.locator('.pe-active-project strong').filter({ hasText: /Fixture|operator/i }).waitFor();
     await page.locator('.pe-mission-composer textarea').fill('Fix game.js so damage subtracts from health and clamps to zero. Keep game.test.js unchanged. Run node --test and report the result.');
     await page.getByRole('button', { name: 'BUILD IT', exact: true }).waitFor();

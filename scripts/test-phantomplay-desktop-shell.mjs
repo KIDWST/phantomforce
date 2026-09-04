@@ -14,6 +14,7 @@ const shellSourceRoot = path.join(repoRoot, "packages", "phantomplay-dioxus-shel
 const shellRoot = path.dirname(manifest);
 const mainSource = fs.readFileSync(path.join(shellSourceRoot, "main.rs"), "utf8");
 const studioSource = fs.readFileSync(path.join(shellSourceRoot, "studio.rs"), "utf8");
+const engineSource = fs.readFileSync(path.join(shellSourceRoot, "phantom_engine.rs"), "utf8");
 const historySource = fs.readFileSync(path.join(shellSourceRoot, "project_history.rs"), "utf8");
 const buildSource = fs.readFileSync(path.join(shellRoot, "build.rs"), "utf8");
 const bundleConfig = fs.readFileSync(path.join(shellRoot, "Dioxus.toml"), "utf8");
@@ -62,6 +63,11 @@ for (const [label, source, contract] of [
   ["shared public project title helper", mainSource, "fn public_game_title(game: &GameEntry) -> &str"],
   ["project rail uses public titles", studioSource, '"{public_game_title(&game)}"'],
   ["workspace chrome uses public titles", studioSource, '"{public_game_title(game)}"'],
+  ["Engine blocks work without a selected game", engineSource, 'if !project_selected'],
+  ["Engine explains the empty project state", engineSource, '"Choose the game Phantom should edit."'],
+  ["Engine keeps the edit target prominent", engineSource, '"PHANTOM WILL EDIT"'],
+  ["Engine offers direct game selection", engineSource, '"SELECT A GAME"'],
+  ["Engine offers game creation or import", engineSource, '"CREATE / IMPORT GAME"'],
   ["desktop diagnostic uses package version", studioSource, 'env!("CARGO_PKG_VERSION")'],
 ]) {
   if (!source.includes(contract)) {
@@ -71,6 +77,10 @@ for (const [label, source, contract] of [
 
 if (studioSource.includes("disabled: playing_entry().is_none()")) {
   throw new Error("PhantomPlay must not disable Play, Split, or reload merely because a native project has no embedded web entry.");
+}
+
+if (studioSource.includes('.position(|game| game.id == "vespergate")')) {
+  throw new Error("PhantomPlay must not silently choose a game before the user selects the edit target.");
 }
 
 if (!studioSource.includes('disabled: ai_busy(),')) {

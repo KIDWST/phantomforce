@@ -981,51 +981,6 @@ pub(crate) fn Studio() -> Element {
         });
     });
 
-    use_effect(move || {
-        if selected_game().is_some() {
-            return;
-        }
-        let initial_index = games()
-            .iter()
-            .position(|game| game.id == "vespergate")
-            .or((!games().is_empty()).then_some(0));
-        let Some(index) = initial_index else {
-            status.set(format!("No games found in {}", games_dir().display()));
-            return;
-        };
-        let Some(game) = games().get(index).cloned() else {
-            return;
-        };
-        let project_files = list_files(&game);
-        let first_file = preferred_file_index(&project_files);
-        selected_game.set(Some(index));
-        files.set(project_files);
-        playing_entry.set(
-            game_entry_path(&game)
-                .as_ref()
-                .map(|_| game_entry_name(&game)),
-        );
-        mods_game_id.set(game.id.clone());
-        mods_list.set(read_available_mods(&game.id));
-        mods_enabled.set(read_enabled_mods(&game.id));
-        if let Some(file_index) = first_file {
-            load_project_file(
-                file_index,
-                files,
-                selected_file,
-                editor_content,
-                dirty,
-                status,
-            );
-        }
-        let title = public_game_title(&game);
-        status.set(if game_entry_path(&game).is_some() {
-            format!("Playing {title} inside PhantomPlay. Auto reload is active.")
-        } else {
-            format!("{title} is a native-only source project. Open Code to edit; no generated web preview was created.")
-        });
-    });
-
     let mut select_project = move |index: usize| {
         let Some(game) = games().get(index).cloned() else {
             return;
@@ -1895,6 +1850,7 @@ pub(crate) fn Studio() -> Element {
 
                     if workspace_view() == WorkspaceView::Engine {
                         PhantomEngineWorkspace {
+                            project_selected: project.is_some() && !engine_project_root.is_empty(),
                             project_id: engine_project_id,
                             project_title: engine_project_title,
                             project_root: engine_project_root,
@@ -1911,6 +1867,24 @@ pub(crate) fn Studio() -> Element {
                             on_open_settings: move |_| {
                                 settings_section.set(SettingsSection::Connections);
                                 settings_open.set(true);
+                            },
+                            on_choose_project: move |_| {
+                                focus_mode.set(false);
+                                project_rail_open.set(true);
+                                store_query.set(String::new());
+                                status.set("Select the game Phantom should edit from the Project Library.".to_string());
+                            },
+                            on_add_project: move |_| {
+                                focus_mode.set(false);
+                                project_rail_open.set(true);
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_title("Create or import a PhantomPlay game")
+                                    .pick_folder()
+                                {
+                                    import_paths(vec![path]);
+                                } else {
+                                    status.set("Choose a game folder, or drop a folder, zip, or .html file into Import game.".to_string());
+                                }
                             },
                         }
                     } else if workspace_view() == WorkspaceView::Play {

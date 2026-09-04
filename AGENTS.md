@@ -73,6 +73,12 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Explicit Phantom Engine edit target (2026-09-04)** — the Engine no longer
+  silently chooses a catalog item. It opens behind a blocking select/create gate,
+  keeps the command composer hidden until a game is chosen, and then pins the
+  selected game, runtime, and development folder above every command with visible
+  Change Game/Add Game actions. Native hidden-WebView proof and catalog coverage
+  live under `G:\\Codex\\artifacts\\phantom-engine\\2026-09-04`.
 - **AI-first Phantom Engine and G: migration repair (2026-09-04)** — core
   commit `f9f24db5` implements a top-right Play/Engine switch, plain-language
   commands, scoped background Codex execution, existing provider planning,
