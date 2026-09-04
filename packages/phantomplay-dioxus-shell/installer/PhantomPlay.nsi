@@ -1,6 +1,7 @@
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 !include "x64.nsh"
+!include "LogicLib.nsh"
 
 Name "{{product_name}}"
 OutFile "{{output_path}}"
@@ -104,7 +105,28 @@ Section "Install"
         "EstimatedSize" "$0"
 
     {{#if install_webview}}
+    ; Microsoft documents the 32-bit HKLM registry view and HKCU pv values
+    ; for Evergreen runtime detection. Never relaunch setup on every update.
+    SetRegView 32
+    ReadRegStr $R0 HKLM "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+    ${If} $R0 != ""
+    ${AndIf} $R0 != "0.0.0.0"
+        Goto WebViewReady
+    ${EndIf}
+    ReadRegStr $R0 HKCU "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+    ${If} $R0 != ""
+    ${AndIf} $R0 != "0.0.0.0"
+        Goto WebViewReady
+    ${EndIf}
+    ; Dioxus.toml explicitly requests /silent /install for missing runtimes.
     {{webview_install_code}}
+    ${If} $0 != 0
+    ${AndIf} $0 != 3010
+        DetailPrint "WebView2 runtime installation failed (exit $0)."
+        SetErrorLevel $0
+        Abort
+    ${EndIf}
+    WebViewReady:
     {{/if}}
 SectionEnd
 

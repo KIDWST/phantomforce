@@ -15,6 +15,7 @@ original_file_name = "PhantomPlay.exe"
 
 [bundle.windows]
 icon_path = "assets/phantomplay.ico"
+webview_install_mode = { OfflineInstaller = { silent = true } }
 
 [bundle.windows.nsis]
 template = "installer/PhantomPlay.nsi"
