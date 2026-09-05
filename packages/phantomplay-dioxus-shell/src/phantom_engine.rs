@@ -1946,9 +1946,9 @@ pub(crate) fn PhantomEngineWorkspace(
             if !project_selected {
                 main { class: "pe-project-gate",
                     section {
-                        span { class: "pe-gate-kicker", "START HERE" }
+                        span { class: "pe-gate-kicker", "NO EDIT TARGET · START HERE" }
                         h1 { "Choose the game Phantom should edit." }
-                        p { "No game is selected. Pick an existing game from the Project Library, or add a new game folder. Phantom Engine will not change anything until the active game is clear." }
+                        p { "Select an existing game or create a new one. Phantom Engine will not expose its command composer or change any files until the edit target is explicit." }
                         div { class: "pe-gate-actions",
                             button {
                                 class: "pe-run-agent",
@@ -1958,10 +1958,10 @@ pub(crate) fn PhantomEngineWorkspace(
                             button {
                                 class: "pe-settings-link",
                                 onclick: move |_| on_add_project.call(()),
-                                "CREATE / IMPORT GAME"
+                                "CREATE OR IMPORT A GAME"
                             }
                         }
-                        small { "After selection, the exact game name, engine, and development folder will stay visible above every command." }
+                        small { "Safe by design: the exact game name, engine, and development folder stay visible above every command." }
                     }
                 }
             } else if advanced() {

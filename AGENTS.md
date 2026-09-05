@@ -77,7 +77,9 @@
   silently chooses a catalog item. It opens behind a blocking select/create gate,
   keeps the command composer hidden until a game is chosen, and then pins the
   selected game, runtime, and development folder above every command with visible
-  Change Game/Add Game actions. Native hidden-WebView proof and catalog coverage
+  Change Game/Add Game actions. Change Game clears the former edit target before
+  returning to selection, preventing accidental commands against the last game.
+  Native hidden-WebView proof and catalog coverage
   live under `G:\\Codex\\artifacts\\phantom-engine\\2026-09-04`.
 - **AI-first Phantom Engine and G: migration repair (2026-09-04)** — core
   commit `f9f24db5` implements a top-right Play/Engine switch, plain-language

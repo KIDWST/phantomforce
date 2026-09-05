@@ -67,7 +67,7 @@ for (const [label, source, contract] of [
   ["Engine explains the empty project state", engineSource, '"Choose the game Phantom should edit."'],
   ["Engine keeps the edit target prominent", engineSource, '"PHANTOM WILL EDIT"'],
   ["Engine offers direct game selection", engineSource, '"SELECT A GAME"'],
-  ["Engine offers game creation or import", engineSource, '"CREATE / IMPORT GAME"'],
+  ["Engine offers game creation or import", engineSource, '"CREATE OR IMPORT A GAME"'],
   ["desktop diagnostic uses package version", studioSource, 'env!("CARGO_PKG_VERSION")'],
 ]) {
   if (!source.includes(contract)) {

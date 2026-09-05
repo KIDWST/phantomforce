@@ -55,7 +55,7 @@ const { pathToFileURL } = require('node:url');
     await page.locator('.pe-engine-shell').waitFor({ timeout: 30_000 });
     await page.getByText('Choose the game Phantom should edit.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'SELECT A GAME', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'CREATE / IMPORT GAME', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'CREATE OR IMPORT A GAME', exact: true }).waitFor();
     await page.screenshot({ path: path.join(proof, 'engine-select-game.png') });
     if (realCatalog) {
       assert(await page.locator('.project-row').count() >= 20, 'Default installed catalog is missing');
@@ -85,6 +85,9 @@ const { pathToFileURL } = require('node:url');
       execFileSync(process.execPath, ['--test', 'game.test.js'], { cwd: project, stdio: 'pipe', windowsHide: true });
       assert.match(await page.locator('.pe-run-receipt').innerText(), /game.js/);
     }
+    await page.getByRole('button', { name: 'CHANGE GAME', exact: true }).click();
+    await page.getByText('Choose the game Phantom should edit.', { exact: true }).waitFor();
+    await page.screenshot({ path: path.join(proof, 'engine-change-game.png') });
     await page.getByRole('button', { name: 'CONNECTIONS', exact: true }).click();
     await page.getByText('PHANTOMPLAY CONTROL CENTER', { exact: true }).waitFor();
     await page.screenshot({ path: path.join(proof, 'engine-connections.png') });

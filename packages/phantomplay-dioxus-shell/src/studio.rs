@@ -1872,6 +1872,12 @@ pub(crate) fn Studio() -> Element {
                                 focus_mode.set(false);
                                 project_rail_open.set(true);
                                 store_query.set(String::new());
+                                selected_game.set(None);
+                                selected_file.set(None);
+                                files.set(Vec::new());
+                                editor_content.set(String::new());
+                                dirty.set(false);
+                                playing_entry.set(None);
                                 status.set("Select the game Phantom should edit from the Project Library.".to_string());
                             },
                             on_add_project: move |_| {
