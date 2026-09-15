@@ -7,6 +7,7 @@ const root = await mkdtemp(join(tmpdir(), "phantomforce-workforce-http-"));
 process.env.NODE_ENV = "development";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
+process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_WORK_GRAPH_DIR = root;

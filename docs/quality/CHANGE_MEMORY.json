@@ -1634,13 +1634,13 @@
     {
       "id": "primary-navigation-search-and-accounting-simplification",
       "status": "active",
-      "title": "Primary navigation follows owner jobs and Search stays non-AI",
-      "ownerDecision": "Primary navigation follows owner outcomes: Overview, Leads, Follow-up, Bookings, Clients, Quotes & Money, Media Lab, Sites & Stores, Approvals, Risk Watch, and Analytics. System and ecosystem destinations remain available but quieter. Global Search only finds pages, records, and explicit actions; conversational prompting belongs in PhantomBot. Offers and review requests remain Quotes & Money sections, never separate desk products.",
+      "title": "Primary navigation is media-first with one relationship workspace and Search stays non-AI",
+      "ownerDecision": "Primary navigation follows the media-growth business: Overview, ChicagoShots, Media Lab, Content Hub, Social Analytics, Relationships, Bookings, Quotes & Money, Sites & Stores, Approvals, and Risk Watch. Leads, active clients, and follow-ups live as three views inside Relationships and never compete as separate primary tabs. Analytics opens on social media and keeps business, commerce, revenue, competitor marketing, and game analytics in its source selector. System and ecosystem destinations remain available but quieter. Global Search only finds pages, records, and explicit actions; conversational prompting belongs in PhantomBot. Offers and review requests remain Quotes & Money sections, never separate desk products.",
       "requiredPatterns": [
         {
           "file": "app/index.html",
-          "pattern": "data-nav-id=\"dashboard\"[^>]*>Overview<[\\s\\S]*data-nav-id=\"leads\"[^>]*>Leads<[\\s\\S]*data-nav-id=\"followup\"[^>]*>Follow-up<[\\s\\S]*data-nav-id=\"bookings\"[^>]*>Bookings<[\\s\\S]*data-nav-id=\"clients\"[^>]*>Clients<[\\s\\S]*data-nav-id=\"money\"[^>]*>Quotes &amp; Money<[\\s\\S]*data-nav-id=\"media\"[^>]*>Media Lab<[\\s\\S]*data-nav-id=\"sites\"[^>]*>Sites &amp; Stores<[\\s\\S]*data-nav-id=\"approvals\"[^>]*>Approvals<[\\s\\S]*data-nav-id=\"riskwatch\"[^>]*>Risk Watch<[\\s\\S]*data-nav-id=\"analytics\"[^>]*>Analytics<",
-          "description": "The primary command rail directly exposes the owner jobs in audited priority order."
+          "pattern": "data-nav-id=\"dashboard\"[^>]*>Overview<[\\s\\S]*data-nav-id=\"chicagoshots\"[^>]*>ChicagoShots<[\\s\\S]*data-nav-id=\"media\"[^>]*>Media Lab<[\\s\\S]*data-nav-id=\"content\"[^>]*>Content Hub<[\\s\\S]*data-nav-id=\"analytics\"[^>]*>Social Analytics<[\\s\\S]*data-nav-id=\"leads\"[^>]*>Relationships<[\\s\\S]*data-nav-id=\"bookings\"[^>]*>Bookings<[\\s\\S]*data-nav-id=\"money\"[^>]*>Quotes &amp; Money<[\\s\\S]*data-nav-id=\"sites\"[^>]*>Sites &amp; Stores<[\\s\\S]*data-nav-id=\"approvals\"[^>]*>Approvals<[\\s\\S]*data-nav-id=\"riskwatch\"[^>]*>Risk Watch<",
+          "description": "The primary command rail directly exposes the media-first owner jobs in audited priority order."
         },
         {
           "file": "app/js/main.js",
@@ -1654,8 +1654,8 @@
         },
         {
           "file": "app/js/analytics-hub.js",
-          "pattern": "id: \"pulse\", label: \"Overview\"",
-          "description": "The Analytics landing domain is Overview, not Business."
+          "pattern": "id: \"social\", label: \"Social Media\"[\\s\\S]*id: \"pulse\", label: \"Business Overview\"[\\s\\S]*id: \"games\", label: \"Game Analytics\"",
+          "description": "Analytics is social-media-first while business and game analytics remain available in the selector."
         }
       ],
       "forbiddenPatterns": [
@@ -1671,8 +1671,13 @@
         },
         {
           "file": "app/js/analytics-hub.js",
-          "pattern": "id: \"pulse\", label: \"Business\"",
-          "description": "Analytics cannot regress to a Business label."
+          "pattern": "const DEFAULT_DOMAIN = \"pulse\"",
+          "description": "Analytics cannot regress to business-first loading."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "data-nav-id=\"(?:clients|followup)\"",
+          "description": "Clients and Follow-up cannot return as separate primary navigation tabs."
         }
       ]
     },

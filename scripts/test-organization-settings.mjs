@@ -9,18 +9,22 @@ const organization = read("app/js/organization.js");
 const settings = read("app/js/settings.js");
 const registry = read("server/src/customization/module-registry.ts");
 
-assert.match(main, /id: "leads",\s+label: "Leads & Clients",\s+icon: "users", ws: "leads"/u,
-  "Leads and active clients must share one visible relationship destination.");
+assert.match(main, /id: "leads",\s+label: "Relationships",\s+icon: "users", ws: "leads"/u,
+  "Leads, active clients, and follow-ups must share one visible relationship destination.");
 assert.doesNotMatch(main, /\{ id: "clients",[^\n]*ws: "clients"/u,
   "The navigation must not duplicate the CRM as a separate Clients tab.");
+assert.doesNotMatch(main, /\{ id: "followup",[^\n]*ws: "followup"/u,
+  "The navigation must not duplicate the CRM as a separate Follow-up tab.");
 assert.doesNotMatch(main, /id: "leads"[^\n]*navHidden/u,
   "The combined relationship workspace must not be hidden with the retired Client Setup surface.");
 assert.match(main, /leads: "CRM"/u,
   "Mobile navigation must give the combined relationship workspace a compact CRM label.");
 assert.match(main, /clients: "leads"/u,
   "Legacy Clients deep links must highlight the combined relationship workspace.");
-assert.match(workspaces, /function renderRelationships[\s\S]*data-relationship-tab="leads"[\s\S]*data-relationship-tab="clients"/u,
-  "The relationship workspace must provide Leads and Active Clients views inside one tab.");
+assert.match(main, /followup: "leads"/u,
+  "Legacy Follow-up deep links must highlight the combined relationship workspace.");
+assert.match(workspaces, /function renderRelationships[\s\S]*data-relationship-tab="leads"[\s\S]*data-relationship-tab="clients"[\s\S]*data-relationship-tab="followups"/u,
+  "The relationship workspace must provide Leads, Active Clients, and Follow-ups views inside one tab.");
 assert.match(workspaces, /function isActiveClient[\s\S]*lead\?\.status === "won"/u,
   "Won relationships must graduate into the Active Clients view.");
 assert.match(workspaces, /filter\(\(lead\) => lead\.ws === ws && !isActiveClient\(lead\)\)/u,

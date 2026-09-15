@@ -1,4 +1,4 @@
-import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260914-204";
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260914-205";
 
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,

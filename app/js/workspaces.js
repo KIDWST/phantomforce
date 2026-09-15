@@ -9,25 +9,25 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260914-204";
+} from "./store.js?v=phantom-live-20260914-205";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260914-204";
+} from "./orgs.js?v=phantom-live-20260914-205";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-204";
+} from "./proposalpipeline.js?v=phantom-live-20260914-205";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-204";
+} from "./approvalpipeline.js?v=phantom-live-20260914-205";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -35,9 +35,9 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-204";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-204";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-204";
+} from "./financeledger.js?v=phantom-live-20260914-205";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-205";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-205";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -949,23 +949,33 @@ function renderRelationships(el, rerender) {
   const records = store.state.leads.filter((lead) => lead.ws === ws);
   const activeClients = records.filter(isActiveClient);
   const leads = records.filter((lead) => !isActiveClient(lead));
+  const followUps = records.filter((lead) => ["new", "follow-up"].includes(lead.status));
   el.innerHTML = `
     <div class="accounting-tabs" role="tablist" aria-label="Relationship view">
       <button type="button" role="tab" data-relationship-tab="leads" class="${relationshipsUi.view === "leads" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "leads"}">Leads <b>${leads.length}</b></button>
       <button type="button" role="tab" data-relationship-tab="clients" class="${relationshipsUi.view === "clients" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "clients"}">Active Clients <b>${activeClients.length}</b></button>
+      <button type="button" role="tab" data-relationship-tab="followups" class="${relationshipsUi.view === "followups" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "followups"}">Follow-ups <b>${followUps.length}</b></button>
     </div>
     <div data-relationship-body></div>`;
   const body = el.querySelector("[data-relationship-body]");
   if (relationshipsUi.view === "clients") renderClients(body, repaint);
+  else if (relationshipsUi.view === "followups") renderFollowUp(body, repaint);
   else renderLeads(body, repaint);
   el.querySelectorAll("[data-relationship-tab]").forEach((button) => button.addEventListener("click", () => {
-    relationshipsUi.view = button.dataset.relationshipTab === "clients" ? "clients" : "leads";
+    relationshipsUi.view = ["leads", "clients", "followups"].includes(button.dataset.relationshipTab)
+      ? button.dataset.relationshipTab
+      : "leads";
     repaint();
   }));
 }
 
 function renderLegacyClientsRoute(el, rerender) {
   relationshipsUi.view = "clients";
+  renderRelationships(el, rerender);
+}
+
+function renderLegacyFollowUpRoute(el, rerender) {
+  relationshipsUi.view = "followups";
   renderRelationships(el, rerender);
 }
 
@@ -2383,7 +2393,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-204")
+      import("./brain.js?v=phantom-live-20260914-205")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -4177,10 +4187,10 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
-  leads: { title: "Leads & Clients", kicker: "Prospects and active relationships in one CRM", render: renderRelationships },
-  followup: { title: "Follow-up", kicker: "Deadline-first outreach desk", render: renderFollowUp },
+  leads: { title: "Relationships", kicker: "Leads, active clients, and follow-ups in one CRM", render: renderRelationships },
+  followup: { title: "Relationships", kicker: "Leads, active clients, and follow-ups in one CRM", render: renderLegacyFollowUpRoute },
   comms: { title: "Comms", kicker: "Permission-aware drafts and send readiness", render: renderComms },
-  clients: { title: "Leads & Clients", kicker: "Active client relationships", render: renderLegacyClientsRoute },
+  clients: { title: "Relationships", kicker: "Leads, active clients, and follow-ups in one CRM", render: renderLegacyClientsRoute },
   proposals: { title: "Offers", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Offers to review", kicker: "Review requests and proof", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },

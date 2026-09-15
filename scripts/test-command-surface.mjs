@@ -99,7 +99,7 @@ assert.match(main, /renderDashboardBrief\(\);/u, "Console render must refresh th
 // nothing.
 assert.doesNotMatch(main, /bindChatboxMobility/u, "Dead chatbox drag/hotkey subsystem must not come back once its target element is gone.");
 assert.match(main, /const bottomItems = items;/u, "The dedicated utility zone must remain the full navigation launcher while the main sidebar shows open tabs.");
-assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "leads", "followup", "approvals", "phantomai"\]/u, "Phone dock must keep the five audited owner-job destinations stable.");
+assert.match(main, /const MOBILE_DOCK_IDS = \["dashboard", "media", "content", "analytics", "leads"\]/u, "Phone dock must keep media, publishing, social analytics, and the unified CRM one tap away.");
 assert.doesNotMatch(main, /renderAssetCloud|\.\/assetcloud\.js|id:\s*"assets"/u, "Removed Asset Cloud must not blank the shell through stale imports or navigation.");
 assert.doesNotMatch(index, /data-nav-id="assets"/u, "Removed Asset Cloud must not remain in the command rail.");
 assert.doesNotMatch(flowMap, /ws:\s*"assets"/u, "Flow-map delivery must not route into the removed Asset Cloud workspace.");

@@ -29,8 +29,7 @@ const primaryJobs = [
   ["media", "Media Lab"],
   ["content", "Content Hub"],
   ["analytics", "Social Analytics"],
-  ["leads", "Leads &amp; Clients"],
-  ["followup", "Follow-up"],
+  ["leads", "Relationships"],
   ["bookings", "Bookings"],
   ["money", "Quotes &amp; Money"],
   ["sites", "Sites &amp; Stores"],
@@ -48,6 +47,7 @@ for (const [id, label] of primaryJobs) {
 }
 
 assert.doesNotMatch(primaryNav, /data-nav-id="(?:phantomplay|phantomstore|automation)"/u, "Ecosystem and system tools cannot displace daily owner jobs in the primary rail.");
+assert.doesNotMatch(primaryNav, /data-nav-id="(?:clients|followup)"/u, "Clients and Follow-up must live inside the single Relationships destination.");
 assert.match(main, /\{ id: "approvals",\s+label: "Approvals",[^\n]*ws: "approvals"/u, "Approvals must be a persistent destination.");
 assert.doesNotMatch(main, /\{ id: "approvals"[^\n]*dashboardWidget/u, "Approvals cannot be hidden as a dashboard-only widget.");
 assert.match(main, /\{ id: "riskwatch",\s+label: "Risk Watch",[^\n]*ws: "riskwatch"/u, "Risk Watch must be a persistent destination.");
@@ -55,7 +55,7 @@ assert.match(main, /crm: "leads"[\s\S]*protect: "riskwatch"/u, "Old CRM and Prot
 
 for (const [id, renderer] of [
   ["leads", "renderRelationships"],
-  ["followup", "renderFollowUp"],
+  ["followup", "renderLegacyFollowUpRoute"],
   ["comms", "renderComms"],
   ["bookings", "renderBookings"],
   ["clients", "renderLegacyClientsRoute"],
