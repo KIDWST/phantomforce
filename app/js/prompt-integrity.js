@@ -37,7 +37,7 @@ export function promptSizeError(value) {
 
 export async function buildPromptIntegrityEnvelope(
   value,
-  { messageId, conversationId, clientVersion = "phantom-live-20260914-207", createdAt = new Date().toISOString() },
+  { messageId, conversationId, clientVersion = "phantom-live-20260914-208", createdAt = new Date().toISOString() },
 ) {
   const sizeError = promptSizeError(value);
   if (sizeError) throw new Error(sizeError);

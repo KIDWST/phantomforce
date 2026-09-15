@@ -10,25 +10,25 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-207";
+} from "./store.js?v=phantom-live-20260914-208";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260914-207";
+} from "./orgs.js?v=phantom-live-20260914-208";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-207";
+} from "./proposalpipeline.js?v=phantom-live-20260914-208";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-207";
+} from "./approvalpipeline.js?v=phantom-live-20260914-208";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -36,9 +36,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-207";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-207";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-207";
+} from "./financeledger.js?v=phantom-live-20260914-208";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-208";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-208";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-208";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -48,17 +49,18 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all", brainOpen: false };
-const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", loadedOrg: "", loadingOrg: "" };
+const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", segment: "all", page: 1, loadedOrg: "", loadingOrg: "" };
 const crmSelection = createScopedSelection("");
 const proposalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
 const approvalUi = { loadedTenant: "", loadingTenant: "", runLoadedTenant: "", runLoadingTenant: "", notice: "", serverAudit: [], serverRuns: [] };
 const auditUi = { orgId: "", state: "idle", events: [], error: "", refreshedAt: "", query: "" };
 const financeUi = { loadedTenant: "", loadingTenant: "", notice: "", serverSummary: null };
-const operatorUi = { followQuery: "", followFilter: "action", clientId: "", auditQuery: "", notice: "" };
+const operatorUi = { followQuery: "", followFilter: "action", followPage: 1, clientId: "", auditQuery: "", notice: "" };
 const relationshipsUi = {
   view: "leads", scope: "", editorOpen: false, editingId: "", settingsOpen: false,
   busy: false, importBusy: false,
 };
+const crmEmailUi = { scope: "", state: "checking", provider: "", message: "", loading: false };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -534,11 +536,21 @@ function filteredCrmContacts() {
   const ws = leadWorkspaceId();
   let leads = store.state.leads.filter((lead) => lead.ws === ws && !isActiveClient(lead));
   if (leadsUi.status !== "all") leads = leads.filter((lead) => lead.status === leadsUi.status);
+  if (leadsUi.segment !== "all") leads = leads.filter((lead) => (lead.tags || []).some((tag) => String(tag).toLowerCase() === `lane:${leadsUi.segment}`));
   const q = leadsUi.query.trim().toLowerCase();
   if (q) {
     leads = leads.filter((lead) => `${lead.name} ${lead.company} ${lead.email || ""} ${lead.phone || ""} ${lead.website || ""} ${Object.values(lead.socials || {}).join(" ")} ${(lead.tags || []).join(" ")}`.toLowerCase().includes(q));
   }
   return leads;
+}
+
+function crmLane(lead) {
+  const tag = (lead?.tags || []).find((item) => /^lane:/i.test(String(item)));
+  return tag ? String(tag).split(":").slice(1).join(":") : "general";
+}
+
+function crmLaneLabel(lead) {
+  return crmLane(lead).replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function isActiveClient(lead) {
@@ -553,14 +565,11 @@ function crmContactCard(l) {
     ${canEditRelationships() ? `<button class="record-x" data-act="remove" data-id="${esc(l.id)}" aria-label="Remove contact">×</button>` : ""}
     <div class="crm-avatar">${crmAvatar(l)}</div>
     <div class="crm-main">
-      ${wsTag(l.ws)}
-      <h4>${esc(l.name || l.company)}</h4>
-      <p>${esc(l.company || "Independent contact")} · ${esc(statusLabel(l.status || "new"))}</p>
-      <div class="crm-tags">${l.fitScore ? `<span>Fit ${esc(l.fitScore)}%</span>` : ""}${(l.tags || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>
-      <p class="crm-next">${esc(l.next || "No next step set")}</p>
-      <div class="crm-socials">${leadSocialLinks(l) || "<span>No socials yet</span>"}</div>
+      <div class="crm-row-title">${wsTag(l.ws)}<h4>${esc(l.name || l.company)}</h4><span class="crm-row-stage">${esc(statusLabel(l.status || "new"))}</span></div>
+      <p>${esc(crmLaneLabel(l))} · ${l.email ? "published email" : l.website ? "website research" : "channel needed"}</p>
     </div>
-    <b>${fmtMoney(Number(l.value || 0))}</b>
+    <div class="crm-row-score"><b>${l.fitScore ? `${esc(l.fitScore)}%` : "—"}</b><span>fit</span></div>
+    <div class="crm-row-value"><b>${fmtMoney(Number(l.value || 0))}</b><span>${esc(dueLabel(l))}</span></div>
   </article>`;
 }
 
@@ -572,34 +581,51 @@ function renderLeads(el, rerender) {
   const leads = filteredCrmContacts();
   const selected = leads.find((lead) => lead.id === leadsUi.selectedId) || leads[0] || null;
   const lanes = [["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["lost", "Lost / archived"]];
+  const pageSize = 40;
+  const pageCount = Math.max(1, Math.ceil(leads.length / pageSize));
+  leadsUi.page = Math.max(1, Math.min(pageCount, leadsUi.page || 1));
+  const pageStart = (leadsUi.page - 1) * pageSize;
+  const pageLeads = leads.slice(pageStart, pageStart + pageSize);
+  const segments = [
+    ["all", "All targets"],
+    ["events-hospitality", "Events"],
+    ["healthcare", "Healthcare"],
+    ["sports-fitness", "Sports"],
+    ["education", "Education"],
+    ["creative-partners", "Partners"],
+  ];
   el.innerHTML = `
-    <section class="crm-command">
-      <div>
-        <p>Easy CRM · ${esc(leadWorkspaceName(ws))}</p>
-        <h3>Lead pipeline</h3>
-        <span>Find, qualify, and move prospects here. Won relationships graduate automatically to Active Clients.</span>
-      </div>
+    <section class="crm-discovery">
+      <div class="crm-discovery-mark" aria-hidden="true">✦</div>
       <form class="lead-intel-form" data-lead-form>
-        <input data-lead-prompt value="${esc(leadsUi.prompt)}" placeholder="pull 5 new clients per day, gyms in Chicago, warm referrals..." />
-        <button class="btn btn-primary" type="submit">Update CRM</button>
+        <label><span>Prospect finder</span><input data-lead-prompt value="${esc(leadsUi.prompt)}" placeholder="Describe the organizations you want to add…" /></label>
+        <button class="btn btn-primary" type="submit">Build list</button>
       </form>
+      <p><b>${Number(settings.dailyPullTarget || 0).toLocaleString()}/day</b><span>research target</span></p>
     </section>
-    <div class="ws-toolbar crm-toolbar">
-      <p class="ws-note">Daily pull target: <b>${Number(settings.dailyPullTarget || 0).toLocaleString()}</b> · Organization brain: <b>${esc(ws)}</b> · sends stay approval-gated.</p>
+    <div class="crm-segments" role="group" aria-label="Prospect market">
+      ${segments.map(([id, label]) => `<button type="button" data-crm-segment="${esc(id)}" class="${leadsUi.segment === id ? "is-active" : ""}">${esc(label)}<b>${id === "all" ? leads.length : store.state.leads.filter((lead) => lead.ws === ws && !isActiveClient(lead) && (lead.tags || []).some((tag) => String(tag).toLowerCase() === `lane:${id}`)).length}</b></button>`).join("")}
+    </div>
+    <div class="crm-toolbar">
       <input class="crm-search" data-crm-search value="${esc(leadsUi.query)}" placeholder="Search clients, socials, emails, tags..." />
       <select class="crm-filter" data-crm-status>${[["all", "All"], ...lanes].map(([id, label]) => `<option value="${esc(id)}" ${leadsUi.status === id ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>
-      <button class="btn btn-primary" data-act="add" ${canEditRelationships() ? "" : "disabled"}>+ New contact</button>
+      <span class="crm-result-count">${leads.length.toLocaleString()} result${leads.length === 1 ? "" : "s"}</span>
     </div>
     <div class="crm-layout">
-      <div class="crm-list">${leads.map(crmContactCard).join("") || productStateHtml("empty", {
+      <div class="crm-list-wrap">
+        <div class="crm-list-head"><span>Organization</span><span>Fit</span><span>Value / due</span></div>
+        <div class="crm-list">${pageLeads.map(crmContactCard).join("") || productStateHtml("empty", {
         title: "No CRM contacts yet",
-        detail: "Ask Phantom to find verified prospects or capture a real contact manually.",
+        detail: "Use Prospect finder to source public organizations or add a relationship manually.",
         actionLabel: "New contact",
         actionAttribute: "data-act=add",
       })}</div>
+        ${leads.length ? `<footer class="crm-pager"><span>${(pageStart + 1).toLocaleString()}–${Math.min(pageStart + pageSize, leads.length).toLocaleString()} of ${leads.length.toLocaleString()}</span><div><button class="btn btn-quiet" type="button" data-crm-page="prev" ${leadsUi.page <= 1 ? "disabled" : ""}>← Previous</button><b>${leadsUi.page} / ${pageCount}</b><button class="btn btn-quiet" type="button" data-crm-page="next" ${leadsUi.page >= pageCount ? "disabled" : ""}>Next →</button></div></footer>` : ""}
+      </div>
       <aside class="crm-detail">
         ${selected ? `
           <div class="crm-detail-head"><div class="crm-avatar is-large">${crmAvatar(selected)}</div><div><p>${esc(selected.crmStage || statusLabel(selected.status))}</p><h3>${esc(selected.name || selected.company)}</h3><span>${esc(selected.company || "")}</span></div></div>
+          <div class="crm-detail-flags"><span>${esc(crmLaneLabel(selected))}</span><span>${selected.email ? "Published email" : "Email research needed"}</span><span>Permission ${esc(leadConsentStatus(selected))}</span></div>
           <div class="crm-detail-grid">
             <span><b>Email</b><i>${esc(selected.email || "—")}</i></span>
             <span><b>Phone</b><i>${esc(selected.phone || "—")}</i></span>
@@ -624,8 +650,13 @@ function renderLeads(el, rerender) {
     </div>`;
   const find = (id) => store.state.leads.find((l) => l.id === id);
   const persistLead = (lead) => { if (lead && isDatabaseSession()) updateOrgCrmContact(lead.id, crmPayload(lead)).catch(() => {}); };
-  el.querySelector("[data-crm-search]")?.addEventListener("input", (event) => { leadsUi.query = event.currentTarget.value; rerender(); });
-  el.querySelector("[data-crm-status]")?.addEventListener("change", (event) => { leadsUi.status = event.currentTarget.value; rerender(); });
+  el.querySelector("[data-crm-search]")?.addEventListener("input", (event) => { leadsUi.query = event.currentTarget.value; leadsUi.page = 1; rerender(); });
+  el.querySelector("[data-crm-status]")?.addEventListener("change", (event) => { leadsUi.status = event.currentTarget.value; leadsUi.page = 1; rerender(); });
+  el.querySelectorAll("[data-crm-segment]").forEach((button) => button.addEventListener("click", () => { leadsUi.segment = button.dataset.crmSegment || "all"; leadsUi.page = 1; rerender(); }));
+  el.querySelectorAll("[data-crm-page]").forEach((button) => button.addEventListener("click", () => {
+    leadsUi.page = Math.max(1, Math.min(pageCount, leadsUi.page + (button.dataset.crmPage === "next" ? 1 : -1)));
+    rerender();
+  }));
   const form = el.querySelector("[data-lead-form]");
   if (form) {
     form.addEventListener("submit", async (event) => {
@@ -987,6 +1018,11 @@ function renderFollowUp(el, rerender) {
   const overdue = all.filter((lead) => lead.due && daysUntil(lead.due) < 0).length;
   const today = all.filter((lead) => lead.due && daysUntil(lead.due) === 0).length;
   const unknown = all.filter((lead) => leadConsentStatus(lead) === "unknown").length;
+  const pageSize = 35;
+  const pageCount = Math.max(1, Math.ceil(records.length / pageSize));
+  operatorUi.followPage = Math.max(1, Math.min(pageCount, operatorUi.followPage || 1));
+  const pageStart = (operatorUi.followPage - 1) * pageSize;
+  const pageRecords = records.slice(pageStart, pageStart + pageSize);
   el.innerHTML = `
     <section class="ops-summary" aria-label="Follow-up status">
       <article><span>Due now</span><b>${(overdue + today).toLocaleString()}</b><i>${overdue} overdue · ${today} today</i></article>
@@ -1002,7 +1038,7 @@ function renderFollowUp(el, rerender) {
     </div>
     ${operatorUi.notice ? `<div class="ops-notice">${esc(operatorUi.notice)}</div>` : ""}
     <div class="stack ops-stack">
-      ${records.map((lead) => {
+      ${pageRecords.map((lead) => {
         const consent = leadConsentStatus(lead);
         const destination = lead.email || lead.phone || lead.socials?.instagram || "";
         return `<article class="record record-wide ops-record ${lead.due && daysUntil(lead.due) < 0 ? "is-critical" : ""}">
@@ -1020,10 +1056,15 @@ function renderFollowUp(el, rerender) {
           </div>
         </article>`;
       }).join("") || productStateHtml("empty", { title: "No follow-ups in this view", detail: "Change the filter or add a lead with a next step and due date." })}
-    </div>`;
+    </div>
+    ${records.length ? `<footer class="crm-pager"><span>${(pageStart + 1).toLocaleString()}–${Math.min(pageStart + pageSize, records.length).toLocaleString()} of ${records.length.toLocaleString()}</span><div><button class="btn btn-quiet" type="button" data-follow-page="prev" ${operatorUi.followPage <= 1 ? "disabled" : ""}>← Previous</button><b>${operatorUi.followPage} / ${pageCount}</b><button class="btn btn-quiet" type="button" data-follow-page="next" ${operatorUi.followPage >= pageCount ? "disabled" : ""}>Next →</button></div></footer>` : ""}`;
   const find = (id) => store.state.leads.find((lead) => lead.id === id);
-  el.querySelector("[data-follow-query]")?.addEventListener("input", (event) => { operatorUi.followQuery = event.currentTarget.value; rerender(); });
-  el.querySelector("[data-follow-filter]")?.addEventListener("change", (event) => { operatorUi.followFilter = event.currentTarget.value; rerender(); });
+  el.querySelector("[data-follow-query]")?.addEventListener("input", (event) => { operatorUi.followQuery = event.currentTarget.value; operatorUi.followPage = 1; rerender(); });
+  el.querySelector("[data-follow-filter]")?.addEventListener("change", (event) => { operatorUi.followFilter = event.currentTarget.value; operatorUi.followPage = 1; rerender(); });
+  el.querySelectorAll("[data-follow-page]").forEach((button) => button.addEventListener("click", () => {
+    operatorUi.followPage = Math.max(1, Math.min(pageCount, operatorUi.followPage + (button.dataset.followPage === "next" ? 1 : -1)));
+    rerender();
+  }));
   el.querySelectorAll("[data-follow-consent]").forEach((select) => {
     select.onchange = () => {
       const lead = find(select.dataset.followConsent);
@@ -1186,12 +1227,28 @@ function renderClients(el, rerender) {
   });
 }
 
+function syncCrmEmailConnection(ws, rerender) {
+  if (crmEmailUi.scope !== ws) Object.assign(crmEmailUi, { scope: ws, state: "checking", provider: "", message: "", loading: false });
+  if (crmEmailUi.loading || crmEmailUi.state !== "checking") return;
+  crmEmailUi.loading = true;
+  getEmailConnectionSnapshot().then((snapshot) => {
+    Object.assign(crmEmailUi, snapshot);
+  }).catch((error) => {
+    crmEmailUi.state = "error";
+    crmEmailUi.message = error instanceof Error ? error.message : "Inbox status could not be checked.";
+  }).finally(() => {
+    crmEmailUi.loading = false;
+    rerender();
+  });
+}
+
 function renderRelationships(el, rerender) {
   const ws = leadWorkspaceId();
   const repaint = () => renderRelationships(el, rerender);
   syncRelationshipUiScope(ws);
   syncCrmSelectionScope(ws);
   syncServerCrm(ws, repaint);
+  syncCrmEmailConnection(ws, repaint);
   const settings = workspaceCrmSettings(ws);
   const prefs = relationshipPreferences(settings);
   const canEdit = canEditRelationships();
@@ -1201,33 +1258,57 @@ function renderRelationships(el, rerender) {
   const followUps = records.filter((lead) => lead.status !== "lost" && (lead.due || ["new", "follow-up"].includes(lead.status)));
   const dueNow = followUps.filter((lead) => lead.due && daysUntil(lead.due) <= 0).length;
   const pipelineValue = records.filter((lead) => lead.status !== "lost").reduce((sum, lead) => sum + Number(lead.value || 0), 0);
+  const publishedEmails = records.filter((lead) => Boolean(lead.email)).length;
+  const permissionReady = records.filter((lead) => Boolean(lead.email) && leadConsentStatus(lead) === "opt-in").length;
+  const drafts = store.state.communications.filter((item) => item.ws === ws && item.status === "draft").length;
+  const pendingSends = store.state.approvals.filter((item) => item.ws === ws && item.type === "send-message" && item.status === "pending").length;
+  const emailConnected = crmEmailUi.state === "connected";
+  const emailAvailable = crmEmailUi.state === "available";
+  const emailTitle = emailConnected
+    ? `${crmEmailUi.provider || "Inbox"} connected`
+    : emailAvailable
+      ? "Inbox ready to connect"
+      : crmEmailUi.state === "checking"
+        ? "Checking inbox connection"
+        : "Email automation needs platform setup";
+  const emailDetail = emailConnected
+    ? "Drafts and approvals are account-scoped. Delivery and replies appear only after the provider returns a verified receipt."
+    : emailAvailable
+      ? "Connect Gmail or Outlook to enable approved sending, delivery events, and reply sync for this account."
+      : crmEmailUi.message || "Drafting and approvals are live; a secure email broker is required for provider sending, tracking, and replies.";
   const editing = relationshipsUi.editingId ? records.find((lead) => lead.id === relationshipsUi.editingId) || null : null;
   el.innerHTML = `
-    <section class="crm-overview" data-crm-account="${esc(ws)}">
-      <header class="crm-overview-head">
-        <div><p>PRIVATE TO ${esc(leadWorkspaceName(ws))}</p><h2>${esc(prefs.pipelineName)}</h2><span>Every contact, default, filter, and workflow is isolated to this account.</span></div>
+    <div class="crm-app" data-crm-account="${esc(ws)}">
+      <section class="crm-desk-head">
+        <div class="crm-desk-title"><p>${esc(leadWorkspaceName(ws))} / private sales workspace</p><h2>Sales desk</h2><span>${esc(prefs.pipelineName)} · ${canEdit ? "Manager access" : "Member view"}</span></div>
         <div class="crm-overview-actions">
-          ${canEdit ? `<button class="btn btn-primary" type="button" data-crm-add>+ New relationship</button><label class="btn crm-import-button">Import CSV<input type="file" accept=".csv,text/csv" data-crm-import hidden /></label>` : ""}
-          <button class="btn" type="button" data-crm-export ${records.length ? "" : "disabled"}>Export CSV</button>
-          <button class="btn btn-quiet" type="button" data-crm-settings>Customize CRM</button>
+          ${canEdit ? `<button class="btn btn-primary" type="button" data-crm-add>+ Add relationship</button><label class="btn crm-import-button">Import CSV<input type="file" accept=".csv,text/csv" data-crm-import hidden /></label>` : ""}
+          <button class="btn" type="button" data-crm-export ${records.length ? "" : "disabled"}>Export</button>
+          <button class="btn btn-quiet" type="button" data-crm-settings>Customize</button>
         </div>
-      </header>
-      <div class="crm-metrics" aria-label="Relationship summary">
-        <article><span>Open pipeline</span><b>${leads.filter((lead) => lead.status !== "lost").length.toLocaleString()}</b><i>${fmtMoney(pipelineValue)} total value</i></article>
-        <article><span>Active clients</span><b>${activeClients.length.toLocaleString()}</b><i>current relationships</i></article>
-        <article><span>Follow-ups</span><b>${followUps.length.toLocaleString()}</b><i>${dueNow} due now</i></article>
-        <article><span>Account</span><b>${canEdit ? "Manager" : "Member"}</b><i>${canEdit ? "editing enabled" : "read-only access"}</i></article>
+      </section>
+      <section class="crm-metrics" aria-label="Relationship summary">
+        <article><span>Pipeline</span><b>${leads.filter((lead) => lead.status !== "lost").length.toLocaleString()}</b><i>${fmtMoney(pipelineValue)}</i></article>
+        <article><span>Clients</span><b>${activeClients.length.toLocaleString()}</b><i>active</i></article>
+        <article><span>Due now</span><b>${dueNow.toLocaleString()}</b><i>${followUps.length.toLocaleString()} follow-ups</i></article>
+        <article><span>Email found</span><b>${publishedEmails.toLocaleString()}</b><i>${permissionReady} permission-ready</i></article>
+      </section>
+      <section class="crm-mail-status is-${esc(crmEmailUi.state)}" aria-label="Email automation status">
+        <div class="crm-mail-icon">@</div>
+        <div><b>${esc(emailTitle)}</b><span>${esc(emailDetail)}</span></div>
+        <div class="crm-mail-counts"><span><b>${drafts}</b> drafts</span><span><b>${pendingSends}</b> approvals</span><span><b>0</b> provider receipts</span></div>
+        <button class="btn" type="button" data-open-ws="settings" data-settings-target="connections">${emailConnected ? "Manage inbox" : emailAvailable ? "Connect inbox" : "Open setup"}</button>
+      </section>
+      ${leadsUi.notice ? `<div class="ops-notice" role="status" aria-live="polite">${esc(leadsUi.notice)}</div>` : ""}
+      ${relationshipsUi.editorOpen ? contactEditorHtml(editing, prefs, canEdit) : ""}
+      ${relationshipsUi.settingsOpen ? relationshipSettingsHtml(settings, prefs, canEdit) : ""}
+      <div class="crm-view-tabs" role="tablist" aria-label="Relationship view">
+        <button type="button" role="tab" data-relationship-tab="leads" class="${relationshipsUi.view === "leads" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "leads"}"><span>${esc(prefs.leadsLabel)}</span><b>${leads.length}</b></button>
+        <button type="button" role="tab" data-relationship-tab="clients" class="${relationshipsUi.view === "clients" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "clients"}"><span>${esc(prefs.clientsLabel)}</span><b>${activeClients.length}</b></button>
+        <button type="button" role="tab" data-relationship-tab="followups" class="${relationshipsUi.view === "followups" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "followups"}"><span>${esc(prefs.followupsLabel)}</span><b>${followUps.length}</b></button>
       </div>
-    </section>
-    ${leadsUi.notice ? `<div class="ops-notice" role="status" aria-live="polite">${esc(leadsUi.notice)}</div>` : ""}
-    ${relationshipsUi.editorOpen ? contactEditorHtml(editing, prefs, canEdit) : ""}
-    ${relationshipsUi.settingsOpen ? relationshipSettingsHtml(settings, prefs, canEdit) : ""}
-    <div class="crm-view-tabs accounting-tabs" role="tablist" aria-label="Relationship view">
-      <button type="button" role="tab" data-relationship-tab="leads" class="${relationshipsUi.view === "leads" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "leads"}">${esc(prefs.leadsLabel)} <b>${leads.length}</b></button>
-      <button type="button" role="tab" data-relationship-tab="clients" class="${relationshipsUi.view === "clients" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "clients"}">${esc(prefs.clientsLabel)} <b>${activeClients.length}</b></button>
-      <button type="button" role="tab" data-relationship-tab="followups" class="${relationshipsUi.view === "followups" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "followups"}">${esc(prefs.followupsLabel)} <b>${followUps.length}</b></button>
-    </div>
-    <div class="crm-view-body" data-relationship-body></div>`;
+      <div class="crm-view-body" data-relationship-body></div>
+    </div>`;
   const body = el.querySelector("[data-relationship-body]");
   if (relationshipsUi.view === "clients") renderClients(body, repaint);
   else if (relationshipsUi.view === "followups") renderFollowUp(body, repaint);
@@ -2795,7 +2876,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-207")
+      import("./brain.js?v=phantom-live-20260914-208")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

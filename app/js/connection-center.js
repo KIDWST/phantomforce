@@ -2,8 +2,8 @@
    The browser never asks for developer credentials. Connect is enabled only
    when the server can create a real, signed authorization handoff. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-207";
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-207";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-208";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-208";
 
 let connectionState = { loaded: false, loading: false, error: "", connectors: [], notice: "", busyId: "" };
 let connectionMount = null;
@@ -46,6 +46,19 @@ async function refreshConnections({ force = false } = {}) {
   }
   if (connectionMount?.isConnected) renderConnectionCenter(connectionMount, connectionOpts);
   return connectionState;
+}
+
+export async function getEmailConnectionSnapshot({ force = false } = {}) {
+  await refreshConnections({ force });
+  const email = connectionState.connectors.filter((connector) => connector.group === "Email");
+  const connected = email.find((connector) => connector.state === "connected") || null;
+  const available = email.find((connector) => connector.state === "available") || null;
+  const configurationRequired = email.length > 0 && email.every((connector) => connector.state === "configuration_required");
+  return {
+    state: connected ? "connected" : available ? "available" : configurationRequired ? "configuration_required" : connectionState.error ? "error" : "checking",
+    provider: connected?.name || available?.name || "",
+    message: connected?.customerMessage || available?.customerMessage || connectionState.error || "",
+  };
 }
 
 function connectionCard(connector) {
