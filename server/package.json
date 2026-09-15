@@ -18,6 +18,7 @@
     "test:security-scanner": "tsx scripts/test-security-scanner-route.ts",
     "test:seatbelt-posture": "tsx scripts/test-seatbelt-posture.ts",
     "test:chicagoshots-crm": "tsx scripts/test-chicagoshots-nexprospex-crm.ts",
+    "test:chicagoshots-studio": "tsx scripts/test-chicagoshots-studio.ts",
     "test:send-readiness-status": "tsx scripts/test-send-readiness-status.ts",
     "test:finance-connector": "tsx scripts/test-finance-connector-status.ts",
     "test:social-analytics": "tsx scripts/test-social-analytics-connector.ts",

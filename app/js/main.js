@@ -1,4 +1,4 @@
-/* PhantomForce — AI Operations Console: shell, sidebar, dashboard, ghost, overlays. */
+/* PhantomForce — Media Growth OS: shell, navigation, dashboard, and growth workflows. */
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, currentTenantId, setWorkspace, wsName,
@@ -6,56 +6,55 @@ import {
   redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260822-198";
+  workspaceStorageGetItem,
+} from "./store.js?v=phantom-live-20260914-204";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems, cachedOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260822-198";
-import {
-  loadSecurityMonitorStatus, cachedSecurityMonitorStatus, securityMonitorIsAdmin, runSecurityMonitorScan, securityMonitorRunning,
-} from "./securitystatus.js?v=phantom-live-20260822-198";
-import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260822-198";
-import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260822-198";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260822-198";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260822-198";
-import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260822-198";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260822-198";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260822-198";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260822-198";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260822-198";
-import { mountPhantomAI, queuePhantomAiPrompt } from "./phantomai.js?v=phantom-live-20260822-198";
-import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260822-198";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260822-198";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260822-198";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260822-198";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260822-198";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260822-198";
-import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260822-198";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260822-198";
-import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260822-198";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260822-198";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260822-198";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260822-198";
-import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260822-198";
+} from "./organizationpulse.js?v=phantom-live-20260914-204";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260914-204";
+import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260914-204";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-204";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260914-204";
+import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260914-204";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260914-204";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260914-204";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260914-204";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260914-204";
+import { mountPhantomAI, queuePhantomAiPrompt } from "./phantomai.js?v=phantom-live-20260914-204";
+import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260914-204";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260914-204";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260914-204";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260914-204";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260914-204";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260914-204";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260914-204";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260914-204";
+import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260914-204";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260914-204";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260914-204";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260914-204";
+import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260914-204";
+import { renderChicagoShotsStudio } from "./chicagoshots-studio.js?v=phantom-live-20260914-204";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260822-198";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260822-198";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260822-198";
+} from "./orgs.js?v=phantom-live-20260914-204";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260914-204";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260914-204";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260822-198";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260914-204";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260822-198";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260914-204";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260822-198";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260822-198";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260822-198";
-import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260822-198";
+} from "./customization.js?v=phantom-live-20260914-204";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260914-204";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260914-204";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260914-204";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -64,17 +63,18 @@ const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 const WORKSPACE_STYLE_BUNDLES = Object.freeze({
   phantomplay: [
-    "/app/phantomplay.css?v=phantom-live-20260822-198",
-    "/app/phantomplay-v2.css?v=phantom-live-20260822-198",
+    "/app/phantomplay.css?v=phantom-live-20260914-204",
+    "/app/phantomplay-v2.css?v=phantom-live-20260914-204",
   ],
-  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260822-198"],
-  phantomai: ["/app/creator-studio.css?v=phantom-live-20260822-198"],
+  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260914-204"],
+  phantomai: ["/app/creator-studio.css?v=phantom-live-20260914-204"],
   phantomhunter: [
-    "/app/phantomhunter.css?v=phantom-live-20260822-198",
-    "/app/phantomhunter-connect.css?v=phantom-live-20260822-198",
+    "/app/phantomhunter.css?v=phantom-live-20260914-204",
+    "/app/phantomhunter-connect.css?v=phantom-live-20260914-204",
   ],
-  media: ["/app/creator-studio.css?v=phantom-live-20260822-198"],
-  content: ["/app/creator-studio.css?v=phantom-live-20260822-198"],
+  media: ["/app/creator-studio.css?v=phantom-live-20260914-204"],
+  content: ["/app/creator-studio.css?v=phantom-live-20260914-204"],
+  chicagoshots: ["/app/chicagoshots-studio.css?v=phantom-live-20260914-204"],
 });
 
 const workspaceStylePromises = new Map();
@@ -161,7 +161,7 @@ function showWorkspaceTransition(transition, phase = "loading") {
   transition.node.setAttribute("role", phase === "error" ? "alert" : "status");
   transition.node.setAttribute("aria-live", phase === "error" ? "assertive" : "polite");
   transition.node.innerHTML = `<div class="workspace-transition-card">
-    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20260822-198" alt=""><i></i><i></i></div>
+    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20260914-204" alt=""><i></i><i></i></div>
     <p>${phase === "error" ? "PHANTOM RECOVERY" : "PHANTOM ROUTING"}</p>
     <h2>${phase === "error" ? "This workspace needs another moment." : `Preparing ${esc(transition.title)}`}</h2>
     <span>${phase === "error" ? "Nothing unfinished was shown. Try the transition again." : "Assembling your workspace."}</span>
@@ -733,18 +733,18 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
 /* ============================ sidebar nav ============================ */
 const BASE_NAV = [
   { id: "dashboard",  label: "Overview",     icon: "grid",  view: "main" },
-  { id: "leads",      label: "Leads",        icon: "users", ws: "leads" },
+  { id: "chicagoshots", label: "ChicagoShots", icon: "film", ws: "chicagoshots" },
+  { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
+  { id: "content",    label: "Content Hub",  icon: "spark", ws: "content" },
+  { id: "analytics",  label: "Social Analytics", icon: "chart", ws: "analytics" },
+  { id: "leads",      label: "Leads & Clients", icon: "users", ws: "leads" },
   { id: "followup",   label: "Follow-up",    icon: "clock", ws: "followup" },
   { id: "comms",      label: "Comms",        icon: "chat",  ws: "comms" },
   { id: "bookings",   label: "Bookings",     icon: "clock", ws: "bookings" },
-  { id: "clients",    label: "Clients",      icon: "users", ws: "clients" },
   { id: "money",      label: "Quotes & Money", icon: "dollar", ws: "money" },
-  { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
-  { id: "content",    label: "Content Hub",  icon: "spark", ws: "content" },
   { id: "sites",      label: "Sites & Stores", icon: "site", ws: "sites" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "riskwatch",  label: "Risk Watch",   icon: "shield", ws: "riskwatch" },
-  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "phantomai",  label: "PhantomBot",   icon: "chat",  ws: "phantomai", navZone: "bottom" },
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation", navZone: "bottom" },
   { id: "intelligence", label: "Intel", icon: "chart", ws: "intelligence", navZone: "bottom" },
@@ -822,7 +822,7 @@ function canUseNavItem(item) {
    only the frequent destinations; More summons the complete vertical list. */
 const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
-  leads: "Leads",
+  leads: "CRM",
   followup: "Follow-up",
   money: "Money",
   sites: "Sites",
@@ -832,13 +832,13 @@ const MOBILE_LABEL_OVERRIDES = {
   approvals: "Approvals",
   protect: "Risk",
   auditlog: "Audit",
-  analytics: "Analytics",
+  analytics: "Social",
   intelligence: "Competitor",
   adminos: "Admin",
   vacation: "Away",
   developer: "Developer",
 };
-const MOBILE_DOCK_IDS = ["dashboard", "leads", "followup", "approvals", "phantomai"];
+const MOBILE_DOCK_IDS = ["dashboard", "media", "content", "analytics", "leads"];
 let MOBILE_NAV = NAV.map((n) => ({
   id: n.id,
   label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
@@ -926,7 +926,7 @@ let activeNav = "dashboard";
 let activePageId = null;
 /* The right-hand deck is the launcher. The left-hand rail is a working set:
    destinations only become tabs after somebody opens them. */
-const openNavTabs = new Set(["dashboard", "leads", "followup", "bookings", "money", "media", "sites", "approvals", "riskwatch", "analytics"]);
+const openNavTabs = new Set(["dashboard", "chicagoshots", "media", "content", "analytics", "leads", "followup", "bookings", "money", "sites", "approvals", "riskwatch"]);
 function markNavTabOpen(id) {
   if (NAV.some((item) => item.id === id && canUseNavItem(item))) openNavTabs.add(id);
 }
@@ -961,6 +961,7 @@ const ROUTE_REGISTRY = createRouteRegistry([
    browser history instead of only following direct nav clicks. */
 const NAV_PARENT_BY_WORKSPACE = {
   phantom: "dashboard",
+  clients: "leads",
   proposals: "money",
   reviews: "money",
   clientsetup: "settings",
@@ -1882,7 +1883,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260822-198";
+const POSE_VERSION = "phantom-live-20260914-204";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2151,24 +2152,25 @@ function renderDashboardBrief() {
   if (!title || !status || !metrics) return;
   const rawName = (ctx.session?.name || "Operator").split(/\s+/)[0];
   const name = /^customer$/i.test(rawName) || /^there$/i.test(rawName) ? "Operator" : rawName;
-  const plan = todaysPlan();
   const leads = visible(store.state.leads || []);
   const approvals = visible(store.state.approvals || []).filter((item) => item.status === "pending");
   const accounting = moneyView();
-  const attention = plan.length + approvals.length;
+  const marketing = marketingContentSnapshot();
+  const socialChannels = connectedSocialCount();
+  const openLeads = leads.filter((lead) => !["won", "lost"].includes(lead.status));
   title.textContent = `${greeting()}, ${name}`;
-  status.textContent = attention
-    ? `${attention} real item${attention === 1 ? "" : "s"} need attention in this organization.`
-    : "No urgent decisions are waiting. Phantom is ready for the next outcome.";
+  status.textContent = marketing.assets || marketing.drafts || socialChannels || openLeads.length
+    ? `${marketing.assets} media asset${marketing.assets === 1 ? "" : "s"}, ${marketing.drafts} publishing draft${marketing.drafts === 1 ? "" : "s"}, and ${openLeads.length} open lead${openLeads.length === 1 ? "" : "s"} are in the growth engine.${approvals.length ? ` ${approvals.length} item${approvals.length === 1 ? "" : "s"} await approval.` : ""}`
+    : "Start with media, connect a social channel, then turn attention into qualified leads.";
   const snapshot = [
-    { label: "Clients", value: String(leads.length), detail: "organization records", open: "leads" },
-    { label: "Today", value: String(plan.length), detail: plan.length ? "scheduled items" : "nothing due", open: plan[0]?.open || "settings" },
-    { label: "Approvals", value: String(approvals.length), detail: approvals.length ? "waiting on you" : "none waiting", open: "approvals" },
+    { label: "Media library", value: String(marketing.assets), detail: "usable creative assets", open: "media" },
+    { label: "Content queue", value: String(marketing.drafts), detail: "publishing drafts", open: "content" },
+    { label: "Social channels", value: String(socialChannels), detail: socialChannels ? "connected accounts" : "connect analytics", open: "analytics" },
     {
-      label: "Actual cash",
-      value: accounting.transactions.length ? signedMoney(accounting.netCash) : "None yet",
-      detail: accounting.transactions.length ? `${accounting.transactions.length} confirmed transactions` : "add or connect",
-      open: "money",
+      label: "Open pipeline",
+      value: accounting.pipeline ? fmtMoney(accounting.pipeline) : String(openLeads.length),
+      detail: accounting.pipeline ? `${openLeads.length} open lead${openLeads.length === 1 ? "" : "s"}` : "qualified opportunities",
+      open: "leads",
     },
   ];
   metrics.innerHTML = snapshot.map((item) => `
@@ -2219,14 +2221,33 @@ function renderAccessVersion() {
 
 function connectedSocialCount() {
   try {
-    const raw = JSON.parse(localStorage.getItem("pf.social.accounts.v1") || "{}") || {};
+    const raw = JSON.parse(workspaceStorageGetItem("pf.social.accounts.v1") || "[]") || [];
     return Object.values(raw).filter((account) => {
-      const status = String(account?.status || "").toLowerCase();
-      return status === "linked" || status === "connected" || account?.profileUrl || account?.handle;
+      const status = String(account?.officialConnectState || account?.connectionStatus || "").toLowerCase();
+      const mode = String(account?.connectMode || "").toLowerCase();
+      return ["connected", "limited_permissions"].includes(status)
+        || ["live-api", "oauth-connected"].includes(mode)
+        || Boolean(account?.hermesProof);
     }).length;
   } catch {
     return 0;
   }
+}
+
+function marketingContentSnapshot() {
+  const readList = (key, nested = "") => {
+    try {
+      const raw = JSON.parse(workspaceStorageGetItem(key) || (nested ? "{}" : "[]"));
+      const rows = nested ? raw?.[nested] : raw;
+      return Array.isArray(rows) ? rows.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  };
+  return {
+    assets: readList("pf.contenthub.assets.v1", "assets").length,
+    drafts: readList("pf.contenthub.publish.drafts.v1").length,
+  };
 }
 
 function shortDate(iso) {
@@ -2284,28 +2305,28 @@ function interactionsCard() {
   return { label: "New comments/interactions", value: `${socialCount} account${socialCount === 1 ? "" : "s"} linked`, detail: "View Analytics for live engagement", open: "analytics", tone: "good" };
 }
 
-function securityCard() {
-  const monitor = cachedSecurityMonitorStatus();
-  const history = monitor?.history;
-  if (!history?.last_run_at) {
-    return { label: "Leaked password scanner", value: "Not yet scanned", detail: "Run the first local scan below", open: "settings", tone: "idle" };
+function contentMomentumCard() {
+  const content = marketingContentSnapshot();
+  if (!content.assets && !content.drafts) {
+    return { label: "Content engine", value: "Ready to build", detail: "Bring media into the library and create the first campaign", open: "media", tone: "idle" };
   }
-  const asOf = shortDate(history.last_run_at);
-  if (history.verdict === "clean") {
-    return { label: "Leaked password scanner", value: "No leak detected", detail: `As of ${asOf}`, open: "settings", tone: "good" };
-  }
-  return { label: "Leaked password scanner", value: "Needs review", detail: `Last scan ${asOf}`, open: "settings", tone: "warn" };
+  return {
+    label: "Content engine",
+    value: `${content.assets} asset${content.assets === 1 ? "" : "s"}`,
+    detail: `${content.drafts} publishing draft${content.drafts === 1 ? "" : "s"} in the queue`,
+    open: "content",
+    tone: content.drafts ? "good" : "idle",
+  };
 }
 
 function renderDashboardIntel() {
   const host = $("[data-dashboard-intel]");
   if (!host) return;
-  const cards = [opportunityCard(), appointmentsCard(), interactionsCard(), securityCard()];
-  const isAdminMonitor = securityMonitorIsAdmin();
+  const cards = [interactionsCard(), contentMomentumCard(), opportunityCard(), appointmentsCard()];
   host.innerHTML = `
     <div class="dashboard-intel-head">
-      <span>Business signals</span>
-      <b>What's moving right now</b>
+      <span>Marketing signals</span>
+      <b>What's growing right now</b>
     </div>
     <div class="dashboard-intel-grid">
       ${cards.map((card) => `
@@ -2314,15 +2335,7 @@ function renderDashboardIntel() {
           <b>${esc(card.value)}</b>
           <i>${esc(card.detail)}</i>
         </button>`).join("")}
-    </div>
-    ${isAdminMonitor ? `<button class="dashboard-intel-scan" type="button" data-security-scan-run ${securityMonitorRunning() ? "disabled" : ""}>${securityMonitorRunning() ? "Scanning…" : "Run local scan now"}</button>` : ""}`;
-  if (isAdminMonitor) {
-    host.querySelector("[data-security-scan-run]")?.addEventListener("click", async () => {
-      renderDashboardIntel();
-      try { await runSecurityMonitorScan(); } catch { /* status card shows last-known state either way */ }
-      renderDashboardIntel();
-    });
-  }
+    </div>`;
 }
 
 /* ====================== YOUR PHANTOM WORKFORCE heartbeat ======================
@@ -2768,7 +2781,7 @@ function dashWidgetItems() {
       sub: pendingApprovals ? `${pendingApprovals} waiting on you` : "None waiting" },
     { id: "workers", ws: "workforce", label: "Workforce", icon: "users",
       val: agentCount || "", sub: agentCount ? `${agentCount} in motion` : "Idle" },
-    { id: "analytics", ws: "analytics", label: "Analytics", icon: "chart", sub: "Reach & engagement" },
+    { id: "analytics", ws: "analytics", label: "Social Analytics", icon: "chart", sub: "Reach, engagement & audience" },
     { id: "intelligence", ws: "intelligence", label: "Competitor Intel", icon: "shield", sub: "Market & rivals" },
   ];
 }
@@ -3060,7 +3073,6 @@ function renderConsole() {
   renderDashboardIntel();
   renderOrganizationPulse();
   refreshOrganizationPulse();
-  loadSecurityMonitorStatus().then(() => renderDashboardIntel()).catch(() => {});
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
   mountPhantomWire($("[data-phantomwire]") || $("[data-agent-ticker]"));
   mountDesktopContextWidget($("[data-desktop-context]"), {
@@ -4334,13 +4346,14 @@ function phantomBotBrainPresentation() {
 }
 
 const CUSTOM = {
+  chicagoshots: { title: "ChicagoShots Studio", kicker: "Media, distribution, pipeline, and growth", custom: true, wide: true, render: (body) => renderChicagoShotsStudio(body, mediaOpts()) },
   media: { title: "Media Lab", kicker: "Create and edit", custom: true, wide: true, render: (body) => renderMediaLabSuite(body) },
   content: { title: "Content Hub", kicker: "Library, ideas, drafts, publishing, and performance", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   phantomstore: { title: "PhantomStore", kicker: "AI marketplace", custom: true, wide: true, render: (body) => renderPhantomStore(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
-  analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderUnifiedAnalytics(body) },
+  analytics: { title: "Social Analytics", kicker: "Audience, reach, engagement, and campaign performance", custom: true, wide: true, render: (body) => renderUnifiedAnalytics(body) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   clientsetup: { title: "Business Manager Settings", kicker: "Workspace and organization setup", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "clientsetup", onWorkspaceApplied: () => { refreshCustomizedNavigation(); void refreshNavEntitlements(); renderMobileBottomNav(); } }) },
   adminos: {

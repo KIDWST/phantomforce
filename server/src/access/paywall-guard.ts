@@ -32,6 +32,10 @@ export function requiresWrite(method: string, url: string): boolean {
   if (/^(session|owner|demo)-login$/.test(seg)) return false; // signing in
   if (path.startsWith("/auth/")) return false; // identity/auth flows are guarded by auth itself, not subscription state
   if (path === "/billing/webhook") return false; // authenticated by its own signing secret, not a session
+  // ChicagoShots.com lead intake is intentionally public. The route owns its
+  // honeypot, timing, rate-limit, validation, and idempotency boundaries; it
+  // only records an inquiry and an approval-required response draft.
+  if (path === "/api/public/chicagoshots/inquiries") return false;
   if (/(^|-)(preview|dry-run|preflight|contract|validate)$/.test(seg)) return false; // read-only computes
   if (path === "/phantom-ai/chat") return false; // conversational; its side effects are separately gated
   // Native PhantomPlay deliberately has no browser/account session. These

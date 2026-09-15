@@ -15,6 +15,7 @@ const indexLocks = new Map<string, Promise<unknown>>();
 export type ContentAssetRecord = {
   id: string;
   owner_scope: string;
+  campaign_id: string | null;
   original_name: string;
   mime_type: string;
   size_bytes: number;
@@ -28,7 +29,7 @@ export type ContentAssetRecord = {
   expires_at: string;
 };
 
-type AssetIndex = { schemaVersion: 2; records: ContentAssetRecord[] };
+type AssetIndex = { schemaVersion: 3; records: ContentAssetRecord[] };
 
 function cleanOwnerScope(value: string) {
   return String(value || "").trim().replace(/[^a-zA-Z0-9_.:-]+/g, "-").slice(0, 100) || "unknown";
@@ -36,6 +37,10 @@ function cleanOwnerScope(value: string) {
 
 function cleanName(value = "") {
   return String(value || "content-asset").replace(/[\u0000-\u001f<>:"/\\|?*]+/g, "-").trim().slice(0, 160) || "content-asset";
+}
+
+function cleanCampaignId(value = "") {
+  return String(value || "").trim().replace(/[^a-zA-Z0-9_.:-]+/g, "-").slice(0, 120) || null;
 }
 
 function sha256(buffer: Buffer) {
@@ -61,17 +66,22 @@ function sniffMime(buffer: Buffer): string | null {
   if (buffer.length >= 12 && buffer.subarray(4, 8).toString("ascii") === "ftyp") {
     const brand = buffer.subarray(8, 12).toString("ascii").toLowerCase();
     if (["avif", "avis"].includes(brand)) return "image/avif";
+    if (brand === "qt  ") return "video/quicktime";
     return "video/mp4";
   }
+  if (buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return "video/webm";
   if (buffer.length >= 4 && buffer.subarray(0, 4).toString("ascii") === "OggS") return "audio/ogg";
   if (buffer.length >= 3 && buffer.subarray(0, 3).toString("ascii") === "ID3") return "audio/mpeg";
+  if (buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0) return "audio/mpeg";
   if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WAVE") return "audio/wav";
   return null;
 }
 
 function normalizedMime(value: string) {
   const mime = value.toLowerCase();
-  return mime === "image/jpg" ? "image/jpeg" : mime;
+  if (mime === "image/jpg") return "image/jpeg";
+  if (["video/x-m4v", "video/m4v"].includes(mime)) return "video/mp4";
+  return mime;
 }
 
 function refCounts(records: ContentAssetRecord[]) {
@@ -85,11 +95,16 @@ export interface ContentAssetStorageProvider {
     ownerScope: string;
     dataUrl: string;
     originalName?: string;
+    campaignId?: string;
   }): Promise<{ ok: true; asset: ContentAssetRecord; deduplicated: boolean } | { ok: false; error: string }>;
   getAssetFile(
     id: string,
     ownerScope: string,
   ): Promise<{ ok: true; dataUrl: string; asset: ContentAssetRecord } | { ok: false; error: string }>;
+  getAssetSource?(
+    id: string,
+    ownerScope: string,
+  ): Promise<{ ok: true; path: string; asset: ContentAssetRecord } | { ok: false; error: string }>;
   listAssets(ownerScope: string): Promise<ContentAssetRecord[]>;
   listArchivedAssets(ownerScope: string): Promise<ContentAssetRecord[]>;
   deleteAsset(id: string, ownerScope: string): Promise<boolean>;
@@ -119,6 +134,7 @@ export class LocalDiskContentAssetProvider implements ContentAssetStorageProvide
         ? parsed.records.map((raw): ContentAssetRecord => ({
             id: String(raw.id || randomUUID()),
             owner_scope: cleanOwnerScope(String(raw.owner_scope || "unknown")),
+            campaign_id: cleanCampaignId(raw.campaign_id || ""),
             original_name: cleanName(raw.original_name),
             mime_type: normalizedMime(String(raw.mime_type || "application/octet-stream")),
             size_bytes: Number(raw.size_bytes) || 0,
@@ -134,9 +150,9 @@ export class LocalDiskContentAssetProvider implements ContentAssetStorageProvide
         : [];
       await this.hydrateLegacyChecksums(records);
       refCounts(records);
-      return { schemaVersion: 2, records };
+      return { schemaVersion: 3, records };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { schemaVersion: 2, records: [] };
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { schemaVersion: 3, records: [] };
       throw error;
     }
   }
@@ -189,7 +205,7 @@ export class LocalDiskContentAssetProvider implements ContentAssetStorageProvide
     try { return await readFile(modern); } catch { return readFile(path.join(this.legacyFilesDir, record.id)); }
   }
 
-  async putAsset({ ownerScope, dataUrl, originalName }: { ownerScope: string; dataUrl: string; originalName?: string }) {
+  async putAsset({ ownerScope, dataUrl, originalName, campaignId }: { ownerScope: string; dataUrl: string; originalName?: string; campaignId?: string }) {
     const parsed = parseDataUrl(dataUrl);
     if (!parsed) return { ok: false as const, error: "invalid_data_url" };
     if (parsed.buffer.length > MAX_UPLOAD_BYTES) return { ok: false as const, error: "file_too_large" };
@@ -210,6 +226,7 @@ export class LocalDiskContentAssetProvider implements ContentAssetStorageProvide
       const record: ContentAssetRecord = {
         id: randomUUID(),
         owner_scope: owner,
+        campaign_id: cleanCampaignId(campaignId),
         original_name: cleanName(originalName),
         mime_type: detectedMime,
         size_bytes: parsed.buffer.length,
@@ -240,6 +257,23 @@ export class LocalDiskContentAssetProvider implements ContentAssetStorageProvide
     } catch {
       return { ok: false as const, error: "file_missing" };
     }
+  }
+
+  async getAssetSource(id: string, ownerScope: string) {
+    const index = await this.readIndex();
+    const record = index.records.find((item) => item.id === id && item.owner_scope === cleanOwnerScope(ownerScope) && item.status === "active");
+    if (!record) return { ok: false as const, error: "not_found" };
+    const modern = path.join(this.filesDir, record.checksum_sha256);
+    try {
+      const info = await stat(modern);
+      if (info.isFile() && info.size > 0) return { ok: true as const, path: modern, asset: record };
+    } catch {}
+    const legacy = path.join(this.legacyFilesDir, record.id);
+    try {
+      const info = await stat(legacy);
+      if (info.isFile() && info.size > 0) return { ok: true as const, path: legacy, asset: record };
+    } catch {}
+    return { ok: false as const, error: "file_missing" };
   }
 
   async listAssets(ownerScope: string) {

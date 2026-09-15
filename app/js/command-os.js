@@ -7,9 +7,10 @@ import {
   memoryStats,
   fmtMoney,
   session,
-} from "./store.js?v=phantom-live-20260822-198";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260822-198";
-import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings } from "./settings.js?v=phantom-live-20260822-198";
+  workspaceStorageGetItem,
+} from "./store.js?v=phantom-live-20260914-204";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260914-204";
+import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings } from "./settings.js?v=phantom-live-20260914-204";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -100,6 +101,32 @@ function audienceSignal() {
     windowDays,
     platforms: linked.length,
     avgPerDay: Math.round(impressions / Math.max(1, windowDays)),
+  };
+}
+
+function marketingInventory() {
+  const readCount = (key, nested = "") => {
+    try {
+      const parsed = JSON.parse(workspaceStorageGetItem(key) || (nested ? "{}" : "[]"));
+      const rows = nested ? parsed?.[nested] : parsed;
+      return Array.isArray(rows) ? rows.filter(Boolean).length : 0;
+    } catch {
+      return 0;
+    }
+  };
+  let accounts = [];
+  try { accounts = loadSocialAccounts(); } catch { accounts = []; }
+  const connected = accounts.filter((account) => {
+    const status = String(account?.officialConnectState || account?.connectionStatus || "").toLowerCase();
+    const mode = String(account?.connectMode || "").toLowerCase();
+    return ["connected", "limited_permissions"].includes(status)
+      || ["live-api", "oauth-connected"].includes(mode)
+      || Boolean(account?.hermesProof);
+  }).length;
+  return {
+    assets: Math.max(visibleCount(store.state.media), readCount("pf.contenthub.assets.v1", "assets")),
+    drafts: readCount("pf.contenthub.publish.drafts.v1"),
+    connected,
   };
 }
 
@@ -364,22 +391,31 @@ function syncCommandOS() {
   const bridge = liveBridgeState();
   const name = (ctx.session?.name || $("[data-user-name]")?.textContent || "Operator").trim();
   const initial = name.slice(0, 1).toUpperCase() || "P";
+  const audience = audienceSignal();
+  const marketing = marketingInventory();
 
   setNode(
     "revenue",
-    money.transactions.length ? fmtMoney(money.netCash) : "—",
-    money.transactions.length ? plural(money.transactions.length, "confirmed transaction") : "No ledger data",
+    marketing.assets,
+    marketing.assets ? plural(marketing.assets, "creative asset") : "Bring in the first media batch",
   );
-  setNode("clients", leads, leads ? plural(leads, "organization record") : "No records");
-  setNode("missions", agents.length, agents.length ? plural(agents.length, "mission in motion", "missions in motion") : "None in motion");
+  setNode("clients", marketing.drafts, marketing.drafts ? plural(marketing.drafts, "publishing draft") : "Build the first campaign");
+  setNode(
+    "missions",
+    audience.ready ? fmtCompact(audience.impressions) : marketing.connected,
+    audience.ready ? `${plural(audience.platforms, "measured channel")} · ${audience.windowDays}d` : (marketing.connected ? plural(marketing.connected, "connected channel") : "Connect a social channel"),
+  );
   setNode("approvals", pendingApprovals, pendingApprovals ? plural(pendingApprovals, "decision waiting") : "None waiting");
-  setNode("risk", riskRecords, riskRecords ? plural(riskRecords, "recorded signal") : "No recorded alerts");
-  setNode("health", health.short, health.detail);
+  setNode("risk", leads, leads ? plural(leads, "tracked opportunity") : "No open relationships yet");
+  setNode(
+    "health",
+    money.transactions.length ? fmtMoney(money.netCash) : "—",
+    money.transactions.length ? plural(money.transactions.length, "confirmed transaction") : "No attributed revenue yet",
+  );
 
   const products = visibleCount(store.state.products);
-  const mediaItems = visibleCount(store.state.media);
+  const mediaItems = marketing.assets;
   const sites = visibleCount(store.state.sites);
-  const audience = audienceSignal();
 
   setDivision("phantomplay", "Open entertainment operations");
   setDivision("phantomstore", products ? plural(products, "product") : "No products loaded");
@@ -402,12 +438,12 @@ function syncCommandOS() {
      state is a no-op on the attribute, so once data settles this stops firing
      the MutationObserver and the sync loop goes quiet. */
   const liveMap = {
-    revenue: money.transactions.length > 0,
-    clients: leads > 0,
-    missions: agents.length > 0,
+    revenue: marketing.assets > 0,
+    clients: marketing.drafts > 0,
+    missions: audience.ready || marketing.connected > 0,
     approvals: pendingApprovals > 0,
-    risk: riskRecords > 0,
-    health: health.short !== "Checking",
+    risk: leads > 0,
+    health: money.transactions.length > 0,
   };
   Object.keys(liveMap).forEach((key) => {
     const node = $(`[data-os-node="${key}"]`);
@@ -440,7 +476,7 @@ function syncCommandOS() {
     const label = $("b", core);
     const detail = $("i", core);
     if (label) label.textContent = agents.length ? "Working" : "Ready";
-    if (detail) detail.textContent = agents.length ? plural(agents.length, "mission routed") : "Operating intelligence";
+    if (detail) detail.textContent = agents.length ? plural(agents.length, "mission routed") : "Growth intelligence";
   }
 
   const time = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });

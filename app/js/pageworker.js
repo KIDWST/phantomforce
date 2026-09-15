@@ -4,10 +4,10 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260822-198";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260822-198";
-import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260822-198";
-import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260822-198";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260914-204";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260914-204";
+import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260914-204";
+import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260914-204";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")

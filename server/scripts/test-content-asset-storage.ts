@@ -20,11 +20,13 @@ try {
     ownerScope: "tenant-a",
     dataUrl: pngDataUrl,
     originalName: "hero.png",
+    campaignId: "campaign-one",
   });
   assert.equal(first.ok, true);
   if (!first.ok) throw new Error(first.error);
   assert.equal(first.deduplicated, false);
   assert.equal(first.asset.mime_type, "image/png");
+  assert.equal(first.asset.campaign_id, "campaign-one");
   assert.match(first.asset.checksum_sha256, /^[a-f0-9]{64}$/);
 
   const spoofed = await provider.putAsset({
@@ -80,7 +82,7 @@ try {
   await assert.rejects(stat(path.join(stateDir, "blobs", tenantB.asset.checksum_sha256)));
 
   const index = JSON.parse(await readFile(path.join(stateDir, "index.json"), "utf8")) as { schemaVersion: number; records: unknown[] };
-  assert.equal(index.schemaVersion, 2);
+  assert.equal(index.schemaVersion, 3);
   assert.equal(index.records.length, 0);
 
   console.log("content asset storage tests passed");

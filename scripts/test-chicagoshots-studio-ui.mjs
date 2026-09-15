@@ -1,0 +1,40 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const main = readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
+const studio = readFileSync(new URL("../app/js/chicagoshots-studio.js", import.meta.url), "utf8");
+const css = readFileSync(new URL("../app/chicagoshots-studio.css", import.meta.url), "utf8");
+const server = readFileSync(new URL("../server/src/index.ts", import.meta.url), "utf8");
+const storage = readFileSync(new URL("../server/src/phantom-ai/content-asset-storage.ts", import.meta.url), "utf8");
+
+assert.match(main, /renderChicagoShotsStudio[\s\S]*id: "chicagoshots"[\s\S]*ChicagoShots Studio/u);
+assert.match(main, /chicagoshots-studio\.css\?v=phantom-live-20260914-203/u);
+assert.match(studio, /Upload a batch[\s\S]*data-cs-upload-input[\s\S]*multiple/u);
+assert.match(studio, /Route this batch to[\s\S]*data-cs-upload-campaign[\s\S]*campaign_id/u);
+assert.match(studio, /outcomes\?\.assets_total[\s\S]*attributed inquiries/u);
+assert.match(studio, /copyCampaignLink[\s\S]*pf_campaign[\s\S]*data-cs-copy-campaign/u);
+assert.match(studio, /Attribution shows real matched inquiries only\./u);
+assert.match(studio, /reply-drafts\/queue[\s\S]*Nothing was sent/u);
+assert.match(studio, /social-oauth\/start[\s\S]*authorizationUrl/u);
+assert.match(studio, /content\/assets\/\$\{encodeURIComponent\(id\)\}\/thumbnail/u);
+assert.match(studio, /local-assets\/refresh[\s\S]*Rescan camera folder/u);
+assert.match(studio, /GROWTH CAMPAIGNS[\s\S]*Every shoot becomes a revenue system/u);
+assert.match(studio, /data-cs-new-campaign[\s\S]*Campaign blueprint[\s\S]*Sports \+ athletes/u);
+assert.match(studio, /data-cs-campaign-form[\s\S]*Create campaign engine/u);
+assert.match(studio, /api\("\/phantom-ai\/ops\/chicagoshots\/campaigns"[\s\S]*method: "POST"/u);
+assert.match(studio, /Creates an internal plan only\. No post, email, or CRM message is sent\./u);
+assert.match(studio, /campaigns\/\$\{encodeURIComponent\(campaignId\)\}\/deliverables[\s\S]*ready_for_review/u);
+assert.match(server, /api\/public\/chicagoshots\/inquiries[\s\S]*createWorkspaceApproval/u);
+assert.match(server, /post\("\/phantom-ai\/ops\/chicagoshots\/campaigns"[\s\S]*createChicagoShotsCampaign/u);
+assert.match(server, /campaign_id[\s\S]*ChicagoShots campaign not found\.[\s\S]*campaignId/u);
+assert.match(server, /campaign_tag[\s\S]*attributedCampaign[\s\S]*inquiries_total/u);
+assert.match(server, /campaigns\/:campaignId\/deliverables\/:deliverableId[\s\S]*campaign-deliverable-review/u);
+assert.match(server, /campaign_updates_are_internal:\s*true/u);
+assert.match(server, /local_library:[\s\S]*localAssets\.slice\(0, limit\)\.map\(publicLocalAsset\)/u);
+assert.match(server, /content\/assets\/:id\/thumbnail[\s\S]*x-phantom-thumbnail-state/u);
+assert.match(storage, /video\/quicktime[\s\S]*video\/webm/u);
+assert.match(storage, /campaign_id:\s*string \| null[\s\S]*schemaVersion:\s*3/u);
+assert.doesNotMatch(studio, /external_send\s*:\s*true/u);
+assert.match(css, /\.cs-hero[\s\S]*\.cs-campaign-engine[\s\S]*\.cs-campaign-builder[\s\S]*\.cs-social-grid[\s\S]*\.cs-crm-panel[\s\S]*@media/u);
+
+console.log("ChicagoShots Studio UI checks passed.");

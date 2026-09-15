@@ -4,18 +4,27 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const main = read("app/js/main.js");
+const workspaces = read("app/js/workspaces.js");
 const organization = read("app/js/organization.js");
 const settings = read("app/js/settings.js");
 const registry = read("server/src/customization/module-registry.ts");
 
-assert.match(main, /id: "leads",\s+label: "Leads",\s+icon: "users", ws: "leads"/u,
-  "Leads must remain a visible acquisition-pipeline destination.");
-assert.match(main, /id: "clients",\s+label: "Clients",\s+icon: "users", ws: "clients"/u,
-  "Client 360 must remain distinct from the lead pipeline.");
-assert.doesNotMatch(main, /id: "(?:leads|clients)"[^\n]*navHidden/u,
-  "Leads and Clients must not be hidden with the retired Client Setup surface.");
-assert.match(main, /leads: "Leads"/u,
-  "Mobile navigation must call the acquisition pipeline Leads.");
+assert.match(main, /id: "leads",\s+label: "Leads & Clients",\s+icon: "users", ws: "leads"/u,
+  "Leads and active clients must share one visible relationship destination.");
+assert.doesNotMatch(main, /\{ id: "clients",[^\n]*ws: "clients"/u,
+  "The navigation must not duplicate the CRM as a separate Clients tab.");
+assert.doesNotMatch(main, /id: "leads"[^\n]*navHidden/u,
+  "The combined relationship workspace must not be hidden with the retired Client Setup surface.");
+assert.match(main, /leads: "CRM"/u,
+  "Mobile navigation must give the combined relationship workspace a compact CRM label.");
+assert.match(main, /clients: "leads"/u,
+  "Legacy Clients deep links must highlight the combined relationship workspace.");
+assert.match(workspaces, /function renderRelationships[\s\S]*data-relationship-tab="leads"[\s\S]*data-relationship-tab="clients"/u,
+  "The relationship workspace must provide Leads and Active Clients views inside one tab.");
+assert.match(workspaces, /function isActiveClient[\s\S]*lead\?\.status === "won"/u,
+  "Won relationships must graduate into the Active Clients view.");
+assert.match(workspaces, /filter\(\(lead\) => lead\.ws === ws && !isActiveClient\(lead\)\)/u,
+  "The Leads view must not duplicate active clients.");
 assert.doesNotMatch(main, /id: "clientsetup"|label: "Client Setup"/iu,
   "Client Setup must not return as a primary navigation module.");
 

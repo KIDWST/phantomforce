@@ -19,6 +19,8 @@ const { requiresWrite, makePaywallPreHandler } = await import("../src/access/pay
 assert(requiresWrite("GET", "/client-access-workflow") === false, "GET is free (view)");
 assert(requiresWrite("HEAD", "/anything") === false, "HEAD is free");
 assert(requiresWrite("POST", "/auth/demo-login") === false, "login is free");
+assert(requiresWrite("POST", "/api/public/chicagoshots/inquiries") === false, "public ChicagoShots inquiry intake is route-guarded");
+assert(requiresWrite("POST", "/api/public/chicagoshots/inquiries/anything") === true, "ChicagoShots public intake exemption is exact");
 assert(requiresWrite("POST", "/phantom-ai/security/scan/preview") === false, "preview is free");
 assert(requiresWrite("POST", "/phantom-ai/hermes/interaction-memory/persist-preview") === false, "persist-preview is free");
 assert(requiresWrite("POST", "/client-provisioning/dry-run") === false, "dry-run is free");

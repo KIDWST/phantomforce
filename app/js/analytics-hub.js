@@ -4,12 +4,14 @@
 import {
   store, isAdmin, isOwnerOperator, session, currentTenantId, moneyView, fmtMoney,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260822-198";
-import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260822-198";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260822-198";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260822-198";
+} from "./store.js?v=phantom-live-20260914-204";
+import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20260914-204";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260914-204";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260914-204";
 
-const LAST_DOMAIN_KEY = "pf.analytics.lastDomain.v1";
+// V2 intentionally resets the old operations-first selection once so this
+// release opens on social media. After that, an explicit user choice sticks.
+const LAST_DOMAIN_KEY = "pf.analytics.lastDomain.v2";
 const CUSTOM_SOURCES_KEY = "pf.analytics.customSources.v1";
 const DOMAIN_COLORS = { pulse: "#63e2a9", store: "#39c98f", games: "#7c6cf0", custom: "#4ea1ff", social: "#ffb86b", money: "#f4c95d", intelligence: "#ff687d" };
 
@@ -49,24 +51,21 @@ async function fetchGamesAnalytics() {
 
 function availableDomains() {
   const domains = [
-    { id: "pulse", label: "Overview" },
-    { id: "store", label: "Store" },
-    { id: "games", label: "Play" },
-    { id: "money", label: "Accounting" },
-    { id: "intelligence", label: "Competitors" },
+    { id: "social", label: "Social Media" },
+    { id: "pulse", label: "Business Overview" },
+    { id: "store", label: "Campaign Commerce" },
+    { id: "money", label: "Revenue" },
+    { id: "intelligence", label: "Competitor Marketing" },
+    { id: "games", label: "Game Analytics" },
   ];
   for (const source of loadCustomSources()) domains.push({ id: `custom:${source.id}`, label: source.label });
-  domains.push({ id: "social", label: "Audience" });
   return domains;
 }
 
 function preferredInitialDomain(domains, saved) {
   const ids = new Set(domains.map((domain) => domain.id));
-  if (saved && saved !== "social" && ids.has(saved)) return saved;
-  if (ids.has("pulse")) return "pulse";
-  if (ids.has("store")) return "store";
-  if (ids.has("games")) return "games";
-  return domains[0]?.id || "social";
+  if (saved && ids.has(saved)) return saved;
+  return ids.has("social") ? "social" : (domains[0]?.id || "social");
 }
 
 function domainBarChart(rows, { emptyTitle, emptyBody, ariaLabel = "Metric comparison" } = {}) {
@@ -459,7 +458,7 @@ export function renderUnifiedAnalytics(body) {
     <div class="an-domain-shell">
       <section class="ch-card an-domain-picker">
         <div class="ch-card-h">
-          <div><p class="ch-eyebrow">Analytics</p><h3>Performance intelligence</h3></div>
+          <div><p class="ch-eyebrow">Media &amp; marketing</p><h3>Social analytics first</h3></div>
           <div class="an-domain-controls">
             <select data-an-domain aria-label="Analytics source"></select>
             <select data-an-range aria-label="Time range">

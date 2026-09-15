@@ -9,25 +9,25 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260822-198";
+} from "./store.js?v=phantom-live-20260914-204";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260822-198";
+} from "./orgs.js?v=phantom-live-20260914-204";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260822-198";
+} from "./proposalpipeline.js?v=phantom-live-20260914-204";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260822-198";
+} from "./approvalpipeline.js?v=phantom-live-20260914-204";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -35,9 +35,9 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260822-198";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260822-198";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260822-198";
+} from "./financeledger.js?v=phantom-live-20260914-204";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-204";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-204";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -54,6 +54,7 @@ const approvalUi = { loadedTenant: "", loadingTenant: "", runLoadedTenant: "", r
 const auditUi = { orgId: "", state: "idle", events: [], error: "", refreshedAt: "", query: "" };
 const financeUi = { loadedTenant: "", loadingTenant: "", notice: "", serverSummary: null };
 const operatorUi = { followQuery: "", followFilter: "action", clientId: "", auditQuery: "", notice: "" };
+const relationshipsUi = { view: "leads" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -298,13 +299,19 @@ function persistOperationalLead(lead) {
 
 function filteredCrmContacts() {
   const ws = leadWorkspaceId();
-  let leads = store.state.leads.filter((lead) => lead.ws === ws);
+  let leads = store.state.leads.filter((lead) => lead.ws === ws && !isActiveClient(lead));
   if (leadsUi.status !== "all") leads = leads.filter((lead) => lead.status === leadsUi.status);
   const q = leadsUi.query.trim().toLowerCase();
   if (q) {
     leads = leads.filter((lead) => `${lead.name} ${lead.company} ${lead.email || ""} ${lead.phone || ""} ${lead.website || ""} ${Object.values(lead.socials || {}).join(" ")} ${(lead.tags || []).join(" ")}`.toLowerCase().includes(q));
   }
   return leads;
+}
+
+function isActiveClient(lead) {
+  const type = String(lead?.type || "").toLowerCase();
+  const stage = String(lead?.crmStage || "").toLowerCase();
+  return lead?.status === "won" || type === "client" || type === "active-client" || /^(active )?(client|customer)$/u.test(stage);
 }
 
 function crmContactCard(l) {
@@ -331,13 +338,13 @@ function renderLeads(el, rerender) {
   const settings = workspaceCrmSettings(ws);
   const leads = filteredCrmContacts();
   const selected = leads.find((lead) => lead.id === leadsUi.selectedId) || leads[0] || null;
-  const lanes = [["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["won", "Won"], ["lost", "Lost"]];
+  const lanes = [["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["lost", "Lost / archived"]];
   el.innerHTML = `
     <section class="crm-command">
       <div>
         <p>Easy CRM · ${esc(leadWorkspaceName(ws))}</p>
-        <h3>Client database</h3>
-        <span>Tell Phantom “pull 5 new clients per day” or capture contacts manually. Each organization keeps its own CRM memory.</span>
+        <h3>Lead pipeline</h3>
+        <span>Find, qualify, and move prospects here. Won relationships graduate automatically to Active Clients.</span>
       </div>
       <form class="lead-intel-form" data-lead-form>
         <input data-lead-prompt value="${esc(leadsUi.prompt)}" placeholder="pull 5 new clients per day, gyms in Chicago, warm referrals..." />
@@ -901,17 +908,18 @@ function renderComms(el, rerender) {
 }
 
 function renderClients(el, rerender) {
-  const clients = visible(store.state.leads).slice().sort((a, b) => String(a.company || a.name).localeCompare(String(b.company || b.name)));
+  const ws = leadWorkspaceId();
+  const clients = store.state.leads.filter((lead) => lead.ws === ws && isActiveClient(lead)).slice().sort((a, b) => String(a.company || a.name).localeCompare(String(b.company || b.name)));
   const selected = clients.find((lead) => lead.id === operatorUi.clientId) || clients[0] || null;
   if (selected && !operatorUi.clientId) operatorUi.clientId = selected.id;
   const proposals = selected ? visible(store.state.proposals).filter((item) => [item.client, item.contact].some((value) => String(value || "").toLowerCase() === String(selected.company || selected.name || "").toLowerCase())) : [];
   const bookings = selected ? visible(store.state.bookings).filter((item) => String(item.client || "").toLowerCase().includes(String(selected.name || selected.company || "").toLowerCase())) : [];
   const activity = selected ? visible(store.state.activity).filter((item) => String(item.text || "").toLowerCase().includes(String(selected.name || selected.company || "").toLowerCase())).slice(0, 8) : [];
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">A single organization-scoped client view: contact, permission, value, next step, offers, bookings, and recent evidence.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Active relationships only: contact, permission, value, next step, offers, bookings, and recent evidence.</p></div>
     <div class="ops-client-layout">
       <div class="ops-client-list">
-        ${clients.map((lead) => `<button class="ops-client-row ${selected?.id === lead.id ? "is-active" : ""}" data-act="select-client" data-id="${esc(lead.id)}"><span>${esc(lead.name || lead.company)}</span><b>${esc(lead.company || statusLabel(lead.status))}</b><i>${fmtMoney(lead.value || 0)}</i></button>`).join("") || empty("No clients or prospects recorded yet.")}
+        ${clients.map((lead) => `<button class="ops-client-row ${selected?.id === lead.id ? "is-active" : ""}" data-act="select-client" data-id="${esc(lead.id)}"><span>${esc(lead.name || lead.company)}</span><b>${esc(lead.company || statusLabel(lead.status))}</b><i>${fmtMoney(lead.value || 0)}</i></button>`).join("") || empty("No active clients yet. Mark a proposal won and the relationship will move here.")}
       </div>
       <section class="ops-client-360">
         ${selected ? `
@@ -931,6 +939,34 @@ function renderClients(el, rerender) {
       </section>
     </div>`;
   bindActions(el, { "select-client": (id) => { operatorUi.clientId = id; rerender(); } });
+}
+
+function renderRelationships(el, rerender) {
+  const ws = leadWorkspaceId();
+  const repaint = () => renderRelationships(el, rerender);
+  syncCrmSelectionScope(ws);
+  syncServerCrm(ws, repaint);
+  const records = store.state.leads.filter((lead) => lead.ws === ws);
+  const activeClients = records.filter(isActiveClient);
+  const leads = records.filter((lead) => !isActiveClient(lead));
+  el.innerHTML = `
+    <div class="accounting-tabs" role="tablist" aria-label="Relationship view">
+      <button type="button" role="tab" data-relationship-tab="leads" class="${relationshipsUi.view === "leads" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "leads"}">Leads <b>${leads.length}</b></button>
+      <button type="button" role="tab" data-relationship-tab="clients" class="${relationshipsUi.view === "clients" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "clients"}">Active Clients <b>${activeClients.length}</b></button>
+    </div>
+    <div data-relationship-body></div>`;
+  const body = el.querySelector("[data-relationship-body]");
+  if (relationshipsUi.view === "clients") renderClients(body, repaint);
+  else renderLeads(body, repaint);
+  el.querySelectorAll("[data-relationship-tab]").forEach((button) => button.addEventListener("click", () => {
+    relationshipsUi.view = button.dataset.relationshipTab === "clients" ? "clients" : "leads";
+    repaint();
+  }));
+}
+
+function renderLegacyClientsRoute(el, rerender) {
+  relationshipsUi.view = "clients";
+  renderRelationships(el, rerender);
 }
 
 
@@ -2347,7 +2383,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260822-198")
+      import("./brain.js?v=phantom-live-20260914-204")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -4141,10 +4177,10 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
-  leads: { title: "Leads", kicker: "Tenant-scoped pipeline and contact intelligence", render: renderLeads },
+  leads: { title: "Leads & Clients", kicker: "Prospects and active relationships in one CRM", render: renderRelationships },
   followup: { title: "Follow-up", kicker: "Deadline-first outreach desk", render: renderFollowUp },
   comms: { title: "Comms", kicker: "Permission-aware drafts and send readiness", render: renderComms },
-  clients: { title: "Clients", kicker: "Client 360, relationship value, and activity", render: renderClients },
+  clients: { title: "Leads & Clients", kicker: "Active client relationships", render: renderLegacyClientsRoute },
   proposals: { title: "Offers", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Offers to review", kicker: "Review requests and proof", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },

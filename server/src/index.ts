@@ -272,6 +272,9 @@ import {
   updateChicagoShotsProposalHistoryRecordStatus,
 } from "./phantom-ai/chicagoshots-proposal-history.js";
 import { getChicagoShotsNexProspexCrm } from "./phantom-ai/chicagoshots-nexprospex-crm.js";
+import { buildChicagoShotsReplyDrafts } from "./phantom-ai/chicagoshots-studio.js";
+import { createChicagoShotsInquiry, listChicagoShotsInquiries } from "./phantom-ai/chicagoshots-inquiry-store.js";
+import { createChicagoShotsCampaign, listChicagoShotsCampaigns, updateChicagoShotsCampaignDeliverable } from "./phantom-ai/chicagoshots-campaign-store.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
   getSecurityScannerStatus,
@@ -960,6 +963,8 @@ await app.register(cors, {
   origin: [
     /^http:\/\/127\.0\.0\.1:\d+$/,
     /^http:\/\/localhost:\d+$/,
+    "https://chicagoshots.com",
+    "https://www.chicagoshots.com",
     ...PUBLIC_WEB_ORIGINS,
   ],
   credentials: true,
@@ -8689,6 +8694,97 @@ app.get("/phantom-ai/hermes/interaction-memory/history", async (request, reply) 
   };
 });
 
+const ChicagoShotsPublicInquirySchema = z.object({
+  idempotency_key: z.string().trim().min(8).max(180),
+  name: z.string().trim().min(2).max(120),
+  email: z.string().trim().email().max(240),
+  phone: z.string().trim().max(60).optional().default(""),
+  project_type: z.string().trim().min(2).max(100),
+  event_date: z.string().trim().max(40).optional().default(""),
+  location: z.string().trim().max(180).optional().default(""),
+  budget: z.string().trim().max(80).optional().default(""),
+  message: z.string().trim().min(10).max(2_000),
+  referral: z.string().trim().max(180).optional().default(""),
+  campaign_tag: z.string().trim().max(180).optional().default(""),
+  utm_source: z.string().trim().max(120).optional().default(""),
+  utm_medium: z.string().trim().max(120).optional().default(""),
+  utm_campaign: z.string().trim().max(180).optional().default(""),
+  landing_url: z.string().trim().max(800).optional().default(""),
+  referrer_url: z.string().trim().max(800).optional().default(""),
+  website: z.string().trim().max(300).optional().default(""),
+  started_at: z.number().int().positive(),
+});
+const chicagoShotsInquiryRate = new Map<string, number[]>();
+
+app.post("/api/public/chicagoshots/inquiries", async (request, reply) => {
+  reply.header("cache-control", "no-store");
+  const parsed = ChicagoShotsPublicInquirySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: "Please check the required inquiry fields." });
+  if (parsed.data.website) return reply.code(202).send({ ok: true, received: true });
+
+  const elapsed = Date.now() - parsed.data.started_at;
+  if (elapsed < 1_500 || elapsed > 24 * 60 * 60 * 1_000) {
+    return reply.code(400).send({ ok: false, error: "Please reopen the inquiry form and try again." });
+  }
+  const rateKey = String(request.ip || "unknown").slice(0, 120);
+  const cutoff = Date.now() - 60 * 60 * 1_000;
+  const recent = (chicagoShotsInquiryRate.get(rateKey) || []).filter((timestamp) => timestamp >= cutoff);
+  if (recent.length >= 6) return reply.code(429).send({ ok: false, error: "Too many inquiry attempts. Please try again later." });
+  recent.push(Date.now());
+  chicagoShotsInquiryRate.set(rateKey, recent);
+
+  try {
+    const campaigns = await listChicagoShotsCampaigns();
+    const campaignTag = parsed.data.campaign_tag || parsed.data.utm_campaign;
+    const attributedCampaign = campaignTag
+      ? campaigns.find((campaign) => campaign.attributionTag === campaignTag)
+      : undefined;
+    const result = await createChicagoShotsInquiry({
+      idempotencyKey: parsed.data.idempotency_key,
+      name: parsed.data.name,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      projectType: parsed.data.project_type,
+      eventDate: parsed.data.event_date,
+      location: parsed.data.location,
+      budget: parsed.data.budget,
+      message: parsed.data.message,
+      referral: parsed.data.referral,
+      attribution: {
+        campaignId: attributedCampaign?.id || null,
+        campaignTag,
+        utmSource: parsed.data.utm_source,
+        utmMedium: parsed.data.utm_medium,
+        utmCampaign: parsed.data.utm_campaign,
+        landingUrl: parsed.data.landing_url,
+        referrerUrl: parsed.data.referrer_url,
+      },
+    });
+    if (result.created) {
+      await createWorkspaceApproval({
+        tenantId: "client-chicagoshots",
+        actor: "chicagoshots.com",
+        approval: {
+          type: "crm-inquiry-response-draft",
+          title: `New ${result.inquiry.projectType} inquiry: ${result.inquiry.name}`,
+          detail: `INQUIRY\n${result.inquiry.email}${result.inquiry.phone ? ` · ${result.inquiry.phone}` : ""}\n${result.inquiry.eventDate || "Date not set"} · ${result.inquiry.location || "Location not set"}${attributedCampaign ? `\nAttributed campaign: ${attributedCampaign.name}` : ""}\n${result.inquiry.message}\n\nRESPONSE DRAFT\n${result.inquiry.responseDraft.subject}\n\n${result.inquiry.responseDraft.body}`,
+          ref: `chicagoshots-inquiry:${result.inquiry.id}`,
+          status: "pending",
+          requestedBy: "chicagoshots.com",
+        },
+      });
+    }
+    return reply.code(result.created ? 201 : 200).send({
+      ok: true,
+      received: true,
+      inquiry_id: result.inquiry.id,
+      message: "Your project is in the ChicagoShots production queue.",
+    });
+  } catch {
+    return reply.code(503).send({ ok: false, error: "The inquiry could not be saved right now. Please email booking@chicagoshots.com." });
+  }
+});
+
 app.post("/phantom-ai/ops/chicagoshots/lead-intake/preview", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -8903,6 +8999,279 @@ app.get("/phantom-ai/ops/chicagoshots/nexprospex-crm", async (request, reply) =>
       production_ledger_write: false,
       source_data_mutated: false,
       credentials_returned: false,
+    });
+  }
+});
+
+const CHICAGOSHOTS_WORKSPACE_ID = "client-chicagoshots";
+
+app.get("/phantom-ai/ops/chicagoshots/studio", async (request, reply) => {
+  const session = requireClientWorkspaceView(request, reply, CHICAGOSHOTS_WORKSPACE_ID);
+  if (!session) return reply;
+  const query = request.query as { limit?: string } | undefined;
+  const requestedLimit = Number.parseInt(String(query?.limit ?? "12"), 10);
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(25, requestedLimit)) : 12;
+
+  try {
+    const provider = getContentAssetStorageProvider();
+    const ownerScope = contentAssetOwnerScope(session, CHICAGOSHOTS_WORKSPACE_ID);
+    const [crm, assets, publications, approvalDocument, inquiries, localAssetIndex, campaigns] = await Promise.all([
+      getChicagoShotsNexProspexCrm(Math.max(limit, 25)),
+      provider.listAssets(ownerScope),
+      listContentPublications(CHICAGOSHOTS_WORKSPACE_ID),
+      getWorkspaceApprovalDocument(CHICAGOSHOTS_WORKSPACE_ID, session.id),
+      listChicagoShotsInquiries(200),
+      loadLocalAssetIndex(false),
+      listChicagoShotsCampaigns(),
+    ]);
+    const localAssets = visibleLocalAssets(localAssetIndex);
+    const responseDrafts = buildChicagoShotsReplyDrafts(crm.follow_up_candidates, limit);
+    const existingApprovalRefs = new Set(approvalDocument.approvals.map((approval) => approval.ref));
+    const publicationCounts = publications.reduce<Record<string, number>>((counts, publication) => {
+      counts[publication.status] = (counts[publication.status] || 0) + 1;
+      return counts;
+    }, {});
+    const socialConnections = getCustomerSocialConnectionStatus(CHICAGOSHOTS_WORKSPACE_ID);
+    const providers = Array.isArray(socialConnections.providers) ? socialConnections.providers : [];
+
+    return {
+      ok: true,
+      tenant_id: CHICAGOSHOTS_WORKSPACE_ID,
+      business: "ChicagoShots",
+      crm,
+      media: {
+        assets_total: assets.length,
+        bytes_total: assets.reduce((sum, asset) => sum + asset.size_bytes, 0),
+        recent_assets: assets.slice(0, limit),
+        automatic_thumbnail_route: "/phantom-ai/content/assets/:id/thumbnail",
+        local_library: {
+          ok: localAssetIndex.ok,
+          root_label: localAssetIndex.rootLabel,
+          source: localAssetIndex.source,
+          count: localAssets.length,
+          generated_at: localAssetIndex.generatedAt,
+          truncated: localAssetIndex.truncated,
+          recent: localAssets.slice(0, limit).map(publicLocalAsset),
+        },
+      },
+      publishing: {
+        total: publications.length,
+        counts: publicationCounts,
+        pending_approval: publications.filter((publication) => publication.status === "approval_required").length,
+        recent: publications.slice(0, limit),
+      },
+      socials: {
+        providers,
+        connected: providers.filter((provider) => ["CONNECTED", "LIMITED_PERMISSIONS"].includes(String(provider.connectionStatus))).length,
+        total: providers.length,
+      },
+      response_drafts: responseDrafts.map((draft) => ({
+        ...draft,
+        already_queued: existingApprovalRefs.has(draft.ref),
+      })),
+      approvals: {
+        pending_total: approvalDocument.approvals.filter((approval) => approval.status === "pending").length,
+        crm_reply_drafts: approvalDocument.approvals.filter((approval) => approval.type === "crm-response-draft").slice(0, limit),
+      },
+      inquiries: {
+        total: inquiries.length,
+        new: inquiries.filter((inquiry) => inquiry.status === "new").length,
+        recent: inquiries.slice(0, limit),
+      },
+      campaigns: campaigns.map((campaign) => {
+        const attributedInquiries = inquiries.filter((inquiry) => inquiry.attribution?.campaignId === campaign.id);
+        return {
+          ...campaign,
+          outcomes: {
+            assets_total: assets.filter((asset) => asset.campaign_id === campaign.id).length,
+            inquiries_total: attributedInquiries.length,
+            new_inquiries: attributedInquiries.filter((inquiry) => inquiry.status === "new").length,
+            booked_inquiries: attributedInquiries.filter((inquiry) => inquiry.status === "booked").length,
+          },
+        };
+      }),
+      safety: {
+        external_send: false,
+        external_publish: false,
+        source_crm_mutated: false,
+        campaign_updates_are_internal: true,
+        reply_drafts_require_owner_approval: true,
+        publication_requires_provider_receipt: true,
+      },
+    };
+  } catch (error) {
+    return reply.code(503).send({
+      ok: false,
+      error: error instanceof Error ? error.message : "ChicagoShots Studio is unavailable.",
+      external_send: false,
+      external_publish: false,
+      source_crm_mutated: false,
+    });
+  }
+});
+
+app.post("/phantom-ai/ops/chicagoshots/campaigns", async (request, reply) => {
+  const session = requireClientWorkspaceView(request, reply, CHICAGOSHOTS_WORKSPACE_ID);
+  if (!session) return reply;
+  if (!canManageWorkspaceModules(session, CHICAGOSHOTS_WORKSPACE_ID)) {
+    return reply.code(403).send({ ok: false, error: "ChicagoShots campaign-management access is required." });
+  }
+  const body = (request.body ?? {}) as {
+    name?: unknown;
+    template?: unknown;
+    date_label?: unknown;
+    target_outcome?: unknown;
+    channels?: unknown;
+  };
+  try {
+    const campaign = await createChicagoShotsCampaign({
+      name: typeof body.name === "string" ? body.name : "",
+      template: typeof body.template === "string" ? body.template : "custom",
+      dateLabel: typeof body.date_label === "string" ? body.date_label : "",
+      targetOutcome: typeof body.target_outcome === "string" ? body.target_outcome : "",
+      channels: Array.isArray(body.channels) ? body.channels.filter((channel): channel is string => typeof channel === "string") : [],
+      actor: session.id,
+    });
+    return reply.code(201).send({
+      ok: true,
+      tenant_id: CHICAGOSHOTS_WORKSPACE_ID,
+      campaign,
+      external_send: false,
+      external_publish: false,
+      approval_bypassed: false,
+    });
+  } catch (error) {
+    const statusCode = Number((error as { statusCode?: unknown })?.statusCode || 503);
+    return reply.code(Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600 ? statusCode : 503).send({
+      ok: false,
+      error: error instanceof Error ? error.message : "Campaign could not be created.",
+      external_send: false,
+      external_publish: false,
+    });
+  }
+});
+
+app.patch("/phantom-ai/ops/chicagoshots/campaigns/:campaignId/deliverables/:deliverableId", async (request, reply) => {
+  const session = requireClientWorkspaceView(request, reply, CHICAGOSHOTS_WORKSPACE_ID);
+  if (!session) return reply;
+  if (!canManageWorkspaceModules(session, CHICAGOSHOTS_WORKSPACE_ID)) {
+    return reply.code(403).send({ ok: false, error: "ChicagoShots campaign-management access is required." });
+  }
+  const params = request.params as { campaignId?: string; deliverableId?: string };
+  const body = (request.body ?? {}) as { status?: unknown };
+  const status = typeof body.status === "string" ? body.status : undefined;
+  if (!status || !["planned", "in_progress", "ready_for_review"].includes(status)) {
+    return reply.code(400).send({
+      ok: false,
+      error: "Use planned, in_progress, or ready_for_review. Approval and published states come from their verified systems.",
+      external_send: false,
+      external_publish: false,
+    });
+  }
+  try {
+    const result = await updateChicagoShotsCampaignDeliverable({
+      campaignId: String(params.campaignId || ""),
+      deliverableId: String(params.deliverableId || ""),
+      status: status as "planned" | "in_progress" | "ready_for_review",
+      actor: session.id,
+    });
+    let approvalQueued = false;
+    if (status === "ready_for_review") {
+      const ref = `chicagoshots-campaign:${result.campaign.id}:${result.deliverable.id}`;
+      const document = await getWorkspaceApprovalDocument(CHICAGOSHOTS_WORKSPACE_ID, session.id);
+      if (!document.approvals.some((approval) => approval.ref === ref)) {
+        await createWorkspaceApproval({
+          tenantId: CHICAGOSHOTS_WORKSPACE_ID,
+          actor: session.id,
+          approval: {
+            ws: CHICAGOSHOTS_WORKSPACE_ID,
+            type: "campaign-deliverable-review",
+            title: `Campaign review: ${result.deliverable.name}`,
+            detail: `${result.campaign.name}\n${result.campaign.targetOutcome}\nAttribution: ${result.campaign.attributionTag}`,
+            ref,
+            status: "pending",
+            requestedBy: "PhantomForce ChicagoShots Campaign Engine",
+          },
+        });
+        approvalQueued = true;
+      }
+    }
+    return {
+      ok: true,
+      tenant_id: CHICAGOSHOTS_WORKSPACE_ID,
+      ...result,
+      approval_queued: approvalQueued,
+      external_send: false,
+      external_publish: false,
+      approval_bypassed: false,
+      next_action: status === "ready_for_review" ? "Review this deliverable in the approval workflow before publication." : "Continue production tracking.",
+    };
+  } catch (error) {
+    const statusCode = Number((error as { statusCode?: unknown })?.statusCode || 503);
+    return reply.code(Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600 ? statusCode : 503).send({
+      ok: false,
+      error: error instanceof Error ? error.message : "Campaign deliverable could not be updated.",
+      external_send: false,
+      external_publish: false,
+    });
+  }
+});
+
+app.post("/phantom-ai/ops/chicagoshots/reply-drafts/queue", async (request, reply) => {
+  const session = requireClientWorkspaceView(request, reply, CHICAGOSHOTS_WORKSPACE_ID);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.code(403).send({ ok: false, error: "CRM draft access is required." });
+  const body = (request.body ?? {}) as { limit?: unknown };
+  const requestedLimit = Number.parseInt(String(body.limit ?? "8"), 10);
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(25, requestedLimit)) : 8;
+
+  try {
+    const crm = await getChicagoShotsNexProspexCrm(Math.max(limit, 25));
+    const drafts = buildChicagoShotsReplyDrafts(crm.follow_up_candidates, limit);
+    let document = await getWorkspaceApprovalDocument(CHICAGOSHOTS_WORKSPACE_ID, session.id);
+    const existingRefs = new Set(document.approvals.map((approval) => approval.ref));
+    const queued = [];
+    const alreadyQueued = [];
+
+    for (const draft of drafts) {
+      if (existingRefs.has(draft.ref)) {
+        alreadyQueued.push(draft.ref);
+        continue;
+      }
+      const result = await createWorkspaceApproval({
+        tenantId: CHICAGOSHOTS_WORKSPACE_ID,
+        actor: session.id,
+        approval: {
+          ws: CHICAGOSHOTS_WORKSPACE_ID,
+          type: "crm-response-draft",
+          title: `Reply draft: ${draft.organization}`,
+          detail: `${draft.subject}\n\n${draft.body}`,
+          ref: draft.ref,
+          status: "pending",
+          requestedBy: "PhantomForce ChicagoShots Studio",
+        },
+      });
+      document = result.document;
+      existingRefs.add(draft.ref);
+      queued.push({ draft, approval: result.result });
+    }
+
+    return reply.code(queued.length ? 201 : 200).send({
+      ok: true,
+      tenant_id: CHICAGOSHOTS_WORKSPACE_ID,
+      queued,
+      already_queued: alreadyQueued,
+      pending_approvals: document.approvals.filter((approval) => approval.status === "pending").length,
+      external_send: false,
+      source_crm_mutated: false,
+      next_action: "Review the drafts in Approvals. Approval records a decision; it does not send a message.",
+    });
+  } catch (error) {
+    return reply.code(503).send({
+      ok: false,
+      error: error instanceof Error ? error.message : "Reply drafts could not be prepared.",
+      external_send: false,
+      source_crm_mutated: false,
     });
   }
 });
@@ -11183,6 +11552,7 @@ function contentAssetOwnerScope(session: AccessSession, requestedTenantId?: unkn
 
 const ContentAssetUploadSchema = z.object({
   tenant_id: z.string().trim().max(80).optional(),
+  campaign_id: z.string().trim().max(120).optional(),
   image: z.string().trim().min(1).max(24_000_000),
   filename: z.string().trim().max(160).optional(),
 });
@@ -11593,10 +11963,21 @@ app.post("/phantom-ai/content/assets", { bodyLimit: 24 * 1024 * 1024 }, async (r
 
   const provider = getContentAssetStorageProvider();
   const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const campaignId = parsed.data.campaign_id || undefined;
+  if (campaignId) {
+    if (ownerScope !== CHICAGOSHOTS_WORKSPACE_ID) {
+      return reply.code(400).send({ ok: false, error: "Campaign routing is only available in the ChicagoShots workspace." });
+    }
+    const campaigns = await listChicagoShotsCampaigns();
+    if (!campaigns.some((campaign) => campaign.id === campaignId)) {
+      return reply.code(400).send({ ok: false, error: "ChicagoShots campaign not found." });
+    }
+  }
   const result = await provider.putAsset({
     ownerScope,
     dataUrl: parsed.data.image,
     originalName: parsed.data.filename,
+    campaignId,
   });
 
   if (!result.ok) {
@@ -11643,6 +12024,43 @@ app.get("/phantom-ai/content/assets/:id/file", async (request, reply) => {
   }
 
   return { ok: true, session, tenant_id: ownerScope, image: result.dataUrl, asset: result.asset };
+});
+
+app.get("/phantom-ai/content/assets/:id/thumbnail", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const provider = getContentAssetStorageProvider();
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const source = provider.getAssetSource ? await provider.getAssetSource(id, ownerScope) : { ok: false as const, error: "source_path_unavailable" };
+  if (!source.ok) return reply.code(404).send({ ok: false, error: source.error });
+
+  const mime = source.asset.mime_type.toLowerCase();
+  const kind: LocalThumbnailKind = mime.startsWith("image/")
+    ? "image"
+    : mime.startsWith("video/")
+      ? "video"
+      : mime.startsWith("audio/")
+        ? "audio"
+        : "other";
+  const safeOwner = ownerScope.replace(/[^a-zA-Z0-9_.:-]+/gu, "-").slice(0, 100) || "unknown";
+  const outputPath = join(process.cwd(), ".local", "content-asset-thumbnails", safeOwner, `${source.asset.checksum_sha256}.jpg`);
+  const result = await generateLocalMediaThumbnail({ sourcePath: source.path, outputPath, kind });
+  if (result.ok && result.path) {
+    return reply
+      .type("image/jpeg")
+      .header("cache-control", "private, max-age=86400")
+      .header("x-phantom-thumbnail-state", result.state)
+      .send(createReadStream(result.path));
+  }
+
+  return reply
+    .type("image/svg+xml; charset=utf-8")
+    .header("cache-control", "private, max-age=300")
+    .header("x-phantom-thumbnail-state", "fallback")
+    .send(localMediaFallbackSvg({ title: source.asset.original_name, kind }));
 });
 
 app.post("/phantom-ai/content/assets/:id/restore", async (request, reply) => {

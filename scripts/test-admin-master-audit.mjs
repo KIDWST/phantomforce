@@ -26,16 +26,16 @@ if (existsSync(sourcePath)) {
 
 const primaryJobs = [
   ["dashboard", "Overview"],
-  ["leads", "Leads"],
+  ["media", "Media Lab"],
+  ["content", "Content Hub"],
+  ["analytics", "Social Analytics"],
+  ["leads", "Leads &amp; Clients"],
   ["followup", "Follow-up"],
   ["bookings", "Bookings"],
-  ["clients", "Clients"],
   ["money", "Quotes &amp; Money"],
-  ["media", "Media Lab"],
   ["sites", "Sites &amp; Stores"],
   ["approvals", "Approvals"],
   ["riskwatch", "Risk Watch"],
-  ["analytics", "Analytics"],
 ];
 
 let previousIndex = -1;
@@ -54,11 +54,11 @@ assert.match(main, /\{ id: "riskwatch",\s+label: "Risk Watch",[^\n]*ws: "riskwat
 assert.match(main, /crm: "leads"[\s\S]*protect: "riskwatch"/u, "Old CRM and Protect deep links must remain compatible.");
 
 for (const [id, renderer] of [
-  ["leads", "renderLeads"],
+  ["leads", "renderRelationships"],
   ["followup", "renderFollowUp"],
   ["comms", "renderComms"],
   ["bookings", "renderBookings"],
-  ["clients", "renderClients"],
+  ["clients", "renderLegacyClientsRoute"],
   ["riskwatch", "renderRiskWatch"],
   ["runtime", "renderRuntime"],
   ["audit", "renderAuditLog"],
