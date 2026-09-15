@@ -7,8 +7,9 @@ const css = readFileSync(new URL("../app/chicagoshots-studio.css", import.meta.u
 const server = readFileSync(new URL("../server/src/index.ts", import.meta.url), "utf8");
 const storage = readFileSync(new URL("../server/src/phantom-ai/content-asset-storage.ts", import.meta.url), "utf8");
 
-assert.match(main, /renderChicagoShotsStudio[\s\S]*id: "chicagoshots"[\s\S]*ChicagoShots Studio/u);
-assert.match(main, /chicagoshots-studio\.css\?v=phantom-live-20260914-203/u);
+assert.match(main, /renderChicagoShotsStudio[\s\S]*chicagoshots: \{ title: "ChicagoShots Studio"/u);
+assert.match(main, /chicagoshots-studio\.css\?v=phantom-live-[0-9-]+/u);
+assert.doesNotMatch(main, /\{ id: "chicagoshots",\s+label: "ChicagoShots"/u, "ChicagoShots remains an organization workspace, not public platform navigation.");
 assert.match(studio, /Upload a batch[\s\S]*data-cs-upload-input[\s\S]*multiple/u);
 assert.match(studio, /Route this batch to[\s\S]*data-cs-upload-campaign[\s\S]*campaign_id/u);
 assert.match(studio, /outcomes\?\.assets_total[\s\S]*attributed inquiries/u);

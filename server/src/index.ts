@@ -3538,34 +3538,33 @@ app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
   const parsed = CrmPullSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   const discovery = getWebDiscoveryStatus();
+  const existingSettings = await db.crmSettings.findUnique({ where: { orgId } });
+  const existingBrain = existingSettings?.brain && typeof existingSettings.brain === "object" && !Array.isArray(existingSettings.brain)
+    ? existingSettings.brain as Record<string, unknown>
+    : {};
+  const updatedBrain = {
+    ...existingBrain,
+    kind: "phantomforce_org_crm_brain",
+    version: 1,
+    lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
+    dailyPullTarget: parsed.data.count,
+    discoveryStatus: discovery.connected ? "provider-configured-adapter-required" : "provider-required",
+    updatedAt: new Date().toISOString(),
+  } as Prisma.InputJsonValue;
   const settings = await db.crmSettings.upsert({
     where: { orgId },
     update: {
       dailyPullTarget: parsed.data.count,
       sourceMode: "research-required",
       notes: parsed.data.prompt || parsed.data.audience,
-      brain: {
-        kind: "phantomforce_org_crm_brain",
-        version: 1,
-        lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
-        dailyPullTarget: parsed.data.count,
-        discoveryStatus: discovery.connected ? "provider-configured-adapter-required" : "provider-required",
-        updatedAt: new Date().toISOString(),
-      } as Prisma.InputJsonValue,
+      brain: updatedBrain,
     },
     create: {
       orgId,
       dailyPullTarget: parsed.data.count,
       sourceMode: "research-required",
       notes: parsed.data.prompt || parsed.data.audience,
-      brain: {
-        kind: "phantomforce_org_crm_brain",
-        version: 1,
-        lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
-        dailyPullTarget: parsed.data.count,
-        discoveryStatus: discovery.connected ? "provider-configured-adapter-required" : "provider-required",
-        updatedAt: new Date().toISOString(),
-      } as Prisma.InputJsonValue,
+      brain: updatedBrain,
     },
   });
   return reply.code(409).send({

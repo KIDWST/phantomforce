@@ -5693,6 +5693,127 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
 .crm-detail-grid b { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 .crm-detail-grid i, .crm-detail-grid a { min-width: 0; color: var(--ink); font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crm-socials.is-detail { margin: 0; }
+.crm-overview {
+  position: relative;
+  display: grid;
+  gap: 17px;
+  margin-bottom: 16px;
+  padding: clamp(18px, 2.5vw, 28px);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--neon) 42%, var(--line));
+  border-radius: 22px;
+  background:
+    linear-gradient(112deg, color-mix(in srgb, var(--neon) 9%, transparent), transparent 48%),
+    radial-gradient(circle at 90% 10%, color-mix(in srgb, var(--neon) 14%, transparent), transparent 34%),
+    color-mix(in srgb, var(--panel) 94%, #02130b);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, .22), inset 0 1px rgba(255, 255, 255, .05);
+}
+.crm-overview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 55px, color-mix(in srgb, var(--neon) 5%, transparent) 56px);
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+.crm-overview-head,
+.crm-panel-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.crm-overview-head p,
+.crm-panel-head p {
+  margin: 0 0 5px;
+  color: var(--neon);
+  font: 800 10px "Spline Sans Mono", monospace;
+  letter-spacing: .16em;
+}
+.crm-overview-head h2,
+.crm-panel-head h3 { margin: 0; color: var(--text, var(--ink)); letter-spacing: -.035em; }
+.crm-overview-head h2 { font-size: clamp(25px, 3vw, 38px); }
+.crm-panel-head h3 { font-size: clamp(20px, 2.3vw, 28px); }
+.crm-overview-head span,
+.crm-panel-head span { display: block; margin-top: 6px; color: var(--dim); font-size: 13px; }
+.crm-overview-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.crm-import-button { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.crm-metrics {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+.crm-metrics article {
+  display: grid;
+  min-width: 0;
+  min-height: 92px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--glass) 82%, transparent);
+  backdrop-filter: blur(12px);
+}
+.crm-metrics span { color: var(--dim); font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
+.crm-metrics b { align-self: end; min-width: 0; overflow: hidden; color: var(--text, var(--ink)); font-size: clamp(22px, 2.5vw, 31px); text-overflow: ellipsis; white-space: nowrap; }
+.crm-metrics i { color: var(--dim); font-size: 11px; font-style: normal; }
+.crm-editor {
+  display: grid;
+  gap: 18px;
+  margin: 0 0 16px;
+  padding: clamp(17px, 2.4vw, 26px);
+  border: 1px solid color-mix(in srgb, var(--neon) 38%, var(--line));
+  border-radius: 20px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--neon) 6%, var(--panel)), var(--panel));
+  box-shadow: 0 18px 58px rgba(0, 0, 0, .18);
+}
+.crm-contact-form { display: grid; gap: 18px; }
+.crm-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.crm-form-grid label { display: grid; gap: 7px; min-width: 0; color: var(--dim); font-size: 11px; font-weight: 760; }
+.crm-form-grid label > span { text-transform: uppercase; letter-spacing: .07em; }
+.crm-form-grid input,
+.crm-form-grid select,
+.crm-form-grid textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 45px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  outline: none;
+  background: color-mix(in srgb, var(--glass) 88%, transparent);
+  color: var(--text, var(--ink));
+  padding: 10px 12px;
+  font: 650 13px "Instrument Sans", sans-serif;
+}
+.crm-form-grid textarea { min-height: 104px; resize: vertical; }
+.crm-form-grid input:focus,
+.crm-form-grid select:focus,
+.crm-form-grid textarea:focus { border-color: color-mix(in srgb, var(--neon) 70%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--neon) 11%, transparent); }
+.crm-form-wide { grid-column: 1 / -1; }
+.crm-contact-form footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.crm-contact-form footer span { color: var(--dim); font-size: 12px; }
+.crm-view-tabs { margin-bottom: 14px; }
+.crm-view-tabs button b { display: inline-flex; align-items: center; justify-content: center; min-width: 23px; min-height: 20px; margin-left: 5px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 9%, transparent); font-size: 10px; }
+.crm-view-body { min-width: 0; }
+@media (max-width: 900px) {
+  .crm-overview-head, .crm-panel-head { display: grid; }
+  .crm-overview-actions { justify-content: flex-start; }
+  .crm-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crm-layout { grid-template-columns: 1fr; }
+  .crm-detail { position: static; }
+}
+@media (max-width: 620px) {
+  .crm-overview, .crm-editor { border-radius: 16px; }
+  .crm-overview-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .crm-overview-actions .btn { width: 100%; }
+  .crm-metrics, .crm-form-grid { grid-template-columns: 1fr; }
+  .crm-form-wide { grid-column: 1; }
+  .crm-contact-form footer { align-items: stretch; flex-direction: column; }
+  .crm-contact-form footer .btn { width: 100%; }
+}
 .auth-recovery-codes {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
@@ -7632,7 +7753,7 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260914-206") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260914-207") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(65, 255, 161, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;

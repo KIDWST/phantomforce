@@ -9,25 +9,26 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260914-206";
+  workspaceStorageGetItem, workspaceStorageSetItem,
+} from "./store.js?v=phantom-live-20260914-207";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260914-206";
+} from "./orgs.js?v=phantom-live-20260914-207";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-206";
+} from "./proposalpipeline.js?v=phantom-live-20260914-207";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-206";
+} from "./approvalpipeline.js?v=phantom-live-20260914-207";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -35,9 +36,9 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-206";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-206";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-206";
+} from "./financeledger.js?v=phantom-live-20260914-207";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-207";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-207";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -54,7 +55,10 @@ const approvalUi = { loadedTenant: "", loadingTenant: "", runLoadedTenant: "", r
 const auditUi = { orgId: "", state: "idle", events: [], error: "", refreshedAt: "", query: "" };
 const financeUi = { loadedTenant: "", loadingTenant: "", notice: "", serverSummary: null };
 const operatorUi = { followQuery: "", followFilter: "action", clientId: "", auditQuery: "", notice: "" };
-const relationshipsUi = { view: "leads" };
+const relationshipsUi = {
+  view: "leads", scope: "", editorOpen: false, editingId: "", settingsOpen: false,
+  busy: false, importBusy: false,
+};
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -124,6 +128,235 @@ function workspaceCrmSettings(ws = leadWorkspaceId()) {
   store.state.crmSettings = store.state.crmSettings && typeof store.state.crmSettings === "object" ? store.state.crmSettings : {};
   store.state.crmSettings[ws] = { dailyPullTarget: 5, sourceMode: "manual", notes: "", brain: { kind: "phantomforce_org_crm_brain", version: 1 }, ...(store.state.crmSettings[ws] || {}) };
   return store.state.crmSettings[ws];
+}
+
+const CRM_VIEW_STORAGE_KEY = "pf.relationships.view.v1";
+const CRM_DEFAULTS = Object.freeze({
+  pipelineName: "Relationships",
+  leadsLabel: "Leads",
+  clientsLabel: "Active Clients",
+  followupsLabel: "Follow-ups",
+  defaultValue: 750,
+  followUpDays: 3,
+  defaultSource: "Manual CRM",
+  defaultNextStep: "Qualify need, budget, and best contact path",
+  defaultTags: [],
+});
+
+function cleanCrmLabel(value, fallback, max = 48) {
+  return String(value || "").trim().slice(0, max) || fallback;
+}
+
+function relationshipPreferences(settings = workspaceCrmSettings()) {
+  const saved = settings?.brain?.crmPreferences && typeof settings.brain.crmPreferences === "object"
+    ? settings.brain.crmPreferences
+    : {};
+  return {
+    pipelineName: cleanCrmLabel(saved.pipelineName, CRM_DEFAULTS.pipelineName, 70),
+    leadsLabel: cleanCrmLabel(saved.leadsLabel, CRM_DEFAULTS.leadsLabel),
+    clientsLabel: cleanCrmLabel(saved.clientsLabel, CRM_DEFAULTS.clientsLabel),
+    followupsLabel: cleanCrmLabel(saved.followupsLabel, CRM_DEFAULTS.followupsLabel),
+    defaultValue: Math.max(0, Math.min(100000000, Math.round(Number(saved.defaultValue ?? CRM_DEFAULTS.defaultValue) || 0))),
+    followUpDays: Math.max(1, Math.min(365, Math.round(Number(saved.followUpDays ?? CRM_DEFAULTS.followUpDays) || CRM_DEFAULTS.followUpDays))),
+    defaultSource: cleanCrmLabel(saved.defaultSource, CRM_DEFAULTS.defaultSource, 160),
+    defaultNextStep: cleanCrmLabel(saved.defaultNextStep, CRM_DEFAULTS.defaultNextStep, 600),
+    defaultTags: Array.isArray(saved.defaultTags)
+      ? saved.defaultTags.map((tag) => String(tag || "").trim()).filter(Boolean).slice(0, 12)
+      : [],
+  };
+}
+
+function canEditRelationships() {
+  return !isDatabaseSession() || canManageActiveOrg();
+}
+
+function syncRelationshipUiScope(ws) {
+  if (relationshipsUi.scope === ws) return;
+  relationshipsUi.scope = ws;
+  const savedView = workspaceStorageGetItem(CRM_VIEW_STORAGE_KEY, { migrateGlobal: false });
+  relationshipsUi.view = ["leads", "clients", "followups"].includes(savedView) ? savedView : "leads";
+  relationshipsUi.editorOpen = false;
+  relationshipsUi.editingId = "";
+  relationshipsUi.settingsOpen = false;
+  relationshipsUi.busy = false;
+  relationshipsUi.importBusy = false;
+  leadsUi.query = "";
+  leadsUi.status = "all";
+  operatorUi.followQuery = "";
+  operatorUi.clientId = "";
+}
+
+function setRelationshipView(view) {
+  relationshipsUi.view = ["leads", "clients", "followups"].includes(view) ? view : "leads";
+  workspaceStorageSetItem(CRM_VIEW_STORAGE_KEY, relationshipsUi.view);
+}
+
+function crmDateInput(value) {
+  const time = new Date(value || 0);
+  return Number.isFinite(time.getTime()) ? time.toISOString().slice(0, 10) : "";
+}
+
+function crmDueIso(value) {
+  const clean = String(value || "").trim();
+  if (!clean) return null;
+  const date = new Date(`${clean}T12:00:00`);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
+function splitCrmList(value, max = 30) {
+  return [...new Set(String(value || "").split(/[,\n]/u).map((item) => item.trim()).filter(Boolean))].slice(0, max);
+}
+
+function contactEditorHtml(contact, prefs, canEdit) {
+  const editing = Boolean(contact?.id);
+  const source = contact || {};
+  const consent = editing ? leadConsentStatus(source) : "unknown";
+  const socials = source.socials || {};
+  return `<section class="crm-editor" aria-label="${editing ? "Edit relationship" : "New relationship"}">
+    <header class="crm-panel-head">
+      <div><p>ACCOUNT-SCOPED RECORD</p><h3>${editing ? `Edit ${esc(source.name || source.company || "contact")}` : "Add a relationship"}</h3><span>Saved only to ${esc(leadWorkspaceName())}. Required fields are marked.</span></div>
+      <button class="btn btn-quiet" type="button" data-crm-editor-close>Close</button>
+    </header>
+    <form class="crm-contact-form" data-crm-contact-form data-contact-id="${esc(source.id || "")}">
+      <div class="crm-form-grid">
+        <label><span>Name *</span><input name="name" required maxlength="160" value="${esc(source.name || "")}" placeholder="Contact name" /></label>
+        <label><span>Company / organization</span><input name="company" maxlength="180" value="${esc(source.company || "")}" placeholder="Business or brand" /></label>
+        <label><span>Email</span><input name="email" type="email" maxlength="200" value="${esc(source.email || "")}" placeholder="name@company.com" /></label>
+        <label><span>Phone</span><input name="phone" maxlength="80" value="${esc(source.phone || "")}" placeholder="Phone number" /></label>
+        <label><span>Stage</span><select name="status">${[["new", "New lead"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["won", "Active client"], ["lost", "Lost / archived"]].map(([value, label]) => `<option value="${value}" ${(source.status || "new") === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+        <label><span>Relationship value</span><input name="value" type="number" min="0" max="100000000" step="1" value="${esc(source.value ?? prefs.defaultValue)}" /></label>
+        <label><span>Next follow-up</span><input name="due" type="date" value="${esc(crmDateInput(source.due || new Date(Date.now() + prefs.followUpDays * 86400000)))}" /></label>
+        <label><span>Source</span><input name="source" maxlength="160" value="${esc(source.source || prefs.defaultSource)}" placeholder="Referral, website, event..." /></label>
+        <label class="crm-form-wide"><span>Next step</span><input name="next" maxlength="600" value="${esc(source.next || prefs.defaultNextStep)}" /></label>
+        <label><span>Website</span><input name="website" maxlength="400" value="${esc(source.website || "")}" placeholder="company.com" /></label>
+        <label><span>Outreach permission</span><select name="consent">${[["unknown", "Unknown — drafts only"], ["opt-in", "Confirmed opt-in"], ["opt-out", "Do not contact"]].map(([value, label]) => `<option value="${value}" ${consent === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+        <label><span>Instagram</span><input name="instagram" maxlength="300" value="${esc(socials.instagram || "")}" placeholder="@handle" /></label>
+        <label><span>TikTok</span><input name="tiktok" maxlength="300" value="${esc(socials.tiktok || "")}" placeholder="@handle" /></label>
+        <label><span>LinkedIn</span><input name="linkedin" maxlength="300" value="${esc(socials.linkedin || "")}" placeholder="Handle or URL" /></label>
+        <label><span>Facebook</span><input name="facebook" maxlength="300" value="${esc(socials.facebook || "")}" placeholder="Handle or URL" /></label>
+        <label><span>X</span><input name="x" maxlength="300" value="${esc(socials.x || "")}" placeholder="@handle" /></label>
+        <label class="crm-form-wide"><span>Tags</span><input name="tags" maxlength="500" value="${esc((source.tags || prefs.defaultTags).filter((tag) => !/^consent:/iu.test(tag)).join(", "))}" placeholder="vip, wedding, referral" /></label>
+        <label class="crm-form-wide"><span>Notes</span><textarea name="notes" maxlength="4000" rows="4" placeholder="Context, needs, preferences, and history">${esc(source.notes || "")}</textarea></label>
+      </div>
+      <footer><span>${canEdit ? "Changes are isolated to this organization." : "You have read-only access in this organization."}</span><button class="btn btn-primary" type="submit" ${!canEdit || relationshipsUi.busy ? "disabled" : ""}>${relationshipsUi.busy ? "Saving..." : editing ? "Save relationship" : "Create relationship"}</button></footer>
+    </form>
+  </section>`;
+}
+
+function relationshipSettingsHtml(settings, prefs, canEdit) {
+  return `<section class="crm-editor crm-settings-panel" aria-label="CRM customization">
+    <header class="crm-panel-head"><div><p>ORGANIZATION CRM SETTINGS</p><h3>Make this CRM yours</h3><span>These labels and defaults follow ${esc(leadWorkspaceName())}, not the browser or another customer.</span></div><button class="btn btn-quiet" type="button" data-crm-settings-close>Close</button></header>
+    <form class="crm-contact-form" data-crm-settings-form>
+      <div class="crm-form-grid">
+        <label><span>CRM name</span><input name="pipelineName" maxlength="70" value="${esc(prefs.pipelineName)}" /></label>
+        <label><span>Lead view label</span><input name="leadsLabel" maxlength="48" value="${esc(prefs.leadsLabel)}" /></label>
+        <label><span>Client view label</span><input name="clientsLabel" maxlength="48" value="${esc(prefs.clientsLabel)}" /></label>
+        <label><span>Follow-up view label</span><input name="followupsLabel" maxlength="48" value="${esc(prefs.followupsLabel)}" /></label>
+        <label><span>Default relationship value</span><input name="defaultValue" type="number" min="0" max="100000000" step="1" value="${prefs.defaultValue}" /></label>
+        <label><span>Default follow-up days</span><input name="followUpDays" type="number" min="1" max="365" step="1" value="${prefs.followUpDays}" /></label>
+        <label><span>Daily research target</span><input name="dailyPullTarget" type="number" min="1" max="2000" step="1" value="${Number(settings.dailyPullTarget || 5)}" /></label>
+        <label><span>Default source</span><input name="defaultSource" maxlength="160" value="${esc(prefs.defaultSource)}" /></label>
+        <label class="crm-form-wide"><span>Default next step</span><input name="defaultNextStep" maxlength="600" value="${esc(prefs.defaultNextStep)}" /></label>
+        <label class="crm-form-wide"><span>Default tags</span><input name="defaultTags" maxlength="500" value="${esc(prefs.defaultTags.join(", "))}" placeholder="priority, referral, local" /></label>
+      </div>
+      <footer><span>${canEdit ? "One configuration per organization." : "Only an organization manager can change CRM settings."}</span><button class="btn btn-primary" type="submit" ${!canEdit || relationshipsUi.busy ? "disabled" : ""}>${relationshipsUi.busy ? "Saving..." : "Save CRM settings"}</button></footer>
+    </form>
+  </section>`;
+}
+
+function relationshipFormPayload(form, existing = null) {
+  const data = new FormData(form);
+  const status = ["new", "follow-up", "proposal", "won", "lost"].includes(String(data.get("status"))) ? String(data.get("status")) : "new";
+  const consent = ["unknown", "opt-in", "opt-out"].includes(String(data.get("consent"))) ? String(data.get("consent")) : "unknown";
+  return {
+    name: String(data.get("name") || "").trim(),
+    organization: String(data.get("company") || "").trim(),
+    email: String(data.get("email") || "").trim(),
+    phone: String(data.get("phone") || "").trim(),
+    status,
+    type: status === "won" ? "client" : "prospect",
+    value: Math.max(0, Math.min(100000000, Math.round(Number(data.get("value")) || 0))),
+    nextStep: String(data.get("next") || "").trim(),
+    notes: String(data.get("notes") || "").trim(),
+    source: String(data.get("source") || "Manual CRM").trim(),
+    website: String(data.get("website") || "").trim(),
+    avatarUrl: existing?.avatarUrl || "",
+    socials: {
+      instagram: normalizeSocialHandle(data.get("instagram")),
+      tiktok: normalizeSocialHandle(data.get("tiktok")),
+      linkedin: String(data.get("linkedin") || "").trim(),
+      facebook: String(data.get("facebook") || "").trim(),
+      x: normalizeSocialHandle(data.get("x")),
+    },
+    tags: [...splitCrmList(data.get("tags")), `consent:${consent}`],
+    fitScore: existing?.fitScore ?? null,
+    qualification: existing?.qualification || [],
+    outreach: existing?.outreach || "",
+    crmStage: status === "won" ? "Active Client" : status === "proposal" ? "Proposal" : status === "lost" ? "Archived" : status === "follow-up" ? "Follow-up" : "Prospect",
+    dueAt: crmDueIso(data.get("due")),
+    lastTouchAt: existing?.lastTouch || null,
+  };
+}
+
+function applyContactView(target, view, ws) {
+  Object.assign(target, view, {
+    ws,
+    company: view.company ?? view.organization ?? "",
+    next: view.next ?? view.nextStep ?? "",
+    due: view.due ?? view.dueAt ?? "",
+    lastTouch: view.lastTouch ?? view.lastTouchAt ?? "",
+  });
+  return target;
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replace(/"/gu, '""')}"`;
+}
+
+function exportRelationshipCsv(records, orgName) {
+  const fields = ["name", "company", "email", "phone", "status", "value", "next", "due", "source", "website", "tags", "notes"];
+  const rows = [fields.join(","), ...records.map((record) => fields.map((field) => csvCell(field === "tags" ? (record.tags || []).join("; ") : record[field])).join(","))];
+  const blob = new Blob([rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${String(orgName || "organization").toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "") || "organization"}-relationships.csv`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function parseRelationshipCsv(text) {
+  const rows = [];
+  let row = [], cell = "", quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"' && quoted && text[index + 1] === '"') { cell += '"'; index += 1; }
+    else if (char === '"') quoted = !quoted;
+    else if (char === "," && !quoted) { row.push(cell); cell = ""; }
+    else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(cell); if (row.some((value) => value.trim())) rows.push(row); row = []; cell = "";
+    } else cell += char;
+  }
+  row.push(cell); if (row.some((value) => value.trim())) rows.push(row);
+  if (rows.length < 2) return [];
+  const headers = rows.shift().map((value) => value.trim().toLowerCase().replace(/\s+/gu, ""));
+  const pick = (record, ...names) => names.map((name) => record[headers.indexOf(name)]).find((value) => value !== undefined) || "";
+  return rows.slice(0, 500).map((record) => {
+    const statusRaw = pick(record, "status", "stage").toLowerCase();
+    const status = statusRaw.includes("client") || statusRaw === "won" ? "won" : statusRaw.includes("proposal") ? "proposal" : statusRaw.includes("follow") ? "follow-up" : statusRaw.includes("lost") || statusRaw.includes("archive") ? "lost" : "new";
+    return {
+      name: pick(record, "name", "contact", "contactname").trim(),
+      organization: pick(record, "company", "organization", "business").trim(),
+      email: pick(record, "email").trim(), phone: pick(record, "phone", "mobile").trim(), status,
+      type: status === "won" ? "client" : "prospect",
+      value: Math.max(0, Math.round(Number(pick(record, "value", "dealvalue").replace(/[^0-9.-]/gu, "")) || 0)),
+      nextStep: pick(record, "next", "nextstep").trim(), notes: pick(record, "notes", "note").trim(),
+      source: pick(record, "source").trim() || "CSV import", website: pick(record, "website", "url").trim(), avatarUrl: "", socials: {},
+      tags: [...splitCrmList(pick(record, "tags").replace(/;/gu, ",")), "consent:unknown"], qualification: [], outreach: "",
+      crmStage: status === "won" ? "Active Client" : status === "proposal" ? "Proposal" : "Prospect",
+      dueAt: crmDueIso(pick(record, "due", "duedate")), lastTouchAt: null,
+    };
+  }).filter((record) => record.name);
 }
 
 function normalizeSocialHandle(value) {
@@ -317,7 +550,7 @@ function isActiveClient(lead) {
 function crmContactCard(l) {
   const due = l.due && daysUntil(l.due) <= 0 && ["new", "follow-up"].includes(l.status);
   return `<article class="crm-card ${due ? "is-due" : ""} ${leadsUi.selectedId === l.id ? "is-selected" : ""}" data-act="select" data-id="${esc(l.id)}">
-    <button class="record-x" data-act="remove" data-id="${esc(l.id)}" aria-label="Remove contact">×</button>
+    ${canEditRelationships() ? `<button class="record-x" data-act="remove" data-id="${esc(l.id)}" aria-label="Remove contact">×</button>` : ""}
     <div class="crm-avatar">${crmAvatar(l)}</div>
     <div class="crm-main">
       ${wsTag(l.ws)}
@@ -351,12 +584,11 @@ function renderLeads(el, rerender) {
         <button class="btn btn-primary" type="submit">Update CRM</button>
       </form>
     </section>
-    ${leadsUi.notice ? `<div class="lead-intel-result">${esc(leadsUi.notice)}</div>` : ""}
     <div class="ws-toolbar crm-toolbar">
       <p class="ws-note">Daily pull target: <b>${Number(settings.dailyPullTarget || 0).toLocaleString()}</b> · Organization brain: <b>${esc(ws)}</b> · sends stay approval-gated.</p>
       <input class="crm-search" data-crm-search value="${esc(leadsUi.query)}" placeholder="Search clients, socials, emails, tags..." />
       <select class="crm-filter" data-crm-status>${[["all", "All"], ...lanes].map(([id, label]) => `<option value="${esc(id)}" ${leadsUi.status === id ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>
-      <button class="btn btn-primary" data-act="add">+ New contact</button>
+      <button class="btn btn-primary" data-act="add" ${canEditRelationships() ? "" : "disabled"}>+ New contact</button>
     </div>
     <div class="crm-layout">
       <div class="crm-list">${leads.map(crmContactCard).join("") || productStateHtml("empty", {
@@ -379,7 +611,7 @@ function renderLeads(el, rerender) {
           <p class="record-notes">${esc(selected.notes || "No notes yet.")}</p>
           ${(selected.qualification && selected.qualification.length) ? `<ul class="lead-checks">${selected.qualification.slice(0, 5).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}
           <div class="record-actions">
-            <button class="btn" data-act="edit" data-id="${esc(selected.id)}">Edit CRM fields</button>
+            ${canEditRelationships() ? `<button class="btn" data-act="edit" data-id="${esc(selected.id)}">Edit CRM fields</button>` : ""}
             ${selected.outreach ? `<button class="btn" data-act="copy-outreach" data-id="${esc(selected.id)}">Copy outreach angle</button>` : ""}
             ${selected.status === "new" ? `<button class="btn" data-act="advance" data-id="${esc(selected.id)}">Start follow-up</button>` : ""}
             ${["new", "follow-up"].includes(selected.status) ? `<button class="btn" data-act="propose" data-id="${esc(selected.id)}">Convert to proposal</button>` : ""}
@@ -443,50 +675,33 @@ function renderLeads(el, rerender) {
   bindActions(el, {
     select: (id) => { setCrmSelection(id); rerender(); },
     add: () => {
-      const name = prompt("Contact name (person or business):");
-      if (!name) return;
-      const company = prompt("Company / brand name:", name.trim()) || name.trim();
-      const instagram = normalizeSocialHandle(prompt("Instagram handle (optional):") || "");
-      const website = prompt("Website (optional):") || "";
-      const avatarUrl = prompt("Profile image URL (optional — paste from their public profile):") || "";
-      const lead = { id: uid("lead"), ws, name: name.trim(), company: company.trim(), source: "Manual CRM", status: "new", value: 750, next: "Qualify need, budget, and best contact path", due: new Date(Date.now() + 86400000).toISOString(), owner: "CRM", notes: "", proposalId: null, type: "prospect", socials: { instagram }, website, avatarUrl, email: "", phone: "", tags: ["consent:unknown"], qualification: [], outreach: "", crmStage: "Prospect" };
-      store.state.leads.unshift(lead);
-      setCrmSelection(lead.id);
-      pushActivity("Easy CRM", `captured CRM contact: ${name.trim()}.`, ws);
-      if (isDatabaseSession()) createOrgCrmContact(crmPayload(lead)).then((result) => {
-        if (result?.contact) {
-          Object.assign(lead, result.contact);
-          setCrmSelection(result.contact.id);
-          store.save();
-          rerender();
-        }
-      }).catch(() => {});
-      store.save(); rerender();
+      if (!canEditRelationships()) return;
+      relationshipsUi.editingId = "";
+      relationshipsUi.editorOpen = true;
+      relationshipsUi.settingsOpen = false;
+      rerender();
     },
     edit: (id) => {
-      const l = find(id); if (!l) return;
-      l.name = prompt("Contact name:", l.name || "") || l.name;
-      l.company = prompt("Company / brand:", l.company || l.name || "") || l.company;
-      l.email = prompt("Email:", l.email || "") || l.email || "";
-      l.phone = prompt("Phone:", l.phone || "") || l.phone || "";
-      l.website = prompt("Website:", l.website || "") || l.website || "";
-      l.socials = l.socials || {};
-      l.socials.instagram = normalizeSocialHandle(prompt("Instagram:", l.socials.instagram || "") || l.socials.instagram || "");
-      l.socials.tiktok = normalizeSocialHandle(prompt("TikTok:", l.socials.tiktok || "") || l.socials.tiktok || "");
-      l.socials.linkedin = prompt("LinkedIn handle or URL:", l.socials.linkedin || "") || l.socials.linkedin || "";
-      l.avatarUrl = prompt("Public profile image URL:", l.avatarUrl || "") || l.avatarUrl || "";
-      l.notes = prompt("Notes:", l.notes || "") || l.notes || "";
-      const consent = String(prompt("Outreach permission (unknown, opt-in, or opt-out):", leadConsentStatus(l)) || leadConsentStatus(l)).toLowerCase();
-      if (["unknown", "opt-in", "opt-out"].includes(consent)) setLeadConsentStatus(l, consent);
-      pushActivity("Easy CRM", `updated CRM profile: ${l.name || l.company}.`, l.ws);
-      if (isDatabaseSession()) updateOrgCrmContact(l.id, crmPayload(l)).catch(() => {});
-      store.save(); rerender();
+      if (!canEditRelationships() || !find(id)) return;
+      relationshipsUi.editingId = id;
+      relationshipsUi.editorOpen = true;
+      relationshipsUi.settingsOpen = false;
+      rerender();
     },
-    remove: (id) => {
+    remove: async (id) => {
       const l = find(id);
+      if (!l || !canEditRelationships() || !window.confirm(`Remove ${l.name || l.company} from this organization's CRM?`)) return;
+      if (isDatabaseSession()) {
+        const result = await deleteOrgCrmContact(id).catch((error) => ({ ok: false, error: error?.message || "crm_contact_delete_failed" }));
+        if (!result?.ok) {
+          leadsUi.notice = `Could not remove contact: ${String(result?.error || "unknown error")}`;
+          rerender();
+          return;
+        }
+      }
       store.state.leads = store.state.leads.filter((item) => item.id !== id);
-      if (l) pushActivity("Lead Hunter", `removed lead: ${l.name}.`, l.ws);
-      if (isDatabaseSession()) deleteOrgCrmContact(id).catch(() => {});
+      if (leadsUi.selectedId === id) setCrmSelection("");
+      pushActivity("Relationships", `removed relationship: ${l.name || l.company}.`, l.ws);
       store.save(); rerender();
     },
     "copy-outreach": (id, btn) => copyText(btn, leadDraftText(find(id))),
@@ -746,9 +961,10 @@ function dueLabel(lead) {
 }
 
 function followUpLeads() {
+  const ws = leadWorkspaceId();
   const query = operatorUi.followQuery.trim().toLowerCase();
-  let records = visible(store.state.leads)
-    .filter((lead) => ["new", "follow-up"].includes(lead.status))
+  let records = store.state.leads
+    .filter((lead) => lead.ws === ws && lead.status !== "lost" && (lead.due || ["new", "follow-up"].includes(lead.status)))
     .sort((left, right) => leadDueTime(left) - leadDueTime(right));
   if (operatorUi.followFilter === "overdue") records = records.filter((lead) => lead.due && daysUntil(lead.due) < 0);
   if (operatorUi.followFilter === "today") records = records.filter((lead) => lead.due && daysUntil(lead.due) === 0);
@@ -765,7 +981,8 @@ function communicationTarget(lead, channel) {
 }
 
 function renderFollowUp(el, rerender) {
-  const all = visible(store.state.leads).filter((lead) => ["new", "follow-up"].includes(lead.status));
+  const ws = leadWorkspaceId();
+  const all = store.state.leads.filter((lead) => lead.ws === ws && lead.status !== "lost" && (lead.due || ["new", "follow-up"].includes(lead.status)));
   const records = followUpLeads();
   const overdue = all.filter((lead) => lead.due && daysUntil(lead.due) < 0).length;
   const today = all.filter((lead) => lead.due && daysUntil(lead.due) === 0).length;
@@ -794,10 +1011,10 @@ function renderFollowUp(el, rerender) {
           <p class="record-notes"><b>Next:</b> ${esc(lead.next || "Set the next step before outreach.")}</p>
           <p class="record-sub">${destination ? `Destination on file: ${esc(destination)}` : "No email, phone, or social destination on file."}</p>
           <div class="record-actions">
-            <button class="btn btn-primary" data-act="draft-followup" data-id="${esc(lead.id)}">Prepare draft</button>
-            <button class="btn" data-act="done-followup" data-id="${esc(lead.id)}">Touch completed</button>
-            <button class="btn btn-quiet" data-act="snooze-followup" data-id="${esc(lead.id)}">Snooze 3 days</button>
-            <select class="ops-consent" data-follow-consent="${esc(lead.id)}" aria-label="Outreach permission for ${esc(lead.name || lead.company)}">
+            <button class="btn btn-primary" data-act="draft-followup" data-id="${esc(lead.id)}" ${canEditRelationships() ? "" : "disabled"}>Prepare draft</button>
+            <button class="btn" data-act="done-followup" data-id="${esc(lead.id)}" ${canEditRelationships() ? "" : "disabled"}>Touch completed</button>
+            <button class="btn btn-quiet" data-act="snooze-followup" data-id="${esc(lead.id)}" ${canEditRelationships() ? "" : "disabled"}>Snooze 3 days</button>
+            <select class="ops-consent" data-follow-consent="${esc(lead.id)}" aria-label="Outreach permission for ${esc(lead.name || lead.company)}" ${canEditRelationships() ? "" : "disabled"}>
               ${[["unknown", "Permission unknown"], ["opt-in", "Permission confirmed"], ["opt-out", "Do not contact"]].map(([value, label]) => `<option value="${value}" ${consent === value ? "selected" : ""}>${label}</option>`).join("")}
             </select>
           </div>
@@ -833,7 +1050,7 @@ function renderFollowUp(el, rerender) {
       const lead = find(id); if (!lead) return;
       lead.lastTouch = new Date().toISOString();
       lead.due = new Date(Date.now() + 7 * 86400000).toISOString();
-      lead.status = "follow-up";
+      if (!["won", "proposal"].includes(lead.status)) lead.status = "follow-up";
       lead.next = "Check response and choose the next safe step";
       persistOperationalLead(lead);
       pushActivity("Follow-up Desk", `recorded a completed touch for ${lead.name || lead.company}.`, lead.ws);
@@ -933,49 +1150,234 @@ function renderClients(el, rerender) {
             <span><b>Email</b><i>${esc(selected.email || "Missing")}</i></span><span><b>Phone</b><i>${esc(selected.phone || "Missing")}</i></span>
             <span><b>Next step</b><i>${esc(selected.next || "Not set")}</i></span><span><b>Due</b><i>${esc(dueLabel(selected))}</i></span>
           </div>
+          ${canEditRelationships() ? `<div class="record-actions"><button class="btn btn-primary" data-act="edit-client" data-id="${esc(selected.id)}">Edit client</button><button class="btn" data-act="client-followup" data-id="${esc(selected.id)}">Schedule follow-up</button><button class="btn btn-quiet" data-act="return-to-lead" data-id="${esc(selected.id)}">Return to pipeline</button></div>` : ""}
           <h3 class="ws-subhead">Recent evidence</h3>
           <div class="ops-timeline">${activity.map((item) => `<article><span>${esc(item.who)}</span><b>${esc(item.text)}</b><i>${fmtDateTime(item.at)}</i></article>`).join("") || empty("No activity mentions this client yet.")}</div>
         ` : productStateHtml("empty", { title: "No client selected", detail: "Add a CRM contact to create a client 360 record." })}
       </section>
     </div>`;
-  bindActions(el, { "select-client": (id) => { operatorUi.clientId = id; rerender(); } });
+  const find = (id) => store.state.leads.find((lead) => lead.ws === ws && lead.id === id);
+  bindActions(el, {
+    "select-client": (id) => { operatorUi.clientId = id; rerender(); },
+    "edit-client": (id) => {
+      if (!find(id) || !canEditRelationships()) return;
+      relationshipsUi.editingId = id;
+      relationshipsUi.editorOpen = true;
+      relationshipsUi.settingsOpen = false;
+      rerender();
+    },
+    "client-followup": (id) => {
+      const lead = find(id); if (!lead || !canEditRelationships()) return;
+      const prefs = relationshipPreferences();
+      lead.due = new Date(Date.now() + prefs.followUpDays * 86400000).toISOString();
+      lead.next = lead.next || "Check in and confirm the next milestone";
+      persistOperationalLead(lead);
+      setRelationshipView("followups");
+      store.save(); rerender();
+    },
+    "return-to-lead": (id) => {
+      const lead = find(id); if (!lead || !canEditRelationships()) return;
+      lead.status = "follow-up"; lead.type = "prospect"; lead.crmStage = "Follow-up";
+      persistOperationalLead(lead);
+      setCrmSelection(id);
+      setRelationshipView("leads");
+      store.save(); rerender();
+    },
+  });
 }
 
 function renderRelationships(el, rerender) {
   const ws = leadWorkspaceId();
   const repaint = () => renderRelationships(el, rerender);
+  syncRelationshipUiScope(ws);
   syncCrmSelectionScope(ws);
   syncServerCrm(ws, repaint);
+  const settings = workspaceCrmSettings(ws);
+  const prefs = relationshipPreferences(settings);
+  const canEdit = canEditRelationships();
   const records = store.state.leads.filter((lead) => lead.ws === ws);
   const activeClients = records.filter(isActiveClient);
   const leads = records.filter((lead) => !isActiveClient(lead));
-  const followUps = records.filter((lead) => ["new", "follow-up"].includes(lead.status));
+  const followUps = records.filter((lead) => lead.status !== "lost" && (lead.due || ["new", "follow-up"].includes(lead.status)));
+  const dueNow = followUps.filter((lead) => lead.due && daysUntil(lead.due) <= 0).length;
+  const pipelineValue = records.filter((lead) => lead.status !== "lost").reduce((sum, lead) => sum + Number(lead.value || 0), 0);
+  const editing = relationshipsUi.editingId ? records.find((lead) => lead.id === relationshipsUi.editingId) || null : null;
   el.innerHTML = `
-    <div class="accounting-tabs" role="tablist" aria-label="Relationship view">
-      <button type="button" role="tab" data-relationship-tab="leads" class="${relationshipsUi.view === "leads" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "leads"}">Leads <b>${leads.length}</b></button>
-      <button type="button" role="tab" data-relationship-tab="clients" class="${relationshipsUi.view === "clients" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "clients"}">Active Clients <b>${activeClients.length}</b></button>
-      <button type="button" role="tab" data-relationship-tab="followups" class="${relationshipsUi.view === "followups" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "followups"}">Follow-ups <b>${followUps.length}</b></button>
+    <section class="crm-overview" data-crm-account="${esc(ws)}">
+      <header class="crm-overview-head">
+        <div><p>PRIVATE TO ${esc(leadWorkspaceName(ws))}</p><h2>${esc(prefs.pipelineName)}</h2><span>Every contact, default, filter, and workflow is isolated to this account.</span></div>
+        <div class="crm-overview-actions">
+          ${canEdit ? `<button class="btn btn-primary" type="button" data-crm-add>+ New relationship</button><label class="btn crm-import-button">Import CSV<input type="file" accept=".csv,text/csv" data-crm-import hidden /></label>` : ""}
+          <button class="btn" type="button" data-crm-export ${records.length ? "" : "disabled"}>Export CSV</button>
+          <button class="btn btn-quiet" type="button" data-crm-settings>Customize CRM</button>
+        </div>
+      </header>
+      <div class="crm-metrics" aria-label="Relationship summary">
+        <article><span>Open pipeline</span><b>${leads.filter((lead) => lead.status !== "lost").length.toLocaleString()}</b><i>${fmtMoney(pipelineValue)} total value</i></article>
+        <article><span>Active clients</span><b>${activeClients.length.toLocaleString()}</b><i>current relationships</i></article>
+        <article><span>Follow-ups</span><b>${followUps.length.toLocaleString()}</b><i>${dueNow} due now</i></article>
+        <article><span>Account</span><b>${canEdit ? "Manager" : "Member"}</b><i>${canEdit ? "editing enabled" : "read-only access"}</i></article>
+      </div>
+    </section>
+    ${leadsUi.notice ? `<div class="ops-notice" role="status" aria-live="polite">${esc(leadsUi.notice)}</div>` : ""}
+    ${relationshipsUi.editorOpen ? contactEditorHtml(editing, prefs, canEdit) : ""}
+    ${relationshipsUi.settingsOpen ? relationshipSettingsHtml(settings, prefs, canEdit) : ""}
+    <div class="crm-view-tabs accounting-tabs" role="tablist" aria-label="Relationship view">
+      <button type="button" role="tab" data-relationship-tab="leads" class="${relationshipsUi.view === "leads" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "leads"}">${esc(prefs.leadsLabel)} <b>${leads.length}</b></button>
+      <button type="button" role="tab" data-relationship-tab="clients" class="${relationshipsUi.view === "clients" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "clients"}">${esc(prefs.clientsLabel)} <b>${activeClients.length}</b></button>
+      <button type="button" role="tab" data-relationship-tab="followups" class="${relationshipsUi.view === "followups" ? "is-active" : ""}" aria-selected="${relationshipsUi.view === "followups"}">${esc(prefs.followupsLabel)} <b>${followUps.length}</b></button>
     </div>
-    <div data-relationship-body></div>`;
+    <div class="crm-view-body" data-relationship-body></div>`;
   const body = el.querySelector("[data-relationship-body]");
   if (relationshipsUi.view === "clients") renderClients(body, repaint);
   else if (relationshipsUi.view === "followups") renderFollowUp(body, repaint);
   else renderLeads(body, repaint);
   el.querySelectorAll("[data-relationship-tab]").forEach((button) => button.addEventListener("click", () => {
-    relationshipsUi.view = ["leads", "clients", "followups"].includes(button.dataset.relationshipTab)
-      ? button.dataset.relationshipTab
-      : "leads";
+    setRelationshipView(button.dataset.relationshipTab);
     repaint();
   }));
+  el.querySelector("[data-crm-add]")?.addEventListener("click", () => {
+    relationshipsUi.editorOpen = true;
+    relationshipsUi.editingId = "";
+    relationshipsUi.settingsOpen = false;
+    repaint();
+  });
+  el.querySelector("[data-crm-settings]")?.addEventListener("click", () => {
+    relationshipsUi.settingsOpen = !relationshipsUi.settingsOpen;
+    relationshipsUi.editorOpen = false;
+    relationshipsUi.editingId = "";
+    repaint();
+  });
+  el.querySelector("[data-crm-editor-close]")?.addEventListener("click", () => {
+    relationshipsUi.editorOpen = false;
+    relationshipsUi.editingId = "";
+    repaint();
+  });
+  el.querySelector("[data-crm-settings-close]")?.addEventListener("click", () => {
+    relationshipsUi.settingsOpen = false;
+    repaint();
+  });
+  el.querySelector("[data-crm-export]")?.addEventListener("click", () => exportRelationshipCsv(records, leadWorkspaceName(ws)));
+
+  const contactForm = el.querySelector("[data-crm-contact-form]");
+  contactForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!canEdit || relationshipsUi.busy) return;
+    const contactId = contactForm.dataset.contactId || "";
+    const existing = records.find((record) => record.id === contactId) || null;
+    const payload = relationshipFormPayload(contactForm, existing);
+    if (!payload.name) return;
+    relationshipsUi.busy = true;
+    contactForm.querySelectorAll("input, select, textarea, button").forEach((control) => { control.disabled = true; });
+    try {
+      let saved;
+      if (isDatabaseSession()) {
+        const result = existing
+          ? await updateOrgCrmContact(existing.id, payload)
+          : await createOrgCrmContact(payload);
+        if (!result?.ok || !result?.contact) throw new Error(typeof result?.error === "string" ? result.error : "The CRM could not save this relationship.");
+        saved = result.contact;
+      } else {
+        saved = { id: existing?.id || uid("lead"), ...payload };
+      }
+      const target = existing || { id: saved.id, ws, proposalId: null, owner: "CRM" };
+      applyContactView(target, saved, ws);
+      if (!existing) store.state.leads.unshift(target);
+      setCrmSelection(target.id);
+      operatorUi.clientId = isActiveClient(target) ? target.id : operatorUi.clientId;
+      setRelationshipView(isActiveClient(target) ? "clients" : "leads");
+      leadsUi.notice = `${target.name || target.company} ${existing ? "updated" : "added"} in ${leadWorkspaceName(ws)}.`;
+      pushActivity("Relationships", `${existing ? "updated" : "created"} ${target.name || target.company}.`, ws);
+      relationshipsUi.editorOpen = false;
+      relationshipsUi.editingId = "";
+      store.save();
+    } catch (error) {
+      leadsUi.notice = `CRM save failed: ${error instanceof Error ? error.message : "unknown error"}`;
+    } finally {
+      relationshipsUi.busy = false;
+      repaint();
+    }
+  });
+
+  const settingsForm = el.querySelector("[data-crm-settings-form]");
+  settingsForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!canEdit || relationshipsUi.busy) return;
+    const data = new FormData(settingsForm);
+    const crmPreferences = {
+      pipelineName: cleanCrmLabel(data.get("pipelineName"), CRM_DEFAULTS.pipelineName, 70),
+      leadsLabel: cleanCrmLabel(data.get("leadsLabel"), CRM_DEFAULTS.leadsLabel),
+      clientsLabel: cleanCrmLabel(data.get("clientsLabel"), CRM_DEFAULTS.clientsLabel),
+      followupsLabel: cleanCrmLabel(data.get("followupsLabel"), CRM_DEFAULTS.followupsLabel),
+      defaultValue: Math.max(0, Math.min(100000000, Math.round(Number(data.get("defaultValue")) || 0))),
+      followUpDays: Math.max(1, Math.min(365, Math.round(Number(data.get("followUpDays")) || 3))),
+      defaultSource: cleanCrmLabel(data.get("defaultSource"), CRM_DEFAULTS.defaultSource, 160),
+      defaultNextStep: cleanCrmLabel(data.get("defaultNextStep"), CRM_DEFAULTS.defaultNextStep, 600),
+      defaultTags: splitCrmList(data.get("defaultTags"), 12),
+    };
+    const updated = {
+      dailyPullTarget: Math.max(1, Math.min(2000, Math.round(Number(data.get("dailyPullTarget")) || 5))),
+      sourceMode: settings.sourceMode || "manual",
+      notes: settings.notes || "",
+      brain: { ...(settings.brain || {}), kind: "phantomforce_org_crm_brain", version: 1, crmPreferences, updatedAt: new Date().toISOString() },
+    };
+    relationshipsUi.busy = true;
+    try {
+      if (isDatabaseSession()) {
+        const result = await saveOrgCrmSettings(updated);
+        if (!result?.ok || !result?.settings) throw new Error(typeof result?.error === "string" ? result.error : "CRM settings could not be saved.");
+        store.state.crmSettings[ws] = result.settings;
+      } else store.state.crmSettings[ws] = updated;
+      leadsUi.notice = `CRM defaults saved for ${leadWorkspaceName(ws)}.`;
+      relationshipsUi.settingsOpen = false;
+      store.save();
+    } catch (error) {
+      leadsUi.notice = `CRM settings failed: ${error instanceof Error ? error.message : "unknown error"}`;
+    } finally {
+      relationshipsUi.busy = false;
+      repaint();
+    }
+  });
+
+  el.querySelector("[data-crm-import]")?.addEventListener("change", async (event) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file || !canEdit || relationshipsUi.importBusy) return;
+    const imports = parseRelationshipCsv(await file.text());
+    if (!imports.length) {
+      leadsUi.notice = "No valid contacts were found. Include a Name or Contact column in the CSV.";
+      repaint();
+      return;
+    }
+    if (!window.confirm(`Import ${imports.length} relationship${imports.length === 1 ? "" : "s"} into ${leadWorkspaceName(ws)}?`)) return;
+    relationshipsUi.importBusy = true;
+    let created = 0;
+    let failed = 0;
+    for (const payload of imports) {
+      try {
+        let view;
+        if (isDatabaseSession()) {
+          const result = await createOrgCrmContact(payload);
+          if (!result?.ok || !result?.contact) throw new Error("create failed");
+          view = result.contact;
+        } else view = { id: uid("lead"), ...payload };
+        store.state.leads.unshift(applyContactView({ id: view.id, ws, proposalId: null, owner: "CRM" }, view, ws));
+        created += 1;
+      } catch { failed += 1; }
+    }
+    relationshipsUi.importBusy = false;
+    leadsUi.notice = `Imported ${created} relationship${created === 1 ? "" : "s"}${failed ? ` · ${failed} failed validation or save` : ""}.`;
+    pushActivity("Relationships", `imported ${created} CRM relationship${created === 1 ? "" : "s"}.`, ws);
+    store.save(); repaint();
+  });
 }
 
 function renderLegacyClientsRoute(el, rerender) {
-  relationshipsUi.view = "clients";
+  setRelationshipView("clients");
   renderRelationships(el, rerender);
 }
 
 function renderLegacyFollowUpRoute(el, rerender) {
-  relationshipsUi.view = "followups";
+  setRelationshipView("followups");
   renderRelationships(el, rerender);
 }
 
@@ -2393,7 +2795,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-206")
+      import("./brain.js?v=phantom-live-20260914-207")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

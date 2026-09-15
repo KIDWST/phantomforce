@@ -46,6 +46,15 @@ must(files.workspaces, /function syncServerCrm/u, "Clients page must synchronize
 must(files.workspaces, /function crmPullIntent/u, "Clients page must recognize natural discovery requests.");
 must(files.workspaces, /No placeholder or invented contacts were added/u, "Clients page must disclose that unavailable research creates zero placeholders.");
 must(files.workspaces, /capture a real contact manually/u, "Manual real-contact capture must remain available.");
+must(files.workspaces, /data-crm-account="\$\{esc\(ws\)\}"/u, "Relationships must expose the authenticated organization scope in the CRM shell.");
+must(files.workspaces, /data-relationship-tab="leads"[\s\S]*data-relationship-tab="clients"[\s\S]*data-relationship-tab="followups"/u, "Leads, clients, and follow-ups must remain inside one Relationships destination.");
+must(files.workspaces, /workspaceStorageSetItem\(CRM_VIEW_STORAGE_KEY/u, "The selected relationship view must persist in workspace-scoped storage.");
+must(files.workspaces, /crmPreferences[\s\S]*pipelineName[\s\S]*defaultValue[\s\S]*followUpDays/u, "Each organization must own customizable CRM labels and defaults.");
+must(files.workspaces, /data-crm-contact-form[\s\S]*name="email"[\s\S]*name="status"[\s\S]*name="due"[\s\S]*name="notes"/u, "The CRM must provide a complete contact editor instead of chained browser prompts.");
+must(files.workspaces, /data-crm-import[\s\S]*parseRelationshipCsv/u, "The account CRM must support scoped CSV import.");
+must(files.workspaces, /data-crm-export[\s\S]*exportRelationshipCsv/u, "The account CRM must support scoped CSV export.");
+assert.doesNotMatch(files.workspaces, /prompt\("Contact name|prompt\("Company \/ brand/u, "Relationship creation and editing cannot use chained browser prompts.");
+must(files.workspaces, /lead\.ws === ws && lead\.status !== "lost"/u, "Follow-up lists must be explicitly restricted to the active organization.");
 
 must(files.server, /sourceMode:\s*"research-required"/u, "Unfulfilled discovery must be recorded as research-required.");
 must(files.server, /error:\s*"public_research_not_connected"/u, "Unavailable research must return a stable error code.");
@@ -54,6 +63,7 @@ must(files.server, /contacts:\s*\[\]/u, "Unavailable research must return no con
 must(files.server, /provider_called:\s*false/u, "Unavailable research must not claim a provider call.");
 must(files.server, /outbound_action_executed:\s*false/u, "CRM routes must not send outbound actions.");
 must(files.server, /public_exposure_changed:\s*false/u, "CRM routes must not change public exposure.");
+must(files.server, /const existingBrain =[\s\S]*\.\.\.existingBrain[\s\S]*brain: updatedBrain/u, "CRM research commands must preserve each organization's saved customization.");
 must(files.coreClient, /export function friendlyBackendError/u, "Shared client core must expose a friendly backend error formatter.");
 must(files.packageJson, /test:crm-pipeline/u, "Root package must expose the CRM regression test.");
 
