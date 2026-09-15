@@ -36,6 +36,7 @@ const checks = [
   "test:content-publication-lifecycle",
   "test:workspace-approvals",
   "test:work-graph",
+  "test:email-delivery",
   "test:workforce-http",
   "test:workforce-heartbeat-ui",
   "test:agent-run-lifecycle",

@@ -12,6 +12,10 @@ const files = {
   orgClient: read("app/js/orgs.js"),
   workspaces: read("app/js/workspaces.js"),
   staticServer: read("ops/admin-live/admin-static-server.mjs"),
+  connectionCenter: read("app/js/connection-center.js"),
+  emailConnector: read("server/src/connectors/email-delivery-connector.ts"),
+  workGraph: read("server/src/workforce/work-graph.ts"),
+  actionContracts: read("packages/contracts/src/actions.ts"),
   packageJson: read("package.json"),
 };
 
@@ -55,6 +59,20 @@ must(files.workspaces, /data-crm-import[\s\S]*parseRelationshipCsv/u, "The accou
 must(files.workspaces, /data-crm-export[\s\S]*exportRelationshipCsv/u, "The account CRM must support scoped CSV export.");
 assert.doesNotMatch(files.workspaces, /prompt\("Contact name|prompt\("Company \/ brand/u, "Relationship creation and editing cannot use chained browser prompts.");
 must(files.workspaces, /lead\.ws === ws && lead\.status !== "lost"/u, "Follow-up lists must be explicitly restricted to the active organization.");
+must(files.workspaces, /Email queue & replies/u, "Follow-ups must expose the account email queue and reply stream inside Relationships.");
+must(files.workspaces, /proposeWorkGraphAction/u, "CRM sends must enter the durable work graph.");
+must(files.workspaces, /policy:\s*\{ surface: "external", reversible: false, requiresApproval: true \}/u, "Every CRM send must require owner approval.");
+must(files.workspaces, /draft\.channel === "email" && consent === "opt-in"/u, "Only opted-in email drafts may enter the email executor.");
+must(files.workspaces, /threadId: draft\.threadId \|\| undefined/u, "CRM reply sends must preserve provider threads.");
+must(files.workspaces, /data-act="draft-reply"/u, "Verified provider replies must offer a reply-draft action.");
+must(files.workspaces, /providerReceipts/u, "CRM status must count real provider receipts instead of a placeholder.");
+must(files.connectionCenter, /emailExecution\?\.sendReady === true[\s\S]*trackingReady === true[\s\S]*replySyncReady === true/u, "Inbox status cannot claim connected until execution, tracking, and reply sync are ready.");
+must(files.connectionCenter, /error\?\.status\) === 401 \|\| Number\(error\?\.status\) === 403[\s\S]*Sign in with an account-backed workspace/u, "CRM inbox setup must translate authorization failures into customer-facing language.");
+must(files.emailConnector, /x-idempotency-key/u, "Provider submission must include a stable idempotency key.");
+must(files.emailConnector, /timingSafeEqual/u, "Provider events must use timing-safe signature verification.");
+must(files.workGraph, /recordWorkGraphEmailProviderEvent/u, "Work graph must durably record provider delivery and reply events.");
+must(files.actionContracts, /EmailSendActionSchema[\s\S]*threadId: z\.string\(\)\.optional\(\)/u, "Email send contracts must support threaded replies.");
+must(files.server, /app\.post\("\/api\/email\/provider\/events"/u, "A signed provider event endpoint is required.");
 
 must(files.server, /sourceMode:\s*"research-required"/u, "Unfulfilled discovery must be recorded as research-required.");
 must(files.server, /error:\s*"public_research_not_connected"/u, "Unavailable research must return a stable error code.");
@@ -104,4 +122,5 @@ console.log(JSON.stringify({
   lifecycle: ["create", "read", "update", "delete"],
   syntheticContacts: false,
   externalActions: false,
+  emailExecution: "approval-bound-and-provider-verified",
 }, null, 2));

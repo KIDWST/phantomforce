@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ActionSchema, type ActionPolicy, type ActionType } from "@phantomforce/contracts";
+import { getEmailDeliveryConnectorStatus, submitEmailDelivery, type EmailProviderEvent } from "../connectors/email-delivery-connector.js";
 
 export type WorkGraphStatus =
   | "awaiting_approval"
@@ -24,6 +25,22 @@ export type WorkGraphReceipt = {
   verifiedAt: string | null;
   blockedReason: string | null;
   remediation: string | null;
+  providerReceipt?: {
+    provider: "gmail" | "outlook" | "other";
+    messageId: string;
+    threadId: string | null;
+    deliveryStatus: "submitted" | "delivered" | "bounced" | "replied";
+    submittedAt: string;
+    lastEventAt: string;
+    replyCount: number;
+    events: Array<{
+      eventId: string;
+      eventType: "delivered" | "bounced" | "replied";
+      occurredAt: string;
+      sequence: number;
+      replyPreview: string | null;
+    }>;
+  };
   createdAt: string;
 };
 
@@ -329,7 +346,7 @@ function blockedReceipt(action: WorkGraphAction, reason: string, remediation: st
   };
 }
 
-function executeAction(document: WorkGraphDocument, action: WorkGraphAction, actor: string) {
+async function executeAction(document: WorkGraphDocument, action: WorkGraphAction, actor: string) {
   action.status = "executing";
   action.updatedAt = now();
   appendAudit(document, {
@@ -435,15 +452,51 @@ function executeAction(document: WorkGraphDocument, action: WorkGraphAction, act
     const verified = document.drafts.some((candidate) => candidate.id === proposal.id && candidate.actionId === action.id);
     if (!verified) throw new Error("Calendar proposal write could not be verified.");
     action.receipt = verifiedReceipt(action, `Prepared and verified calendar proposal: ${proposal.title}`, "calendar_proposal", proposal.id);
+  } else if (action.type === "email.send") {
+    const connector = getEmailDeliveryConnectorStatus();
+    if (!connector.sendReady) {
+      action.receipt = blockedReceipt(
+        action,
+        "No verified email delivery connector is active for this organization.",
+        `Connect and verify Gmail or Outlook in Connections, then retry this approved action.${connector.reason ? ` Platform owner: ${connector.reason}` : ""}`,
+      );
+    } else {
+      const linkedDraft = cleanText(payload.draftId, 120)
+        ? document.drafts.find((draft) => draft.id === cleanText(payload.draftId, 120) && draft.kind === "email")
+        : null;
+      const deliveryPayload = linkedDraft?.payload || payload;
+      const provider = await submitEmailDelivery({
+        tenantId: action.tenantId,
+        actionId: action.id,
+        correlationId: action.correlationId,
+        to: Array.isArray(deliveryPayload.to) ? deliveryPayload.to.map((value) => cleanText(value, 320)).filter(Boolean) : [],
+        subject: cleanText(deliveryPayload.subject, 300),
+        body: cleanBody(deliveryPayload.body, 50_000),
+        threadId: cleanText(deliveryPayload.threadId, 300) || null,
+      });
+      action.receipt = verifiedReceipt(
+        action,
+        `${provider.provider} accepted the approved email and returned message receipt ${provider.messageId}.`,
+        "provider_email_message",
+        provider.messageId,
+      );
+      action.receipt.verifiedAt = provider.submittedAt;
+      action.receipt.providerReceipt = {
+        provider: provider.provider,
+        messageId: provider.messageId,
+        threadId: provider.threadId,
+        deliveryStatus: "submitted",
+        submittedAt: provider.submittedAt,
+        lastEventAt: provider.submittedAt,
+        replyCount: 0,
+        events: [],
+      };
+    }
   } else if (action.policy.surface === "external") {
-    const reason = action.type === "email.send"
-      ? "No verified email delivery connector is active for this organization."
-      : action.type === "calendar.event.commit"
+    const reason = action.type === "calendar.event.commit"
         ? "No verified calendar write connector is active for this organization."
         : `No verified external executor is active for ${action.type}.`;
-    const remediation = action.type === "email.send"
-      ? "Connect and verify Gmail or Outlook in Connections, then retry this approved action."
-      : action.type === "calendar.event.commit"
+    const remediation = action.type === "calendar.event.commit"
         ? "Connect and verify a calendar account in Connections, then retry this approved action."
         : "Connect and verify the required provider, then retry the action.";
     action.receipt = blockedReceipt(action, reason, remediation);
@@ -479,7 +532,7 @@ export async function proposeWorkAction(options: {
   if (!parsed.success) throw new Error(`Invalid action: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`);
   const idempotencyKey = cleanText(options.idempotencyKey, 180);
   if (!idempotencyKey) throw new Error("An idempotency key is required.");
-  return mutateDocument(options.tenantId, options.actor, (document) => {
+  return mutateDocument(options.tenantId, options.actor, async (document) => {
     const existing = document.actions.find((candidate) => candidate.idempotencyKey === idempotencyKey && candidate.type === parsed.data.type);
     if (existing) return { action: existing, replayed: true };
     const createdAt = now();
@@ -514,7 +567,7 @@ export async function proposeWorkAction(options: {
       eventType: "proposed",
       summary: `Proposed ${action.type}; approval ${action.approval.required ? "required" : "not required"}.`,
     });
-    if (!action.approval.required) executeAction(document, action, options.actor);
+    if (!action.approval.required) await executeAction(document, action, options.actor);
     return { action, replayed: false };
   }, options.root);
 }
@@ -527,7 +580,7 @@ export async function decideWorkAction(options: {
   note?: string;
   root?: string;
 }) {
-  return mutateDocument(options.tenantId, options.actor, (document) => {
+  return mutateDocument(options.tenantId, options.actor, async (document) => {
     const action = document.actions.find((candidate) => candidate.id === options.actionId);
     if (!action) throw new Error("Work action not found for this organization.");
     if (!action.approval.required) return { action, replayed: true };
@@ -556,7 +609,7 @@ export async function decideWorkAction(options: {
       summary: `Approved ${action.type}.`,
     });
     try {
-      executeAction(document, action, options.actor);
+      await executeAction(document, action, options.actor);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Execution failed without a usable error.";
       action.status = "failed";
@@ -590,7 +643,7 @@ export async function decideAllSafeWorkActions(options: {
   actor: string;
   root?: string;
 }) {
-  return mutateDocument(options.tenantId, options.actor, (document) => {
+  return mutateDocument(options.tenantId, options.actor, async (document) => {
     const candidates = document.actions.filter((action) => action.status === "awaiting_approval" && action.policy.surface === "internal").slice(0, 25);
     const completed: WorkGraphAction[] = [];
     for (const action of candidates) {
@@ -605,10 +658,51 @@ export async function decideAllSafeWorkActions(options: {
         eventType: "approved",
         summary: `Approved ${action.type} in safe bulk decision.`,
       });
-      executeAction(document, action, options.actor);
+      await executeAction(document, action, options.actor);
       completed.push(action);
     }
     return { completed, skippedExternal: document.actions.filter((action) => action.status === "awaiting_approval" && action.policy.surface === "external").length };
+  }, options.root);
+}
+
+export async function recordWorkGraphEmailProviderEvent(options: {
+  event: EmailProviderEvent;
+  actor?: string;
+  root?: string;
+}) {
+  const actor = cleanText(options.actor, 120) || `provider:${options.event.provider}`;
+  return mutateDocument(options.event.tenantId, actor, (document) => {
+    const action = document.actions.find((candidate) => candidate.type === "email.send" && candidate.receipt?.providerReceipt?.messageId === options.event.messageId);
+    if (!action?.receipt?.providerReceipt) throw new Error("Email provider message receipt was not found for this organization.");
+    const providerReceipt = action.receipt.providerReceipt;
+    const existing = providerReceipt.events.find((event) => event.eventId === options.event.eventId);
+    if (existing) return { action, event: existing, replayed: true, applied: true };
+    const lastSequence = providerReceipt.events.reduce((largest, event) => Math.max(largest, event.sequence), -1);
+    if (options.event.sequence <= lastSequence) {
+      return { action, event: null, replayed: false, applied: false, reason: "out_of_order" };
+    }
+    const event = {
+      eventId: options.event.eventId,
+      eventType: options.event.eventType,
+      occurredAt: options.event.occurredAt,
+      sequence: options.event.sequence,
+      replyPreview: options.event.eventType === "replied" ? cleanBody(options.event.replyPreview, 2_000) || null : null,
+    };
+    providerReceipt.events.push(event);
+    providerReceipt.events = providerReceipt.events.slice(-100);
+    providerReceipt.deliveryStatus = options.event.eventType;
+    providerReceipt.lastEventAt = options.event.occurredAt;
+    if (options.event.threadId) providerReceipt.threadId = options.event.threadId;
+    if (options.event.eventType === "replied") providerReceipt.replyCount += 1;
+    action.updatedAt = now();
+    appendAudit(document, {
+      actor,
+      actionId: action.id,
+      correlationId: action.correlationId,
+      eventType: "verified_complete",
+      summary: `Verified provider event: ${options.event.eventType} for email message ${options.event.messageId}.`,
+    });
+    return { action, event, replayed: false, applied: true };
   }, options.root);
 }
 

@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260914-208";
+import { ctx, session } from "./store.js?v=phantom-live-20260914-209";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -29,6 +29,26 @@ async function api(path, { method = "GET", body } = {}) {
   });
   const json = await response.json().catch(() => ({}));
   return { status: response.status, ok: response.ok, json };
+}
+
+export async function proposeWorkGraphAction(action, { idempotencyKey, correlationId } = {}) {
+  const tenantId = activeOrgId() || "";
+  const { ok, status, json } = await api("/api/workforce/actions", {
+    method: "POST",
+    body: {
+      tenant_id: tenantId,
+      action,
+      idempotency_key: String(idempotencyKey || "").trim(),
+      correlation_id: String(correlationId || "").trim() || undefined,
+    },
+  });
+  return ok ? { ok: true, ...json } : { ok: false, status, error: json?.error || "work_action_create_failed" };
+}
+
+export async function fetchWorkGraphAction(actionId) {
+  const tenantId = activeOrgId() || "";
+  const { ok, status, json } = await api(`/api/workforce/actions/${encodeURIComponent(actionId)}?tenant_id=${encodeURIComponent(tenantId)}`);
+  return ok ? { ok: true, ...json } : { ok: false, status, error: json?.error || "work_action_read_failed" };
 }
 
 let cachedAuthConfig = null;

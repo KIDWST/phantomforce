@@ -10,25 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-208";
+} from "./store.js?v=phantom-live-20260914-209";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-} from "./orgs.js?v=phantom-live-20260914-208";
+  proposeWorkGraphAction, fetchWorkGraphAction,
+} from "./orgs.js?v=phantom-live-20260914-209";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-208";
+} from "./proposalpipeline.js?v=phantom-live-20260914-209";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-208";
+} from "./approvalpipeline.js?v=phantom-live-20260914-209";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -36,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-208";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-208";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-208";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-208";
+} from "./financeledger.js?v=phantom-live-20260914-209";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-209";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-209";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-209";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -61,6 +62,7 @@ const relationshipsUi = {
   busy: false, importBusy: false,
 };
 const crmEmailUi = { scope: "", state: "checking", provider: "", message: "", loading: false };
+const communicationActionRefresh = new Map();
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -1037,6 +1039,10 @@ function renderFollowUp(el, rerender) {
       </select>
     </div>
     ${operatorUi.notice ? `<div class="ops-notice">${esc(operatorUi.notice)}</div>` : ""}
+    <section class="crm-comms-workbench">
+      <header><div><p>OUTREACH CONTROL</p><h3>Email queue & replies</h3></div><span>Draft → approval → provider receipt → reply</span></header>
+      <div data-crm-comms></div>
+    </section>
     <div class="stack ops-stack">
       ${pageRecords.map((lead) => {
         const consent = leadConsentStatus(lead);
@@ -1074,6 +1080,8 @@ function renderFollowUp(el, rerender) {
       store.save();
     };
   });
+  const commsMount = el.querySelector("[data-crm-comms]");
+  if (commsMount) renderComms(commsMount, rerender);
   bindActions(el, {
     "draft-followup": (id) => {
       const lead = find(id); if (!lead) return;
@@ -1107,30 +1115,70 @@ function renderFollowUp(el, rerender) {
   });
 }
 
+function syncServerCommunicationActions(drafts, rerender) {
+  if (!isDatabaseSession()) return;
+  const now = Date.now();
+  drafts.filter((draft) => draft.workActionId).slice(0, 30).forEach((draft) => {
+    const lastChecked = communicationActionRefresh.get(draft.workActionId) || 0;
+    if (now - lastChecked < 15_000) return;
+    communicationActionRefresh.set(draft.workActionId, now);
+    fetchWorkGraphAction(draft.workActionId).then((result) => {
+      const action = result?.action;
+      if (!result?.ok || !action) return;
+      const providerReceipt = action.receipt?.providerReceipt || null;
+      const nextStatus = providerReceipt?.deliveryStatus || action.status || draft.status;
+      const nextSignature = JSON.stringify([nextStatus, providerReceipt?.lastEventAt, providerReceipt?.replyCount]);
+      const currentSignature = JSON.stringify([draft.status, draft.providerReceipt?.lastEventAt, draft.providerReceipt?.replyCount]);
+      if (nextSignature === currentSignature) return;
+      draft.status = nextStatus;
+      draft.providerReceipt = providerReceipt;
+      draft.executionReceipt = action.receipt || null;
+      draft.updatedAt = action.updatedAt || new Date().toISOString();
+      store.save();
+      rerender();
+    }).catch(() => {});
+  });
+}
+
 function renderComms(el, rerender) {
   const drafts = visible(store.state.communications).slice().sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+  syncServerCommunicationActions(drafts, rerender);
   const pending = visible(store.state.approvals).filter((approval) => approval.type === "send-message" && approval.status === "pending");
+  const draftApprovalIds = new Set(drafts.map((item) => item.id));
+  const awaiting = drafts.filter((item) => ["pending", "awaiting_approval"].includes(item.status)).length
+    + pending.filter((approval) => !draftApprovalIds.has(approval.communicationId || approval.ref)).length;
+  const providerAccepted = drafts.filter((item) => ["submitted", "delivered", "replied"].includes(item.status)).length;
+  const replies = drafts.filter((item) => item.status === "replied").reduce((sum, item) => sum + Number(item.providerReceipt?.replyCount || 1), 0);
   el.innerHTML = `
     <section class="ops-summary" aria-label="Communication status">
       <article><span>Drafts</span><b>${drafts.filter((item) => item.status === "draft").length}</b><i>private working copy</i></article>
-      <article><span>Waiting approval</span><b>${pending.length}</b><i>no send before decision</i></article>
-      <article><span>Send-ready</span><b>${drafts.filter((item) => item.status === "send-ready").length}</b><i>connector still required</i></article>
+      <article><span>Waiting approval</span><b>${awaiting}</b><i>no send before decision</i></article>
+      <article><span>Provider accepted</span><b>${providerAccepted}</b><i>verified message receipts</i></article>
+      <article><span>Replies</span><b>${replies}</b><i>signed provider events</i></article>
     </section>
-    <div class="ws-toolbar"><p class="ws-note">One place for outbound drafts and consent. Approval changes a draft to send-ready; it does not invent a provider delivery receipt.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">One account-scoped queue for outbound drafts and replies. Approval changes a draft to send-ready; it does not invent a provider delivery receipt. Execution requires a verified provider, and delivery or reply states require signed events.</p></div>
     <div class="stack ops-stack">
       ${drafts.map((draft) => {
         const lead = store.state.leads.find((item) => item.id === draft.leadId);
         const consent = leadConsentStatus(lead);
         const target = communicationTarget(lead, draft.channel);
-        const canQueue = draft.status === "draft" && consent === "opt-in" && Boolean(target);
+        const canQueue = draft.status === "draft" && draft.channel === "email" && consent === "opt-in" && Boolean(target);
+        const latestReply = draft.providerReceipt?.events?.filter((event) => event.eventType === "replied" && event.replyPreview).slice(-1)[0] || null;
+        const queueHint = consent !== "opt-in"
+          ? "Record permission in Follow-up before approval."
+          : draft.channel !== "email"
+            ? "Verified execution is email-only right now. Add an email or use this draft manually."
+            : "Add a real email address in Leads.";
         return `<article class="record record-wide ops-record">
           <div class="record-top">${wsTag(draft.ws)}<h4>${esc(lead?.name || lead?.company || "Contact unavailable")}</h4>${chip(draft.status)}</div>
           <p class="record-sub">${esc(draft.channel)} · ${target ? esc(target) : "destination missing"} · permission ${esc(consent)} · updated ${ago(draft.updatedAt || draft.createdAt)}</p>
           <p class="record-notes ops-message">${esc(draft.body)}</p>
+          ${draft.providerReceipt ? `<div class="crm-provider-receipt"><span>${esc(draft.providerReceipt.provider)}</span><b>${esc(draft.providerReceipt.deliveryStatus)}</b><i>${Number(draft.providerReceipt.replyCount || 0)} repl${Number(draft.providerReceipt.replyCount || 0) === 1 ? "y" : "ies"}</i></div>${latestReply ? `<blockquote><small>LATEST REPLY</small>${esc(latestReply.replyPreview)}</blockquote>` : ""}` : ""}
           <div class="record-actions">
             ${draft.status === "draft" ? `<button class="btn" data-act="edit-comm" data-id="${esc(draft.id)}">Edit draft</button>` : ""}
             ${canQueue ? `<button class="btn btn-good" data-act="queue-comm" data-id="${esc(draft.id)}">Queue approval</button>` : ""}
-            ${draft.status === "draft" && !canQueue ? `<span class="hint-inline">${consent !== "opt-in" ? "Record permission in Follow-up before approval." : "Add a real destination in Leads."}</span>` : ""}
+            ${latestReply && target && draft.channel === "email" ? `<button class="btn" data-act="draft-reply" data-id="${esc(draft.id)}">Prepare reply</button>` : ""}
+            ${draft.status === "draft" && !canQueue ? `<span class="hint-inline">${queueHint}</span>` : ""}
             <button class="btn btn-quiet" data-act="remove-comm" data-id="${esc(draft.id)}">Remove draft</button>
           </div>
         </article>`;
@@ -1145,15 +1193,68 @@ function renderComms(el, rerender) {
       draft.body = body.trim(); draft.updatedAt = new Date().toISOString();
       store.save(); rerender();
     },
-    "queue-comm": (id) => {
+    "queue-comm": async (id) => {
       const draft = find(id); if (!draft) return;
       const lead = store.state.leads.find((item) => item.id === draft.leadId);
       const target = communicationTarget(lead, draft.channel);
-      if (leadConsentStatus(lead) !== "opt-in" || !target) return;
+      if (draft.channel !== "email" || leadConsentStatus(lead) !== "opt-in" || !target) return;
+      if (isDatabaseSession()) {
+        const action = {
+          type: "email.send",
+          proposedBy: "user",
+          rationale: `Send the reviewed CRM follow-up to ${lead.name || lead.company}.`,
+          policy: { surface: "external", reversible: false, requiresApproval: true },
+          payload: {
+            to: [target],
+            subject: draft.subject || `Video production support for ${lead.company || lead.name}`,
+            body: draft.body,
+            threadId: draft.threadId || undefined,
+          },
+        };
+        const result = await proposeWorkGraphAction(action, {
+          idempotencyKey: `crm-email:${draft.id}:${draft.updatedAt || draft.createdAt}`,
+          correlationId: `crm-contact:${lead.id}`,
+        }).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : "work_action_create_failed" }));
+        if (!result?.ok || !result.action) {
+          operatorUi.notice = `Could not queue the email: ${String(result?.error || "unknown error")}`;
+          rerender();
+          return;
+        }
+        draft.status = result.action.status;
+        draft.workActionId = result.action.id;
+        draft.updatedAt = result.action.updatedAt || new Date().toISOString();
+        operatorUi.notice = `Email queued for owner approval. Nothing was sent.`;
+        pushActivity("Comms", `queued an email for owner approval through the verified work graph. Nothing was sent.`, draft.ws);
+        store.save(); rerender();
+        return;
+      }
       const approval = { id: uid("app"), ws: draft.ws, type: "send-message", title: `Send ${draft.channel} follow-up to ${lead.name || lead.company}`, detail: `Target: ${target}. Exact draft: ${draft.body}`, ref: draft.id, communicationId: draft.id, status: "pending", requestedBy: "Comms", at: new Date().toISOString() };
       queueWorkspaceApproval(approval);
       draft.status = "pending"; draft.updatedAt = new Date().toISOString();
       pushActivity("Comms", `queued a ${draft.channel} draft for owner approval. Nothing was sent.`, draft.ws);
+      store.save(); rerender();
+    },
+    "draft-reply": (id) => {
+      const source = find(id); if (!source) return;
+      const lead = store.state.leads.find((item) => item.id === source.leadId);
+      if (!lead?.email || !source.providerReceipt?.messageId) return;
+      const existing = store.state.communications.find((item) => item.replyToMessageId === source.providerReceipt.messageId && item.status === "draft");
+      const draft = existing || {
+        id: uid("comm"),
+        ws: source.ws,
+        leadId: source.leadId,
+        channel: "email",
+        status: "draft",
+        createdAt: new Date().toISOString(),
+        replyToMessageId: source.providerReceipt.messageId,
+      };
+      draft.subject = /^re:/i.test(source.subject || "") ? source.subject : `Re: ${source.subject || `Video production support for ${lead.company || lead.name}`}`;
+      draft.body = draft.body || `Thanks for getting back to us. I’d be glad to continue the conversation. What timing, deliverables, and next decision should we plan around?`;
+      draft.threadId = source.providerReceipt.threadId || null;
+      draft.updatedAt = new Date().toISOString();
+      if (!existing) store.state.communications.unshift(draft);
+      operatorUi.notice = `Reply draft prepared for ${lead.name || lead.company}. Nothing was sent.`;
+      pushActivity("Comms", `prepared a threaded reply draft for ${lead.name || lead.company}. Nothing was sent.`, draft.ws);
       store.save(); rerender();
     },
     "remove-comm": (id) => {
@@ -1260,8 +1361,10 @@ function renderRelationships(el, rerender) {
   const pipelineValue = records.filter((lead) => lead.status !== "lost").reduce((sum, lead) => sum + Number(lead.value || 0), 0);
   const publishedEmails = records.filter((lead) => Boolean(lead.email)).length;
   const permissionReady = records.filter((lead) => Boolean(lead.email) && leadConsentStatus(lead) === "opt-in").length;
-  const drafts = store.state.communications.filter((item) => item.ws === ws && item.status === "draft").length;
-  const pendingSends = store.state.approvals.filter((item) => item.ws === ws && item.type === "send-message" && item.status === "pending").length;
+  const communications = store.state.communications.filter((item) => item.ws === ws);
+  const drafts = communications.filter((item) => item.status === "draft").length;
+  const pendingSends = communications.filter((item) => ["pending", "awaiting_approval"].includes(item.status)).length;
+  const providerReceipts = communications.filter((item) => Boolean(item.providerReceipt?.messageId)).length;
   const emailConnected = crmEmailUi.state === "connected";
   const emailAvailable = crmEmailUi.state === "available";
   const emailTitle = emailConnected
@@ -1296,7 +1399,7 @@ function renderRelationships(el, rerender) {
       <section class="crm-mail-status is-${esc(crmEmailUi.state)}" aria-label="Email automation status">
         <div class="crm-mail-icon">@</div>
         <div><b>${esc(emailTitle)}</b><span>${esc(emailDetail)}</span></div>
-        <div class="crm-mail-counts"><span><b>${drafts}</b> drafts</span><span><b>${pendingSends}</b> approvals</span><span><b>0</b> provider receipts</span></div>
+        <div class="crm-mail-counts"><span><b>${drafts}</b> drafts</span><span><b>${pendingSends}</b> approvals</span><span><b>${providerReceipts}</b> provider receipts</span></div>
         <button class="btn" type="button" data-open-ws="settings" data-settings-target="connections">${emailConnected ? "Manage inbox" : emailAvailable ? "Connect inbox" : "Open setup"}</button>
       </section>
       ${leadsUi.notice ? `<div class="ops-notice" role="status" aria-live="polite">${esc(leadsUi.notice)}</div>` : ""}
@@ -2876,7 +2979,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-208")
+      import("./brain.js?v=phantom-live-20260914-209")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

@@ -2,10 +2,10 @@
    The browser never asks for developer credentials. Connect is enabled only
    when the server can create a real, signed authorization handoff. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-208";
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-208";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-209";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-209";
 
-let connectionState = { loaded: false, loading: false, error: "", connectors: [], notice: "", busyId: "" };
+let connectionState = { loaded: false, loading: false, error: "", connectors: [], emailExecution: null, notice: "", busyId: "" };
 let connectionMount = null;
 let connectionOpts = {};
 
@@ -34,15 +34,29 @@ async function connectionApi(path, options = {}) {
   return payload;
 }
 
+function connectionErrorMessage(error) {
+  if (Number(error?.status) === 401 || Number(error?.status) === 403) {
+    return "Sign in with an account-backed workspace to configure inbox automation.";
+  }
+  return error instanceof Error ? error.message : "Connections could not be checked.";
+}
+
 async function refreshConnections({ force = false } = {}) {
   if (connectionState.loading || (connectionState.loaded && !force)) return connectionState;
   connectionState = { ...connectionState, loading: true, error: "" };
   try {
     const tenant = encodeURIComponent(currentTenantId());
     const payload = await connectionApi(`/api/connections/status?tenant_id=${tenant}`);
-    connectionState = { ...connectionState, loaded: true, loading: false, error: "", connectors: Array.isArray(payload.connectors) ? payload.connectors : [] };
+    connectionState = {
+      ...connectionState,
+      loaded: true,
+      loading: false,
+      error: "",
+      connectors: Array.isArray(payload.connectors) ? payload.connectors : [],
+      emailExecution: payload.email_execution && typeof payload.email_execution === "object" ? payload.email_execution : null,
+    };
   } catch (error) {
-    connectionState = { ...connectionState, loaded: true, loading: false, error: error instanceof Error ? error.message : "Connections could not be checked." };
+    connectionState = { ...connectionState, loaded: true, loading: false, error: connectionErrorMessage(error) };
   }
   if (connectionMount?.isConnected) renderConnectionCenter(connectionMount, connectionOpts);
   return connectionState;
@@ -54,10 +68,19 @@ export async function getEmailConnectionSnapshot({ force = false } = {}) {
   const connected = email.find((connector) => connector.state === "connected") || null;
   const available = email.find((connector) => connector.state === "available") || null;
   const configurationRequired = email.length > 0 && email.every((connector) => connector.state === "configuration_required");
+  const executionReady = connectionState.emailExecution?.sendReady === true
+    && connectionState.emailExecution?.trackingReady === true
+    && connectionState.emailExecution?.replySyncReady === true;
+  const connectedAndReady = Boolean(connected && executionReady);
   return {
-    state: connected ? "connected" : available ? "available" : configurationRequired ? "configuration_required" : connectionState.error ? "error" : "checking",
+    state: connectionState.error ? "error" : connectedAndReady ? "connected" : available && executionReady ? "available" : connected || configurationRequired || !executionReady ? "configuration_required" : "checking",
     provider: connected?.name || available?.name || "",
-    message: connected?.customerMessage || available?.customerMessage || connectionState.error || "",
+    message: connected && !executionReady
+      ? `Inbox authorization exists, but verified sending/tracking is not ready. ${connectionState.emailExecution?.reason || "The email executor needs platform setup."}`
+      : connected?.customerMessage || available?.customerMessage || connectionState.emailExecution?.reason || connectionState.error || "",
+    sendReady: connectedAndReady,
+    trackingReady: connectedAndReady,
+    replySyncReady: connectedAndReady,
   };
 }
 

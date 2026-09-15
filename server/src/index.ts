@@ -236,6 +236,7 @@ import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
 import { CUSTOMER_CONNECTOR_IDS, type CustomerConnectorId } from "./connectors/connection-request-store.js";
 import { customerConnectionCatalog, startCustomerConnection } from "./connectors/customer-connection-catalog.js";
+import { getEmailDeliveryConnectorStatus, parseVerifiedEmailProviderEvent } from "./connectors/email-delivery-connector.js";
 import { parseExpenseText, parseReceiptImage } from "./connectors/finance-smart-entry.js";
 import { getReceiptAssetStorageProvider } from "./connectors/receipt-asset-storage.js";
 import {
@@ -443,6 +444,7 @@ import {
   getWorkGraphHeartbeat,
   proposeWorkAction,
   publicWorkGraphAction,
+  recordWorkGraphEmailProviderEvent,
 } from "./workforce/work-graph.js";
 import {
   getAutonomousSecurityScanStatus,
@@ -5802,6 +5804,7 @@ app.get("/api/connections/status", async (request, reply) => {
     ok: true,
     tenant_id: tenantId,
     connectors: customerConnectionCatalog(tenantId),
+    email_execution: getEmailDeliveryConnectorStatus(),
     customer_contract: {
       actions: ["Connect", "Connected", "Reconnect", "Manage"],
       customer_credentials_required: false,
@@ -8712,6 +8715,29 @@ const ChicagoShotsPublicInquirySchema = z.object({
   referrer_url: z.string().trim().max(800).optional().default(""),
   website: z.string().trim().max(300).optional().default(""),
   started_at: z.number().int().positive(),
+});
+
+app.post("/api/email/provider/events", async (request, reply) => {
+  try {
+    const event = parseVerifiedEmailProviderEvent(request.body, request.headers["x-phantomforce-email-signature"]);
+    const result = await recordWorkGraphEmailProviderEvent({ event });
+    return {
+      ok: true,
+      event_id: event.eventId,
+      message_id: event.messageId,
+      applied: result.result.applied,
+      replayed: result.result.replayed,
+      reason: "reason" in result.result ? result.result.reason : null,
+      raw_reply_returned: false,
+    };
+  } catch (error) {
+    const code = String((error as { code?: unknown })?.code || "email_provider_event_rejected");
+    const status = code === "email_webhook_not_configured" ? 503
+      : code === "invalid_email_provider_signature" ? 401
+        : /not found/i.test(error instanceof Error ? error.message : "") ? 404
+          : 400;
+    return reply.status(status).send({ ok: false, error: code });
+  }
 });
 const chicagoShotsInquiryRate = new Map<string, number[]>();
 

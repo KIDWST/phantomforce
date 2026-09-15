@@ -32,6 +32,7 @@ export function requiresWrite(method: string, url: string): boolean {
   if (/^(session|owner|demo)-login$/.test(seg)) return false; // signing in
   if (path.startsWith("/auth/")) return false; // identity/auth flows are guarded by auth itself, not subscription state
   if (path === "/billing/webhook") return false; // authenticated by its own signing secret, not a session
+  if (path === "/api/email/provider/events") return false; // authenticated by the dedicated email-provider HMAC
   // ChicagoShots.com lead intake is intentionally public. The route owns its
   // honeypot, timing, rate-limit, validation, and idempotency boundaries; it
   // only records an inquiry and an approval-required response draft.
