@@ -1,4 +1,4 @@
-import { session } from "./store.js?v=phantom-live-20260914-205";
+import { session } from "./store.js?v=phantom-live-20260914-206";
 
 const DESKTOP_PROTOCOL = "phantomforce.hermes.extension.v1";
 const BRIDGE_TIMEOUT_MS = 1800;

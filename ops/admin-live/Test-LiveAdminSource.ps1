@@ -147,13 +147,13 @@ $repoOverride = [Environment]::GetEnvironmentVariable("PHANTOMFORCE_DASHBOARD_RE
 $overrideOk = [string]::IsNullOrWhiteSpace($repoOverride) -or ((Resolve-Path -LiteralPath $repoOverride -ErrorAction SilentlyContinue).Path -eq $RepoRoot)
 $states.Add((Result ($(if ($overrideOk) { "OK" } else { "FAIL" })) ($(if ($overrideOk) { "Dashboard repository environment override is empty or canonical." } else { "PHANTOMFORCE_DASHBOARD_REPO points at $repoOverride" }))))
 
-$combinedLauncher = Join-Path $RepoRoot "ops\admin-live\Run-AdminMainSyncHidden.vbs"
+$combinedLauncher = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\Run-AdminMainSync.ps1"
 $combinedTaskXml = ScheduledTaskXmlText -TaskName "PhantomForce Admin Main Sync"
 $combinedTaskEnabled = $combinedTaskXml -and $combinedTaskXml -notmatch '<Enabled>\s*false\s*</Enabled>'
 $combinedTaskOk = $combinedTaskEnabled -and
   $combinedTaskXml.Contains($combinedLauncher) -and
   $combinedTaskXml -match '<LogonTrigger>' -and
-  $combinedTaskXml -match '<Interval>PT1H</Interval>' -and
+  $combinedTaskXml -match '<Interval>PT5M</Interval>' -and
   $combinedTaskXml -match '<Hidden>true</Hidden>'
 
 $fallbackPath = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live\start-admin-live-watch.vbs"
