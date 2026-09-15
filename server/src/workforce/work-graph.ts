@@ -473,6 +473,7 @@ async function executeAction(document: WorkGraphDocument, action: WorkGraphActio
         subject: cleanText(deliveryPayload.subject, 300),
         body: cleanBody(deliveryPayload.body, 50_000),
         threadId: cleanText(deliveryPayload.threadId, 300) || null,
+        replyToMessageId: cleanText(deliveryPayload.replyToMessageId, 300) || null,
       });
       action.receipt = verifiedReceipt(
         action,

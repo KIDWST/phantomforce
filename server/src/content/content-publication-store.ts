@@ -7,6 +7,7 @@ export type PublicationStatus =
   | "draft"
   | "scheduled"
   | "approval_required"
+  | "blocked"
   | "publishing"
   | "published"
   | "partial"
@@ -16,7 +17,9 @@ export type PublicationStatus =
 
 export type PublicationChannelResult = {
   channel: string;
-  status: "pending" | "published" | "failed";
+  status: "pending" | "submitted" | "published" | "failed";
+  provider: string | null;
+  submissionReceiptId: string | null;
   providerReceiptId: string | null;
   publicUrl: string | null;
   errorCode: string | null;
@@ -38,6 +41,9 @@ export type ContentPublication = {
   timezone: string;
   scheduledFor: string | null;
   approvalId: string | null;
+  blockedReason: string | null;
+  remediation: string | null;
+  providerEventIds: string[];
   externalSent: boolean;
   createdAt: string;
   updatedAt: string;
@@ -75,12 +81,14 @@ function dateOrNull(value: unknown) {
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
 }
 function normalizeChannelResult(value: Partial<PublicationChannelResult>, now: string): PublicationChannelResult {
-  const status = ["pending", "published", "failed"].includes(String(value.status))
+  const status = ["pending", "submitted", "published", "failed"].includes(String(value.status))
     ? value.status as PublicationChannelResult["status"]
     : "pending";
   return {
     channel: clean(value.channel, 80),
     status,
+    provider: clean(value.provider, 120) || null,
+    submissionReceiptId: clean(value.submissionReceiptId, 300) || null,
     providerReceiptId: clean(value.providerReceiptId, 200) || null,
     publicUrl: clean(value.publicUrl, 1_000) || null,
     errorCode: clean(value.errorCode, 100) || null,
@@ -90,7 +98,7 @@ function normalizeChannelResult(value: Partial<PublicationChannelResult>, now: s
 }
 function normalize(raw: Partial<ContentPublication>, tenantId: string): ContentPublication {
   const now = new Date().toISOString();
-  const status = ["draft", "scheduled", "approval_required", "publishing", "published", "partial", "failed", "cancelled", "manual_record"].includes(String(raw.status))
+  const status = ["draft", "scheduled", "approval_required", "blocked", "publishing", "published", "partial", "failed", "cancelled", "manual_record"].includes(String(raw.status))
     ? raw.status as PublicationStatus
     : "draft";
   const channels = [...new Set((Array.isArray(raw.channels) ? raw.channels : []).map((item) => clean(item, 80)).filter(Boolean))].slice(0, 12);
@@ -110,6 +118,9 @@ function normalize(raw: Partial<ContentPublication>, tenantId: string): ContentP
     timezone: validTimezone(raw.timezone),
     scheduledFor: dateOrNull(raw.scheduledFor),
     approvalId: clean(raw.approvalId, 140) || null,
+    blockedReason: clean(raw.blockedReason, 400) || null,
+    remediation: clean(raw.remediation, 600) || null,
+    providerEventIds: [...new Set((Array.isArray(raw.providerEventIds) ? raw.providerEventIds : []).map((value) => clean(value, 180)).filter(Boolean))].slice(-500),
     externalSent: Boolean(raw.externalSent),
     createdAt: dateOrNull(raw.createdAt) || now,
     updatedAt: dateOrNull(raw.updatedAt) || now,
@@ -200,6 +211,65 @@ export async function approveContentPublication(options: {
     if (!approvalId) throw new Error("approval_id_required");
     publication.approvalId = approvalId;
     publication.status = "publishing";
+    publication.blockedReason = null;
+    publication.remediation = null;
+    publication.updatedAt = new Date().toISOString();
+    return publication;
+  }, options.root);
+}
+
+export async function blockContentPublication(options: {
+  tenantId: string;
+  publicationId: string;
+  approvalId: string;
+  reason: string;
+  remediation: string;
+  root?: string;
+}) {
+  return mutate(options.tenantId, (document) => {
+    const publication = document.publications.find((record) => record.id === options.publicationId);
+    if (!publication) throw new Error("publication_not_found");
+    if (["published", "partial", "cancelled"].includes(publication.status)) throw new Error("publication_terminal");
+    publication.approvalId = clean(options.approvalId, 140) || publication.approvalId;
+    publication.status = "blocked";
+    publication.blockedReason = clean(options.reason, 400) || "Social publishing is not configured.";
+    publication.remediation = clean(options.remediation, 600) || "Connect and verify a publishing executor, then retry.";
+    publication.updatedAt = new Date().toISOString();
+    return publication;
+  }, options.root);
+}
+
+export async function recordPublicationSubmission(options: {
+  tenantId: string;
+  publicationId: string;
+  channel: string;
+  accepted: boolean;
+  provider?: string;
+  submissionReceiptId?: string;
+  submittedAt?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  root?: string;
+}) {
+  return mutate(options.tenantId, (document) => {
+    const publication = document.publications.find((record) => record.id === options.publicationId);
+    if (!publication) throw new Error("publication_not_found");
+    if (publication.status !== "publishing") throw new Error("publication_not_in_progress");
+    if (!publication.approvalId) throw new Error("approval_required");
+    const channel = clean(options.channel, 80);
+    const result = publication.channelResults.find((row) => row.channel === channel);
+    if (!result) throw new Error("channel_not_selected");
+    const receipt = clean(options.submissionReceiptId, 300);
+    if (options.accepted && !receipt) throw new Error("submission_receipt_required");
+    result.provider = clean(options.provider, 120) || channel;
+    result.submissionReceiptId = receipt || null;
+    result.status = options.accepted ? "submitted" : "failed";
+    result.errorCode = options.accepted ? null : clean(options.errorCode, 100) || "provider_rejected";
+    result.errorMessage = options.accepted ? null : clean(options.errorMessage, 400) || "The channel rejected the publication request.";
+    result.updatedAt = dateOrNull(options.submittedAt) || new Date().toISOString();
+    const allResolved = publication.channelResults.every((row) => row.status !== "pending");
+    const submittedCount = publication.channelResults.filter((row) => row.status === "submitted").length;
+    if (allResolved && !submittedCount) publication.status = "failed";
     publication.updatedAt = new Date().toISOString();
     return publication;
   }, options.root);
@@ -215,6 +285,8 @@ export async function recordPublicationChannelResult(options: {
   publicUrl?: string;
   errorCode?: string;
   errorMessage?: string;
+  eventId?: string;
+  submissionReceiptId?: string;
   root?: string;
 }) {
   return mutate(options.tenantId, (document) => {
@@ -229,13 +301,21 @@ export async function recordPublicationChannelResult(options: {
     const now = new Date().toISOString();
     const result = publication.channelResults.find((row) => row.channel === channel);
     if (!result) throw new Error("channel_not_selected");
+    const eventId = clean(options.eventId, 180);
+    if (eventId && publication.providerEventIds.includes(eventId)) return publication;
+    const submissionReceiptId = clean(options.submissionReceiptId, 300);
+    if (submissionReceiptId && result.submissionReceiptId && submissionReceiptId !== result.submissionReceiptId) {
+      throw new Error("submission_receipt_mismatch");
+    }
+    if (result.status !== "submitted" && result.status !== "pending") throw new Error("channel_result_already_final");
     result.status = options.status;
     result.providerReceiptId = receipt || null;
     result.publicUrl = clean(options.publicUrl, 1_000) || null;
     result.errorCode = options.status === "failed" ? clean(options.errorCode, 100) || "provider_failed" : null;
     result.errorMessage = options.status === "failed" ? clean(options.errorMessage, 400) || "Channel publish failed." : null;
     result.updatedAt = now;
-    const complete = publication.channelResults.every((row) => row.status !== "pending");
+    if (eventId) publication.providerEventIds = [...publication.providerEventIds, eventId].slice(-500);
+    const complete = publication.channelResults.every((row) => !["pending", "submitted"].includes(row.status));
     const publishedCount = publication.channelResults.filter((row) => row.status === "published").length;
     if (complete) {
       publication.status = publishedCount === publication.channelResults.length ? "published" : publishedCount ? "partial" : "failed";

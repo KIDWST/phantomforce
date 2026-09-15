@@ -9,22 +9,22 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260914-209";
-import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260914-209";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260914-209";
-import { persistContentPublication } from "./contentpublication.js?v=phantom-live-20260914-209";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260914-209";
+} from "./imagefilters.js?v=phantom-live-20260914-210";
+import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20260914-210";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260914-210";
+import { approveAndSubmitContentPublication, fetchContentPublishingStatus, listContentPublications, persistContentPublication } from "./contentpublication.js?v=phantom-live-20260914-210";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260914-210";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260914-209";
+} from "./content-editor.js?v=phantom-live-20260914-210";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260914-209";
-import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260914-209";
+} from "./store.js?v=phantom-live-20260914-210";
+import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20260914-210";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -514,6 +514,25 @@ async function queueAssetSync(assetId, urlOverride = "") {
   saveContentAssets(fresh.map((item) => item.id === assetId ? { ...item, syncedId: result.asset.id } : item));
 }
 
+async function ensurePublishAssetSynced(source) {
+  if (!source) return "";
+  if (source.kind !== "asset") {
+    if (["image", "carousel", "story", "video", "reel", "short"].includes(source.type)) {
+      throw new Error("Choose the original file from Media Pool before publishing live.");
+    }
+    return "";
+  }
+  const asset = source.asset;
+  if (asset.syncedId) return asset.syncedId;
+  const uploadUrl = contentAssetDisplayUrl(asset);
+  if (!uploadUrl?.startsWith("data:")) throw new Error("This media is not backed up yet. Restore or re-upload it before publishing live.");
+  const result = await syncAssetUpload(uploadUrl, asset.title || "publish-media");
+  if (!result.ok || !result.asset?.id) throw new Error(result.error || "Media could not be uploaded for publishing.");
+  const fresh = loadContentAssets();
+  saveContentAssets(fresh.map((item) => item.id === asset.id ? { ...item, syncedId: result.asset.id } : item));
+  return result.asset.id;
+}
+
 let assetPullState = { tenant: "", pulled: false, pulling: false };
 let chRenderedTenant = "";
 function syncCreatorTenant() {
@@ -847,6 +866,62 @@ function svgIc(k) {
    Content Hub
    ========================================================================= */
 const chState = { tab: "publish", platform: "all", ctype: "all", eng: "likes" };
+const livePublishingUi = { scope: "", state: "idle", reason: "", loading: false };
+const serverPublicationUi = { scope: "", state: "idle", publications: [], loading: false, lastAt: 0, reason: "" };
+
+function syncLivePublishingStatus(root, opts) {
+  const scope = currentTenantId();
+  if (livePublishingUi.scope !== scope) Object.assign(livePublishingUi, { scope, state: "idle", reason: "", loading: false });
+  if (livePublishingUi.loading || livePublishingUi.state !== "idle") return;
+  livePublishingUi.loading = true;
+  fetchContentPublishingStatus().then((status) => {
+    livePublishingUi.state = status.state === "ready" && status.publishReady && status.trackingReady ? "ready" : "configuration_required";
+    livePublishingUi.reason = status.reason || "Connect and verify the social publishing executor in Connections.";
+  }).catch((error) => {
+    livePublishingUi.state = "error";
+    livePublishingUi.reason = error?.message || "Publishing status could not be checked.";
+  }).finally(() => {
+    livePublishingUi.loading = false;
+    if (root?.isConnected) renderContentHub(root, opts);
+  });
+}
+
+function syncServerPublications(root, opts) {
+  const scope = currentTenantId();
+  if (serverPublicationUi.scope !== scope) Object.assign(serverPublicationUi, { scope, state: "idle", publications: [], loading: false, lastAt: 0, reason: "" });
+  if (serverPublicationUi.loading || (serverPublicationUi.state === "ready" && Date.now() - serverPublicationUi.lastAt < 30_000)) return;
+  serverPublicationUi.loading = true;
+  listContentPublications().then((publications) => {
+    serverPublicationUi.publications = publications;
+    serverPublicationUi.state = "ready";
+    serverPublicationUi.reason = "";
+    serverPublicationUi.lastAt = Date.now();
+    let content = loadContent();
+    publications.filter((publication) => ["published", "partial"].includes(publication.status)).forEach((publication) => {
+      const publishedChannels = (publication.channelResults || []).filter((row) => row.status === "published");
+      if (!publishedChannels.length) return;
+      content = addPublishPosts(content, {
+        id: publication.id,
+        platforms: publishedChannels.map((row) => row.channel),
+        caption: publication.caption,
+        sourceType: publication.postType,
+        postType: publication.postType,
+        sourceHue: 155,
+        thumbnailUrl: "",
+        thumbnailTitle: "",
+        scheduledFor: publication.scheduledFor,
+        localOnly: false,
+        channelResults: publishedChannels,
+      }, "published");
+    });
+  }).catch((error) => {
+    serverPublicationUi.state = "error";
+    serverPublicationUi.reason = error?.message || "Publication history could not be loaded.";
+  }).finally(() => {
+    serverPublicationUi.loading = false;
+    if (root?.isConnected) renderContentHub(root, opts);
+  });
+}
 const CONTENT_TYPE_FILTERS = [["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]];
 const chSelection = new Set();
 let chLightbox = null;
@@ -1296,7 +1371,13 @@ function draftStatusLabel(status) {
   if (status === "scheduled") return "Scheduled";
   if (status === "posted") return "Posted";
   if (status === "approval") return "Approval required";
+  if (status === "publishing") return "Submitted";
+  if (status === "blocked") return "Connection needed";
+  if (status === "published") return "Published";
+  if (status === "partial") return "Partially published";
+  if (status === "failed") return "Publish failed";
   if (status === "manual-posted") return "Manual posted";
+  if (status === "manual_record") return "Manual record";
   return "Draft";
 }
 function enhancedPublishBrief(state, source) {
@@ -1353,6 +1434,7 @@ function addPublishPosts(data, draft, status) {
     const id = `${draft.id}-${platformId}-${status}`;
     if (existing.has(id)) return;
     const type = publishTypeFor(platformId, { type: draft.sourceType }, draft.postType || "auto");
+    const channelResult = (draft.channelResults || []).find((row) => row.channel === platformId) || {};
     rows.unshift({
       id,
       platform: platformId,
@@ -1367,7 +1449,9 @@ function addPublishPosts(data, draft, status) {
       mentions: [],
       metrics: blankMetrics(),
       comments: [],
-      localOnly: true,
+      localOnly: draft.localOnly !== false,
+      providerReceiptId: channelResult.providerReceiptId || "",
+      publicUrl: channelResult.publicUrl || "",
       analyticsVisible: status === "published",
       sourceDraftId: draft.id,
     });
@@ -1376,14 +1460,18 @@ function addPublishPosts(data, draft, status) {
 }
 function publishQueueMarkup(drafts, esc) {
   if (!drafts.length) return `<p class="empty-line">No post drafts yet. Create a post, save it, schedule it, or record it as posted.</p>`;
-  return drafts.slice(0, 6).map((draft) => `<article class="ch-pub-queue-item">
+  return drafts.slice(0, 8).map((draft) => `<article class="ch-pub-queue-item">
     <span class="ch-pub-status ch-pub-status-${esc(draft.status)}">${esc(draftStatusLabel(draft.status))}</span>
     <b>${esc(draft.sourceTitle || "Manual post")}</b>
     <p>${esc((draft.caption || "").slice(0, 150))}${(draft.caption || "").length > 150 ? "..." : ""}</p>
-    <i>${draft.platforms.map((id) => esc(plat(id).name)).join(" · ")} · ${draft.status === "scheduled" ? "scheduled" : draft.status === "posted" || draft.status === "manual-posted" ? "visible in local analytics" : "draft"}</i>
+    <i>${draft.platforms.map((id) => esc(plat(id).name)).join(" · ")} · ${draft.status === "scheduled" ? "scheduled" : draft.status === "posted" || draft.status === "manual-posted" ? "visible in local analytics" : draft.status === "publishing" ? "waiting for platform receipts" : draft.status === "blocked" ? "executor setup required" : ["published", "partial", "failed"].includes(draft.status) ? "verified server result" : "draft"}</i>
+    ${(draft.channelResults || []).length ? `<div class="ch-pub-result-row">${draft.channelResults.map((row) => `<span title="${esc(row.publicUrl || row.errorMessage || row.submissionReceiptId || "Awaiting provider")}">${esc(plat(row.channel).name)} · ${esc(row.status)}</span>`).join("")}</div>` : ""}
+    ${draft.blockedReason ? `<small>${esc(draft.blockedReason)} ${esc(draft.remediation || "")}</small>` : ""}
   </article>`).join("");
 }
 function renderPostPublish(body, data, esc, root, opts) {
+  syncLivePublishingStatus(root, opts);
+  syncServerPublications(root, opts);
   const assets = loadContentAssets();
   const accounts = loadSocialAccounts();
   const accountById = Object.fromEntries(accounts.map((account) => [account.id, account]));
@@ -1394,8 +1482,45 @@ function renderPostPublish(body, data, esc, root, opts) {
   const source = publishSourceFromState(data, assets, state);
   const thumbnailRows = publishThumbnailSources(assets);
   const thumbnailSource = publishThumbnailFromState(assets, state);
-  const drafts = loadPublishDrafts();
+  const localDrafts = loadPublishDrafts();
+  const serverById = new Map(serverPublicationUi.publications.map((publication) => [publication.id, publication]));
+  const drafts = localDrafts.map((draft) => {
+    const publication = serverById.get(draft.serverPublicationId);
+    if (!publication) return draft;
+    return {
+      ...draft,
+      status: publication.status,
+      serverStatus: publication.status,
+      externalSent: Boolean(publication.externalSent),
+      channelResults: publication.channelResults || [],
+      blockedReason: publication.blockedReason || "",
+      remediation: publication.remediation || "",
+    };
+  });
+  const knownServerIds = new Set(localDrafts.map((draft) => draft.serverPublicationId).filter(Boolean));
+  serverPublicationUi.publications.filter((publication) => !knownServerIds.has(publication.id)).forEach((publication) => {
+    drafts.push({
+      id: publication.id,
+      serverPublicationId: publication.id,
+      status: publication.status,
+      serverStatus: publication.status,
+      platforms: publication.channels,
+      caption: publication.caption,
+      sourceTitle: `${publication.channels.length}-channel campaign`,
+      channelResults: publication.channelResults || [],
+      externalSent: Boolean(publication.externalSent),
+      localOnly: false,
+      createdAt: Date.parse(publication.createdAt) || Date.now(),
+    });
+  });
+  drafts.sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0));
   const linkedCount = enabledPlatformIds(accounts).length;
+  const liveReady = livePublishingUi.state === "ready";
+  const liveStatusText = liveReady
+    ? "Verified publishing online"
+    : livePublishingUi.state === "idle" || livePublishingUi.loading
+      ? "Checking publishing connection…"
+      : livePublishingUi.reason || "Connect publishing in Connections";
   const selectedPostType = state.postType || "auto";
   body.innerHTML = `
     <section class="ch-publish-grid">
@@ -1470,9 +1595,9 @@ function renderPostPublish(body, data, esc, root, opts) {
             <button type="button" class="ch-tool" data-ch-pub-save>Save draft</button>
             <button type="button" class="ch-tool" data-ch-pub-schedule-post>Schedule</button>
             <button type="button" class="ch-tool" data-ch-pub-post-now>Post now</button>
-            <button type="button" class="ch-tool" data-ch-pub-live disabled title="Connect a publishing account in Settings to enable this action.">Live post</button>
+            <button type="button" class="ch-tool ${liveReady ? "is-on" : ""}" data-ch-pub-live ${liveReady ? "" : "disabled"} title="${esc(liveStatusText)}">Approve & publish everywhere</button>
           </div>
-          <p class="ch-pub-note">Post now records activity for selected channels. Live publishing becomes available after the account is connected and remains approval-gated.</p>
+          <p class="ch-pub-note">${esc(liveStatusText)} · One approval submits channel-specific versions. A channel counts as published only after its platform returns a signed post receipt.</p>
         </div>
       </div>
       <aside class="ch-card ch-pub-preview">
@@ -1483,7 +1608,7 @@ function renderPostPublish(body, data, esc, root, opts) {
       </aside>
     </section>
     <section class="ch-card ch-pub-queue">
-      <div class="ch-card-h"><h3>Post status</h3><span class="ch-src">drafts · scheduled · posted locally</span></div>
+      <div class="ch-card-h"><h3>Post status</h3><span class="ch-src">drafts · approvals · submissions · platform receipts</span></div>
       <div class="ch-pub-queue-grid">${publishQueueMarkup(drafts, esc)}</div>
     </section>`;
   wirePostPublish(body, data, assets, esc, root, opts);
@@ -1679,6 +1804,48 @@ function wirePostPublish(body, data, assets, esc, root, opts) {
   body.querySelector("[data-ch-pub-save]")?.addEventListener("click", () => void saveDraft("draft"));
   body.querySelector("[data-ch-pub-schedule-post]")?.addEventListener("click", () => void saveDraft("scheduled"));
   body.querySelector("[data-ch-pub-post-now]")?.addEventListener("click", () => void saveDraft("posted"));
+  body.querySelector("[data-ch-pub-live]")?.addEventListener("click", async () => {
+    let state = readPublishForm(body);
+    const source = publishSourceFromState(data, assets, state);
+    const thumbnailSource = publishThumbnailFromState(assets, state);
+    if (!state.caption.trim()) state = savePublishState({ ...state, caption: suggestPublishCaption(state, source, state.platforms) });
+    const draft = buildPublishDraft(state, source, "approval", thumbnailSource);
+    const button = body.querySelector("[data-ch-pub-live]");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Submitting…";
+    }
+    try {
+      const serverSourceAssetId = await ensurePublishAssetSynced(source);
+      const serverThumbnailAssetId = thumbnailSource ? await ensurePublishAssetSynced(thumbnailSource) : "";
+      const mediaFormat = ["image", "carousel", "story", "video", "reel", "short"].includes(draft.postType)
+        || ["image", "video"].includes(draft.sourceType);
+      if (mediaFormat && !serverSourceAssetId) throw new Error("Choose and upload the original media before publishing live.");
+      draft.serverSourceAssetId = serverSourceAssetId;
+      draft.serverThumbnailAssetId = serverThumbnailAssetId;
+      const result = await approveAndSubmitContentPublication(draft);
+      const publication = result.publication || {};
+      draft.serverPublicationId = publication.id || "";
+      draft.serverStatus = publication.status || "publishing";
+      draft.status = publication.status || "publishing";
+      draft.localOnly = false;
+      draft.externalSent = Boolean(publication.externalSent);
+      draft.channelResults = publication.channelResults || [];
+      savePublishDrafts([draft, ...loadPublishDrafts()]);
+      notify(`${result.receipts?.filter((receipt) => receipt.accepted).length || 0} channel submission${result.receipts?.filter((receipt) => receipt.accepted).length === 1 ? "" : "s"} accepted. PhantomForce is waiting for signed platform post receipts.`);
+    } catch (error) {
+      const publication = error?.publication || {};
+      draft.serverPublicationId = publication.id || "";
+      draft.serverStatus = publication.status || "blocked";
+      draft.status = publication.status || "blocked";
+      draft.localOnly = !publication.id;
+      draft.externalSent = false;
+      draft.channelResults = publication.channelResults || [];
+      savePublishDrafts([draft, ...loadPublishDrafts()]);
+      notify(`Live publishing is blocked safely: ${error?.message || "verify the publishing connection and retry"}`);
+    }
+    renderContentHub(root, opts);
+  });
 }
 function renderContentLibrary(body, data, esc, root, opts) {
   const assets = loadContentAssets();

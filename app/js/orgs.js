@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260914-209";
+import { ctx, session } from "./store.js?v=phantom-live-20260914-210";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -49,6 +49,15 @@ export async function fetchWorkGraphAction(actionId) {
   const tenantId = activeOrgId() || "";
   const { ok, status, json } = await api(`/api/workforce/actions/${encodeURIComponent(actionId)}?tenant_id=${encodeURIComponent(tenantId)}`);
   return ok ? { ok: true, ...json } : { ok: false, status, error: json?.error || "work_action_read_failed" };
+}
+
+export async function fetchWorkGraphActions({ type = "", status = "", limit = 100 } = {}) {
+  const tenantId = activeOrgId() || "";
+  const query = new URLSearchParams({ tenant_id: tenantId, limit: String(Math.max(1, Math.min(200, Number(limit) || 100))) });
+  if (type) query.set("type", String(type));
+  if (status) query.set("status", String(status));
+  const { ok, status: responseStatus, json } = await api(`/api/workforce/actions?${query.toString()}`);
+  return ok ? { ok: true, ...json } : { ok: false, status: responseStatus, error: json?.error || "work_action_list_failed" };
 }
 
 let cachedAuthConfig = null;

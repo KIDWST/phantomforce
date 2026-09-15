@@ -8,6 +8,7 @@ export type EmailDeliveryRequest = {
   subject: string;
   body: string;
   threadId?: string | null;
+  replyToMessageId?: string | null;
 };
 
 export type EmailDeliveryReceipt = {
@@ -100,7 +101,13 @@ export async function submitEmailDelivery(request: EmailDeliveryRequest): Promis
       tenant_id: text(request.tenantId, 120),
       action_id: text(request.actionId, 120),
       correlation_id: text(request.correlationId, 180),
-      message: { to, subject, body, thread_id: text(request.threadId, 300) || null },
+      message: {
+        to,
+        subject,
+        body,
+        thread_id: text(request.threadId, 300) || null,
+        in_reply_to_message_id: text(request.replyToMessageId, 300) || null,
+      },
     }),
     signal: AbortSignal.timeout(20_000),
   });

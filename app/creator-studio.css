@@ -1799,6 +1799,13 @@ html[data-org-color-mode="dark"] .ml-field-brief .ml-prompt::placeholder {
 .ch-pub-status { display: inline-flex; padding: 4px 7px; border-radius: 999px; background: rgba(65, 255, 161,.1); color: var(--neon); font: 700 8.5px "Spline Sans Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
 .ch-pub-status-approval { color: var(--warn); background: rgba(199, 126, 0,.12); }
 .ch-pub-status-manual-posted { color: #16d985; background: rgba(22, 217, 133,.12); }
+.ch-pub-status-publishing { color: #73d9ff; background: rgba(59, 184, 255,.12); }
+.ch-pub-status-published { color: #16d985; background: rgba(22, 217, 133,.12); }
+.ch-pub-status-partial, .ch-pub-status-blocked { color: var(--warn); background: rgba(199, 126, 0,.12); }
+.ch-pub-status-failed { color: #ff7a8a; background: rgba(255, 64, 92,.12); }
+.ch-pub-result-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ch-pub-result-row span { display: inline-flex; border: 1px solid color-mix(in srgb, var(--line) 76%, transparent); border-radius: 999px; padding: 5px 8px; background: color-mix(in srgb, var(--glass) 84%, transparent); color: var(--dim); font: 700 9px "Spline Sans Mono", monospace; text-transform: uppercase; letter-spacing: .035em; }
+.ch-pub-queue-item small { display: block; margin-top: 9px; color: var(--warn); font-size: 10px; line-height: 1.45; }
 
 /* Content Hub planner: one weekly operating surface for content and business time. */
 .ch-planner-hero { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-bottom: 14px; }

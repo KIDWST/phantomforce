@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-209";
+} from "./store.js?v=phantom-live-20260914-210";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
-  proposeWorkGraphAction, fetchWorkGraphAction,
-} from "./orgs.js?v=phantom-live-20260914-209";
+  proposeWorkGraphAction, fetchWorkGraphActions,
+} from "./orgs.js?v=phantom-live-20260914-210";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-209";
+} from "./proposalpipeline.js?v=phantom-live-20260914-210";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-209";
+} from "./approvalpipeline.js?v=phantom-live-20260914-210";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-209";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-209";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-209";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-209";
+} from "./financeledger.js?v=phantom-live-20260914-210";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-210";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-210";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-210";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -62,7 +62,7 @@ const relationshipsUi = {
   busy: false, importBusy: false,
 };
 const crmEmailUi = { scope: "", state: "checking", provider: "", message: "", loading: false };
-const communicationActionRefresh = new Map();
+const communicationServerSync = { scope: "", state: "idle", lastAt: 0, error: "" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -1006,11 +1006,10 @@ function followUpLeads() {
   return records;
 }
 
-function communicationTarget(lead, channel) {
-  if (!lead) return "";
-  if (channel === "email") return lead.email || "";
-  if (channel === "sms") return lead.phone || "";
-  return lead.socials?.instagram || lead.socials?.linkedin || lead.socials?.x || "";
+function communicationTarget(lead, channel, draft = null) {
+  if (channel === "email") return lead?.email || draft?.to?.[0] || "";
+  if (channel === "sms") return lead?.phone || "";
+  return lead?.socials?.instagram || lead?.socials?.linkedin || lead?.socials?.x || "";
 }
 
 function renderFollowUp(el, rerender) {
@@ -1115,35 +1114,69 @@ function renderFollowUp(el, rerender) {
   });
 }
 
-function syncServerCommunicationActions(drafts, rerender) {
+function syncServerCommunicationActions(ws, rerender) {
   if (!isDatabaseSession()) return;
+  if (communicationServerSync.scope !== ws) Object.assign(communicationServerSync, { scope: ws, state: "idle", lastAt: 0, error: "" });
   const now = Date.now();
-  drafts.filter((draft) => draft.workActionId).slice(0, 30).forEach((draft) => {
-    const lastChecked = communicationActionRefresh.get(draft.workActionId) || 0;
-    if (now - lastChecked < 15_000) return;
-    communicationActionRefresh.set(draft.workActionId, now);
-    fetchWorkGraphAction(draft.workActionId).then((result) => {
-      const action = result?.action;
-      if (!result?.ok || !action) return;
+  if (communicationServerSync.state === "loading" || now - communicationServerSync.lastAt < 15_000) return;
+  Object.assign(communicationServerSync, { state: "loading", lastAt: now, error: "" });
+  fetchWorkGraphActions({ type: "email.send", limit: 200 }).then((result) => {
+    if (!result?.ok) throw new Error(result?.error || "work_action_list_failed");
+    let changed = false;
+    for (const action of Array.isArray(result.actions) ? result.actions : []) {
+      const payload = action?.payload && typeof action.payload === "object" ? action.payload : {};
+      const serverDraftId = String(payload.clientDraftId || "").trim();
+      const fallbackDraftId = String(action.idempotencyKey || "").match(/^crm-email:([^:]+):/)?.[1] || "";
+      const localId = serverDraftId || fallbackDraftId || `server-email-${action.id}`;
+      const correlationLeadId = String(action.correlationId || "").match(/^crm-contact:(.+)$/)?.[1] || "";
+      const leadId = String(payload.crmContactId || correlationLeadId || "").trim();
       const providerReceipt = action.receipt?.providerReceipt || null;
-      const nextStatus = providerReceipt?.deliveryStatus || action.status || draft.status;
-      const nextSignature = JSON.stringify([nextStatus, providerReceipt?.lastEventAt, providerReceipt?.replyCount]);
-      const currentSignature = JSON.stringify([draft.status, draft.providerReceipt?.lastEventAt, draft.providerReceipt?.replyCount]);
-      if (nextSignature === currentSignature) return;
-      draft.status = nextStatus;
-      draft.providerReceipt = providerReceipt;
-      draft.executionReceipt = action.receipt || null;
-      draft.updatedAt = action.updatedAt || new Date().toISOString();
-      store.save();
-      rerender();
-    }).catch(() => {});
+      const next = {
+        id: localId,
+        ws,
+        leadId,
+        channel: "email",
+        status: providerReceipt?.deliveryStatus || action.status || "awaiting_approval",
+        subject: String(payload.subject || ""),
+        body: String(payload.body || ""),
+        to: Array.isArray(payload.to) ? payload.to.map(String).slice(0, 50) : [],
+        threadId: String(payload.threadId || providerReceipt?.threadId || "") || null,
+        replyToMessageId: String(payload.replyToMessageId || "") || null,
+        workActionId: action.id,
+        providerReceipt,
+        executionReceipt: action.receipt || null,
+        serverBacked: true,
+        createdAt: action.createdAt,
+        updatedAt: action.updatedAt,
+      };
+      const existing = store.state.communications.find((item) => item.workActionId === action.id || item.id === localId);
+      const currentSignature = existing ? JSON.stringify([
+        existing.status, existing.subject, existing.body, existing.leadId, existing.updatedAt,
+        existing.providerReceipt?.lastEventAt, existing.providerReceipt?.replyCount,
+      ]) : "";
+      const nextSignature = JSON.stringify([
+        next.status, next.subject, next.body, next.leadId, next.updatedAt,
+        next.providerReceipt?.lastEventAt, next.providerReceipt?.replyCount,
+      ]);
+      if (existing && currentSignature === nextSignature) continue;
+      if (existing) Object.assign(existing, next);
+      else store.state.communications.unshift(next);
+      changed = true;
+    }
+    Object.assign(communicationServerSync, { state: "ready", error: "" });
+    if (changed) store.save();
+    rerender();
+  }).catch(() => {
+    Object.assign(communicationServerSync, { state: "error", error: "Server email history could not be refreshed. Local drafts remain available." });
+    rerender();
   });
 }
 
 function renderComms(el, rerender) {
-  const drafts = visible(store.state.communications).slice().sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-  syncServerCommunicationActions(drafts, rerender);
-  const pending = visible(store.state.approvals).filter((approval) => approval.type === "send-message" && approval.status === "pending");
+  const ws = leadWorkspaceId();
+  const drafts = store.state.communications.filter((item) => item.ws === ws).slice().sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+  syncServerCommunicationActions(ws, rerender);
+  const pending = store.state.approvals.filter((approval) => approval.ws === ws && approval.type === "send-message" && approval.status === "pending");
   const draftApprovalIds = new Set(drafts.map((item) => item.id));
   const awaiting = drafts.filter((item) => ["pending", "awaiting_approval"].includes(item.status)).length
     + pending.filter((approval) => !draftApprovalIds.has(approval.communicationId || approval.ref)).length;
@@ -1156,12 +1189,13 @@ function renderComms(el, rerender) {
       <article><span>Provider accepted</span><b>${providerAccepted}</b><i>verified message receipts</i></article>
       <article><span>Replies</span><b>${replies}</b><i>signed provider events</i></article>
     </section>
+    ${isDatabaseSession() && communicationServerSync.error ? `<div class="ops-notice">${esc(communicationServerSync.error)}</div>` : ""}
     <div class="ws-toolbar"><p class="ws-note">One account-scoped queue for outbound drafts and replies. Approval changes a draft to send-ready; it does not invent a provider delivery receipt. Execution requires a verified provider, and delivery or reply states require signed events.</p></div>
     <div class="stack ops-stack">
       ${drafts.map((draft) => {
         const lead = store.state.leads.find((item) => item.id === draft.leadId);
         const consent = leadConsentStatus(lead);
-        const target = communicationTarget(lead, draft.channel);
+        const target = communicationTarget(lead, draft.channel, draft);
         const canQueue = draft.status === "draft" && draft.channel === "email" && consent === "opt-in" && Boolean(target);
         const latestReply = draft.providerReceipt?.events?.filter((event) => event.eventType === "replied" && event.replyPreview).slice(-1)[0] || null;
         const queueHint = consent !== "opt-in"
@@ -1179,7 +1213,7 @@ function renderComms(el, rerender) {
             ${canQueue ? `<button class="btn btn-good" data-act="queue-comm" data-id="${esc(draft.id)}">Queue approval</button>` : ""}
             ${latestReply && target && draft.channel === "email" ? `<button class="btn" data-act="draft-reply" data-id="${esc(draft.id)}">Prepare reply</button>` : ""}
             ${draft.status === "draft" && !canQueue ? `<span class="hint-inline">${queueHint}</span>` : ""}
-            <button class="btn btn-quiet" data-act="remove-comm" data-id="${esc(draft.id)}">Remove draft</button>
+            ${draft.serverBacked ? `<span class="hint-inline">Server record · immutable history</span>` : `<button class="btn btn-quiet" data-act="remove-comm" data-id="${esc(draft.id)}">Remove draft</button>`}
           </div>
         </article>`;
       }).join("") || productStateHtml("empty", { title: "No communication drafts", detail: "Prepare one from Follow-up. Drafting stays private and does not require approval." })}
@@ -1196,7 +1230,7 @@ function renderComms(el, rerender) {
     "queue-comm": async (id) => {
       const draft = find(id); if (!draft) return;
       const lead = store.state.leads.find((item) => item.id === draft.leadId);
-      const target = communicationTarget(lead, draft.channel);
+      const target = communicationTarget(lead, draft.channel, draft);
       if (draft.channel !== "email" || leadConsentStatus(lead) !== "opt-in" || !target) return;
       if (isDatabaseSession()) {
         const action = {
@@ -1209,6 +1243,9 @@ function renderComms(el, rerender) {
             subject: draft.subject || `Video production support for ${lead.company || lead.name}`,
             body: draft.body,
             threadId: draft.threadId || undefined,
+            replyToMessageId: draft.replyToMessageId || undefined,
+            crmContactId: lead.id,
+            clientDraftId: draft.id,
           },
         };
         const result = await proposeWorkGraphAction(action, {
@@ -1350,6 +1387,7 @@ function renderRelationships(el, rerender) {
   syncCrmSelectionScope(ws);
   syncServerCrm(ws, repaint);
   syncCrmEmailConnection(ws, repaint);
+  syncServerCommunicationActions(ws, repaint);
   const settings = workspaceCrmSettings(ws);
   const prefs = relationshipPreferences(settings);
   const canEdit = canEditRelationships();
@@ -2979,7 +3017,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-209")
+      import("./brain.js?v=phantom-live-20260914-210")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

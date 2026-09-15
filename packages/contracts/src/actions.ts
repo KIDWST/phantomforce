@@ -49,7 +49,10 @@ export const EmailSendActionSchema = ActionBaseSchema.extend({
       to: z.array(z.string().email()).min(1).optional(),
       subject: z.string().min(1).optional(),
       body: z.string().min(1).optional(),
-      threadId: z.string().optional(),
+      threadId: z.string().max(300).optional(),
+      replyToMessageId: z.string().max(300).optional(),
+      crmContactId: z.string().max(120).optional(),
+      clientDraftId: z.string().max(120).optional(),
     })
     .refine((payload) => Boolean(payload.draftId || (payload.to && payload.subject && payload.body)), {
       message: "Provide draftId or full message payload.",

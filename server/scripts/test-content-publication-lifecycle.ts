@@ -4,10 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import {
   approveContentPublication,
+  blockContentPublication,
   cancelContentPublication,
   createContentPublication,
   listContentPublications,
   recordPublicationChannelResult,
+  recordPublicationSubmission,
 } from "../src/content/content-publication-store.js";
 
 const root = await mkdtemp(path.join(os.tmpdir(), "phantom-content-publications-"));
@@ -66,6 +68,18 @@ try {
   });
   assert.equal(approved.status, "publishing");
 
+  const submitted = await recordPublicationSubmission({
+    tenantId: "tenant-a",
+    publicationId: created.publication.id,
+    channel: "instagram",
+    accepted: true,
+    provider: "meta",
+    submissionReceiptId: "ig-submission-1",
+    submittedAt: "2026-07-24T14:00:01.000Z",
+    root,
+  });
+  assert.equal(submitted.channelResults.find((row) => row.channel === "instagram")?.status, "submitted");
+
   await assert.rejects(
     recordPublicationChannelResult({
       tenantId: "tenant-a",
@@ -86,6 +100,8 @@ try {
     status: "published",
     providerReceiptId: "ig-receipt-1",
     publicUrl: "https://example.invalid/post/1",
+    eventId: "ig-event-1",
+    submissionReceiptId: "ig-submission-1",
     root,
   });
   assert.equal(oneSuccess.status, "publishing");
@@ -117,6 +133,24 @@ try {
   const cancelled = await cancelContentPublication("tenant-a", draft.publication.id, root);
   assert.equal(cancelled.status, "cancelled");
   assert.equal(cancelled.externalSent, false);
+
+  const blockedDraft = await createContentPublication({
+    tenantId: "tenant-a",
+    actor: "author-a",
+    idempotencyKey: "draft-3",
+    input: { status: "approval_required", channels: ["youtube"], caption: "Executor-gated video" },
+    root,
+  });
+  const blocked = await blockContentPublication({
+    tenantId: "tenant-a",
+    publicationId: blockedDraft.publication.id,
+    approvalId: "approval-blocked-1",
+    reason: "No verified executor.",
+    remediation: "Connect a verified executor and retry.",
+    root,
+  });
+  assert.equal(blocked.status, "blocked");
+  assert.equal(blocked.externalSent, false);
 
   console.log("content publication lifecycle tests passed");
 } finally {

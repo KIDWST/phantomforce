@@ -50,6 +50,7 @@
     "test:content-asset-storage": "npm run test:content-asset-storage --workspace @phantomforce/server",
     "test:media-generation-lifecycle": "npm run test:media-generation-lifecycle --workspace @phantomforce/server",
     "test:content-publication-lifecycle": "npm run test:content-publication-lifecycle --workspace @phantomforce/server",
+    "test:social-publishing": "npm run test:social-publishing --workspace @phantomforce/server && node scripts/test-social-publishing-ui.mjs",
     "test:production-core": "npm run build --workspace @phantomforce/server && node scripts/test-production-core-golden-path.mjs",
     "test:workspace-approvals": "node scripts/test-workspace-approvals.mjs",
     "test:work-graph": "npm run test:work-graph --workspace @phantomforce/server",

@@ -445,6 +445,7 @@ import {
   proposeWorkAction,
   publicWorkGraphAction,
   recordWorkGraphEmailProviderEvent,
+  type WorkGraphAction,
 } from "./workforce/work-graph.js";
 import {
   getAutonomousSecurityScanStatus,
@@ -664,11 +665,18 @@ import {
 import { defaultMediaRoute } from "./media/media-defaults.js";
 import {
   approveContentPublication,
+  blockContentPublication,
   cancelContentPublication,
   createContentPublication,
   listContentPublications,
   recordPublicationChannelResult,
+  recordPublicationSubmission,
 } from "./content/content-publication-store.js";
+import {
+  getSocialPublishingConnectorStatus,
+  parseVerifiedSocialProviderEvent,
+  submitSocialPublication,
+} from "./connectors/social-publishing-connector.js";
 import { PRODUCTION_CORE_ACTIONS, type ProductionRole } from "./production-core/policy.js";
 import { productionProviderAdapter } from "./production-core/provider-adapter.js";
 import {
@@ -926,6 +934,18 @@ const workspaceRecordSafety = {
   outbound_action_executed: false,
   public_exposure_changed: false,
 } as const;
+
+function workGraphExecutionTruth(actions: WorkGraphAction[]) {
+  const providerCalled = actions.some((action) => (
+    action.receipt?.artifactType === "provider_email_message"
+    && Boolean(action.receipt.providerReceipt?.messageId)
+  ));
+  return {
+    provider_called: providerCalled,
+    outbound_action_executed: providerCalled,
+    public_exposure_changed: false,
+  } as const;
+}
 
 async function moduleAccessForSession(session: AccessSession, moduleId: string, requestedTenantId?: unknown) {
   const tenantId = customizationTenantForSession(session, typeof requestedTenantId === "string" ? requestedTenantId : undefined);
@@ -1881,6 +1901,12 @@ const WorkGraphDecisionBodySchema = z.object({
   decision: z.enum(["approve", "reject"]),
   note: z.string().trim().max(1200).optional(),
 });
+const WorkGraphListQuerySchema = z.object({
+  tenant_id: z.string().trim().max(120).optional(),
+  type: z.string().trim().max(80).optional(),
+  status: z.enum(["awaiting_approval", "executing", "verified_complete", "blocked", "failed", "rejected"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(100),
+});
 
 app.get("/api/workforce/heartbeat", async (request, reply) => {
   const session = requireAccessSession(request, reply);
@@ -1898,7 +1924,12 @@ app.get("/api/workforce/heartbeat", async (request, reply) => {
       verification: "read_back_required",
       external_actions: "connector_gated",
     },
-    ...workspaceRecordSafety,
+    ...workGraphExecutionTruth([
+      ...heartbeat.needsYou,
+      ...heartbeat.inMotion,
+      ...heartbeat.verified,
+      ...heartbeat.blocked,
+    ]),
   };
 });
 
@@ -1912,7 +1943,30 @@ app.get("/api/workforce/actions/:actionId", async (request, reply) => {
   const document = await getWorkGraphDocument(tenantId, session.id);
   const action = document.actions.find((candidate) => candidate.id === String(params.actionId || ""));
   if (!action) return reply.status(404).send({ ok: false, error: "Work action not found for this organization." });
-  return { ok: true, tenant_id: tenantId, action: publicWorkGraphAction(action), audit: document.audit.filter((event) => event.actionId === action.id), ...workspaceRecordSafety };
+  return { ok: true, tenant_id: tenantId, action: publicWorkGraphAction(action), audit: document.audit.filter((event) => event.actionId === action.id), ...workGraphExecutionTruth([action]) };
+});
+
+app.get("/api/workforce/actions", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = WorkGraphListQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const document = await getWorkGraphDocument(tenantId, session.id);
+  const matching = document.actions
+    .filter((action) => !parsed.data.type || action.type === parsed.data.type)
+    .filter((action) => !parsed.data.status || action.status === parsed.data.status)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    actions: matching.slice(0, parsed.data.limit).map(publicWorkGraphAction),
+    total: matching.length,
+    document_version: document.version,
+    checksum: document.checksum,
+    generated_at: new Date().toISOString(),
+    ...workGraphExecutionTruth(matching),
+  };
 });
 
 app.post("/api/workforce/actions", async (request, reply) => {
@@ -1936,7 +1990,7 @@ app.post("/api/workforce/actions", async (request, reply) => {
       action: publicWorkGraphAction(result.result.action),
       replayed: result.result.replayed,
       execution_implemented: true,
-      ...workspaceRecordSafety,
+      ...workGraphExecutionTruth([result.result.action]),
     };
   } catch (error) {
     return reply.status(400).send({ ok: false, error: error instanceof Error ? error.message : "Work action could not be created." });
@@ -1967,7 +2021,7 @@ app.post("/api/workforce/actions/:actionId/decision", async (request, reply) => 
       action: publicWorkGraphAction(result.result.action),
       replayed: result.result.replayed,
       execution_implemented: true,
-      ...workspaceRecordSafety,
+      ...workGraphExecutionTruth([result.result.action]),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Work decision could not be recorded.";
@@ -5805,6 +5859,7 @@ app.get("/api/connections/status", async (request, reply) => {
     tenant_id: tenantId,
     connectors: customerConnectionCatalog(tenantId),
     email_execution: getEmailDeliveryConnectorStatus(),
+    social_publishing: getSocialPublishingConnectorStatus(),
     customer_contract: {
       actions: ["Connect", "Connected", "Reconnect", "Manage"],
       customer_credentials_required: false,
@@ -11841,6 +11896,32 @@ app.post("/api/content-publications/:publicationId/approve", async (request, rep
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
   const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
   const { publicationId } = request.params as { publicationId: string };
+  const connector = getSocialPublishingConnectorStatus();
+  if (connector.state !== "ready") {
+    try {
+      const publication = await blockContentPublication({
+        tenantId,
+        publicationId,
+        approvalId: parsed.data.approval_id,
+        reason: "No verified social publishing executor is active for this organization.",
+        remediation: connector.reason || "Connect and verify social publishing accounts, then retry this approved publication.",
+      });
+      return reply.code(503).send({
+        ok: false,
+        tenant_id: tenantId,
+        error: "social_publishing_not_configured",
+        publication,
+        connector,
+        provider_called: false,
+        outbound_action_executed: false,
+        public_exposure_changed: false,
+      });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "publication_approval_failed";
+      return reply.code(code === "publication_not_found" ? 404 : 409).send({ ok: false, error: code });
+    }
+  }
+  let providerAttempted = false;
   try {
     const publication = await approveContentPublication({
       tenantId,
@@ -11848,10 +11929,62 @@ app.post("/api/content-publications/:publicationId/approve", async (request, rep
       approvalId: parsed.data.approval_id,
       actor: session.id,
     });
-    return { ok: true, tenant_id: tenantId, publication };
+    providerAttempted = true;
+    const receipts = await submitSocialPublication({
+      tenantId,
+      publicationId: publication.id,
+      idempotencyKey: publication.idempotencyKey,
+      correlationId: `content-publication:${publication.id}`,
+      channels: publication.channels,
+      caption: publication.caption,
+      sourceAssetId: publication.sourceAssetId,
+      thumbnailAssetId: publication.thumbnailAssetId,
+      postType: publication.postType,
+      scheduledFor: publication.scheduledFor,
+      timezone: publication.timezone,
+    });
+    let updated = publication;
+    for (const receipt of receipts) {
+      updated = await recordPublicationSubmission({
+        tenantId,
+        publicationId: publication.id,
+        channel: receipt.channel,
+        accepted: receipt.accepted,
+        provider: receipt.provider,
+        submissionReceiptId: receipt.submissionId || undefined,
+        submittedAt: receipt.submittedAt,
+        errorCode: receipt.errorCode || undefined,
+        errorMessage: receipt.errorMessage || undefined,
+      });
+    }
+    const accepted = receipts.filter((receipt) => receipt.accepted).length;
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      publication: updated,
+      receipts,
+      provider_called: providerAttempted,
+      outbound_action_executed: accepted > 0,
+      public_exposure_changed: false,
+    };
   } catch (error) {
     const code = error instanceof Error ? error.message : "publication_approval_failed";
-    return reply.code(code === "publication_not_found" ? 404 : 409).send({ ok: false, error: code });
+    if (code !== "publication_not_found" && code !== "publication_terminal") {
+      await blockContentPublication({
+        tenantId,
+        publicationId,
+        approvalId: parsed.data.approval_id,
+        reason: "The social publishing executor did not return a complete submission receipt.",
+        remediation: "Verify the executor and connected platform accounts, then retry this approved publication.",
+      }).catch(() => undefined);
+    }
+    return reply.code(code === "publication_not_found" ? 404 : code === "publication_terminal" ? 409 : 502).send({
+      ok: false,
+      error: code,
+      provider_called: providerAttempted,
+      outbound_action_executed: false,
+      public_exposure_changed: false,
+    });
   }
 });
 
@@ -11878,6 +12011,55 @@ app.post("/api/content-publications/:publicationId/results", async (request, rep
   } catch (error) {
     const code = error instanceof Error ? error.message : "publication_result_failed";
     return reply.code(code === "publication_not_found" ? 404 : 409).send({ ok: false, error: code });
+  }
+});
+
+app.post("/api/social/provider/events", async (request, reply) => {
+  try {
+    const event = parseVerifiedSocialProviderEvent(request.body, request.headers["x-phantomforce-social-signature"]);
+    const existing = (await listContentPublications(event.tenantId)).find((publication) => publication.id === event.publicationId);
+    if (!existing) return reply.code(404).send({ ok: false, error: "publication_not_found" });
+    if (existing.providerEventIds.includes(event.eventId)) {
+      return {
+        ok: true,
+        event_id: event.eventId,
+        publication_id: event.publicationId,
+        channel: event.channel,
+        applied: false,
+        replayed: true,
+        public_exposure_changed: false,
+      };
+    }
+    const publication = await recordPublicationChannelResult({
+      tenantId: event.tenantId,
+      publicationId: event.publicationId,
+      actor: `provider:${event.provider}`,
+      channel: event.channel,
+      status: event.eventType,
+      providerReceiptId: event.platformPostId || undefined,
+      publicUrl: event.publicUrl || undefined,
+      errorCode: event.errorCode || undefined,
+      errorMessage: event.errorMessage || undefined,
+      eventId: event.eventId,
+      submissionReceiptId: event.submissionId,
+    });
+    return {
+      ok: true,
+      event_id: event.eventId,
+      publication_id: event.publicationId,
+      channel: event.channel,
+      applied: true,
+      replayed: false,
+      publication,
+      public_exposure_changed: event.eventType === "published",
+    };
+  } catch (error) {
+    const code = String((error as { code?: unknown })?.code || (error instanceof Error ? error.message : "social_provider_event_rejected"));
+    const status = code === "social_webhook_not_configured" ? 503
+      : code === "invalid_social_provider_signature" ? 401
+        : code === "publication_not_found" ? 404
+          : 400;
+    return reply.code(status).send({ ok: false, error: code, public_exposure_changed: false });
   }
 });
 

@@ -61,17 +61,23 @@ assert.doesNotMatch(files.workspaces, /prompt\("Contact name|prompt\("Company \/
 must(files.workspaces, /lead\.ws === ws && lead\.status !== "lost"/u, "Follow-up lists must be explicitly restricted to the active organization.");
 must(files.workspaces, /Email queue & replies/u, "Follow-ups must expose the account email queue and reply stream inside Relationships.");
 must(files.workspaces, /proposeWorkGraphAction/u, "CRM sends must enter the durable work graph.");
+must(files.orgClient, /export async function fetchWorkGraphActions/u, "The browser must be able to rebuild the email queue from tenant-scoped server actions.");
+must(files.server, /app\.get\("\/api\/workforce\/actions"[\s\S]*document_version[\s\S]*checksum/u, "The work graph must expose an authenticated durable action listing.");
+must(files.workspaces, /fetchWorkGraphActions\(\{ type: "email\.send", limit: 200 \}\)[\s\S]*serverBacked: true/u, "Relationships must hydrate server-backed email history after refresh.");
 must(files.workspaces, /policy:\s*\{ surface: "external", reversible: false, requiresApproval: true \}/u, "Every CRM send must require owner approval.");
 must(files.workspaces, /draft\.channel === "email" && consent === "opt-in"/u, "Only opted-in email drafts may enter the email executor.");
 must(files.workspaces, /threadId: draft\.threadId \|\| undefined/u, "CRM reply sends must preserve provider threads.");
+must(files.workspaces, /replyToMessageId: draft\.replyToMessageId \|\| undefined/u, "CRM reply sends must preserve the provider message being answered.");
+must(files.workspaces, /crmContactId: lead\.id[\s\S]*clientDraftId: draft\.id/u, "Queued emails must preserve CRM contact and client-draft identity for cross-device recovery.");
 must(files.workspaces, /data-act="draft-reply"/u, "Verified provider replies must offer a reply-draft action.");
+must(files.workspaces, /Server record · immutable history/u, "Hydrated email history must not pretend it can be deleted from one browser.");
 must(files.workspaces, /providerReceipts/u, "CRM status must count real provider receipts instead of a placeholder.");
 must(files.connectionCenter, /emailExecution\?\.sendReady === true[\s\S]*trackingReady === true[\s\S]*replySyncReady === true/u, "Inbox status cannot claim connected until execution, tracking, and reply sync are ready.");
 must(files.connectionCenter, /error\?\.status\) === 401 \|\| Number\(error\?\.status\) === 403[\s\S]*Sign in with an account-backed workspace/u, "CRM inbox setup must translate authorization failures into customer-facing language.");
 must(files.emailConnector, /x-idempotency-key/u, "Provider submission must include a stable idempotency key.");
 must(files.emailConnector, /timingSafeEqual/u, "Provider events must use timing-safe signature verification.");
 must(files.workGraph, /recordWorkGraphEmailProviderEvent/u, "Work graph must durably record provider delivery and reply events.");
-must(files.actionContracts, /EmailSendActionSchema[\s\S]*threadId: z\.string\(\)\.optional\(\)/u, "Email send contracts must support threaded replies.");
+must(files.actionContracts, /EmailSendActionSchema[\s\S]*threadId: z\.string\(\)\.max\(300\)\.optional\(\)[\s\S]*replyToMessageId[\s\S]*crmContactId[\s\S]*clientDraftId/u, "Email send contracts must support threaded, CRM-linked, cross-device replies.");
 must(files.server, /app\.post\("\/api\/email\/provider\/events"/u, "A signed provider event endpoint is required.");
 
 must(files.server, /sourceMode:\s*"research-required"/u, "Unfulfilled discovery must be recorded as research-required.");
@@ -88,7 +94,9 @@ must(files.packageJson, /test:crm-pipeline/u, "Root package must expose the CRM 
 const truthSurface = `${files.server}\n${files.workspaces}`;
 assert.doesNotMatch(truthSurface, /CRM_PULL_ARCHETYPES|crmPullPlan|LEAD_ARCHETYPES|createProspectsFromPrompt/u, "Synthetic contact generators must not exist in the active CRM path.");
 assert.doesNotMatch(truthSurface, /\.example\.local/u, "The active CRM path must not generate placeholder websites or emails.");
-assert.doesNotMatch(truthSurface, /provider_called:\s*true|outbound_action_executed:\s*true|public_exposure_changed:\s*true/iu, "CRM discovery must not perform unverified external actions.");
+const researchRequiredIndex = files.server.indexOf('sourceMode: "research-required"');
+const crmDiscoveryTruthSurface = files.server.slice(Math.max(0, researchRequiredIndex - 1_500), researchRequiredIndex + 3_000);
+assert.doesNotMatch(crmDiscoveryTruthSurface, /provider_called:\s*true|outbound_action_executed:\s*true|public_exposure_changed:\s*true/iu, "CRM discovery must not perform unverified external actions.");
 
 globalThis.localStorage = {
   data: new Map(),

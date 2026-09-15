@@ -20,6 +20,8 @@ const ownerTenant = "http-workforce-owner";
 try {
   const unauthorized = await app.inject({ method: "GET", url: `/api/workforce/heartbeat?tenant_id=${ownerTenant}` });
   assert.equal(unauthorized.statusCode, 401, "the heartbeat must reject anonymous reads");
+  const unauthorizedList = await app.inject({ method: "GET", url: `/api/workforce/actions?tenant_id=${ownerTenant}&type=email.send` });
+  assert.equal(unauthorizedList.statusCode, 401, "the action list must reject anonymous reads");
 
   const login = await app.inject({
     method: "POST",
@@ -72,12 +74,33 @@ try {
         proposedBy: "ai",
         rationale: "Exercise the governed external-action boundary.",
         policy: { surface: "external", reversible: false, requiresApproval: true },
-        payload: { to: ["client@example.com"], subject: "Follow-up", body: "Approved follow-up." },
+        payload: {
+          to: ["client@example.com"],
+          subject: "Follow-up",
+          body: "Approved follow-up.",
+          crmContactId: "crm-contact-42",
+          clientDraftId: "comm-browser-42",
+        },
       },
     },
   });
   const pending = readJson<{ action: { id: string; status: string } }>(emailSend).action;
   assert.equal(pending.status, "awaiting_approval");
+
+  const emailActions = await app.inject({
+    method: "GET",
+    url: `/api/workforce/actions?tenant_id=${ownerTenant}&type=email.send&limit=20`,
+    headers: ownerHeaders,
+  });
+  assert.equal(emailActions.statusCode, 200);
+  const listed = readJson<{ actions: Array<{ id: string; type: string; payload: { crmContactId?: string; clientDraftId?: string } }>; total: number; document_version: number; checksum: string }>(emailActions);
+  assert.equal(listed.total, 1);
+  assert.equal(listed.actions[0]?.id, pending.id);
+  assert.equal(listed.actions[0]?.type, "email.send");
+  assert.equal(listed.actions[0]?.payload.crmContactId, "crm-contact-42");
+  assert.equal(listed.actions[0]?.payload.clientDraftId, "comm-browser-42");
+  assert.ok(listed.document_version > 0);
+  assert.match(listed.checksum, /^[a-f0-9]{64}$/);
 
   const decision = await app.inject({
     method: "POST",
@@ -121,12 +144,19 @@ try {
     headers: { authorization: `Bearer ${clientToken}` },
   });
   assert.equal(crossTenant.statusCode, 403, "an ordinary client cannot read another tenant's work graph");
+  const crossTenantList = await app.inject({
+    method: "GET",
+    url: `/api/workforce/actions?tenant_id=${ownerTenant}&type=email.send`,
+    headers: { authorization: `Bearer ${clientToken}` },
+  });
+  assert.equal(crossTenantList.statusCode, 403, "an ordinary client cannot list another tenant's email actions");
 
   console.log(JSON.stringify({
     ok: true,
     suite: "workforce-http",
     anonymousRejected: true,
     tenantBoundaryRejected: true,
+    durableActionListing: true,
     idempotentReplay: true,
     verifiedReceipt: true,
     externalConnectorTruth: true,

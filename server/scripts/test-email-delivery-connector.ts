@@ -73,7 +73,7 @@ try {
       proposedBy: "ai",
       rationale: "Send the owner-approved campaign message.",
       policy: { surface: "external", reversible: false, requiresApproval: true },
-      payload: { to: ["public-business@example.com"], subject: "Chicago production support", body: "A reviewed message body.", threadId: "gmail-thread-existing" },
+      payload: { to: ["public-business@example.com"], subject: "Chicago production support", body: "A reviewed message body.", threadId: "gmail-thread-existing", replyToMessageId: "gmail-message-existing" },
     },
   });
   assert.equal(proposed.result.action.status, "awaiting_approval");
@@ -87,6 +87,7 @@ try {
   assert.equal(requests[0]?.headers["x-idempotency-key"], proposed.result.action.id);
   assert.equal((requests[0]?.body.message as { subject?: string })?.subject, "Chicago production support");
   assert.equal((requests[0]?.body.message as { thread_id?: string })?.thread_id, "gmail-thread-existing");
+  assert.equal((requests[0]?.body.message as { in_reply_to_message_id?: string })?.in_reply_to_message_id, "gmail-message-existing");
 
   const delivered: EmailProviderEvent = {
     eventId: "evt-delivered-1",

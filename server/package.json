@@ -59,6 +59,7 @@
     "test:content-asset-storage": "tsx scripts/test-content-asset-storage.ts",
     "test:media-generation-lifecycle": "tsx scripts/test-media-generation-lifecycle.ts",
     "test:content-publication-lifecycle": "tsx scripts/test-content-publication-lifecycle.ts",
+    "test:social-publishing": "tsx scripts/test-social-publishing-connector.ts && tsx scripts/test-social-publishing-http.ts",
     "test:agent-assist-bridge": "tsx scripts/test-agent-assist-bridge.ts",
     "test:phantombot-media-bridge-live": "tsx scripts/test-phantombot-media-bridge-live.ts",
     "chatgpt:adapter": "node scripts/chatgpt-assist-adapter.mjs",
