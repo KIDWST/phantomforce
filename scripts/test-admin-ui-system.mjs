@@ -95,9 +95,9 @@ for (const className of [
   assert.match(adminCss, new RegExp(`\\.${className}(?:[\\s,{:.>]|$)`), `Planner presentation must style ${className}.`);
 }
 
-assert.match(adminCss, /--pf-black:\s*#020705/u, "Admin Next must own the black base.");
-assert.match(adminCss, /--pf-green:\s*#18f28f/u, "Admin Next must own the Phantom green accent.");
-assert.match(index, /<meta name="theme-color" content="#020705"/u, "Browser and preload chrome must begin on the black brand base.");
+assert.match(adminCss, /--pf-black:\s*#090d12/u, "Admin Next must own the graphite base.");
+assert.match(adminCss, /--pf-green:\s*#35f59d/u, "Admin Next must own the bright Phantom green accent.");
+assert.match(index, /<meta name="theme-color" content="#090d12"/u, "Browser and preload chrome must begin on the graphite brand base.");
 assert.match(index, /\.boot-fallback[\s\S]*?rgba\(24, 242, 143/u, "The pre-application loading state must already use Phantom green.");
 assert.doesNotMatch(index, /#(?:f3f2fa|f5f4fb|241f3f|5d5880)|rgba\((?:139,\s*103,\s*255|126,\s*103,\s*255|199,\s*153,\s*255|130,\s*112,\s*255|91,\s*76,\s*255)/iu, "The initial document cannot flash the retired light-purple experience.");
 assert.match(adminCss, /\.page-worker[\s\S]*?rgba\(24, 242, 143/u, "Page intelligence must use the green brand layer.");
@@ -114,4 +114,4 @@ const openingBraces = (adminCss.match(/\{/gu) || []).length;
 const closingBraces = (adminCss.match(/\}/gu) || []).length;
 assert.equal(openingBraces, closingBraces, "Admin Next CSS must have balanced blocks.");
 
-console.log(`Admin UI system checks passed: ${requiredStyles.length} global styles, atomic warmed workspace CSS, branded route recovery, ${requiredModuleHints.length} eager modules, responsive Planner, green/black brand.`);
+console.log(`Admin UI system checks passed: ${requiredStyles.length} global styles, atomic warmed workspace CSS, branded route recovery, ${requiredModuleHints.length} eager modules, responsive Planner, graphite/green brand.`);

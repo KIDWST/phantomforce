@@ -9,6 +9,7 @@ const checks = [
   "test:admin-ui",
   "test:dashboard-chat",
   "test:command-surface",
+  "test:graphite-theme",
   "test:phantombot-interstellar",
   "test:dropdown-readability",
   "test:automation-workspace",

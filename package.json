@@ -83,6 +83,7 @@
     "test:phantombot-interstellar": "node scripts/test-phantombot-interstellar.mjs",
     "test:phantombot-media-bridges": "node scripts/test-phantombot-media-bridges.mjs",
     "test:command-surface": "node scripts/test-command-surface.mjs",
+    "test:graphite-theme": "node scripts/test-graphite-theme.mjs",
     "test:dropdown-readability": "node scripts/test-dropdown-readability.mjs",
     "test:automation-workspace": "node scripts/test-automation-workspace.mjs",
     "test:autopilot-attention": "node scripts/test-autopilot-attention.mjs",

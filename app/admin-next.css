@@ -3,25 +3,27 @@
    while the operating shell, controls, cards, and planner share one brand. */
 
 :root {
-  --pf-black: #020705;
-  --pf-ink: #effff7;
-  --pf-muted: #86a095;
-  --pf-faint: #52675e;
-  --pf-green: #18f28f;
-  --pf-green-2: #0fc978;
-  --pf-green-3: #08784b;
-  --pf-line: rgba(93, 255, 177, .14);
-  --pf-line-strong: rgba(83, 255, 169, .32);
-  --pf-panel: rgba(5, 14, 10, .94);
-  --pf-panel-raised: rgba(8, 21, 15, .96);
-  --pf-glow: rgba(24, 242, 143, .14);
+  --pf-black: #090d12;
+  --pf-shell: #0c1118;
+  --pf-panel: #111820;
+  --pf-panel-raised: #17202a;
+  --pf-panel-soft: #1c2631;
+  --pf-ink: #f2f6f4;
+  --pf-muted: #9aa6b2;
+  --pf-faint: #697582;
+  --pf-green: #35f59d;
+  --pf-green-2: #16d985;
+  --pf-green-3: #0b8f59;
+  --pf-line: rgba(166, 180, 194, .14);
+  --pf-line-strong: rgba(53, 245, 157, .42);
+  --pf-glow: rgba(53, 245, 157, .14);
 }
 
 html[data-command-os="2040"] {
   background: var(--pf-black);
   color-scheme: dark;
   accent-color: var(--pf-green);
-  scrollbar-color: rgba(24, 242, 143, .55) #030907;
+  scrollbar-color: rgba(53, 245, 157, .55) #0b1016;
 }
 
 html[data-command-os="2040"] body,
@@ -41,6 +43,12 @@ html[data-command-os="2040"] .command-os-enabled .console.console-workspace {
   --bg: var(--pf-black);
   --glass: var(--pf-panel);
   --glass-2: var(--pf-panel-raised);
+  --panel: var(--pf-panel);
+  --panel-2: var(--pf-panel-raised);
+  --surface: var(--pf-panel);
+  --surface-2: var(--pf-panel-raised);
+  --text: var(--pf-ink);
+  --muted: var(--pf-muted);
   --line: var(--pf-line);
   --line-strong: var(--pf-line-strong);
 }
@@ -51,13 +59,13 @@ html[data-command-os="2040"] ::selection {
 }
 
 html[data-command-os="2040"] * {
-  scrollbar-color: rgba(24, 242, 143, .45) rgba(3, 9, 7, .88);
+  scrollbar-color: rgba(53, 245, 157, .45) rgba(10, 15, 21, .94);
 }
 
 html[data-command-os="2040"] *::-webkit-scrollbar { width: 9px; height: 9px; }
-html[data-command-os="2040"] *::-webkit-scrollbar-track { background: rgba(3, 9, 7, .88); }
+html[data-command-os="2040"] *::-webkit-scrollbar-track { background: rgba(10, 15, 21, .94); }
 html[data-command-os="2040"] *::-webkit-scrollbar-thumb {
-  border: 2px solid rgba(3, 9, 7, .88);
+  border: 2px solid rgba(10, 15, 21, .94);
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(24, 242, 143, .72), rgba(15, 201, 120, .38));
 }
@@ -69,11 +77,9 @@ html[data-command-os="2040"] .command-os-enabled :focus-visible {
 
 /* Command rail */
 html[data-command-os="2040"] .os-command-rail {
-  border-bottom-color: var(--pf-line) !important;
-  background:
-    linear-gradient(90deg, rgba(24, 242, 143, .035), transparent 25%, transparent 75%, rgba(24, 242, 143, .025)),
-    rgba(2, 8, 5, .96) !important;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, .3), inset 0 -1px rgba(24, 242, 143, .045) !important;
+  border-bottom-color: rgba(166, 180, 194, .12) !important;
+  background: linear-gradient(180deg, #121923, #0c1118) !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .3), inset 0 -1px rgba(255, 255, 255, .035) !important;
 }
 
 html[data-command-os="2040"] .os-identity {
@@ -89,8 +95,8 @@ html[data-command-os="2040"] .os-primary-nav button {
 }
 
 html[data-command-os="2040"] .os-primary-nav button:hover {
-  background: rgba(24, 242, 143, .035) !important;
-  color: #c7ddd2 !important;
+  background: rgba(255, 255, 255, .045) !important;
+  color: #dfe6e9 !important;
 }
 
 html[data-command-os="2040"] .os-primary-nav button::after {
@@ -101,36 +107,36 @@ html[data-command-os="2040"] .os-primary-nav button::after {
 
 html[data-command-os="2040"] .os-primary-nav button.is-active,
 html[data-command-os="2040"] .os-primary-nav button[aria-current="page"] {
-  background: linear-gradient(180deg, rgba(24, 242, 143, .055), rgba(24, 242, 143, .012)) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .065), rgba(255, 255, 255, .025)) !important;
   color: var(--pf-ink) !important;
 }
 
 html[data-command-os="2040"] :where(.os-rail-action, .os-profile, .cmdk-open) {
-  border-color: var(--pf-line) !important;
-  background-color: rgba(7, 18, 13, .78) !important;
+  border-color: rgba(166, 180, 194, .14) !important;
+  background-color: rgba(21, 29, 38, .86) !important;
 }
 
 html[data-command-os="2040"] :where(.os-rail-action, .os-profile, .cmdk-open):hover {
   border-color: var(--pf-line-strong) !important;
-  background-color: rgba(12, 32, 22, .88) !important;
+  background-color: rgba(28, 38, 49, .94) !important;
   color: var(--pf-ink) !important;
 }
 
 /* Workspace frame */
 html[data-command-os="2040"] .command-os-enabled .workspace-page {
   overflow: hidden;
-  border: 1px solid var(--pf-line) !important;
+  border: 1px solid rgba(166, 180, 194, .14) !important;
   border-radius: 22px !important;
   background:
-    radial-gradient(circle at 86% -15%, rgba(24, 242, 143, .055), transparent 32%),
-    linear-gradient(180deg, rgba(7, 18, 13, .98), rgba(3, 10, 7, .985)) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, .018), transparent 170px),
+    #0e141b !important;
   box-shadow: 0 30px 100px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 255, 255, .025) !important;
 }
 
 html[data-command-os="2040"] .command-os-enabled .workspace-page-head {
   position: relative;
   border-bottom-color: var(--pf-line) !important;
-  background: linear-gradient(90deg, rgba(24, 242, 143, .045), transparent 28%) !important;
+  background: linear-gradient(90deg, rgba(255, 255, 255, .035), transparent 34%) !important;
 }
 
 html[data-command-os="2040"] .command-os-enabled .workspace-page-head::before {
@@ -158,8 +164,8 @@ html[data-command-os="2040"] .command-os-enabled .workspace-page h3 {
 }
 
 html[data-command-os="2040"] .command-os-enabled .workspace-page :where(input, textarea, select) {
-  border-color: var(--pf-line) !important;
-  background: rgba(2, 9, 6, .82) !important;
+  border-color: rgba(166, 180, 194, .16) !important;
+  background: #0c1219 !important;
   color: var(--pf-ink) !important;
   box-shadow: inset 0 1px rgba(255, 255, 255, .025) !important;
 }
@@ -188,14 +194,14 @@ html[data-command-os="2040"] .command-os-enabled :where(.btn-primary, .workspace
 }
 
 html[data-command-os="2040"] .command-os-enabled .btn-quiet {
-  border-color: var(--pf-line) !important;
-  background: rgba(8, 22, 15, .72) !important;
-  color: #a7beb3 !important;
+  border-color: rgba(166, 180, 194, .16) !important;
+  background: #151d26 !important;
+  color: #b3bdc6 !important;
 }
 
 html[data-command-os="2040"] .command-os-enabled .btn-quiet:hover {
   border-color: var(--pf-line-strong) !important;
-  background: rgba(15, 45, 30, .72) !important;
+  background: #1b2630 !important;
   color: var(--pf-ink) !important;
 }
 
@@ -224,11 +230,11 @@ html[data-command-os="2040"] .page-worker {
   width: min(100%, 1780px);
   margin: 0 auto 20px;
   padding: clamp(16px, 1.35vw, 24px);
-  border: 1px solid rgba(24, 242, 143, .22) !important;
+  border: 1px solid rgba(166, 180, 194, .16) !important;
   border-radius: 18px;
   background:
-    radial-gradient(circle at 8% -35%, rgba(24, 242, 143, .18), transparent 38%),
-    linear-gradient(135deg, rgba(8, 25, 16, .96), rgba(3, 11, 7, .985)) !important;
+    linear-gradient(135deg, rgba(255, 255, 255, .035), transparent 46%),
+    #121a22 !important;
   box-shadow: inset 0 1px rgba(255, 255, 255, .035), 0 22px 70px rgba(0, 0, 0, .32) !important;
 }
 
@@ -1590,7 +1596,7 @@ html[data-command-os="2040"] .page-worker-output {
    Put the scheme directly on every select and paint every popup row so light
    browser defaults can never produce light text on a white option list. */
 html {
-  --pf-native-option-bg: #06110c;
+  --pf-native-option-bg: #101720;
   --pf-native-option-fg: #f4fff9;
   --pf-native-option-selected-bg: #14603f;
   --pf-native-option-selected-fg: #ffffff;
@@ -1675,4 +1681,292 @@ html[data-org-color-mode="light"] :where(
     color-scheme: normal !important;
     forced-color-adjust: auto;
   }
+}
+
+/* PHANTOMFORCE GRAPHITE THEME
+   The shell is neutral charcoal and slate. Phantom green is a signal for
+   actions, focus, active state, and live status — never the page canvas. */
+html[data-command-os="2040"],
+html[data-command-os="2040"] body,
+html[data-command-os="2040"] .phantom.command-os-enabled,
+html[data-command-os="2040"] .phantom.command-os-enabled .app-main,
+html[data-command-os="2040"] .phantom.command-os-enabled .console.console-workspace {
+  background: #090d12 !important;
+}
+
+html[data-command-os="2040"] .bg-grid {
+  opacity: .24 !important;
+  background-image:
+    linear-gradient(rgba(166, 180, 194, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(166, 180, 194, .045) 1px, transparent 1px) !important;
+}
+
+html[data-command-os="2040"] .bg-glow {
+  opacity: .72 !important;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(93, 112, 132, .13), transparent 31%),
+    radial-gradient(circle at 88% 18%, rgba(53, 245, 157, .035), transparent 24%),
+    radial-gradient(circle at 60% 100%, rgba(75, 88, 104, .10), transparent 34%) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled > .sidebar,
+html[data-command-os="2040"] .phantom.command-os-enabled .os-command-rail {
+  border-color: rgba(166, 180, 194, .12) !important;
+  background: linear-gradient(180deg, #121923, #0c1118) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .sidebar .nav-item {
+  border-color: transparent !important;
+  background: rgba(255, 255, 255, .025) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .045) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .sidebar .nav-item:hover {
+  border-color: rgba(166, 180, 194, .16) !important;
+  background: rgba(255, 255, 255, .05) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .sidebar .nav-item.is-active {
+  border-color: rgba(53, 245, 157, .36) !important;
+  background: rgba(255, 255, 255, .065) !important;
+  box-shadow: inset 0 -2px var(--pf-green), 0 0 22px rgba(53, 245, 157, .07) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .workspace-page {
+  border-color: rgba(166, 180, 194, .14) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .018), transparent 190px),
+    #0e141b !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .workspace-page-head {
+  border-bottom-color: rgba(166, 180, 194, .13) !important;
+  background: linear-gradient(90deg, rgba(255, 255, 255, .035), transparent 34%) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled :where(.os-identity-sub, .os-primary-nav button) {
+  color: #8996a3 !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled :where(
+  .overlay-panel,
+  .notif-menu,
+  .cmdk-panel,
+  .user-menu,
+  .os-menu-popover
+) {
+  border-color: rgba(166, 180, 194, .16) !important;
+  background: #151d26 !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .48), inset 0 1px rgba(255, 255, 255, .035) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled :where(.page-worker-output, .page-worker-form textarea) {
+  border-color: rgba(166, 180, 194, .16) !important;
+  background: #0c1219 !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .planner-hero {
+  border-color: rgba(166, 180, 194, .16) !important;
+  background:
+    radial-gradient(circle at 86% 18%, rgba(53, 245, 157, .045), transparent 28%),
+    linear-gradient(125deg, #17202a, #10171f 58%) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .planner-hero::before {
+  background-image:
+    linear-gradient(rgba(166, 180, 194, .04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(166, 180, 194, .04) 1px, transparent 1px) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .planner :where(
+  .planner-metrics > span,
+  .planner-card,
+  .planner-brief-list > button,
+  .planner-day,
+  .planner-auto-card,
+  .planner-prep-list article,
+  .planner-item,
+  .planner-autopilot,
+  .planner-operation-notice,
+  .planner-attention-card
+) {
+  border-color: rgba(166, 180, 194, .14) !important;
+  background: #111820 !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .planner :where(
+  .planner-brief-list > button:hover,
+  .planner-day.is-today
+) {
+  border-color: rgba(53, 245, 157, .34) !important;
+  background: #1a242e !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .settings-operator :where(
+  .set-section,
+  .set-ai-hero,
+  .set-status-grid span,
+  .set-category,
+  .set-choice-card,
+  .set-route-card,
+  .set-module-card,
+  .set-configured-provider-row,
+  .set-provider-dashboard,
+  .set-provider-setup,
+  .set-provider-detail,
+  .set-provider-manage,
+  .set-usage-panel,
+  .set-usage-metric,
+  .set-model-card,
+  .set-connect-hero,
+  .set-connect-group,
+  .set-connect-brain,
+  .set-connect-active-card,
+  .set-bridge-route,
+  .set-bridge-product,
+  .set-bridge-builder,
+  .set-connect-card,
+  .cust-hero,
+  .cust-ai,
+  .cust-panel,
+  .cust-publish,
+  .org-type-option,
+  .org-member
+) {
+  border-color: rgba(166, 180, 194, .14) !important;
+  background: #111820 !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .settings-operator :where(
+  .set-provider-facts > div,
+  .set-connect-health > span,
+  .set-bridge-metrics > div,
+  .cust-scope,
+  .set-usage-range button
+) {
+  background: #0c1219 !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled :where(
+  .dashboard-brief,
+  .plan-card,
+  .queue-card,
+  .quick-card,
+  .desktop-context-card,
+  .decision-card
+) {
+  border-color: rgba(166, 180, 194, .14) !important;
+  background: linear-gradient(180deg, #17202a, #111820) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled :where(
+  .btn-primary,
+  .workspace-page .primary,
+  .workspace-page button[data-primary]
+) {
+  border-color: transparent !important;
+  background: var(--pf-green) !important;
+  color: #07120d !important;
+  box-shadow: 0 10px 28px rgba(53, 245, 157, .16) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled :where(
+  .btn-primary,
+  .workspace-page .primary,
+  .workspace-page button[data-primary]
+):hover {
+  background: #6bffb8 !important;
+  color: #07120d !important;
+}
+
+/* Relationship workspace: dense, calm graphite surfaces with one signal color. */
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-app :where(
+  .crm-overview,
+  .crm-editor,
+  .crm-discovery,
+  .crm-list-wrap,
+  .crm-detail,
+  .crm-comms-workbench
+) {
+  border-color: rgba(166, 180, 194, .15) !important;
+  background: #111820 !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .03), 0 18px 48px rgba(0, 0, 0, .18) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-overview::after {
+  background: repeating-linear-gradient(90deg, transparent 0 55px, rgba(255, 255, 255, .018) 56px) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-app .crm-metrics {
+  border-color: rgba(166, 180, 194, .15) !important;
+  background: rgba(166, 180, 194, .10) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-app .crm-metrics article {
+  background: #17202a !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-mail-status {
+  border-color: rgba(242, 184, 75, .28) !important;
+  background: linear-gradient(90deg, rgba(242, 184, 75, .055), transparent 32%), #111820 !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-app :where(
+  .crm-search,
+  .crm-filter,
+  .crm-form-grid input,
+  .crm-form-grid select,
+  .crm-form-grid textarea,
+  .crm-discovery .lead-intel-form input
+) {
+  border-color: rgba(166, 180, 194, .16) !important;
+  background: #0c1219 !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-app .crm-card {
+  background: #111820 !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-app .crm-card:hover,
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-app .crm-card.is-selected {
+  background: #1a242e !important;
+  box-shadow: inset 2px 0 var(--pf-green) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-app :where(
+  .crm-detail-grid span,
+  .ops-summary article,
+  .ops-record,
+  .crm-comms-workbench .ops-record
+) {
+  border-color: rgba(166, 180, 194, .13) !important;
+  background: #151d26 !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-comms-workbench > :where(header, summary) {
+  background: linear-gradient(90deg, rgba(255, 255, 255, .035), transparent 58%) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-app .crm-view-tabs button.is-active,
+html[data-command-os="2040"] .phantom.command-os-enabled .crm-segments button.is-active {
+  background: rgba(255, 255, 255, .055) !important;
+  color: var(--pf-ink) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
+  border-top-color: rgba(166, 180, 194, .14) !important;
+  background: rgba(7, 11, 16, .98) !important;
+}
+
+html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > :where(span, button) {
+  border-right-color: rgba(166, 180, 194, .10) !important;
+}
+
+html[data-command-os="2040"] {
+  --pf-native-option-bg: #101720;
+  --pf-native-option-fg: #f2f6f4;
+  --pf-native-option-selected-bg: #1b4936;
+  --pf-native-option-selected-fg: #ffffff;
+  --pf-native-option-disabled-fg: #87929d;
 }
