@@ -6,27 +6,27 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-214";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-215";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260914-214";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260914-214";
+} from "./contenthub.js?v=phantom-live-20260914-215";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260914-215";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260914-214";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260914-214";
-import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260914-214";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260914-214";
+} from "./content-editor.js?v=phantom-live-20260914-215";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260914-215";
+import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260914-215";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260914-215";
 import {
   assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud,
   uploadAsset, patchAsset, assetLifecycle,
   listLocalAssets, refreshLocalAssets, localAssetBlobUrl, localAssetThumbnailBlobUrl,
-} from "./orgs.js?v=phantom-live-20260914-214";
+} from "./orgs.js?v=phantom-live-20260914-215";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";

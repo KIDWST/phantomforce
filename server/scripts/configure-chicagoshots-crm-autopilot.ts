@@ -3,6 +3,7 @@ import "../src/load-env.js";
 import { prisma } from "../src/access/prisma-runtime.js";
 
 const orgId = process.argv.find((arg) => arg.startsWith("--org="))?.slice(6) || "phantomforce-internal";
+const suppliedPostalAddress = process.env.PHANTOMFORCE_CRM_POSTAL_ADDRESS?.trim() || "";
 
 async function main() {
   if (!prisma) throw new Error("DATABASE_URL is required to configure CRM autopilot.");
@@ -30,7 +31,7 @@ async function main() {
     senderName: "Jordan West",
     senderBusiness: "ChicagoShots",
     senderWebsite: "https://chicagoshots.com",
-    senderPostalAddress: typeof previous.senderPostalAddress === "string" ? previous.senderPostalAddress : "",
+    senderPostalAddress: suppliedPostalAddress || (typeof previous.senderPostalAddress === "string" ? previous.senderPostalAddress : ""),
     authorizationSource: "explicit-owner-request",
     authorizedAt: new Date().toISOString(),
   };
