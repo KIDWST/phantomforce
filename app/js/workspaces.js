@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-212";
+} from "./store.js?v=phantom-live-20260914-213";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-212";
+} from "./orgs.js?v=phantom-live-20260914-213";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-212";
+} from "./proposalpipeline.js?v=phantom-live-20260914-213";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-212";
+} from "./approvalpipeline.js?v=phantom-live-20260914-213";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-212";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-212";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-212";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-212";
+} from "./financeledger.js?v=phantom-live-20260914-213";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-213";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-213";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-213";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -50,7 +50,7 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all", brainOpen: false };
-const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", segment: "all", page: 1, loadedOrg: "", loadingOrg: "" };
+const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", segment: "all", page: 1, loadedOrg: "", loadingOrg: "", autopilot: null };
 const crmSelection = createScopedSelection("");
 const proposalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
 const approvalUi = { loadedTenant: "", loadingTenant: "", runLoadedTenant: "", runLoadingTenant: "", notice: "", serverAudit: [], serverRuns: [] };
@@ -184,6 +184,7 @@ function syncRelationshipUiScope(ws) {
   relationshipsUi.settingsOpen = false;
   relationshipsUi.busy = false;
   relationshipsUi.importBusy = false;
+  leadsUi.autopilot = null;
   leadsUi.query = "";
   leadsUi.status = "all";
   operatorUi.followQuery = "";
@@ -248,6 +249,7 @@ function contactEditorHtml(contact, prefs, canEdit) {
 }
 
 function relationshipSettingsHtml(settings, prefs, canEdit) {
+  const autopilot = settings?.brain?.autopilot && typeof settings.brain.autopilot === "object" ? settings.brain.autopilot : {};
   return `<section class="crm-editor crm-settings-panel" aria-label="CRM customization">
     <header class="crm-panel-head"><div><p>ORGANIZATION CRM SETTINGS</p><h3>Make this CRM yours</h3><span>These labels and defaults follow ${esc(leadWorkspaceName())}, not the browser or another customer.</span></div><button class="btn btn-quiet" type="button" data-crm-settings-close>Close</button></header>
     <form class="crm-contact-form" data-crm-settings-form>
@@ -262,6 +264,15 @@ function relationshipSettingsHtml(settings, prefs, canEdit) {
         <label><span>Default source</span><input name="defaultSource" maxlength="160" value="${esc(prefs.defaultSource)}" /></label>
         <label class="crm-form-wide"><span>Default next step</span><input name="defaultNextStep" maxlength="600" value="${esc(prefs.defaultNextStep)}" /></label>
         <label class="crm-form-wide"><span>Default tags</span><input name="defaultTags" maxlength="500" value="${esc(prefs.defaultTags.join(", "))}" placeholder="priority, referral, local" /></label>
+        <label><span>Autopilot mode</span><select name="autopilotEnabled"><option value="true" ${autopilot.enabled === true ? "selected" : ""}>Exception-only autopilot</option><option value="false" ${autopilot.enabled === true ? "" : "selected"}>Off</option></select></label>
+        <label><span>Daily automatic send limit</span><input name="autopilotDailyLimit" type="number" min="1" max="25" value="${Math.max(1, Math.min(25, Number(autopilot.dailySendLimit || 10)))}" /></label>
+        <label><span>Automatic follow-up delay</span><input name="autopilotFollowUpDays" type="number" min="2" max="30" value="${Math.max(2, Math.min(30, Number(autopilot.followUpAfterDays || 5)))}" /></label>
+        <label><span>Outreach eligibility</span><select name="autopilotPermissionMode"><option value="public-business" ${autopilot.permissionMode === "public-business" ? "selected" : ""}>Published business emails</option><option value="opt-in-only" ${autopilot.permissionMode === "public-business" ? "" : "selected"}>Confirmed opt-in only</option></select></label>
+        <label><span>Sender name</span><input name="autopilotSenderName" maxlength="120" value="${esc(autopilot.senderName || "")}" placeholder="Your name" /></label>
+        <label><span>Sender business</span><input name="autopilotSenderBusiness" maxlength="120" value="${esc(autopilot.senderBusiness || "")}" placeholder="Business name" /></label>
+        <label><span>Business website</span><input name="autopilotSenderWebsite" maxlength="300" value="${esc(autopilot.senderWebsite || "")}" placeholder="https://example.com" /></label>
+        <label class="crm-form-wide"><span>Valid physical postal address</span><input name="autopilotPostalAddress" maxlength="300" value="${esc(autopilot.senderPostalAddress || "")}" placeholder="Required before commercial email can be sent automatically" /></label>
+        <p class="crm-form-wide ws-note">Autopilot runs under your standing account policy, adds business identification and opt-out instructions, stops on opt-outs or bounces, and surfaces replies as exceptions. Gmail/Outlook and signed delivery webhooks must be connected once.</p>
       </div>
       <footer><span>${canEdit ? "One configuration per organization." : "Only an organization manager can change CRM settings."}</span><button class="btn btn-primary" type="submit" ${!canEdit || relationshipsUi.busy ? "disabled" : ""}>${relationshipsUi.busy ? "Saving..." : "Save CRM settings"}</button></footer>
     </form>
@@ -451,6 +462,7 @@ function syncServerCrm(ws, rerender) {
     const other = store.state.leads.filter((lead) => lead.ws !== ws);
     store.state.leads = [...(payload.contacts || []), ...other];
     store.state.crmSettings[ws] = payload.settings || workspaceCrmSettings(ws);
+    leadsUi.autopilot = payload.autopilot && typeof payload.autopilot === "object" ? payload.autopilot : null;
     leadsUi.loadedOrg = ws;
     store.save();
     rerender();
@@ -1038,10 +1050,10 @@ function renderFollowUp(el, rerender) {
       </select>
     </div>
     ${operatorUi.notice ? `<div class="ops-notice">${esc(operatorUi.notice)}</div>` : ""}
-    <section class="crm-comms-workbench">
-      <header><div><p>OUTREACH CONTROL</p><h3>Email queue & replies</h3></div><span>Draft → approval → provider receipt → reply</span></header>
+    <details class="crm-comms-workbench">
+      <summary><div><p>AUTOMATION AUDIT TRAIL</p><h3>Show email activity details</h3></div><span>Draft → policy → provider receipt → reply</span></summary>
       <div data-crm-comms></div>
-    </section>
+    </details>
     <div class="stack ops-stack">
       ${pageRecords.map((lead) => {
         const consent = leadConsentStatus(lead);
@@ -1411,17 +1423,27 @@ function renderRelationships(el, rerender) {
   const drafts = communications.filter((item) => item.status === "draft").length;
   const pendingSends = communications.filter((item) => ["pending", "awaiting_approval"].includes(item.status)).length;
   const providerReceipts = communications.filter((item) => Boolean(item.providerReceipt?.messageId)).length;
+  const autopilot = leadsUi.autopilot && typeof leadsUi.autopilot === "object" ? leadsUi.autopilot : null;
+  const outcomes = autopilot?.outcomes || {};
+  const autopilotRunning = autopilot?.state === "running";
+  const autopilotBlockers = Array.isArray(autopilot?.blockers) ? autopilot.blockers : [];
   const emailConnected = crmEmailUi.state === "connected";
   const emailAvailable = crmEmailUi.state === "available";
-  const emailTitle = emailConnected
-    ? `${crmEmailUi.provider || "Inbox"} connected`
+  const emailTitle = autopilotRunning
+    ? "Autopilot running — only exceptions need you"
+    : emailConnected
+      ? `${crmEmailUi.provider || "Inbox"} connected · autopilot setup incomplete`
     : emailAvailable
       ? "Inbox ready to connect"
       : crmEmailUi.state === "checking"
         ? "Checking inbox connection"
         : "Email automation needs platform setup";
-  const emailDetail = emailConnected
-    ? "Drafts and approvals are account-scoped. Delivery and replies appear only after the provider returns a verified receipt."
+  const emailDetail = autopilotRunning
+    ? "PhantomBot qualifies, sends under the standing account policy, watches provider receipts, schedules follow-ups, and stops on replies, opt-outs, or bounces."
+    : autopilotBlockers[0]
+      ? autopilotBlockers[0]
+      : emailConnected
+        ? "Complete the sender identity once. Routine outreach will then run without per-email monitoring."
     : emailAvailable
       ? "Connect Gmail or Outlook to enable approved sending, delivery events, and reply sync for this account."
       : crmEmailUi.message || "Drafting and approvals are live; a secure email broker is required for provider sending, tracking, and replies.";
@@ -1445,8 +1467,8 @@ function renderRelationships(el, rerender) {
       <section class="crm-mail-status is-${esc(crmEmailUi.state)}" aria-label="Email automation status">
         <div class="crm-mail-icon">@</div>
         <div><b>${esc(emailTitle)}</b><span>${esc(emailDetail)}</span></div>
-        <div class="crm-mail-counts"><span><b>${drafts}</b> drafts</span><span><b>${pendingSends}</b> approvals</span><span><b>${providerReceipts}</b> provider receipts</span></div>
-        <button class="btn" type="button" data-open-ws="settings" data-settings-target="connections">${emailConnected ? "Manage inbox" : emailAvailable ? "Connect inbox" : "Open setup"}</button>
+        <div class="crm-mail-counts"><span><b>${Number(outcomes.sent || outcomes.delivered || 0)}</b> email sent</span><span><b>${Number(outcomes.followUpNeeded || 0)}</b> follow-up needed</span><span><b>${Number(outcomes.replied || 0)}</b> replies</span><span><b>${autopilotBlockers.length}</b> setup blockers</span></div>
+        <button class="btn" type="button" ${emailConnected ? "data-crm-settings" : `data-open-ws="settings" data-settings-target="connections"`}>${autopilotRunning ? "Autopilot settings" : emailConnected ? "Finish once" : emailAvailable ? "Connect inbox once" : "Owner setup"}</button>
       </section>
       ${leadsUi.notice ? `<div class="ops-notice" role="status" aria-live="polite">${esc(leadsUi.notice)}</div>` : ""}
       ${relationshipsUi.editorOpen ? contactEditorHtml(editing, prefs, canEdit) : ""}
@@ -1472,12 +1494,12 @@ function renderRelationships(el, rerender) {
     relationshipsUi.settingsOpen = false;
     repaint();
   });
-  el.querySelector("[data-crm-settings]")?.addEventListener("click", () => {
+  el.querySelectorAll("[data-crm-settings]").forEach((button) => button.addEventListener("click", () => {
     relationshipsUi.settingsOpen = !relationshipsUi.settingsOpen;
     relationshipsUi.editorOpen = false;
     relationshipsUi.editingId = "";
     repaint();
-  });
+  }));
   el.querySelector("[data-crm-editor-close]")?.addEventListener("click", () => {
     relationshipsUi.editorOpen = false;
     relationshipsUi.editingId = "";
@@ -1549,7 +1571,31 @@ function renderRelationships(el, rerender) {
       dailyPullTarget: Math.max(1, Math.min(2000, Math.round(Number(data.get("dailyPullTarget")) || 5))),
       sourceMode: settings.sourceMode || "manual",
       notes: settings.notes || "",
-      brain: { ...(settings.brain || {}), kind: "phantomforce_org_crm_brain", version: 1, crmPreferences, updatedAt: new Date().toISOString() },
+      brain: {
+        ...(settings.brain || {}),
+        kind: "phantomforce_org_crm_brain",
+        version: 3,
+        crmPreferences,
+        autopilot: {
+          ...((settings.brain?.autopilot && typeof settings.brain.autopilot === "object") ? settings.brain.autopilot : {}),
+          enabled: String(data.get("autopilotEnabled")) === "true",
+          mode: "exceptions-only",
+          standingApproval: String(data.get("autopilotEnabled")) === "true",
+          automaticInitialOutreach: String(data.get("autopilotEnabled")) === "true",
+          automaticFollowUps: String(data.get("autopilotEnabled")) === "true",
+          automaticReplies: false,
+          dailySendLimit: Math.max(1, Math.min(25, Math.round(Number(data.get("autopilotDailyLimit")) || 10))),
+          followUpAfterDays: Math.max(2, Math.min(30, Math.round(Number(data.get("autopilotFollowUpDays")) || 5))),
+          maxFollowUps: 1,
+          permissionMode: String(data.get("autopilotPermissionMode")) === "public-business" ? "public-business" : "opt-in-only",
+          senderName: String(data.get("autopilotSenderName") || "").trim().slice(0, 120),
+          senderBusiness: String(data.get("autopilotSenderBusiness") || "").trim().slice(0, 120),
+          senderWebsite: String(data.get("autopilotSenderWebsite") || "").trim().slice(0, 300),
+          senderPostalAddress: String(data.get("autopilotPostalAddress") || "").trim().slice(0, 300),
+          authorizedAt: new Date().toISOString(),
+        },
+        updatedAt: new Date().toISOString(),
+      },
     };
     relationshipsUi.busy = true;
     try {
@@ -1557,6 +1603,8 @@ function renderRelationships(el, rerender) {
         const result = await saveOrgCrmSettings(updated);
         if (!result?.ok || !result?.settings) throw new Error(typeof result?.error === "string" ? result.error : "CRM settings could not be saved.");
         store.state.crmSettings[ws] = result.settings;
+        leadsUi.loadedOrg = "";
+        leadsUi.autopilot = null;
       } else store.state.crmSettings[ws] = updated;
       leadsUi.notice = `CRM defaults saved for ${leadWorkspaceName(ws)}.`;
       relationshipsUi.settingsOpen = false;
@@ -3025,7 +3073,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-212")
+      import("./brain.js?v=phantom-live-20260914-213")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

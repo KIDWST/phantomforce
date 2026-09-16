@@ -1,6 +1,7 @@
 import "../src/load-env.js";
 
 import { prisma } from "../src/access/prisma-runtime.js";
+import { getCrmAutopilotStatus } from "../src/crm/crm-growth-automation.js";
 
 const orgId = process.argv.find((arg) => arg.startsWith("--org="))?.slice(6) || "phantomforce-internal";
 
@@ -8,10 +9,13 @@ async function main() {
   if (!prisma) throw new Error("DATABASE_URL is required for the CRM audit.");
   const [org, settings, contacts] = await Promise.all([
     prisma.org.findUnique({ where: { id: orgId }, select: { id: true, name: true } }),
-    prisma.crmSettings.findUnique({ where: { orgId }, select: { dailyPullTarget: true, sourceMode: true, notes: true, brain: true } }),
+    prisma.crmSettings.findUnique({ where: { orgId }, select: { orgId: true, dailyPullTarget: true, sourceMode: true, notes: true, brain: true } }),
     prisma.contact.findMany({
       where: { orgId },
-      select: { email: true, phone: true, website: true, status: true, type: true, tags: true, dueAt: true, source: true },
+      select: {
+        id: true, orgId: true, name: true, organization: true, email: true, phone: true, website: true,
+        status: true, type: true, tags: true, dueAt: true, source: true, fitScore: true, lastTouchAt: true, nextStep: true,
+      },
     }),
   ]);
   if (!org) throw new Error(`Organization ${orgId} does not exist.`);
@@ -29,6 +33,7 @@ async function main() {
   const brain = settings?.brain && typeof settings.brain === "object" && !Array.isArray(settings.brain)
     ? settings.brain as Record<string, unknown>
     : {};
+  const autopilot = settings ? await getCrmAutopilotStatus({ settings, contacts }) : null;
   process.stdout.write(`${JSON.stringify({
     ok: true,
     org: { id: org.id, name: org.name },
@@ -48,7 +53,8 @@ async function main() {
       dailyDraftTarget: settings?.dailyPullTarget || 0,
       phantomBotBusinessProfile: typeof brain.businessProfile === "string" ? brain.businessProfile : "not-configured",
       sendsRequireApproval: true,
-      automaticSendingEnabled: false,
+      automaticSendingEnabled: autopilot?.state === "running",
+      autopilot,
     },
     piiPrinted: false,
   }, null, 2)}\n`);

@@ -28,7 +28,7 @@ import { getContentAssetStorageProvider } from "./content-asset-storage.js";
 import { getSalesConnectorStatus } from "../connectors/sales-connector.js";
 import { getGuardStatus, getRecentAuditLogEntries, runGuardSelfTest } from "./prompt-injection-guard.js";
 import { runDueScheduledTasks } from "./scheduled-tasks.js";
-import { runCrmOutreachPrepForActiveOrganizations } from "../crm/crm-growth-automation.js";
+import { runCrmAutopilotForActiveOrganizations, runCrmOutreachPrepForActiveOrganizations } from "../crm/crm-growth-automation.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -550,6 +550,32 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
           : `Outreach prep checked ${result.organizations} active CRM account(s), but found no eligible published business emails. No messages were sent.`,
         next_action: ready ? "Review the email drafts in Approvals, edit as needed, then explicitly approve any external send." : "Add or verify published business emails and keep consent/do-not-contact tags current.",
         risks: ["Any email, social DM, SMS, or CRM write must be owner-approved before execution."],
+      };
+    },
+  },
+  {
+    id: "crm-outreach-autopilot",
+    name: "CRM Outreach Autopilot",
+    category: "outreach",
+    cadence: "hourly",
+    description: "Runs exception-only CRM sending, provider outcome sync, bounce suppression, and automatic follow-up under each account's standing policy.",
+    benefit: "Owners see sent, delivered, replied, bounced, and follow-up-needed outcomes instead of babysitting drafts.",
+    output: "Verified provider outcomes and only the exceptions that need a person.",
+    setup_fields: ["verified inbox", "signed provider webhooks", "sender identity", "physical postal address", "standing owner policy"],
+    approval_required: false,
+    external_action: true,
+    run: async () => {
+      const result = await runCrmAutopilotForActiveOrganizations();
+      const ready = result.organizations > 0 && result.setupRequired === 0;
+      return {
+        ok: ready,
+        summary: `${result.running} CRM autopilot account(s) running; ${result.setupRequired} need one-time setup. This cycle: ${result.sent} provider-accepted, ${result.replies} replied, ${result.bounces} bounced, ${result.failed} failed.`,
+        next_action: result.setupRequired
+          ? "Complete the one-time inbox, webhook, sender identity, and postal-address setup shown in Relationships. Routine runs need no per-email approval afterward."
+          : result.replies
+            ? "Open Relationships only for reply exceptions that need a human decision."
+            : "No owner action needed.",
+        risks: ["Autopilot stops on opt-outs, bounces, missing compliance identity, or unverified provider receipts."],
       };
     },
   },

@@ -18,6 +18,7 @@ const files = {
   actionContracts: read("packages/contracts/src/actions.ts"),
   crmAutomation: read("server/src/crm/crm-growth-automation.ts"),
   organizationPulse: read("server/src/phantom-ai/organization-pulse.ts"),
+  automationEngine: read("server/src/phantom-ai/automation-engine.ts"),
   packageJson: read("package.json"),
 };
 
@@ -61,7 +62,7 @@ must(files.workspaces, /data-crm-import[\s\S]*parseRelationshipCsv/u, "The accou
 must(files.workspaces, /data-crm-export[\s\S]*exportRelationshipCsv/u, "The account CRM must support scoped CSV export.");
 assert.doesNotMatch(files.workspaces, /prompt\("Contact name|prompt\("Company \/ brand/u, "Relationship creation and editing cannot use chained browser prompts.");
 must(files.workspaces, /lead\.ws === ws && lead\.status !== "lost"/u, "Follow-up lists must be explicitly restricted to the active organization.");
-must(files.workspaces, /Email queue & replies/u, "Follow-ups must expose the account email queue and reply stream inside Relationships.");
+must(files.workspaces, /Show email activity details/u, "Follow-ups must expose the account email queue and reply stream inside Relationships.");
 must(files.workspaces, /proposeWorkGraphAction/u, "CRM sends must enter the durable work graph.");
 must(files.orgClient, /export async function fetchWorkGraphActions/u, "The browser must be able to rebuild the email queue from tenant-scoped server actions.");
 must(files.server, /app\.get\("\/api\/workforce\/actions"[\s\S]*document_version[\s\S]*checksum/u, "The work graph must expose an authenticated durable action listing.");
@@ -85,7 +86,14 @@ must(files.server, /app\.post\("\/api\/email\/provider\/events"/u, "A signed pro
 must(files.crmAutomation, /email:published-business/u, "Outreach prep must require a published business email tag.");
 must(files.crmAutomation, /consent:denied[\s\S]*do-not-contact[\s\S]*unsubscribed[\s\S]*email:guessed/u, "Outreach prep must exclude denied, opted-out, and guessed addresses.");
 must(files.crmAutomation, /type:\s*"email\.draft"[\s\S]*requiresApproval:\s*true/u, "PhantomBot CRM automation must create approval-bound drafts only.");
-assert.doesNotMatch(files.crmAutomation, /type:\s*"email\.send"/u, "Scheduled CRM automation cannot create send actions.");
+must(files.crmAutomation, /autopilotBlockers[\s\S]*senderPostalAddress[\s\S]*sendReady[\s\S]*trackingReady[\s\S]*replySyncReady/u, "Autopilot must stop before sending when identity, postal address, inbox, or signed provider events are missing.");
+must(files.crmAutomation, /This is a business introduction[\s\S]*reply “unsubscribe”/u, "Automatic commercial outreach must include disclosure and a plain opt-out path.");
+must(files.crmAutomation, /type:\s*"email\.send"[\s\S]*system:crm-standing-approval[\s\S]*providerReceipt/u, "Exception-only autopilot must use a recorded standing policy and count only verified provider receipts.");
+must(files.crmAutomation, /outreach:replied[\s\S]*automatic sequence[\s\S]*outreach:bounced[\s\S]*do-not-contact/u, "Reply and bounce outcomes must stop the automatic sequence.");
+must(files.crmAutomation, /unsubscribe\|remove me\|stop emailing\|do not contact[\s\S]*unsubscribed[\s\S]*do-not-contact[\s\S]*suppressed immediately/u, "Opt-out replies must immediately suppress the address and stop outreach.");
+must(files.automationEngine, /id:\s*"crm-outreach-autopilot"[\s\S]*cadence:\s*"hourly"[\s\S]*external_action:\s*true/u, "The CRM outcome loop must run hourly and disclose that it may execute an external action.");
+must(files.workspaces, /Autopilot running — only exceptions need you[\s\S]*email sent[\s\S]*follow-up needed[\s\S]*replies/u, "Relationships must default to the outcome-only operator view.");
+must(files.workspaces, /AUTOMATION AUDIT TRAIL[\s\S]*Show email activity details/u, "Detailed email activity must remain available in a collapsed audit trail.");
 must(files.organizationPulse, /readCrmIntelligence[\s\S]*Live account CRM/u, "PhantomBot workspace context must include tenant-scoped CRM intelligence.");
 
 must(files.server, /sourceMode:\s*"research-required"/u, "Unfulfilled discovery must be recorded as research-required.");

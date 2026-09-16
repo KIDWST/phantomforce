@@ -436,6 +436,7 @@ import {
   getOrganizationPulse,
 } from "./phantom-ai/organization-pulse.js";
 import { getBrainContract, getSignals } from "./phantom-ai/signals.js";
+import { getCrmAutopilotStatus } from "./crm/crm-growth-automation.js";
 import { decide, listDecisions, type DecideAction } from "./phantom-ai/decisions.js";
 import {
   decideAllSafeWorkActions,
@@ -3517,10 +3518,12 @@ app.get("/orgs/:orgId/crm", async (request, reply) => {
     }),
     db.contact.findMany({ where: { orgId }, orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }] }),
   ]);
+  const autopilot = await getCrmAutopilotStatus({ settings, contacts });
   return {
     ok: true,
     settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || { kind: "phantomforce_org_crm_brain", version: 1 } },
     contacts: contacts.map(crmContactView),
+    autopilot,
   };
 });
 

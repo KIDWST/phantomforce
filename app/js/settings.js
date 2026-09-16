@@ -1,12 +1,12 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260914-212";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260914-212";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260914-212";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-212";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260914-212";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-212";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260914-213";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260914-213";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260914-213";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-213";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260914-213";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-213";
 import {
   AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
@@ -22,7 +22,7 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260914-212";
+} from "./ai-runtime.js?v=phantom-live-20260914-213";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";

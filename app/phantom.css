@@ -6067,7 +6067,8 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   border-radius: 14px;
   background: color-mix(in srgb, var(--panel) 97%, #030a07);
 }
-.crm-comms-workbench > header {
+.crm-comms-workbench > header,
+.crm-comms-workbench > summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6076,9 +6077,14 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   border-bottom: 1px solid var(--line);
   background: linear-gradient(90deg, color-mix(in srgb, var(--neon) 8%, transparent), transparent 60%);
 }
-.crm-comms-workbench > header p { margin: 0 0 2px; color: var(--neon); font: 800 8px "Spline Sans Mono", monospace; letter-spacing: .15em; }
-.crm-comms-workbench > header h3 { margin: 0; font-size: 15px; letter-spacing: -.025em; }
-.crm-comms-workbench > header > span { color: var(--dim); font: 700 9px "Spline Sans Mono", monospace; }
+.crm-comms-workbench > summary { cursor: pointer; list-style: none; }
+.crm-comms-workbench > summary::-webkit-details-marker { display: none; }
+.crm-comms-workbench > header p,
+.crm-comms-workbench > summary p { margin: 0 0 2px; color: var(--neon); font: 800 8px "Spline Sans Mono", monospace; letter-spacing: .15em; }
+.crm-comms-workbench > header h3,
+.crm-comms-workbench > summary h3 { margin: 0; font-size: 15px; letter-spacing: -.025em; }
+.crm-comms-workbench > header > span,
+.crm-comms-workbench > summary > span { color: var(--dim); font: 700 9px "Spline Sans Mono", monospace; }
 .crm-comms-workbench > [data-crm-comms] { padding: 10px; }
 .crm-comms-workbench .ops-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .crm-comms-workbench .ops-record { border-color: color-mix(in srgb, var(--line) 86%, transparent); background: color-mix(in srgb, var(--panel) 96%, #020806); }
@@ -6127,7 +6133,8 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   .crm-discovery > p { display: none; }
   .crm-app .crm-layout { grid-template-columns: 1fr; }
   .crm-app .crm-detail { position: static; }
-  .crm-comms-workbench > header { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .crm-comms-workbench > header,
+  .crm-comms-workbench > summary { align-items: flex-start; flex-direction: column; gap: 4px; }
   .crm-comms-workbench .ops-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
@@ -8062,7 +8069,7 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260914-212") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260914-213") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(65, 255, 161, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
