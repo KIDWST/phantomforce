@@ -12,9 +12,9 @@ const CHICAGO_BBOX = "41.64,-87.94,42.03,-87.52";
 const OSM_SOURCE = "OpenStreetMap public business directory";
 const OSM_COPYRIGHT = "https://www.openstreetmap.org/copyright";
 const DEFAULT_ORG = "phantomforce-internal";
-const DEFAULT_LIMIT = 550;
+const DEFAULT_LIMIT = 700;
 
-type ProspectLane = "healthcare" | "sports-fitness" | "education" | "events-hospitality" | "creative-partners";
+type ProspectLane = "healthcare" | "sports-fitness" | "education" | "events-hospitality" | "creative-partners" | "wedding-ecosystem" | "coaches-programs";
 type OsmElement = {
   id: number;
   type: "node" | "way" | "relation";
@@ -65,6 +65,16 @@ const lanePlans: Array<{ lane: ProspectLane; quota: number; query: string }> = [
     quota: 40,
     query: `[out:json][timeout:90];(nwr["name"]["shop"~"^(photo|camera|art|music)$"](${CHICAGO_BBOX});nwr["name"]["office"~"^(advertising_agency|graphic_design|photographer)$"](${CHICAGO_BBOX});nwr["name"]["studio"](${CHICAGO_BBOX}););out center 120;`,
   },
+  {
+    lane: "wedding-ecosystem",
+    quota: 75,
+    query: `[out:json][timeout:90];(nwr["name"]["shop"="wedding"](${CHICAGO_BBOX});nwr["name"]["office"="event_management"](${CHICAGO_BBOX});nwr["name"]["craft"="photographer"](${CHICAGO_BBOX});nwr["name"]["shop"="florist"](${CHICAGO_BBOX}););out center 180;`,
+  },
+  {
+    lane: "coaches-programs",
+    quota: 75,
+    query: `[out:json][timeout:90];(nwr["name"]["club"="sport"](${CHICAGO_BBOX});nwr["name"]["office"~"^(educational_institution|ngo|association)$"](${CHICAGO_BBOX});nwr["name"]["amenity"~"^(community_centre|social_centre)$"](${CHICAGO_BBOX});nwr["name"]["leisure"="fitness_centre"](${CHICAGO_BBOX}););out center 220;`,
+  },
 ];
 
 const laneValue: Record<ProspectLane, number> = {
@@ -73,6 +83,8 @@ const laneValue: Record<ProspectLane, number> = {
   education: 3200,
   "events-hospitality": 4500,
   "creative-partners": 2200,
+  "wedding-ecosystem": 4800,
+  "coaches-programs": 2600,
 };
 
 const lanePitch: Record<ProspectLane, string> = {
@@ -81,6 +93,8 @@ const lanePitch: Record<ProspectLane, string> = {
   education: "Campus stories, enrollment campaigns, athletics coverage, and event highlight films.",
   "events-hospitality": "Event films, venue showcases, wedding coverage, and fast-turn social packages.",
   "creative-partners": "Overflow production, second-camera coverage, editing support, and white-label delivery.",
+  "wedding-ecosystem": "Wedding films, venue and vendor showcases, same-week social edits, and referral-ready highlight packages.",
+  "coaches-programs": "Coach profiles, program stories, testimonials, recruiting content, and recurring social video.",
 };
 
 function argValue(name: string, fallback: string) {
@@ -136,7 +150,7 @@ function address(tags: Record<string, string>) {
 }
 
 function category(tags: Record<string, string>) {
-  for (const key of ["amenity", "healthcare", "leisure", "sport", "tourism", "shop", "office", "studio"]) {
+  for (const key of ["amenity", "healthcare", "leisure", "sport", "club", "tourism", "shop", "office", "craft", "studio"]) {
     if (clean(tags[key])) return `${key}:${clean(tags[key])}`;
   }
   return "public organization";
@@ -322,11 +336,11 @@ async function main() {
         orgId,
         dailyPullTarget: 25,
         sourceMode: "public-research",
-        notes: "ChicagoShots growth pipeline: weddings/events, healthcare, sports/fitness, education, and creative partners. Public business records only; no guessed email addresses.",
+        notes: "ChicagoShots growth pipeline: weddings/vendors, events/hospitality, healthcare, sports/fitness, coaches/programs, education, and creative partners. Public business records only; no guessed email addresses.",
         brain: {
           kind: "phantomforce_org_crm_brain",
           version: 2,
-          businessProfile: "ChicagoShots — Chicago video production for weddings, conferences, healthcare education, sports, podcasts, and brand content.",
+          businessProfile: "ChicagoShots — Chicago video production for weddings, conferences, healthcare education, sports, coaches, community programs, podcasts, and brand content.",
           targetLanes: lanePlans.map((plan) => plan.lane),
           prospectSource: OSM_SOURCE,
           outreachPolicy: "Draft and review only until a live email connector returns provider receipts.",
@@ -336,12 +350,12 @@ async function main() {
       update: {
         dailyPullTarget: 25,
         sourceMode: "public-research",
-        notes: "ChicagoShots growth pipeline: weddings/events, healthcare, sports/fitness, education, and creative partners. Public business records only; no guessed email addresses.",
+        notes: "ChicagoShots growth pipeline: weddings/vendors, events/hospitality, healthcare, sports/fitness, coaches/programs, education, and creative partners. Public business records only; no guessed email addresses.",
         brain: {
           ...currentBrain,
           kind: "phantomforce_org_crm_brain",
           version: 2,
-          businessProfile: "ChicagoShots — Chicago video production for weddings, conferences, healthcare education, sports, podcasts, and brand content.",
+          businessProfile: "ChicagoShots — Chicago video production for weddings, conferences, healthcare education, sports, coaches, community programs, podcasts, and brand content.",
           targetLanes: lanePlans.map((plan) => plan.lane),
           prospectSource: OSM_SOURCE,
           outreachPolicy: "Draft and review only until a live email connector returns provider receipts.",

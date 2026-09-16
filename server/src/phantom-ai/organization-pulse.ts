@@ -53,6 +53,20 @@ export type OrganizationPulse = {
     sourceDocuments: number;
     socialAnalyticsStatus: "not_connected_here";
   }>;
+  crm: Section<{
+    total: number;
+    prospects: number;
+    activeClients: number;
+    publishedBusinessEmails: number;
+    consentReviewRequired: number;
+    followUpsDue: number;
+    dailyTarget: number;
+    sourceMode: string;
+    businessProfile: string;
+    targetLanes: string[];
+    laneCounts: Array<{ lane: string; count: number }>;
+    topProspects: Array<{ id: string; name: string; lane: string; fitScore: number; nextStep: string }>;
+  }>;
   memories: Section<{ total: number; neverRecalled: number; recent: string[] }>;
   assets: Section<{ total: number; recent: Array<{ id: string; title: string; kind: string }>; unusedRecent: number }>;
   sites: Section<{ total: number; names: string[] }>;
@@ -103,6 +117,58 @@ async function readSites(orgId: string) {
   return { total: sites.length, names: sites.slice(0, 6).map((site) => String(site.name ?? site.slug ?? "site")) };
 }
 
+async function readCrmIntelligence(orgId: string) {
+  const { prisma } = await import("../access/prisma-runtime.js");
+  if (!prisma) throw new Error("CRM database is not configured");
+  const [settings, contacts] = await Promise.all([
+    prisma.crmSettings.findUnique({ where: { orgId }, select: { dailyPullTarget: true, sourceMode: true, brain: true } }),
+    prisma.contact.findMany({
+      where: { orgId },
+      orderBy: [{ fitScore: "desc" }, { updatedAt: "desc" }],
+      select: {
+        id: true, name: true, organization: true, email: true, status: true, type: true,
+        tags: true, fitScore: true, nextStep: true, dueAt: true,
+      },
+    }),
+  ]);
+  const now = Date.now();
+  const laneCounts = new Map<string, number>();
+  for (const contact of contacts) {
+    const lane = contact.tags.find((tag) => tag.startsWith("lane:"))?.slice(5) || "general";
+    laneCounts.set(lane, (laneCounts.get(lane) || 0) + 1);
+  }
+  const brain = settings?.brain && typeof settings.brain === "object" && !Array.isArray(settings.brain)
+    ? settings.brain as Record<string, unknown>
+    : {};
+  const targetLanes = Array.isArray(brain.targetLanes)
+    ? brain.targetLanes.filter((lane): lane is string => typeof lane === "string").slice(0, 12)
+    : [];
+  const prospectRows = contacts.filter((contact) => !["client", "active-client", "lost", "archived"].includes(contact.status.toLowerCase()));
+  return {
+    total: contacts.length,
+    prospects: prospectRows.length,
+    activeClients: contacts.filter((contact) => contact.status === "client" || contact.status === "active-client" || contact.type === "client").length,
+    publishedBusinessEmails: contacts.filter((contact) => Boolean(contact.email) && contact.tags.includes("email:published-business")).length,
+    consentReviewRequired: contacts.filter((contact) => contact.tags.includes("consent:unknown")).length,
+    followUpsDue: contacts.filter((contact) => Boolean(contact.dueAt) && Number(contact.dueAt) <= now && !["lost", "archived"].includes(contact.status.toLowerCase())).length,
+    dailyTarget: settings?.dailyPullTarget || 0,
+    sourceMode: settings?.sourceMode || "manual",
+    businessProfile: typeof brain.businessProfile === "string" ? brain.businessProfile.slice(0, 280) : "",
+    targetLanes,
+    laneCounts: [...laneCounts.entries()].sort((left, right) => right[1] - left[1]).map(([lane, count]) => ({ lane, count })),
+    topProspects: prospectRows
+      .filter((contact) => contact.tags.includes("email:published-business"))
+      .slice(0, 5)
+      .map((contact) => ({
+        id: contact.id,
+        name: String(contact.organization || contact.name).slice(0, 120),
+        lane: contact.tags.find((tag) => tag.startsWith("lane:"))?.slice(5) || "general",
+        fitScore: contact.fitScore || 0,
+        nextStep: String(contact.nextStep || "Review fit and outreach permission").slice(0, 180),
+      })),
+  };
+}
+
 function metricValue(report: ManagedGrowthReport, id: string) {
   return Number(report.metrics.find((metric) => metric.id === id)?.value ?? 0);
 }
@@ -143,7 +209,7 @@ async function buildManagedGrowthPulseSection(tenantId: string, actor: string) {
 export async function getOrganizationPulse(session: AccessSession, access: PulseAccess): Promise<OrganizationPulse> {
   const { tenantId, orgId } = access;
 
-  const [approvals, agentRuns, automations, competitors, managedGrowth, memories, assets, sites] = await Promise.all([
+  const [approvals, agentRuns, automations, competitors, managedGrowth, crm, memories, assets, sites] = await Promise.all([
     safe("Approval queue", async () => {
       const queue = await readApprovalQueueRecords({ limit: 200 });
       const mine = queue.records.filter((record) => record.approval?.tenant_context?.tenant_id === tenantId);
@@ -218,6 +284,10 @@ export async function getOrganizationPulse(session: AccessSession, access: Pulse
         socialAnalyticsStatus: section.socialAnalyticsStatus,
       };
     }),
+    safe("Organization CRM", async () => {
+      if (!orgId) return unavailable("The account CRM isn't connected for this workspace yet.");
+      return { available: true as const, ...(await readCrmIntelligence(orgId)) };
+    }),
     safe("Brain memories", async () => {
       const result = await listBrainMemories(session, { limit: 100, readOnly: true });
       // Platform bootstrap notes are seeded guidance, not organization
@@ -243,7 +313,7 @@ export async function getOrganizationPulse(session: AccessSession, access: Pulse
   return {
     tenantId,
     generatedAt: new Date().toISOString(),
-    approvals, agentRuns, automations, competitors, managedGrowth, memories, assets, sites,
+    approvals, agentRuns, automations, competitors, managedGrowth, crm, memories, assets, sites,
     phantomplay: { available: true, builtInGames: PHANTOMPLAY_BUILT_IN_GAMES.length },
   };
 }
@@ -268,6 +338,12 @@ export function buildWorkspaceAwarenessText(pulse: OrganizationPulse): string {
   }
   if (pulse.automations.available && pulse.automations.failing.length) {
     lines.push(`- Automations failing: ${pulse.automations.failing.map((job) => job.name).join(", ")}`);
+  }
+  if (pulse.crm.available) {
+    const lanes = pulse.crm.laneCounts.slice(0, 5).map((item) => `${item.lane} ${item.count}`).join(", ");
+    lines.push(`- Live account CRM: ${pulse.crm.total} contact(s), ${pulse.crm.prospects} prospect(s), ${pulse.crm.publishedBusinessEmails} published business email(s), ${pulse.crm.followUpsDue} due; daily draft target ${pulse.crm.dailyTarget}; lanes: ${lanes || "none"}`);
+    if (pulse.crm.businessProfile) lines.push(`- Business context: ${pulse.crm.businessProfile}`);
+    if (pulse.crm.consentReviewRequired) lines.push(`- Outreach safety: ${pulse.crm.consentReviewRequired} contact(s) still require permission review; prepare drafts only and never claim they were sent`);
   }
   if (pulse.managedGrowth.available) {
     const growth = pulse.managedGrowth;

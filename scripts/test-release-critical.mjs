@@ -26,6 +26,7 @@ const checks = [
   "test:nexus-hardening",
   "test:product-grammar",
   "test:crm-pipeline",
+  "test:crm-growth-automation",
   "test:crm-lifecycle",
   "test:proposal-pipeline",
   "test:proposal-lifecycle",

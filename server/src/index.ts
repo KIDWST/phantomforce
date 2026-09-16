@@ -13274,11 +13274,18 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     normalized.module_data.push({
       module: "workspace_pulse",
       summary: buildWorkspaceAwarenessText(pulse).slice(0, 900),
-      items: opportunityReport.opportunities.slice(0, 3).map((opportunity) => ({
-        title: `Opportunity (${opportunity.impact}): ${opportunity.title}`.slice(0, 120),
-        status: opportunity.action.label.slice(0, 60),
-        detail: opportunity.why.slice(0, 200),
-      })),
+      items: [
+        ...(pulse.crm.available ? pulse.crm.topProspects.slice(0, 3).map((prospect) => ({
+          title: `CRM prospect: ${prospect.name}`.slice(0, 120),
+          status: `${prospect.lane} · fit ${prospect.fitScore}`.slice(0, 60),
+          detail: prospect.nextStep.slice(0, 200),
+        })) : []),
+        ...opportunityReport.opportunities.slice(0, 3).map((opportunity) => ({
+          title: `Opportunity (${opportunity.impact}): ${opportunity.title}`.slice(0, 120),
+          status: opportunity.action.label.slice(0, 60),
+          detail: opportunity.why.slice(0, 200),
+        })),
+      ].slice(0, 5),
     });
   } catch { /* awareness is additive only */ }
 

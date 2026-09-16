@@ -16,6 +16,8 @@ const files = {
   emailConnector: read("server/src/connectors/email-delivery-connector.ts"),
   workGraph: read("server/src/workforce/work-graph.ts"),
   actionContracts: read("packages/contracts/src/actions.ts"),
+  crmAutomation: read("server/src/crm/crm-growth-automation.ts"),
+  organizationPulse: read("server/src/phantom-ai/organization-pulse.ts"),
   packageJson: read("package.json"),
 };
 
@@ -64,6 +66,7 @@ must(files.workspaces, /proposeWorkGraphAction/u, "CRM sends must enter the dura
 must(files.orgClient, /export async function fetchWorkGraphActions/u, "The browser must be able to rebuild the email queue from tenant-scoped server actions.");
 must(files.server, /app\.get\("\/api\/workforce\/actions"[\s\S]*document_version[\s\S]*checksum/u, "The work graph must expose an authenticated durable action listing.");
 must(files.workspaces, /fetchWorkGraphActions\(\{ type: "email\.send", limit: 200 \}\)[\s\S]*serverBacked: true/u, "Relationships must hydrate server-backed email history after refresh.");
+must(files.workspaces, /fetchWorkGraphActions\(\{ type: "email\.draft", limit: 200 \}\)[\s\S]*preparedByPhantomBot: isPreparedDraft/u, "Relationships must hydrate PhantomBot-prepared email drafts into the account queue.");
 must(files.workspaces, /policy:\s*\{ surface: "external", reversible: false, requiresApproval: true \}/u, "Every CRM send must require owner approval.");
 must(files.workspaces, /draft\.channel === "email" && consent === "opt-in"/u, "Only opted-in email drafts may enter the email executor.");
 must(files.workspaces, /threadId: draft\.threadId \|\| undefined/u, "CRM reply sends must preserve provider threads.");
@@ -79,6 +82,11 @@ must(files.emailConnector, /timingSafeEqual/u, "Provider events must use timing-
 must(files.workGraph, /recordWorkGraphEmailProviderEvent/u, "Work graph must durably record provider delivery and reply events.");
 must(files.actionContracts, /EmailSendActionSchema[\s\S]*threadId: z\.string\(\)\.max\(300\)\.optional\(\)[\s\S]*replyToMessageId[\s\S]*crmContactId[\s\S]*clientDraftId/u, "Email send contracts must support threaded, CRM-linked, cross-device replies.");
 must(files.server, /app\.post\("\/api\/email\/provider\/events"/u, "A signed provider event endpoint is required.");
+must(files.crmAutomation, /email:published-business/u, "Outreach prep must require a published business email tag.");
+must(files.crmAutomation, /consent:denied[\s\S]*do-not-contact[\s\S]*unsubscribed[\s\S]*email:guessed/u, "Outreach prep must exclude denied, opted-out, and guessed addresses.");
+must(files.crmAutomation, /type:\s*"email\.draft"[\s\S]*requiresApproval:\s*true/u, "PhantomBot CRM automation must create approval-bound drafts only.");
+assert.doesNotMatch(files.crmAutomation, /type:\s*"email\.send"/u, "Scheduled CRM automation cannot create send actions.");
+must(files.organizationPulse, /readCrmIntelligence[\s\S]*Live account CRM/u, "PhantomBot workspace context must include tenant-scoped CRM intelligence.");
 
 must(files.server, /sourceMode:\s*"research-required"/u, "Unfulfilled discovery must be recorded as research-required.");
 must(files.server, /error:\s*"public_research_not_connected"/u, "Unavailable research must return a stable error code.");

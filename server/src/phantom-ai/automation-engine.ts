@@ -5,7 +5,9 @@
    ledger every time they run. Every job here is read-only/prep-only: none
    of them send, post, pay, publish, or call a paid provider — a job that
    can't verify something real reports that honestly instead of guessing.
-   This is what makes the agent-workforce "active worker" counts respond to
+   CRM prep jobs may create internal, approval-bound drafts; no scheduled job
+   sends, posts, pays, publishes, or calls a paid provider. This is what makes
+   the agent-workforce "active worker" counts respond to
    real recurring activity instead of only live chat turns. */
 
 import { randomUUID } from "node:crypto";
@@ -26,6 +28,7 @@ import { getContentAssetStorageProvider } from "./content-asset-storage.js";
 import { getSalesConnectorStatus } from "../connectors/sales-connector.js";
 import { getGuardStatus, getRecentAuditLogEntries, runGuardSelfTest } from "./prompt-injection-guard.js";
 import { runDueScheduledTasks } from "./scheduled-tasks.js";
+import { runCrmOutreachPrepForActiveOrganizations } from "../crm/crm-growth-automation.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -510,8 +513,8 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
       const sales = getSalesConnectorStatus();
       const [contactCount, settings] = prisma
         ? await Promise.all([
-          prisma.contact.count().catch(() => 0),
-          prisma.crmSettings.findMany({ where: { sourceMode: "daily" }, select: { orgId: true, dailyPullTarget: true } }).catch(() => []),
+          prisma.contact.count({ where: { org: { crmSettings: { sourceMode: { in: ["daily", "public-research"] } } } } }).catch(() => 0),
+          prisma.crmSettings.findMany({ where: { sourceMode: { in: ["daily", "public-research"] } }, select: { orgId: true, dailyPullTarget: true } }).catch(() => []),
         ])
         : [0, [] as Array<{ orgId: string; dailyPullTarget: number }>];
       const dailyTarget = settings.reduce((sum, row) => sum + row.dailyPullTarget, 0);
@@ -531,28 +534,21 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
     name: "Daily Outreach Prep",
     category: "outreach",
     cadence: "daily",
-    description: "Selects a safe daily batch target and prepares outreach copy guidance; it never sends messages.",
+    description: "Builds a safe daily batch of personalized, tenant-scoped email drafts for owner review; it never sends messages.",
     benefit: "Shows every owner how Phantom can turn CRM/contact data into daily revenue motion without manual hunting.",
     output: "10-20 daily outreach targets queued for draft/review when contacts exist.",
     setup_fields: ["contacts", "offer", "business voice", "approval owner"],
     approval_required: true,
     external_action: false,
     run: async () => {
-      const [contactCount, settings] = prisma
-        ? await Promise.all([
-          prisma.contact.count().catch(() => 0),
-          prisma.crmSettings.findMany({ where: { sourceMode: "daily" }, select: { dailyPullTarget: true } }).catch(() => []),
-        ])
-        : [0, [] as Array<{ dailyPullTarget: number }>];
-      const target = settings.reduce((sum, row) => sum + row.dailyPullTarget, 0);
-      const batchSize = Math.min(Math.max(target || 10, 1), Math.max(contactCount, target || 10));
-      const ready = contactCount > 0;
+      const result = await runCrmOutreachPrepForActiveOrganizations();
+      const ready = result.eligible > 0 || result.alreadyPrepared > 0;
       return {
         ok: ready,
         summary: ready
-          ? `Outreach prep ready: choose ${Math.min(batchSize, contactCount)} of ${contactCount} contact(s), draft personalized touches, send nothing.`
-          : `Outreach prep is on, but there are no contacts yet. Saved daily pull target: ${target || 10}; it will prepare drafts once CRM/contact data exists.`,
-        next_action: ready ? "Open Clients or tell Phantom the offer to draft today's outreach packet." : "Add/import contacts and tell Phantom the business offer.",
+          ? `PhantomBot prepared ${result.created} new tenant-scoped draft(s); ${result.alreadyPrepared} introduction(s) were already queued across ${result.organizations} CRM account(s). ${result.sent} sent; provider called: ${result.providerCalled ? "yes" : "no"}.`
+          : `Outreach prep checked ${result.organizations} active CRM account(s), but found no eligible published business emails. No messages were sent.`,
+        next_action: ready ? "Review the email drafts in Approvals, edit as needed, then explicitly approve any external send." : "Add or verify published business emails and keep consent/do-not-contact tags current.",
         risks: ["Any email, social DM, SMS, or CRM write must be owner-approved before execution."],
       };
     },

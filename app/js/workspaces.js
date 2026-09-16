@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-210";
+} from "./store.js?v=phantom-live-20260914-212";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-210";
+} from "./orgs.js?v=phantom-live-20260914-212";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-210";
+} from "./proposalpipeline.js?v=phantom-live-20260914-212";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-210";
+} from "./approvalpipeline.js?v=phantom-live-20260914-212";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-210";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-210";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-210";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-210";
+} from "./financeledger.js?v=phantom-live-20260914-212";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-212";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-212";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-212";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1120,23 +1120,29 @@ function syncServerCommunicationActions(ws, rerender) {
   const now = Date.now();
   if (communicationServerSync.state === "loading" || now - communicationServerSync.lastAt < 15_000) return;
   Object.assign(communicationServerSync, { state: "loading", lastAt: now, error: "" });
-  fetchWorkGraphActions({ type: "email.send", limit: 200 }).then((result) => {
-    if (!result?.ok) throw new Error(result?.error || "work_action_list_failed");
+  Promise.all([
+    fetchWorkGraphActions({ type: "email.draft", limit: 200 }),
+    fetchWorkGraphActions({ type: "email.send", limit: 200 }),
+  ]).then(([draftResult, sendResult]) => {
+    if (!draftResult?.ok || !sendResult?.ok) throw new Error(draftResult?.error || sendResult?.error || "work_action_list_failed");
     let changed = false;
-    for (const action of Array.isArray(result.actions) ? result.actions : []) {
+    const actions = [...(Array.isArray(draftResult.actions) ? draftResult.actions : []), ...(Array.isArray(sendResult.actions) ? sendResult.actions : [])];
+    for (const action of actions) {
       const payload = action?.payload && typeof action.payload === "object" ? action.payload : {};
+      const isPreparedDraft = action.type === "email.draft";
       const serverDraftId = String(payload.clientDraftId || "").trim();
       const fallbackDraftId = String(action.idempotencyKey || "").match(/^crm-email:([^:]+):/)?.[1] || "";
-      const localId = serverDraftId || fallbackDraftId || `server-email-${action.id}`;
+      const localId = serverDraftId || fallbackDraftId || `${isPreparedDraft ? "server-draft" : "server-email"}-${action.id}`;
       const correlationLeadId = String(action.correlationId || "").match(/^crm-contact:(.+)$/)?.[1] || "";
-      const leadId = String(payload.crmContactId || correlationLeadId || "").trim();
+      const threadLeadId = String(payload.threadId || "").match(/^crm-contact:(.+)$/)?.[1] || "";
+      const leadId = String(payload.crmContactId || correlationLeadId || threadLeadId || "").trim();
       const providerReceipt = action.receipt?.providerReceipt || null;
       const next = {
         id: localId,
         ws,
         leadId,
         channel: "email",
-        status: providerReceipt?.deliveryStatus || action.status || "awaiting_approval",
+        status: isPreparedDraft && action.status === "verified_complete" ? "draft" : providerReceipt?.deliveryStatus || action.status || "awaiting_approval",
         subject: String(payload.subject || ""),
         body: String(payload.body || ""),
         to: Array.isArray(payload.to) ? payload.to.map(String).slice(0, 50) : [],
@@ -1146,6 +1152,7 @@ function syncServerCommunicationActions(ws, rerender) {
         providerReceipt,
         executionReceipt: action.receipt || null,
         serverBacked: true,
+        preparedByPhantomBot: isPreparedDraft,
         createdAt: action.createdAt,
         updatedAt: action.updatedAt,
       };
@@ -1212,6 +1219,7 @@ function renderComms(el, rerender) {
             ${draft.status === "draft" ? `<button class="btn" data-act="edit-comm" data-id="${esc(draft.id)}">Edit draft</button>` : ""}
             ${canQueue ? `<button class="btn btn-good" data-act="queue-comm" data-id="${esc(draft.id)}">Queue approval</button>` : ""}
             ${latestReply && target && draft.channel === "email" ? `<button class="btn" data-act="draft-reply" data-id="${esc(draft.id)}">Prepare reply</button>` : ""}
+            ${draft.preparedByPhantomBot && draft.status === "awaiting_approval" ? `<span class="hint-inline">PhantomBot prepared this introduction. Review it in Approvals; nothing has been sent.</span>` : ""}
             ${draft.status === "draft" && !canQueue ? `<span class="hint-inline">${queueHint}</span>` : ""}
             ${draft.serverBacked ? `<span class="hint-inline">Server record · immutable history</span>` : `<button class="btn btn-quiet" data-act="remove-comm" data-id="${esc(draft.id)}">Remove draft</button>`}
           </div>
@@ -3017,7 +3025,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-210")
+      import("./brain.js?v=phantom-live-20260914-212")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
