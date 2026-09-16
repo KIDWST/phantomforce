@@ -17,6 +17,8 @@ assert.match(css, /\.workspace-page[\s\S]*?#0e141b\s*!important/u, "Workspace pa
 assert.match(css, /\.crm-app \.crm-metrics article[\s\S]*?background:\s*#17202a\s*!important/u, "CRM metrics must use raised slate cards.");
 assert.match(css, /\.crm-app \.crm-card\.is-selected[\s\S]*?inset 2px 0 var\(--pf-green\)/u, "CRM selection must reserve green for the active-state signal.");
 assert.match(css, /\.btn-primary[\s\S]*?background:\s*var\(--pf-green\)\s*!important/u, "Primary actions must retain the bright green accent.");
+assert.match(css, /\.gate-card[\s\S]*?background:\s*linear-gradient\(180deg, #161e28, #0f151d\)\s*!important/u, "The pre-authentication gate must use graphite materials too.");
+assert.match(css, /\.gate-opt[\s\S]*?background:\s*#131b24\s*!important/u, "The sign-in action must use a slate surface instead of green fill.");
 assert.match(index, /meta name="theme-color" content="#090d12"/u, "Browser chrome must match the graphite canvas.");
 assert.match(index, /radial-gradient\(circle at 50% 46%, rgba\(27, 38, 49/u, "The boot surface must use neutral slate materials.");
 

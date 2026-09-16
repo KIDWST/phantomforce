@@ -1970,3 +1970,40 @@ html[data-command-os="2040"] {
   --pf-native-option-selected-fg: #ffffff;
   --pf-native-option-disabled-fg: #87929d;
 }
+
+/* Access gate uses the same graphite materials before Command OS mounts. */
+html:not([data-org-color-mode="light"]) .gate {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(93, 112, 132, .12), transparent 34%),
+    radial-gradient(circle at 50% 88%, rgba(53, 245, 157, .025), transparent 28%),
+    #090d12 !important;
+}
+
+html:not([data-org-color-mode="light"]) .gate-card {
+  border-color: rgba(166, 180, 194, .16) !important;
+  background: linear-gradient(180deg, #161e28, #0f151d) !important;
+  box-shadow: 0 36px 110px rgba(0, 0, 0, .5), inset 0 1px rgba(255, 255, 255, .035) !important;
+}
+
+html:not([data-org-color-mode="light"]) .owner-login input {
+  border-color: rgba(166, 180, 194, .18) !important;
+  background: #0c1219 !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025) !important;
+}
+
+html:not([data-org-color-mode="light"]) .owner-login input:focus {
+  border-color: rgba(53, 245, 157, .72) !important;
+  box-shadow: 0 0 0 3px rgba(53, 245, 157, .09) !important;
+}
+
+html:not([data-org-color-mode="light"]) .gate-opt {
+  border-color: rgba(166, 180, 194, .14) !important;
+  background: #131b24 !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025) !important;
+}
+
+html:not([data-org-color-mode="light"]) .gate-opt:hover {
+  border-color: rgba(53, 245, 157, .42) !important;
+  background: #1a242e !important;
+  box-shadow: inset 3px 0 var(--pf-green), 0 16px 38px rgba(0, 0, 0, .24) !important;
+}

@@ -2,8 +2,8 @@
    The browser never asks for developer credentials. Connect is enabled only
    when the server can create a real, signed authorization handoff. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-216";
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-216";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-217";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-217";
 
 let connectionState = { loaded: false, loading: false, error: "", connectors: [], emailExecution: null, notice: "", busyId: "" };
 let connectionMount = null;

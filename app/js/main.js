@@ -7,54 +7,54 @@ import {
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
   workspaceStorageGetItem,
-} from "./store.js?v=phantom-live-20260914-216";
+} from "./store.js?v=phantom-live-20260914-217";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems, cachedOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20260914-216";
-import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260914-216";
-import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260914-216";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-216";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260914-216";
-import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260914-216";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260914-216";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260914-216";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260914-216";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260914-216";
-import { mountPhantomAI, queuePhantomAiPrompt } from "./phantomai.js?v=phantom-live-20260914-216";
-import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260914-216";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260914-216";
-import { renderPlanner } from "./planner.js?v=phantom-live-20260914-216";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260914-216";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260914-216";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260914-216";
-import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260914-216";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260914-216";
-import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260914-216";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260914-216";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260914-216";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260914-216";
-import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260914-216";
-import { renderChicagoShotsStudio } from "./chicagoshots-studio.js?v=phantom-live-20260914-216";
+} from "./organizationpulse.js?v=phantom-live-20260914-217";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20260914-217";
+import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20260914-217";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-217";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260914-217";
+import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20260914-217";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260914-217";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260914-217";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260914-217";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260914-217";
+import { mountPhantomAI, queuePhantomAiPrompt } from "./phantomai.js?v=phantom-live-20260914-217";
+import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20260914-217";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260914-217";
+import { renderPlanner } from "./planner.js?v=phantom-live-20260914-217";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260914-217";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260914-217";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260914-217";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20260914-217";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260914-217";
+import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260914-217";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260914-217";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260914-217";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260914-217";
+import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20260914-217";
+import { renderChicagoShotsStudio } from "./chicagoshots-studio.js?v=phantom-live-20260914-217";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
   databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260914-216";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260914-216";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260914-216";
+} from "./orgs.js?v=phantom-live-20260914-217";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20260914-217";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260914-217";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260914-216";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260914-217";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260914-216";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260914-217";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260914-216";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260914-216";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260914-216";
-import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260914-216";
+} from "./customization.js?v=phantom-live-20260914-217";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260914-217";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20260914-217";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20260914-217";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -63,18 +63,18 @@ const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 const WORKSPACE_STYLE_BUNDLES = Object.freeze({
   phantomplay: [
-    "/app/phantomplay.css?v=phantom-live-20260914-216",
-    "/app/phantomplay-v2.css?v=phantom-live-20260914-216",
+    "/app/phantomplay.css?v=phantom-live-20260914-217",
+    "/app/phantomplay-v2.css?v=phantom-live-20260914-217",
   ],
-  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260914-216"],
-  phantomai: ["/app/creator-studio.css?v=phantom-live-20260914-216"],
+  phantomstore: ["/app/phantomstore.css?v=phantom-live-20260914-217"],
+  phantomai: ["/app/creator-studio.css?v=phantom-live-20260914-217"],
   phantomhunter: [
-    "/app/phantomhunter.css?v=phantom-live-20260914-216",
-    "/app/phantomhunter-connect.css?v=phantom-live-20260914-216",
+    "/app/phantomhunter.css?v=phantom-live-20260914-217",
+    "/app/phantomhunter-connect.css?v=phantom-live-20260914-217",
   ],
-  media: ["/app/creator-studio.css?v=phantom-live-20260914-216"],
-  content: ["/app/creator-studio.css?v=phantom-live-20260914-216"],
-  chicagoshots: ["/app/chicagoshots-studio.css?v=phantom-live-20260914-216"],
+  media: ["/app/creator-studio.css?v=phantom-live-20260914-217"],
+  content: ["/app/creator-studio.css?v=phantom-live-20260914-217"],
+  chicagoshots: ["/app/chicagoshots-studio.css?v=phantom-live-20260914-217"],
 });
 
 const workspaceStylePromises = new Map();
@@ -161,7 +161,7 @@ function showWorkspaceTransition(transition, phase = "loading") {
   transition.node.setAttribute("role", phase === "error" ? "alert" : "status");
   transition.node.setAttribute("aria-live", phase === "error" ? "assertive" : "polite");
   transition.node.innerHTML = `<div class="workspace-transition-card">
-    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20260914-216" alt=""><i></i><i></i></div>
+    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20260914-217" alt=""><i></i><i></i></div>
     <p>${phase === "error" ? "PHANTOM RECOVERY" : "PHANTOM ROUTING"}</p>
     <h2>${phase === "error" ? "This workspace needs another moment." : `Preparing ${esc(transition.title)}`}</h2>
     <span>${phase === "error" ? "Nothing unfinished was shown. Try the transition again." : "Assembling your workspace."}</span>
@@ -1881,7 +1881,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260914-216";
+const POSE_VERSION = "phantom-live-20260914-217";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
