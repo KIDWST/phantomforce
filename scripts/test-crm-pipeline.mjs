@@ -87,6 +87,7 @@ must(files.crmAutomation, /email:published-business/u, "Outreach prep must requi
 must(files.crmAutomation, /consent:denied[\s\S]*do-not-contact[\s\S]*unsubscribed[\s\S]*email:guessed/u, "Outreach prep must exclude denied, opted-out, and guessed addresses.");
 must(files.crmAutomation, /type:\s*"email\.draft"[\s\S]*requiresApproval:\s*true/u, "PhantomBot CRM automation must create approval-bound drafts only.");
 must(files.crmAutomation, /autopilotBlockers[\s\S]*senderPostalAddress[\s\S]*sendReady[\s\S]*trackingReady[\s\S]*replySyncReady/u, "Autopilot must stop before sending when identity, postal address, inbox, or signed provider events are missing.");
+must(files.crmAutomation, /isValidBusinessPostalAddress[\s\S]*address\.length >= 12[\s\S]*\\d/u, "A city-only postal entry must not unlock commercial sending.");
 must(files.crmAutomation, /This is a business introduction[\s\S]*reply “unsubscribe”/u, "Automatic commercial outreach must include disclosure and a plain opt-out path.");
 must(files.crmAutomation, /type:\s*"email\.send"[\s\S]*system:crm-standing-approval[\s\S]*providerReceipt/u, "Exception-only autopilot must use a recorded standing policy and count only verified provider receipts.");
 must(files.crmAutomation, /outreach:replied[\s\S]*automatic sequence[\s\S]*outreach:bounced[\s\S]*do-not-contact/u, "Reply and bounce outcomes must stop the automatic sequence.");

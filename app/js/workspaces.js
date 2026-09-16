@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-213";
+} from "./store.js?v=phantom-live-20260914-214";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-213";
+} from "./orgs.js?v=phantom-live-20260914-214";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-213";
+} from "./proposalpipeline.js?v=phantom-live-20260914-214";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-213";
+} from "./approvalpipeline.js?v=phantom-live-20260914-214";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-213";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-213";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-213";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-213";
+} from "./financeledger.js?v=phantom-live-20260914-214";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-214";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-214";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-214";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -265,13 +265,14 @@ function relationshipSettingsHtml(settings, prefs, canEdit) {
         <label class="crm-form-wide"><span>Default next step</span><input name="defaultNextStep" maxlength="600" value="${esc(prefs.defaultNextStep)}" /></label>
         <label class="crm-form-wide"><span>Default tags</span><input name="defaultTags" maxlength="500" value="${esc(prefs.defaultTags.join(", "))}" placeholder="priority, referral, local" /></label>
         <label><span>Autopilot mode</span><select name="autopilotEnabled"><option value="true" ${autopilot.enabled === true ? "selected" : ""}>Exception-only autopilot</option><option value="false" ${autopilot.enabled === true ? "" : "selected"}>Off</option></select></label>
+        <label><span>Sending inbox</span><select name="autopilotEmailProvider"><option value="gmail" ${autopilot.preferredEmailProvider === "outlook" ? "" : "selected"}>Gmail</option><option value="outlook" ${autopilot.preferredEmailProvider === "outlook" ? "selected" : ""}>Outlook</option></select></label>
         <label><span>Daily automatic send limit</span><input name="autopilotDailyLimit" type="number" min="1" max="25" value="${Math.max(1, Math.min(25, Number(autopilot.dailySendLimit || 10)))}" /></label>
         <label><span>Automatic follow-up delay</span><input name="autopilotFollowUpDays" type="number" min="2" max="30" value="${Math.max(2, Math.min(30, Number(autopilot.followUpAfterDays || 5)))}" /></label>
         <label><span>Outreach eligibility</span><select name="autopilotPermissionMode"><option value="public-business" ${autopilot.permissionMode === "public-business" ? "selected" : ""}>Published business emails</option><option value="opt-in-only" ${autopilot.permissionMode === "public-business" ? "" : "selected"}>Confirmed opt-in only</option></select></label>
         <label><span>Sender name</span><input name="autopilotSenderName" maxlength="120" value="${esc(autopilot.senderName || "")}" placeholder="Your name" /></label>
         <label><span>Sender business</span><input name="autopilotSenderBusiness" maxlength="120" value="${esc(autopilot.senderBusiness || "")}" placeholder="Business name" /></label>
         <label><span>Business website</span><input name="autopilotSenderWebsite" maxlength="300" value="${esc(autopilot.senderWebsite || "")}" placeholder="https://example.com" /></label>
-        <label class="crm-form-wide"><span>Valid physical postal address</span><input name="autopilotPostalAddress" maxlength="300" value="${esc(autopilot.senderPostalAddress || "")}" placeholder="Required before commercial email can be sent automatically" /></label>
+        <label class="crm-form-wide"><span>Valid physical postal address</span><input name="autopilotPostalAddress" maxlength="300" value="${esc(autopilot.senderPostalAddress || "")}" placeholder="Street, registered PO Box/private mailbox, city, region, postal code" /></label>
         <p class="crm-form-wide ws-note">Autopilot runs under your standing account policy, adds business identification and opt-out instructions, stops on opt-outs or bounces, and surfaces replies as exceptions. Gmail/Outlook and signed delivery webhooks must be connected once.</p>
       </div>
       <footer><span>${canEdit ? "One configuration per organization." : "Only an organization manager can change CRM settings."}</span><button class="btn btn-primary" type="submit" ${!canEdit || relationshipsUi.busy ? "disabled" : ""}>${relationshipsUi.busy ? "Saving..." : "Save CRM settings"}</button></footer>
@@ -1580,6 +1581,7 @@ function renderRelationships(el, rerender) {
           ...((settings.brain?.autopilot && typeof settings.brain.autopilot === "object") ? settings.brain.autopilot : {}),
           enabled: String(data.get("autopilotEnabled")) === "true",
           mode: "exceptions-only",
+          preferredEmailProvider: String(data.get("autopilotEmailProvider")) === "outlook" ? "outlook" : "gmail",
           standingApproval: String(data.get("autopilotEnabled")) === "true",
           automaticInitialOutreach: String(data.get("autopilotEnabled")) === "true",
           automaticFollowUps: String(data.get("autopilotEnabled")) === "true",
@@ -3073,7 +3075,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-213")
+      import("./brain.js?v=phantom-live-20260914-214")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

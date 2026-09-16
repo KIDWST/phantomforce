@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
   buildOutreachDraft,
   crmAutopilotPolicy,
+  isValidBusinessPostalAddress,
   prepareCrmOutreachDrafts,
   runCrmAutopilotForOrganization,
   selectAutomaticOutreachProspects,
@@ -44,6 +45,8 @@ const candidates = [
 ];
 const selected = selectDailyOutreachProspects(candidates, 25);
 assert.deepEqual(selected.map((item) => item.id), ["contact-ready"], "Only eligible, published business emails may enter draft prep.");
+assert.equal(isValidBusinessPostalAddress("Elgin, IL"), false, "A city and state alone cannot unlock commercial sending.");
+assert.equal(isValidBusinessPostalAddress("123 Test Street, Chicago, IL 60601"), true, "A complete deliverable address should pass the format gate.");
 
 const draft = buildOutreachDraft(selected[0], settings);
 assert.match(draft.body, /game coverage, athlete profiles, recruiting reels/u, "Lane-specific value must personalize the draft.");
@@ -105,6 +108,7 @@ try {
     },
   };
   const policy = crmAutopilotPolicy(autopilotSettings);
+  assert.equal(policy.preferredEmailProvider, "gmail");
   assert.equal(selectAutomaticOutreachProspects(candidates, policy, 2).length, 1, "Published business outreach may run only under the explicit standing policy.");
   const autopilot = await runCrmAutopilotForOrganization({ settings: autopilotSettings, contacts: candidates, workGraphRoot: root });
   assert.equal(autopilot.state, "running");

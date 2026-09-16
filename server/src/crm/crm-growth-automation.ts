@@ -41,6 +41,7 @@ const INACTIVE_STATUSES = new Set(["lost", "client", "active-client", "archived"
 export type CrmAutopilotPolicy = {
   enabled: boolean;
   mode: "exceptions-only";
+  preferredEmailProvider: "gmail" | "outlook";
   standingApproval: boolean;
   automaticInitialOutreach: boolean;
   automaticFollowUps: boolean;
@@ -58,6 +59,7 @@ export type CrmAutopilotPolicy = {
 const DEFAULT_AUTOPILOT_POLICY: CrmAutopilotPolicy = {
   enabled: false,
   mode: "exceptions-only",
+  preferredEmailProvider: "gmail",
   standingApproval: false,
   automaticInitialOutreach: false,
   automaticFollowUps: false,
@@ -85,6 +87,7 @@ export function crmAutopilotPolicy(settings: Pick<GrowthSettings, "brain">): Crm
   return {
     enabled: raw.enabled === true,
     mode: "exceptions-only",
+    preferredEmailProvider: raw.preferredEmailProvider === "outlook" ? "outlook" : "gmail",
     standingApproval: raw.standingApproval === true,
     automaticInitialOutreach: raw.automaticInitialOutreach === true,
     automaticFollowUps: raw.automaticFollowUps === true,
@@ -98,6 +101,11 @@ export function crmAutopilotPolicy(settings: Pick<GrowthSettings, "brain">): Crm
     senderWebsite: clean(raw.senderWebsite),
     senderPostalAddress: clean(raw.senderPostalAddress),
   };
+}
+
+export function isValidBusinessPostalAddress(value: unknown) {
+  const address = clean(value);
+  return address.length >= 12 && /\d/u.test(address) && /[A-Za-z]/u.test(address);
 }
 
 function contactPermissionReady(contact: GrowthContact, policy: CrmAutopilotPolicy) {
@@ -211,8 +219,8 @@ function autopilotBlockers(policy: CrmAutopilotPolicy) {
   if (!policy.enabled) blockers.push("Autopilot is disabled for this account.");
   if (!policy.standingApproval) blockers.push("Standing owner approval is not recorded.");
   if (!policy.senderName || !policy.senderBusiness || !policy.senderWebsite) blockers.push("Sender identity is incomplete.");
-  if (!policy.senderPostalAddress) blockers.push("A valid physical postal address is required before commercial email can run.");
-  if (!connector.sendReady) blockers.push("A verified Gmail or Outlook sending executor is not connected.");
+  if (!isValidBusinessPostalAddress(policy.senderPostalAddress)) blockers.push("A full deliverable physical postal address is required before commercial email can run; city and state alone are not sufficient.");
+  if (!connector.sendReady) blockers.push(`A verified ${policy.preferredEmailProvider === "gmail" ? "Gmail" : "Outlook"} sending executor is not connected.`);
   if (!connector.trackingReady || !connector.replySyncReady) blockers.push("Signed delivery and reply webhooks are not connected.");
   return { connector, blockers };
 }
@@ -234,6 +242,7 @@ export async function getCrmAutopilotStatus(args: {
     mode: policy.mode,
     policy: {
       enabled: policy.enabled,
+      preferredEmailProvider: policy.preferredEmailProvider,
       standingApproval: policy.standingApproval,
       automaticInitialOutreach: policy.automaticInitialOutreach,
       automaticFollowUps: policy.automaticFollowUps,
