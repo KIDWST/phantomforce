@@ -23,6 +23,10 @@ assert.match(main, /Approve all safe/u, "The owner must be able to approve all s
 assert.match(main, /Approve &amp; run/u, "Individual approval must be a clear execution action.");
 assert.match(main, /BLOCKED — EXACT REASON/u, "Blocked work must explain the exact reason.");
 assert.match(main, /Nothing was marked complete/u, "Client failures must never become optimistic completion.");
+for (const recoveryCopy of ["Reconnect automation", "Secure connection required", "Nothing was sent or marked complete"]) {
+  assert.ok(main.includes(recoveryCopy), `Authentication recovery must include: ${recoveryCopy}`);
+}
+assert.doesNotMatch(main.match(/if \(heartbeat\.unavailable\) \{[\s\S]*?return;/u)?.[0] || "", /\$\{esc\(heartbeat\.error/u, "The owner dashboard must not expose raw authorization or transport errors.");
 assert.match(main, /receipt \$\{esc\(action\.receipt\?\.id/u, "Verified work must surface a durable receipt identifier.");
 
 for (const route of [
@@ -49,6 +53,7 @@ assert.match(graph, /kind: "approval"[\s\S]*kind: "blocked"[\s\S]*kind: "task"[\
 
 assert.match(css, /\.workforce-heartbeat \{[\s\S]*rgba\(93, 255, 179/u, "The heartbeat must use the Phantom green and black visual system.");
 assert.match(css, /\.workforce-next-move/u, "The single next move must have a dedicated visual hierarchy.");
+assert.match(css, /\.workforce-heartbeat\.is-unavailable[\s\S]*\.workforce-heartbeat-recovery/u, "Unavailable automation must use a compact recovery surface.");
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.workforce-heartbeat-body \{ grid-template-columns: 1fr; \}/u, "The heartbeat must intentionally collapse on smaller screens.");
 assert.doesNotMatch(css.match(/\.workforce-heartbeat \{[\s\S]*?@media \(max-width: 560px\)/u)?.[0] || "", /#[a-f0-9]{0,2}(?:7c3aed|8b5cf6|6366f1)|purple|violet/iu, "The heartbeat cannot introduce purple or blue brand drift.");
 
