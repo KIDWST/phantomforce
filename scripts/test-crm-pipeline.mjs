@@ -83,6 +83,7 @@ must(files.connectionCenter, /TimeoutError[\s\S]*AbortError[\s\S]*AbortSignal\.t
 assert.doesNotMatch(files.connectionCenter, /connectionState\.emailExecution\?\.reason \|\| connectionState\.error/u, "CRM status must not expose deployment configuration details as customer copy.");
 must(files.workspaces, /setupBlockerCount = autopilotRunning \? 0 : Math\.max\(autopilotBlockers\.length, emailConnected \? 0 : 1\)/u, "Disconnected inbox automation must never claim zero setup blockers.");
 must(files.workspaces, /emailChecking = crmEmailUi\.state === "checking" && crmEmailUi\.loading/u, "Checking copy must only appear while an inbox request is actively running.");
+must(files.workspaces, /4_500[\s\S]*Promise\.race\(\[getEmailConnectionSnapshot\(\), statusFallback\]\)[\s\S]*window\.clearTimeout/u, "Relationships must independently recover when an inbox status request never settles.");
 must(files.emailConnector, /x-idempotency-key/u, "Provider submission must include a stable idempotency key.");
 must(files.emailConnector, /timingSafeEqual/u, "Provider events must use timing-safe signature verification.");
 must(files.workGraph, /recordWorkGraphEmailProviderEvent/u, "Work graph must durably record provider delivery and reply events.");
