@@ -11,6 +11,7 @@ const phantomai = read("../app/js/phantomai.js");
 const main = read("../app/js/main.js");
 const automationEngine = read("../server/src/phantom-ai/automation-engine.ts");
 const css = read("../app/phantom.css");
+const automationNextCss = read("../app/automation-next.css");
 const packageJson = read("../package.json");
 
 const tabsBlock = brandops.match(/const TABS = \[([\s\S]*?)\];/u)?.[1] || "";
@@ -44,6 +45,10 @@ assert.match(
   "Automation must hide raw auth transport errors for scheduled jobs and agent runs.",
 );
 assert.match(css, /Automation control plane — workflows, decisions, exceptions/u, "Automation CSS should describe the unified control plane.");
+assert.match(automationNextCss, /data-phantombot-view="automations"[\s\S]*phantombot-mission-hud[\s\S]*display:none!important/u, "Automation must remove unrelated chat mission chrome.");
+assert.match(automationNextCss, /data-phantombot-view="automations"[\s\S]*phantombot-taskrail[\s\S]*display:none!important/u, "Automation must use the full stage instead of preserving the chat task rail.");
+assert.match(phantomai, /let activePhantomAiTab = "chat";[\s\S]*activePhantomAiTab = tab;/u, "PhantomBot must retain the active workspace through shell remounts.");
+assert.match(phantomai, /requestedWorkspace[\s\S]*"automation"[\s\S]*\? "automations"[\s\S]*: activePhantomAiTab/u, "Direct Automation routes must remount into Automations instead of Chat.");
 assert.match(brandops, /renderOperatorMiniSettings[\s\S]*renderApprovals[\s\S]*renderRiskWatch/u, "Automations must combine AI routing, decisions, and exceptions.");
 assert.match(brandops, /Daily command center[\s\S]*Attention queue[\s\S]*Provider receipt/u, "Automations must summarize real attention signals and distinguish provider receipts.");
 assert.match(packageJson, /test:automation-workspace/u, "Root package must expose the Automation workspace regression test.");

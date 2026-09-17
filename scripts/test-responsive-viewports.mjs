@@ -842,6 +842,7 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
     audit.automationControl = await evaluate(cdp, `(() => {
       const root = document.querySelector("[data-phantombot-automations-mount]");
       const control = root?.querySelector(".au-control-plane");
+      const todayPanel = root?.querySelector(".au-today");
       const tabs = [...(root?.querySelectorAll("[data-au-tab]") || [])];
       const visible = (element) => !!element && element.getBoundingClientRect().width > 1 && element.getBoundingClientRect().height > 1;
       return {
@@ -850,6 +851,10 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
         decisions: tabs.some((tab) => tab.dataset.auTab === "approvals"),
         exceptions: tabs.some((tab) => tab.dataset.auTab === "risk"),
         activity: tabs.some((tab) => tab.dataset.auTab === "logs"),
+        missionHudVisible: visible(document.querySelector(".phantombot-mission-hud")),
+        constellationVisible: visible(document.querySelector(".phantombot-constellation")),
+        taskRailVisible: visible(document.querySelector(".phantombot-taskrail")),
+        todayInFirstViewport: visible(todayPanel) && todayPanel.getBoundingClientRect().top < window.innerHeight,
         pageWorkerVisible: visible(document.querySelector(".page-worker")),
       };
     })()`);
@@ -1183,6 +1188,10 @@ function assertCase(result) {
       assert.equal(audit.automationControl?.decisions, true, `${label} ${viewport.width}: Automation Decisions must be present.`);
       assert.equal(audit.automationControl?.exceptions, true, `${label} ${viewport.width}: Automation Exceptions must be present.`);
       assert.equal(audit.automationControl?.activity, true, `${label} ${viewport.width}: Automation Activity must be present.`);
+      assert.equal(audit.automationControl?.missionHudVisible, false, `${label} ${viewport.width}: chat mission HUD must not bury Automations.`);
+      assert.equal(audit.automationControl?.constellationVisible, false, `${label} ${viewport.width}: chat mission constellation must not bury Automations.`);
+      assert.equal(audit.automationControl?.taskRailVisible, false, `${label} ${viewport.width}: chat task rail must not shrink Automations.`);
+      assert.equal(audit.automationControl?.todayInFirstViewport, true, `${label} ${viewport.width}: Automation Today must begin in the first viewport.`);
       assert.equal(audit.automationControl?.pageWorkerVisible, false, `${label} ${viewport.width}: retired Page intelligence must stay removed.`);
     } else {
     assert.equal(audit.phantomBot.composerVisible, true, `${label} ${viewport.width}: message composer must be visible on initial load. ${JSON.stringify({ rect: audit.phantomBot.composerRect, ancestors: audit.phantomBot.composerAncestors })}`);

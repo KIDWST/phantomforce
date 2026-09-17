@@ -225,59 +225,8 @@ html[data-command-os="2040"] .workspace-page [role="tab"][aria-selected="true"] 
   box-shadow: inset 0 -1px rgba(24, 242, 143, .48) !important;
 }
 
-/* Page intelligence: black glass and Phantom green only. */
-html[data-command-os="2040"] .page-worker {
-  width: min(100%, 1780px);
-  margin: 0 auto 20px;
-  padding: clamp(16px, 1.35vw, 24px);
-  border: 1px solid rgba(166, 180, 194, .16) !important;
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, .035), transparent 46%),
-    #121a22 !important;
-  box-shadow: inset 0 1px rgba(255, 255, 255, .035), 0 22px 70px rgba(0, 0, 0, .32) !important;
-}
-
-html[data-command-os="2040"] .page-worker::before {
-  background:
-    linear-gradient(90deg, transparent, rgba(24, 242, 143, .25), transparent),
-    repeating-linear-gradient(90deg, rgba(24, 242, 143, .07) 0 1px, transparent 1px 52px) !important;
-}
-
-html[data-command-os="2040"] .page-worker::after {
-  background: linear-gradient(90deg, transparent, rgba(24, 242, 143, .82), transparent) !important;
-}
-
-html[data-command-os="2040"] .page-worker-copy p { color: var(--pf-green) !important; }
-html[data-command-os="2040"] .page-worker-copy h3 {
-  color: var(--pf-ink) !important;
-  text-shadow: 0 0 24px rgba(24, 242, 143, .12) !important;
-}
-html[data-command-os="2040"] .page-worker-copy span { color: var(--pf-muted) !important; }
-
-html[data-command-os="2040"] .page-worker-form textarea {
-  border-color: rgba(24, 242, 143, .2) !important;
-  background:
-    radial-gradient(circle at 8% -20%, rgba(24, 242, 143, .095), transparent 40%),
-    rgba(2, 9, 6, .92) !important;
-  color: var(--pf-ink) !important;
-}
-
-html[data-command-os="2040"] .page-worker-form textarea:focus {
-  border-color: rgba(24, 242, 143, .7) !important;
-  box-shadow: 0 0 0 3px rgba(24, 242, 143, .075), 0 0 30px rgba(24, 242, 143, .1) !important;
-}
-
-html[data-command-os="2040"] .page-worker-form button {
-  background: linear-gradient(135deg, var(--pf-green), var(--pf-green-2)) !important;
-  color: #011108 !important;
-  box-shadow: 0 10px 30px rgba(24, 242, 143, .18) !important;
-}
-
-html[data-command-os="2040"] .page-worker-output {
-  border-color: var(--pf-line-strong) !important;
-  background: rgba(3, 13, 8, .96) !important;
-}
+/* Retired page-level prompt chrome stays absent; Automations owns AI control. */
+.page-worker { display:none!important }
 
 /* Planner */
 .workspace-page[data-workspace-page="planner"] .workspace-page-body {
