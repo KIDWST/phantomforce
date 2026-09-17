@@ -7,13 +7,13 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260914-221";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260914-222";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260914-221";
-import { renderApprovals, renderRiskWatch, getAutomationRiskSummary } from "./workspaces.js?v=phantom-live-20260914-221";
-import { renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260914-221";
+} from "./content-ideas.js?v=phantom-live-20260914-222";
+import { renderApprovals, renderRiskWatch, getAutomationRiskSummary } from "./workspaces.js?v=phantom-live-20260914-222";
+import { renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260914-222";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -799,12 +799,15 @@ export function renderAutomation(el, opts = {}) {
         <span><b>${pendingApprovals.length}</b><i>Decisions</i></span>
         <span><b>${risk.open}</b><i>Exceptions</i></span>
       </div>
-      <nav class="ml-tabs au-tabs" role="tablist">
-        ${TABS.map(([id, label]) => {
-          const total = id === "approvals" ? pendingApprovals.length : id === "risk" ? risk.open : null;
-          return `<button class="ml-tab ${auTab === id ? "is-active" : ""}" type="button" role="tab" data-au-tab="${id}">${label}${total == null ? "" : `<b>${total}</b>`}</button>`;
-        }).join("")}
-      </nav>
+      <div class="au-tabs-shell">
+        <nav class="ml-tabs au-tabs" role="tablist">
+          ${TABS.map(([id, label]) => {
+            const total = id === "approvals" ? pendingApprovals.length : id === "risk" ? risk.open : null;
+            return `<button class="ml-tab ${auTab === id ? "is-active" : ""}" type="button" role="tab" data-au-tab="${id}">${label}${total == null ? "" : `<b>${total}</b>`}</button>`;
+          }).join("")}
+        </nav>
+        <button class="au-tabs-more" type="button" data-au-tabs-more hidden aria-label="Show more Automation sections">More <span>→</span></button>
+      </div>
       <section class="bm-card au-card">${panel}</section>
     </div>`;
 
@@ -814,6 +817,23 @@ export function renderAutomation(el, opts = {}) {
 
   if (auTab === "autopilot") loadAutopilotDiagnostics(el, paint);
   if (auTab === "autopilot") wireAutopilotDiagnostics(el, notify, paint);
+
+  const tabRail = el.querySelector(".au-tabs");
+  const tabShell = el.querySelector(".au-tabs-shell");
+  const tabMore = el.querySelector("[data-au-tabs-more]");
+  const syncTabOverflow = () => {
+    if (!tabRail) return;
+    const remaining = tabRail.scrollWidth - tabRail.clientWidth - tabRail.scrollLeft;
+    tabRail.classList.toggle("can-scroll-left", tabRail.scrollLeft > 2);
+    tabRail.classList.toggle("can-scroll-right", remaining > 2);
+    tabShell?.classList.toggle("can-scroll-right", remaining > 2);
+    if (tabMore) tabMore.hidden = remaining <= 2;
+  };
+  tabRail?.addEventListener("scroll", syncTabOverflow, { passive: true });
+  tabMore?.addEventListener("click", () => {
+    tabRail?.scrollBy({ left: Math.max(180, tabRail.clientWidth * .72), behavior: "smooth" });
+  });
+  window.requestAnimationFrame(syncTabOverflow);
 
   el.querySelectorAll("[data-au-tab]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auTab; paint(); });
   el.querySelectorAll("[data-au-today]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auToday; paint(); });

@@ -844,6 +844,8 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
       const control = root?.querySelector(".au-control-plane");
       const todayPanel = root?.querySelector(".au-today");
       const tabs = [...(root?.querySelectorAll("[data-au-tab]") || [])];
+      const tabRail = root?.querySelector(".au-tabs");
+      const activeWorkTab = document.querySelector('.phantombot-work-tab.is-active[data-phantomai-tab="automations"]');
       const visible = (element) => !!element && element.getBoundingClientRect().width > 1 && element.getBoundingClientRect().height > 1;
       return {
         visible: visible(root) && visible(control),
@@ -855,6 +857,9 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
         constellationVisible: visible(document.querySelector(".phantombot-constellation")),
         taskRailVisible: visible(document.querySelector(".phantombot-taskrail")),
         todayInFirstViewport: visible(todayPanel) && todayPanel.getBoundingClientRect().top < window.innerHeight,
+        activeWorkTabVisible: visible(activeWorkTab),
+        activeWorkTabLabel: activeWorkTab?.textContent?.trim() || "",
+        tabOverflowCue: visible(root?.querySelector("[data-au-tabs-more]")),
         pageWorkerVisible: visible(document.querySelector(".page-worker")),
       };
     })()`);
@@ -1192,6 +1197,9 @@ function assertCase(result) {
       assert.equal(audit.automationControl?.constellationVisible, false, `${label} ${viewport.width}: chat mission constellation must not bury Automations.`);
       assert.equal(audit.automationControl?.taskRailVisible, false, `${label} ${viewport.width}: chat task rail must not shrink Automations.`);
       assert.equal(audit.automationControl?.todayInFirstViewport, true, `${label} ${viewport.width}: Automation Today must begin in the first viewport.`);
+      assert.equal(audit.automationControl?.activeWorkTabVisible, true, `${label} ${viewport.width}: the active Automations workspace label must stay visible.`);
+      assert.equal(audit.automationControl?.activeWorkTabLabel, "Automations", `${label} ${viewport.width}: the workspace header must truthfully identify Automations.`);
+      if (viewport.width <= 860) assert.equal(audit.automationControl?.tabOverflowCue, true, `${label} ${viewport.width}: clipped Automation tabs need a visible overflow cue.`);
       assert.equal(audit.automationControl?.pageWorkerVisible, false, `${label} ${viewport.width}: retired Page intelligence must stay removed.`);
     } else {
     assert.equal(audit.phantomBot.composerVisible, true, `${label} ${viewport.width}: message composer must be visible on initial load. ${JSON.stringify({ rect: audit.phantomBot.composerRect, ancestors: audit.phantomBot.composerAncestors })}`);

@@ -47,6 +47,8 @@ assert.match(
 assert.match(css, /Automation control plane — workflows, decisions, exceptions/u, "Automation CSS should describe the unified control plane.");
 assert.match(automationNextCss, /data-phantombot-view="automations"[\s\S]*phantombot-mission-hud[\s\S]*display:none!important/u, "Automation must remove unrelated chat mission chrome.");
 assert.match(automationNextCss, /data-phantombot-view="automations"[\s\S]*phantombot-taskrail[\s\S]*display:none!important/u, "Automation must use the full stage instead of preserving the chat task rail.");
+assert.match(automationNextCss, /data-phantombot-view=automations[\s\S]*data-phantomai-tab=chat[\s\S]*display:none!important[\s\S]*data-phantomai-tab=automations[\s\S]*display:inline-flex!important/u, "Automation must show a truthful active workspace label on phones.");
+assert.match(brandops, /data-au-tabs-more[\s\S]*syncTabOverflow[\s\S]*scrollBy/u, "Automation must provide a functional mobile control for horizontally overflowed sections.");
 assert.match(phantomai, /let activePhantomAiTab = "chat";[\s\S]*activePhantomAiTab = tab;/u, "PhantomBot must retain the active workspace through shell remounts.");
 assert.match(phantomai, /requestedWorkspace[\s\S]*"automation"[\s\S]*\? "automations"[\s\S]*: activePhantomAiTab/u, "Direct Automation routes must remount into Automations instead of Chat.");
 assert.match(brandops, /renderOperatorMiniSettings[\s\S]*renderApprovals[\s\S]*renderRiskWatch/u, "Automations must combine AI routing, decisions, and exceptions.");

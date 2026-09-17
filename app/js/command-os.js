@@ -8,9 +8,9 @@ import {
   fmtMoney,
   session,
   workspaceStorageGetItem,
-} from "./store.js?v=phantom-live-20260914-221";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260914-221";
-import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings } from "./settings.js?v=phantom-live-20260914-221";
+} from "./store.js?v=phantom-live-20260914-222";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260914-222";
+import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings } from "./settings.js?v=phantom-live-20260914-222";
 
 let executionMode = "advise";
 let syncFrame = 0;

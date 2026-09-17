@@ -13,7 +13,9 @@
 [data-phantombot-view=automations] .au>.au-summary>span:last-child { border-right:0 }
 [data-phantombot-view=automations] .au>.au-summary b { grid-row:1/3;font-size:22px }
 [data-phantombot-view=automations] .au>.au-summary i { font-size:8px }
-[data-phantombot-view=automations] .au .au-tabs { position:sticky;z-index:7;top:0;min-height:43px;margin:0;padding:3px 0 0;border-radius:0;background:rgba(9,14,20,.96)!important;backdrop-filter:blur(16px) }
+[data-phantombot-view=automations] .au-tabs-shell { position:sticky;z-index:7;top:0;background:rgba(9,14,20,.96);backdrop-filter:blur(16px) }
+[data-phantombot-view=automations] .au .au-tabs { position:static;min-height:43px;margin:0;padding:3px 0 0;border-radius:0;background:transparent!important }
+[data-phantombot-view=automations] .au-tabs-more { display:none }
 [data-phantombot-view=automations] .au .au-tabs .ml-tab { min-height:39px;padding:0 13px }
 [data-phantombot-view=automations] .au-card { min-height:0;padding:0;border:0!important;background:transparent!important;box-shadow:none!important }
 [data-phantombot-view=automations] .au-today-hero { padding:17px 18px }
@@ -26,7 +28,15 @@
   [data-phantombot-view=automations] .au>.au-summary>span { min-height:48px;gap:2px 5px;padding:7px 5px }
   [data-phantombot-view=automations] .au>.au-summary b { font-size:18px }
   [data-phantombot-view=automations] .au>.au-summary i { overflow:visible;font-size:6.5px;letter-spacing:.035em;text-overflow:clip }
-  [data-phantombot-view=automations] .au .au-tabs { display:flex;min-height:44px;flex-wrap:nowrap;justify-content:flex-start;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none }
+  [data-phantombot-view=automations] .au-tabs-shell.can-scroll-right { padding-right:66px }
+  [data-phantombot-view=automations] .au .au-tabs { display:flex;min-height:44px;flex-wrap:nowrap;justify-content:flex-start;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-snap-type:x proximity }
+  [data-phantombot-view=automations] .au-tabs-more:not([hidden]) { position:absolute;top:4px;right:0;bottom:4px;display:inline-flex;align-items:center;gap:5px;padding:0 10px;border:1px solid rgba(53,245,157,.28);border-radius:9px;background:#111820;color:#35f59d;font:600 8px/1 "Spline Sans Mono",monospace;letter-spacing:.08em;box-shadow:-12px 0 20px #090e14 }
+  [data-phantombot-view=automations] .au-tabs-more span { font-size:13px }
   [data-phantombot-view=automations] .au .au-tabs::-webkit-scrollbar { display:none }
-  [data-phantombot-view=automations] .au .au-tabs .ml-tab { flex:0 0 auto;min-height:40px;padding-inline:12px;white-space:nowrap }
+  [data-phantombot-view=automations] .au .au-tabs .ml-tab { flex:0 0 auto;min-height:40px;padding-inline:12px;white-space:nowrap;scroll-snap-align:start }
+}
+
+@media(max-width:540px) {
+  [data-phantombot-view=automations] .phantombot-work-tab[data-phantomai-tab=chat] { display:none!important }
+  [data-phantombot-view=automations] .phantombot-work-tab[data-phantomai-tab=automations] { display:inline-flex!important }
 }
