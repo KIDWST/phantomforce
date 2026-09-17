@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-225";
+} from "./store.js?v=phantom-live-20260914-226";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-225";
+} from "./orgs.js?v=phantom-live-20260914-226";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-225";
+} from "./proposalpipeline.js?v=phantom-live-20260914-226";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-225";
+} from "./approvalpipeline.js?v=phantom-live-20260914-226";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-225";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-225";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-225";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-225";
+} from "./financeledger.js?v=phantom-live-20260914-226";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-226";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-226";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-226";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -50,7 +50,7 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all", brainOpen: false };
-const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", segment: "all", page: 1, loadedOrg: "", loadingOrg: "", autopilot: null };
+const leadsUi = { prompt: "", notice: "", selectedId: "", query: "", status: "all", segment: "all", page: 1, loadedOrg: "", loadingOrg: "", autopilot: null, researching: false };
 const crmSelection = createScopedSelection("");
 const proposalUi = { loadedTenant: "", loadingTenant: "", notice: "" };
 const approvalUi = { loadedTenant: "", loadingTenant: "", runLoadedTenant: "", runLoadingTenant: "", notice: "", serverAudit: [], serverRuns: [] };
@@ -185,6 +185,7 @@ function syncRelationshipUiScope(ws) {
   relationshipsUi.busy = false;
   relationshipsUi.importBusy = false;
   leadsUi.autopilot = null;
+  leadsUi.researching = false;
   leadsUi.query = "";
   leadsUi.status = "all";
   operatorUi.followQuery = "";
@@ -568,6 +569,23 @@ function crmLaneLabel(lead) {
   return crmLane(lead).replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function crmSourceRecordUrl(lead) {
+  const direct = String(lead?.socials?.source || "").trim();
+  if (/^https:\/\/www\.openstreetmap\.org\/(?:node|way|relation)\/\d+$/iu.test(direct)) return direct;
+  const noteMatch = String(lead?.notes || "").match(/https:\/\/www\.openstreetmap\.org\/(?:node|way|relation)\/\d+/iu);
+  return noteMatch?.[0] || "";
+}
+
+function crmEvidenceSignals(lead) {
+  const socialCount = Object.entries(lead?.socials || {}).filter(([key, value]) => key !== "source" && key !== "website" && String(value || "").trim()).length;
+  return [
+    lead?.email ? "email" : "",
+    lead?.phone ? "phone" : "",
+    lead?.website ? "website" : "",
+    socialCount ? `${socialCount} social${socialCount === 1 ? "" : "s"}` : "",
+  ].filter(Boolean);
+}
+
 function isActiveClient(lead) {
   const type = String(lead?.type || "").toLowerCase();
   const stage = String(lead?.crmStage || "").toLowerCase();
@@ -576,12 +594,13 @@ function isActiveClient(lead) {
 
 function crmContactCard(l) {
   const due = l.due && daysUntil(l.due) <= 0 && ["new", "follow-up"].includes(l.status);
+  const sourceLinked = Boolean(crmSourceRecordUrl(l));
   return `<article class="crm-card ${due ? "is-due" : ""} ${leadsUi.selectedId === l.id ? "is-selected" : ""}" data-act="select" data-id="${esc(l.id)}">
     ${canEditRelationships() ? `<button class="record-x" data-act="remove" data-id="${esc(l.id)}" aria-label="Remove contact">×</button>` : ""}
     <div class="crm-avatar">${crmAvatar(l)}</div>
     <div class="crm-main">
       <div class="crm-row-title">${wsTag(l.ws)}<h4>${esc(l.name || l.company)}</h4><span class="crm-row-stage">${esc(statusLabel(l.status || "new"))}</span></div>
-      <p>${esc(crmLaneLabel(l))} · ${l.email ? "published email" : l.website ? "website research" : "channel needed"}</p>
+      <p>${esc(crmLaneLabel(l))} · ${l.email ? "published email" : l.website ? "website found" : "channel needed"} · ${sourceLinked ? "source linked" : "account record"}</p>
     </div>
     <div class="crm-row-score"><b>${l.fitScore ? `${esc(l.fitScore)}%` : "—"}</b><span>fit</span></div>
     <div class="crm-row-value"><b>${fmtMoney(Number(l.value || 0))}</b><span>${esc(dueLabel(l))}</span></div>
@@ -595,6 +614,8 @@ function renderLeads(el, rerender) {
   const settings = workspaceCrmSettings(ws);
   const leads = filteredCrmContacts();
   const selected = leads.find((lead) => lead.id === leadsUi.selectedId) || leads[0] || null;
+  const selectedSourceUrl = crmSourceRecordUrl(selected);
+  const selectedEvidence = crmEvidenceSignals(selected);
   const lanes = [["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["lost", "Lost / archived"]];
   const pageSize = 40;
   const pageCount = Math.max(1, Math.ceil(leads.length / pageSize));
@@ -607,14 +628,16 @@ function renderLeads(el, rerender) {
     ["healthcare", "Healthcare"],
     ["sports-fitness", "Sports"],
     ["education", "Education"],
+    ["wedding-ecosystem", "Weddings"],
+    ["coaches-programs", "Coaches"],
     ["creative-partners", "Partners"],
   ];
   el.innerHTML = `
     <section class="crm-discovery">
       <div class="crm-discovery-mark" aria-hidden="true">✦</div>
       <form class="lead-intel-form" data-lead-form>
-        <label><span>Prospect finder</span><input data-lead-prompt value="${esc(leadsUi.prompt)}" placeholder="Describe the organizations you want to add…" /></label>
-        <button class="btn btn-primary" type="submit">Build list</button>
+        <label><span>Prospect finder</span><input data-lead-prompt value="${esc(leadsUi.prompt)}" placeholder="Describe the organizations you want to add…" ${leadsUi.researching ? "disabled" : ""} /></label>
+        <button class="btn btn-primary" type="submit" ${leadsUi.researching ? "disabled" : ""}>${leadsUi.researching ? "Researching…" : "Build list"}</button>
       </form>
       <p><b>${Number(settings.dailyPullTarget || 0).toLocaleString()}/day</b><span>research target</span></p>
     </section>
@@ -647,6 +670,11 @@ function renderLeads(el, rerender) {
             <span><b>Website</b><i>${selected.website ? `<a href="${esc(socialUrl("website", selected.website))}" target="_blank" rel="noopener noreferrer">${esc(selected.website)}</a>` : "—"}</i></span>
             <span><b>Value</b><i>${fmtMoney(Number(selected.value || 0))}</i></span>
           </div>
+          <section class="crm-source-proof" aria-label="Research proof">
+            <div><p>Research proof</p><strong>${esc(selected.source || "Account record")}</strong></div>
+            <span>${selectedEvidence.length ? `${selectedEvidence.length} public signal${selectedEvidence.length === 1 ? "" : "s"}: ${esc(selectedEvidence.join(" · "))}` : "No public contact signals saved"} · added ${selected.createdAt ? esc(fmtDate(selected.createdAt, { year: "numeric" })) : "date unavailable"}</span>
+            ${selectedSourceUrl ? `<a href="${esc(selectedSourceUrl)}" target="_blank" rel="noopener noreferrer">Open source record ↗</a>` : `<i>Source link not attached</i>`}
+          </section>
           <div class="crm-socials is-detail">${leadSocialLinks(selected) || "<span>No social handles saved yet.</span>"}</div>
           <p class="record-next">▸ ${esc(selected.next || "No next step set")}</p>
           <p class="record-notes">${esc(selected.notes || "No notes yet.")}</p>
@@ -687,6 +715,7 @@ function renderLeads(el, rerender) {
       const pull = crmPullIntent(prompt);
       if (pull && isDatabaseSession()) {
         applyCrmCommand(prompt);
+        leadsUi.researching = true;
         leadsUi.notice = `Pulling ${pull.count.toLocaleString()} CRM candidate${pull.count === 1 ? "" : "s"} into ${leadWorkspaceName()}...`;
         rerender();
         try {
@@ -698,16 +727,24 @@ function renderLeads(el, rerender) {
             store.state.leads = [...merged, ...other];
             store.state.crmSettings[ws] = result.settings || workspaceCrmSettings(ws);
             setCrmSelection(result.contacts?.[0]?.id || leadsUi.selectedId);
-            leadsUi.notice = `Added ${Number(result.created || 0).toLocaleString()} verified public-research contact${result.created === 1 ? "" : "s"} to ${leadWorkspaceName()}. Review every record before drafting outreach.`;
+            const created = Number(result.created || 0);
+            const skipped = Number(result.skippedExisting || 0);
+            const market = String(result.source?.market || "the selected market");
+            const createdCopy = created
+              ? `Added ${created.toLocaleString()} sourced public organization${created === 1 ? "" : "s"} from ${market}.`
+              : `No new organizations were added from ${market}.`;
+            const skippedCopy = skipped ? ` ${skipped.toLocaleString()} existing record${skipped === 1 ? " was" : "s were"} skipped.` : "";
+            const limitCopy = result.truncated ? " The request was capped at 100 records for this run; run it again to continue." : "";
+            leadsUi.notice = `${createdCopy}${skippedCopy}${limitCopy} Source proof is attached; permission remains unknown until reviewed.`;
             pushActivity("Easy CRM", `pulled ${Number(result.created || 0).toLocaleString()} CRM candidate${result.created === 1 ? "" : "s"} for ${leadWorkspaceName()}.`, ws);
             store.save();
-            rerender();
           } else {
             leadsUi.notice = String(result?.error || "Public research is not connected. No placeholder contacts were added.");
-            rerender();
           }
         } catch (error) {
           leadsUi.notice = `CRM pull failed: ${error instanceof Error ? error.message : "unknown error"}`;
+        } finally {
+          leadsUi.researching = false;
           rerender();
         }
         return;
@@ -3102,7 +3139,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-225")
+      import("./brain.js?v=phantom-live-20260914-226")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

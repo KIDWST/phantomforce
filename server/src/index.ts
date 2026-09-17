@@ -437,6 +437,7 @@ import {
 } from "./phantom-ai/organization-pulse.js";
 import { getBrainContract, getSignals } from "./phantom-ai/signals.js";
 import { getCrmAutopilotStatus } from "./crm/crm-growth-automation.js";
+import { researchPublicProspects } from "./crm/public-prospect-research.js";
 import { decide, listDecisions, type DecideAction } from "./phantom-ai/decisions.js";
 import {
   decideAllSafeWorkActions,
@@ -3596,51 +3597,166 @@ app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
   if (!db) return reply;
   const parsed = CrmPullSchema.safeParse(request.body ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
-  const discovery = getWebDiscoveryStatus();
   const existingSettings = await db.crmSettings.findUnique({ where: { orgId } });
   const existingBrain = existingSettings?.brain && typeof existingSettings.brain === "object" && !Array.isArray(existingSettings.brain)
     ? existingSettings.brain as Record<string, unknown>
     : {};
+  const command = parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`;
+  const researchStartedAt = new Date().toISOString();
+  let research: Awaited<ReturnType<typeof researchPublicProspects>>;
+  try {
+    research = await researchPublicProspects(parsed.data);
+  } catch (error) {
+    request.log.warn({ err: error, orgId }, "Public CRM research failed");
+    const failedBrain = {
+      ...existingBrain,
+      kind: "phantomforce_org_crm_brain",
+      version: 2,
+      lastNaturalCommand: command,
+      dailyPullTarget: parsed.data.count,
+      lastResearchReceipt: {
+        ok: false,
+        requested: parsed.data.count,
+        provider: "openstreetmap",
+        startedAt: researchStartedAt,
+        finishedAt: new Date().toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
+    } as Prisma.InputJsonValue;
+    const settings = await db.crmSettings.upsert({
+      where: { orgId },
+      update: { dailyPullTarget: parsed.data.count, sourceMode: "research-required", notes: command, brain: failedBrain },
+      create: { orgId, dailyPullTarget: parsed.data.count, sourceMode: "research-required", notes: command, brain: failedBrain },
+    });
+    return reply.code(503).send({
+      ok: false,
+      error: "public_research_temporarily_unavailable",
+      message: "Public organization research is temporarily unavailable. No contacts were added and no outreach was sent.",
+      requested: parsed.data.count,
+      created: 0,
+      settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || {} },
+      contacts: [],
+      provider_called: true,
+      outbound_action_executed: false,
+      public_exposure_changed: false,
+    });
+  }
+
+  const existingContacts = await db.contact.findMany({
+    where: { orgId },
+    select: { organization: true, website: true, notes: true },
+  });
+  const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?/u, "").replace(/\/$/u, "");
+  const existingKeys = new Set(existingContacts.map((contact) => `${normalize(contact.organization)}|${normalize(contact.website)}`));
+  const existingSourceIds = new Set(existingContacts.flatMap((contact) => contact.notes?.match(/openstreetmap\.org\/(?:node|way|relation)\/\d+/giu) || []).map(normalize));
+  const selectedKeys = new Set<string>();
+  const selectedSourceIds = new Set<string>();
+  const pending = research.candidates.filter((candidate) => {
+    const key = `${normalize(candidate.name)}|${normalize(candidate.website)}`;
+    const sourceId = normalize(candidate.sourceUrl);
+    if (existingKeys.has(key) || existingSourceIds.has(sourceId) || selectedKeys.has(key) || selectedSourceIds.has(sourceId)) return false;
+    selectedKeys.add(key);
+    selectedSourceIds.add(sourceId);
+    return true;
+  });
+  const now = Date.now();
+  const researchFinishedAt = new Date().toISOString();
   const updatedBrain = {
     ...existingBrain,
     kind: "phantomforce_org_crm_brain",
-    version: 1,
-    lastNaturalCommand: parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`,
+    version: 2,
+    lastNaturalCommand: command,
     dailyPullTarget: parsed.data.count,
-    discoveryStatus: discovery.connected ? "provider-configured-adapter-required" : "provider-required",
-    updatedAt: new Date().toISOString(),
-  } as Prisma.InputJsonValue;
-  const settings = await db.crmSettings.upsert({
-    where: { orgId },
-    update: {
-      dailyPullTarget: parsed.data.count,
-      sourceMode: "research-required",
-      notes: parsed.data.prompt || parsed.data.audience,
-      brain: updatedBrain,
+    prospectSource: research.source,
+    outreachPolicy: "Research and draft only until a connected email provider returns a signed delivery receipt.",
+    lastResearchReceipt: {
+      ok: true,
+      provider: research.provider,
+      market: research.market,
+      requested: research.requested,
+      limitApplied: research.limitApplied,
+      discovered: research.candidates.length,
+      created: pending.length,
+      skippedExisting: research.candidates.length - pending.length,
+      truncated: research.truncated,
+      sourceLicense: research.sourceLicense,
+      startedAt: researchStartedAt,
+      finishedAt: researchFinishedAt,
     },
-    create: {
-      orgId,
-      dailyPullTarget: parsed.data.count,
-      sourceMode: "research-required",
-      notes: parsed.data.prompt || parsed.data.audience,
-      brain: updatedBrain,
+    updatedAt: researchFinishedAt,
+  } as Prisma.InputJsonValue;
+  const result = await db.$transaction(async (tx) => {
+    const contacts = [];
+    for (const [index, candidate] of pending.entries()) {
+      contacts.push(await tx.contact.create({
+        data: {
+          orgId,
+          name: candidate.name,
+          organization: candidate.name,
+          email: candidate.email,
+          phone: candidate.phone,
+          status: "new",
+          type: "business-prospect",
+          value: candidate.value,
+          nextStep: candidate.email
+            ? "Review fit and permission before approving a personalized email draft"
+            : "Verify a published business email or approved contact channel",
+          notes: candidate.notes,
+          source: candidate.source,
+          website: candidate.website,
+          socials: candidate.socials,
+          tags: candidate.tags,
+          fitScore: candidate.fitScore,
+          qualification: candidate.qualification,
+          outreach: candidate.outreach,
+          crmStage: "Prospect research",
+          dueAt: new Date(now + ((index % 21) + 1) * 86_400_000),
+        },
+      }));
+    }
+    const settings = await tx.crmSettings.upsert({
+      where: { orgId },
+      update: { dailyPullTarget: parsed.data.count, sourceMode: "public-research", notes: command, brain: updatedBrain },
+      create: { orgId, dailyPullTarget: parsed.data.count, sourceMode: "public-research", notes: command, brain: updatedBrain },
+    });
+    return { contacts, settings };
+  }, { timeout: 60_000 });
+  const batchId = createHash("sha256").update(`${orgId}|${researchFinishedAt}|${result.contacts.length}`).digest("hex").slice(0, 20);
+  await recordOrgAuditEvent({
+    orgId,
+    actor: dbSession.email,
+    eventType: "crm_public_prospects_imported",
+    targetType: "crm_batch",
+    targetId: batchId,
+    payload: {
+      requested: research.requested,
+      discovered: research.candidates.length,
+      created: result.contacts.length,
+      skippedExisting: research.candidates.length - pending.length,
+      truncated: research.truncated,
+      source: research.source,
+      sourceLicense: research.sourceLicense,
+      market: research.market,
+      providerCalled: research.providerCalled,
+      publishedBusinessEmails: pending.filter((candidate) => candidate.email).length,
+      outreachExecuted: false,
     },
   });
-  return reply.code(409).send({
-    ok: false,
-    error: "public_research_not_connected",
-    message: discovery.connected
-      ? "A search credential is configured, but CRM discovery is not connected to a verified public-research adapter yet. No contacts were added."
-      : "Connect a supported public-research provider before Phantom discovers contacts. No placeholder or invented contacts were added.",
-    webDiscovery: discovery,
-    requested: parsed.data.count,
-    created: 0,
-    settings: { dailyPullTarget: settings.dailyPullTarget, sourceMode: settings.sourceMode, notes: settings.notes || "", brain: settings.brain || {} },
-    contacts: [],
-    provider_called: false,
+  return {
+    ok: true,
+    batchId,
+    requested: research.requested,
+    discovered: research.candidates.length,
+    created: result.contacts.length,
+    skippedExisting: research.candidates.length - pending.length,
+    truncated: research.truncated,
+    source: { provider: research.provider, label: research.source, license: research.sourceLicense, market: research.market },
+    settings: { dailyPullTarget: result.settings.dailyPullTarget, sourceMode: result.settings.sourceMode, notes: result.settings.notes || "", brain: result.settings.brain || {} },
+    contacts: result.contacts.map(crmContactView),
+    provider_called: research.providerCalled,
     outbound_action_executed: false,
     public_exposure_changed: false,
-  });
+  };
 });
 
 app.post("/orgs/:orgId/crm/contacts/merge/preview", async (request, reply) => {

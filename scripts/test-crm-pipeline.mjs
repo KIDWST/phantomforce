@@ -17,6 +17,7 @@ const files = {
   workGraph: read("server/src/workforce/work-graph.ts"),
   actionContracts: read("packages/contracts/src/actions.ts"),
   crmAutomation: read("server/src/crm/crm-growth-automation.ts"),
+  publicResearch: read("server/src/crm/public-prospect-research.ts"),
   organizationPulse: read("server/src/phantom-ai/organization-pulse.ts"),
   automationEngine: read("server/src/phantom-ai/automation-engine.ts"),
   packageJson: read("package.json"),
@@ -52,6 +53,9 @@ must(files.workspaces, /deleteOrgCrmContact/u, "Clients page must delete organiz
 must(files.workspaces, /function syncServerCrm/u, "Clients page must synchronize database contacts.");
 must(files.workspaces, /function crmPullIntent/u, "Clients page must recognize natural discovery requests.");
 must(files.workspaces, /No placeholder or invented contacts were added/u, "Clients page must disclose that unavailable research creates zero placeholders.");
+must(files.workspaces, /function crmSourceRecordUrl[\s\S]*openstreetmap/u, "Sourced CRM records must expose their public evidence link.");
+must(files.workspaces, /Research proof[\s\S]*Open source record/u, "The selected relationship must show a compact research proof receipt.");
+must(files.workspaces, /wedding-ecosystem[\s\S]*Weddings[\s\S]*coaches-programs[\s\S]*Coaches/u, "Wedding and coaching prospects must be first-class CRM segments.");
 must(files.workspaces, /capture a real contact manually/u, "Manual real-contact capture must remain available.");
 must(files.workspaces, /data-crm-account="\$\{esc\(ws\)\}"/u, "Relationships must expose the authenticated organization scope in the CRM shell.");
 must(files.workspaces, /data-relationship-tab="leads"[\s\S]*data-relationship-tab="clients"[\s\S]*data-relationship-tab="followups"/u, "Leads, clients, and follow-ups must remain inside one Relationships destination.");
@@ -103,23 +107,31 @@ must(files.workspaces, /Autopilot running — only exceptions need you[\s\S]*ema
 must(files.workspaces, /AUTOMATION AUDIT TRAIL[\s\S]*Show email activity details/u, "Detailed email activity must remain available in a collapsed audit trail.");
 must(files.organizationPulse, /readCrmIntelligence[\s\S]*Live account CRM/u, "PhantomBot workspace context must include tenant-scoped CRM intelligence.");
 
-must(files.server, /sourceMode:\s*"research-required"/u, "Unfulfilled discovery must be recorded as research-required.");
-must(files.server, /error:\s*"public_research_not_connected"/u, "Unavailable research must return a stable error code.");
+must(files.server, /researchPublicProspects\(parsed\.data\)/u, "CRM pulls must use the real public-organization research adapter.");
+must(files.server, /sourceMode:\s*"public-research"/u, "Successful public research must be recorded in the account-scoped CRM settings.");
+must(files.server, /sourceMode:\s*"research-required"/u, "Failed public research must remain actionable in the account-scoped CRM settings.");
+must(files.server, /error:\s*"public_research_temporarily_unavailable"/u, "Unavailable research must return a stable retryable error code.");
 must(files.server, /created:\s*0/u, "Unavailable research must create zero contacts.");
 must(files.server, /contacts:\s*\[\]/u, "Unavailable research must return no contacts.");
-must(files.server, /provider_called:\s*false/u, "Unavailable research must not claim a provider call.");
+must(files.server, /provider_called:\s*research\.providerCalled/u, "Successful research receipts must reflect the actual provider call.");
+must(files.server, /crm_public_prospects_imported/u, "Every successful sourced CRM batch must create an organization audit receipt.");
 must(files.server, /outbound_action_executed:\s*false/u, "CRM routes must not send outbound actions.");
 must(files.server, /public_exposure_changed:\s*false/u, "CRM routes must not change public exposure.");
 must(files.server, /const existingBrain =[\s\S]*\.\.\.existingBrain[\s\S]*brain: updatedBrain/u, "CRM research commands must preserve each organization's saved customization.");
+must(files.publicResearch, /OVERPASS_ENDPOINTS[\s\S]*api\/interpreter/u, "Public research must use named OpenStreetMap Overpass endpoints.");
+must(files.publicResearch, /sourceUrl = `https:\/\/www\.openstreetmap\.org\/\$\{sourceId\}`/u, "Every sourced organization must carry a reviewable source record.");
+must(files.publicResearch, /email \? "email:published-business" : "email:research-needed"/u, "CRM research must distinguish published business email from missing email.");
+must(files.publicResearch, /"consent:unknown"/u, "CRM research must never infer outreach consent.");
+must(files.publicResearch, /!value\.includes\(";"\)[\s\S]*@/u, "Ambiguous public email fields must be rejected instead of guessed.");
 must(files.coreClient, /export function friendlyBackendError/u, "Shared client core must expose a friendly backend error formatter.");
 must(files.packageJson, /test:crm-pipeline/u, "Root package must expose the CRM regression test.");
 
-const truthSurface = `${files.server}\n${files.workspaces}`;
+const truthSurface = `${files.server}\n${files.publicResearch}\n${files.workspaces}`;
 assert.doesNotMatch(truthSurface, /CRM_PULL_ARCHETYPES|crmPullPlan|LEAD_ARCHETYPES|createProspectsFromPrompt/u, "Synthetic contact generators must not exist in the active CRM path.");
 assert.doesNotMatch(truthSurface, /\.example\.local/u, "The active CRM path must not generate placeholder websites or emails.");
 const researchRequiredIndex = files.server.indexOf('sourceMode: "research-required"');
 const crmDiscoveryTruthSurface = files.server.slice(Math.max(0, researchRequiredIndex - 1_500), researchRequiredIndex + 3_000);
-assert.doesNotMatch(crmDiscoveryTruthSurface, /provider_called:\s*true|outbound_action_executed:\s*true|public_exposure_changed:\s*true/iu, "CRM discovery must not perform unverified external actions.");
+assert.doesNotMatch(crmDiscoveryTruthSurface, /outbound_action_executed:\s*true|public_exposure_changed:\s*true/iu, "CRM discovery must not perform outbound or public-exposure actions.");
 
 globalThis.localStorage = {
   data: new Map(),

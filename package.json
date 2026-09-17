@@ -39,6 +39,7 @@
     "test:client-setup-console": "node scripts/test-client-setup-console.mjs",
     "test:customization-ui": "node scripts/test-customization-ui.mjs",
     "test:client-setup-audit": "node scripts/audit-client-setup-data-model.mjs",
+    "test:public-prospect-research": "npm run test:public-prospect-research --workspace @phantomforce/server",
     "test:crm-pipeline": "node scripts/test-crm-pipeline.mjs",
     "test:crm-growth-automation": "npm run test:crm-growth-automation --workspace @phantomforce/server",
     "test:chicagoshots-studio": "node scripts/test-chicagoshots-studio-ui.mjs && npm run test:chicagoshots-studio --workspace @phantomforce/server",

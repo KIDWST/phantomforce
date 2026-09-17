@@ -88,6 +88,7 @@
     "test:account-recovery-2fa:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-account-recovery-2fa-postgres.ps1",
     "test:easy-crm": "tsx scripts/test-easy-crm.ts",
     "test:easy-crm:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-easy-crm-postgres.ps1",
+    "test:public-prospect-research": "tsx scripts/test-public-prospect-research.ts",
     "crm:import:chicagoshots": "tsx scripts/import-chicagoshots-public-prospects.ts",
     "crm:audit:chicagoshots": "tsx scripts/audit-chicagoshots-crm.ts",
     "crm:prepare-outreach": "tsx scripts/prepare-crm-outreach.ts",

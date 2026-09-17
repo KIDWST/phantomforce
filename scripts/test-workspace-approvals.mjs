@@ -56,7 +56,11 @@ must(files.workspaces, /applyApprovalSideEffects/u, "Approvals page must keep in
 must(files.audit, /PERSIST-WORKSPACE-APPROVALS/u, "Structured audit must report workspace approval persistence.");
 must(files.packageJson, /test:workspace-approvals/u, "Root package must expose the workspace approvals regression test.");
 
-const joined = `${files.store}\n${files.server}\n${files.client}\n${files.workspaces}`;
+const approvalRouteStart = files.server.indexOf('app.get("/api/workspace-approvals"');
+const approvalRouteEnd = files.server.indexOf('const WorkGraphCreateBodySchema', approvalRouteStart);
+assert.ok(approvalRouteStart >= 0 && approvalRouteEnd > approvalRouteStart, "Workspace approval route safety scope must be discoverable.");
+const approvalRoutes = files.server.slice(approvalRouteStart, approvalRouteEnd);
+const joined = `${files.store}\n${approvalRoutes}\n${files.client}\n${files.workspaces}`;
 assert.doesNotMatch(joined, /provider_called:\s*true|outbound_action_executed:\s*true|public_exposure_changed:\s*true|approval_execution_implemented:\s*true/iu, "Workspace approvals must not perform external/provider/public/execution actions.");
 assert.doesNotMatch(files.store, /api[_-]?key|password|secret|token/iu, "Workspace approval store must not persist secret-shaped fields.");
 

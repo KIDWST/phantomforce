@@ -286,12 +286,22 @@
       "id": "tenant-revenue-truth-no-synthetic-contacts",
       "status": "active",
       "title": "Revenue workflows persist by tenant and never invent contacts",
-      "ownerDecision": "CRM discovery must use a verified public-research provider or add zero contacts. Manual contacts, proposal drafts, approval records, and Managed Growth reporting persist in the active organization; draft and approval state never implies an external send or execution.",
+      "ownerDecision": "CRM discovery must call a named public-research source, preserve a reviewable source record, retain only published business contact details, and leave consent unknown. A failed source adds zero contacts. Manual contacts, proposal drafts, approval records, and Managed Growth reporting persist in the active organization; research, draft, and approval state never implies an external send or execution.",
       "requiredPatterns": [
         {
+          "file": "server/src/crm/public-prospect-research.ts",
+          "pattern": "source:openstreetmap[\\s\\S]*consent:unknown",
+          "description": "Every sourced organization retains public-source provenance without inferred outreach consent."
+        },
+        {
           "file": "server/src/index.ts",
-          "pattern": "public_research_not_connected",
-          "description": "Unconnected CRM discovery returns an explicit blocked state instead of invented leads."
+          "pattern": "researchPublicProspects[(]parsed[.]data[)][\\s\\S]*crm_public_prospects_imported[\\s\\S]*outbound_action_executed: false",
+          "description": "Account-scoped research records an audit receipt and never performs outreach as part of discovery."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "public_research_temporarily_unavailable[\\s\\S]*created: 0[\\s\\S]*contacts: \\[\\]",
+          "description": "A failed public source adds zero placeholder contacts."
         },
         {
           "file": "app/js/workspaces.js",

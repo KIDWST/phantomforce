@@ -26,6 +26,7 @@ const checks = [
   "test:workspace-mobile-integrity",
   "test:nexus-hardening",
   "test:product-grammar",
+  "test:public-prospect-research",
   "test:crm-pipeline",
   "test:crm-growth-automation",
   "test:crm-lifecycle",

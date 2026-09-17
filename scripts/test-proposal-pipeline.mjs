@@ -62,7 +62,11 @@ must(files.workspaces, /Nothing was sent/u, "Proposal Forge must clearly preserv
 must(files.audit, /PERSIST-PROPOSALS/u, "Structured audit must report proposal persistence.");
 must(files.packageJson, /test:proposal-pipeline/u, "Root package must expose the proposal pipeline regression test.");
 
-const joined = `${files.store}\n${files.server}\n${files.client}\n${files.workspaces}`;
+const proposalRouteStart = files.server.indexOf('app.get("/api/proposals"');
+const proposalRouteEnd = files.server.indexOf('app.get("/api/finance/ledger"', proposalRouteStart);
+assert.ok(proposalRouteStart >= 0 && proposalRouteEnd > proposalRouteStart, "Proposal route safety scope must be discoverable.");
+const proposalRoutes = files.server.slice(proposalRouteStart, proposalRouteEnd);
+const joined = `${files.store}\n${proposalRoutes}\n${files.client}\n${files.workspaces}`;
 assert.doesNotMatch(joined, /provider_called:\s*true|outbound_action_executed:\s*true|public_exposure_changed:\s*true/iu, "Proposal pipeline must not perform external/provider/public actions.");
 assert.doesNotMatch(files.store, /fake email|fake phone|invent real/iu, "Proposal store must not seed fake contact details.");
 

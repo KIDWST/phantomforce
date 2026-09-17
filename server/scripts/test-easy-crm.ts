@@ -79,16 +79,27 @@ const pull = await api(`/orgs/${primary.orgId}/crm/pull`, {
   token: primary.token,
   body: { count: 3, prompt: "pull 3 gym clients per day", audience: "gym clients" },
 });
+const sourcedContactIds = Array.isArray(pull.json.contacts) ? pull.json.contacts.map((contact: any) => String(contact.id || "")).filter(Boolean) : [];
+const successfulResearch = pull.status === 200
+  && pull.json.ok === true
+  && pull.json.provider_called === true
+  && pull.json.outbound_action_executed === false
+  && pull.json.public_exposure_changed === false
+  && pull.json.source?.provider === "openstreetmap"
+  && pull.json.contacts.every((contact: any) => contact.source === "OpenStreetMap public business directory"
+    && contact.socials?.source?.startsWith("https://www.openstreetmap.org/")
+    && contact.tags?.includes("consent:unknown"));
+const truthfulProviderFailure = pull.status === 503
+  && pull.json.error === "public_research_temporarily_unavailable"
+  && pull.json.created === 0
+  && Array.isArray(pull.json.contacts)
+  && pull.json.contacts.length === 0
+  && pull.json.provider_called === true
+  && pull.json.outbound_action_executed === false
+  && pull.json.public_exposure_changed === false;
 check(
-  "natural-language CRM pull refuses synthetic contacts without verified public research",
-  pull.status === 409
-    && pull.json.error === "public_research_not_connected"
-    && pull.json.created === 0
-    && Array.isArray(pull.json.contacts)
-    && pull.json.contacts.length === 0
-    && pull.json.provider_called === false
-    && pull.json.outbound_action_executed === false
-    && pull.json.public_exposure_changed === false,
+  "natural-language CRM pull sources public organizations or fails truthfully without placeholders",
+  successfulResearch || truthfulProviderFailure,
   JSON.stringify(pull.json),
 );
 
@@ -114,11 +125,10 @@ check("contact create stores socials and org ws", create.status === 200 && conta
 
 const list = await api(`/orgs/${primary.orgId}/crm`, { token: primary.token });
 check(
-  "CRM list returns research-required settings and only the manually created contact",
+  "CRM list preserves sourced organizations and the manually created contact inside one account",
   list.status === 200
     && list.json.settings?.dailyPullTarget === 3
-    && list.json.settings?.sourceMode === "research-required"
-    && list.json.contacts?.length === 1
+    && list.json.settings?.sourceMode === (successfulResearch ? "public-research" : "research-required")
     && list.json.contacts?.some((c: any) => c.id === contactId),
   JSON.stringify(list.json),
 );
@@ -155,8 +165,12 @@ check("cross-org brain package access is rejected", wrongBrainFetch.status === 4
 const del = await api(`/orgs/${primary.orgId}/crm/contacts/${contactId}`, { method: "DELETE", token: primary.token });
 check("contact delete succeeds", del.status === 200, JSON.stringify(del.json));
 
+for (const sourcedContactId of sourcedContactIds) {
+  await api(`/orgs/${primary.orgId}/crm/contacts/${sourcedContactId}`, { method: "DELETE", token: primary.token });
+}
+
 const afterDelete = await api(`/orgs/${primary.orgId}/crm`, { token: primary.token });
-check("deleted contact no longer appears", afterDelete.status === 200 && !afterDelete.json.contacts?.some((c: any) => c.id === contactId), JSON.stringify(afterDelete.json));
+check("test contacts are removed after verification", afterDelete.status === 200 && !afterDelete.json.contacts?.some((c: any) => c.id === contactId || sourcedContactIds.includes(c.id)), JSON.stringify(afterDelete.json));
 
 console.log(`\nCRM TEST SUMMARY: ${pass} pass, ${fail} fail`);
 if (fail) process.exit(1);
