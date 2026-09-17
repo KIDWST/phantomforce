@@ -33,8 +33,7 @@ const pages = [
   { id: "bookings", label: "bookings" },
   { id: "clients", label: "clients" },
   { id: "money", label: "quotes-money" },
-  { id: "approvals", label: "approvals" },
-  { id: "riskwatch", label: "risk-watch" },
+  { id: "phantomai", label: "automation-control", automationTab: true },
   { id: "media", label: "media-lab" },
   { id: "content", label: "content-hub" },
   { id: "analytics", label: "analytics" },
@@ -63,6 +62,7 @@ const requestedWidths = new Set(String(process.env.PHANTOMFORCE_RESPONSIVE_WIDTH
 if (requestedWidths.size) viewports.splice(0, viewports.length, ...viewports.filter((viewport) => requestedWidths.has(viewport.width)));
 const requestedSettingsTab = String(process.env.PHANTOMFORCE_RESPONSIVE_SETTINGS_TAB || "").trim();
 const requestedMediaTab = String(process.env.PHANTOMFORCE_RESPONSIVE_MEDIA_TAB || "").trim();
+const skipAtomicWorkspaceTransition = process.env.PHANTOMFORCE_RESPONSIVE_SKIP_ATOMIC_TRANSITION === "1";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -74,7 +74,7 @@ function injectDashboardDecisionFixture() {
     <div class="decision-head">
       <h2>Decisions</h2><span class="decision-count">13</span>
       <i>Signals packaged for one motion — approve, adjust, or dismiss.</i>
-      <button class="decision-review-all" type="button" data-open-ws="approvals">Review all 13</button>
+      <button class="decision-review-all" type="button" data-open-ws="automation">Review all 13</button>
     </div>
     <div class="decision-list">
       ${[1, 2, 3, 4].map((index) => `
@@ -785,6 +785,10 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
   // audited workspace instead of capturing startup chrome.
   await evaluate(cdp, `(() => { document.querySelector(".os-poweron")?.click(); return true; })()`);
   await sleep(720);
+  if (page.automationTab) {
+    await evaluate(cdp, `(() => { const button = document.querySelector('[data-phantomai-tab="automations"]'); button?.click(); return !!button; })()`);
+    await sleep(220);
+  }
   if (page.id === "settings" && requestedSettingsTab) {
     await evaluate(cdp, `(() => {
       const button = document.querySelector(${JSON.stringify(`[data-set-tab="${requestedSettingsTab}"]`)});
@@ -834,6 +838,20 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
     await evaluate(cdp, `(${injectDashboardDecisionFixture.toString()})()`);
   }
   const audit = await evaluate(cdp, `(${auditPage.toString()})()`);
+  if (page.automationTab) {
+    audit.automationControl = await evaluate(cdp, `(() => {
+      const root = document.querySelector("[data-phantombot-automations-mount]");
+      const control = root?.querySelector(".au-control-plane");
+      const tabs = [...(root?.querySelectorAll("[data-au-tab]") || [])];
+      const visible = (element) => !!element && element.getBoundingClientRect().width > 1 && element.getBoundingClientRect().height > 1;
+      return {
+        visible: visible(root) && visible(control),
+        decisions: tabs.some((tab) => tab.dataset.auTab === "approvals"),
+        exceptions: tabs.some((tab) => tab.dataset.auTab === "risk"),
+        pageWorkerVisible: visible(document.querySelector(".page-worker")),
+      };
+    })()`);
+  }
   if (page.id === "dashboard" && viewport.width <= 900) {
     await evaluate(cdp, `(() => {
       const opener = document.querySelector("[data-mobile-more]");
@@ -866,7 +884,7 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
     })()`);
     audit.mobileDrawer = { ...opened, ...closed };
   }
-  if (page.id === "phantomai") {
+  if (page.id === "phantomai" && !page.automationTab) {
     await evaluate(cdp, `(() => { const button = document.querySelector("[data-phantombot-model]"); button?.click(); return !!button; })()`);
     await sleep(120);
     const modelOpened = await evaluate(cdp, `(() => {
@@ -985,7 +1003,7 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
   }, 20_000);
   const file = path.join(screenshotDir, `${page.label}-${viewport.width}x${viewport.height}.png`);
   writeFileSync(file, Buffer.from(png.data, "base64"));
-  return { page: page.id, label: page.label, viewport, appState, audit, screenshot: file };
+  return { page: page.id, label: page.label, automationTab: !!page.automationTab, viewport, appState, audit, screenshot: file };
 }
 
 async function verifyAtomicWorkspaceTransition(cdp, baseUrl) {
@@ -1051,7 +1069,7 @@ async function verifyAtomicWorkspaceTransition(cdp, baseUrl) {
 }
 
 function assertCase(result) {
-  const { page, label, viewport, audit, appState } = result;
+  const { page, label, automationTab, viewport, audit, appState } = result;
   assert.equal(appState?.gateVisible, false, `${label} ${viewport.width}: auth gate must not remain visible during local QA.`);
   assert.equal(appState?.bootVisible, false, `${label} ${viewport.width}: boot screen must finish before responsive auditing.`);
   assert.equal(appState?.phantomVisible, true, `${label} ${viewport.width}: Phantom shell must be visible.`);
@@ -1157,6 +1175,12 @@ function assertCase(result) {
     assert.equal(audit.phantomBot.shellVisible, true, `${label} ${viewport.width}: dedicated PhantomBot OS shell must be visible.`);
     assert.equal(audit.phantomBot.taskListPresent, true, `${label} ${viewport.width}: task history rail must remain mounted.`);
     assert.ok(audit.phantomBot.taskCount >= 1, `${label} ${viewport.width}: PhantomBot must start with a usable active task.`);
+    if (automationTab) {
+      assert.equal(audit.automationControl?.visible, true, `${label} ${viewport.width}: unified Automation control plane must be visible.`);
+      assert.equal(audit.automationControl?.decisions, true, `${label} ${viewport.width}: Automation Decisions must be present.`);
+      assert.equal(audit.automationControl?.exceptions, true, `${label} ${viewport.width}: Automation Exceptions must be present.`);
+      assert.equal(audit.automationControl?.pageWorkerVisible, false, `${label} ${viewport.width}: retired Page intelligence must stay removed.`);
+    } else {
     assert.equal(audit.phantomBot.composerVisible, true, `${label} ${viewport.width}: message composer must be visible on initial load. ${JSON.stringify({ rect: audit.phantomBot.composerRect, ancestors: audit.phantomBot.composerAncestors })}`);
     assert.equal(audit.phantomBot.composerTag, "TEXTAREA", `${label} ${viewport.width}: composer must be multiline.`);
     assert.equal(audit.phantomBot.pageWorkerVisible, false, `${label} ${viewport.width}: generic page-intelligence prompt must not duplicate PhantomBot chat.`);
@@ -1191,6 +1215,7 @@ function assertCase(result) {
     } else {
       assert.equal(audit.phantomBot.taskRailVisible, true, `${label} ${viewport.width}: desktop PhantomBot must show the task rail.`);
     }
+    }
   }
   if (page === "analytics") {
     assert.equal(audit.analytics.pageWorkerVisible, false, `${label} ${viewport.width}: Analytics must not render the generic prompt before the stats graph.`);
@@ -1224,7 +1249,9 @@ async function main() {
     await cdp.send("Page.enable");
     await cdp.send("Runtime.enable");
     await cdp.send("Network.enable");
-    const workspaceTransition = await verifyAtomicWorkspaceTransition(cdp, baseUrl);
+    const workspaceTransition = skipAtomicWorkspaceTransition
+      ? { skipped: true, reason: "targeted workspace visual QA" }
+      : await verifyAtomicWorkspaceTransition(cdp, baseUrl);
 
     for (const page of pages) {
       let navigate = true;

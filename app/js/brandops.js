@@ -7,11 +7,13 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260914-217";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260914-218";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260914-217";
+} from "./content-ideas.js?v=phantom-live-20260914-218";
+import { renderApprovals, renderRiskWatch, getAutomationRiskSummary } from "./workspaces.js?v=phantom-live-20260914-218";
+import { renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260914-218";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -110,6 +112,8 @@ const RECIPES = [
 
 const TABS = [
   ["configured", "Configured"],
+  ["approvals", "Decisions"],
+  ["risk", "Exceptions"],
   ["autopilot", "Always-on"],
   ["recipes", "Recipes"],
   ["logs", "Logs"],
@@ -118,6 +122,12 @@ const TABS = [
 
 let auTab = "configured";
 let expandedAutomationId = null;
+
+export function selectAutomationSection(requested = "automation") {
+  const key = String(requested || "").trim().toLowerCase();
+  if (key === "approvals" || key === "approval" || key === "decisions") auTab = "approvals";
+  if (key === "riskwatch" || key === "protect" || key === "risk" || key === "exceptions") auTab = "risk";
+}
 
 function agentCard(a, opts) {
   const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
@@ -136,7 +146,7 @@ function agentCard(a, opts) {
     </span>
     <span class="aops-agent-mode aops-m-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}">${st.label}</span>
     <span class="au-actions">
-      ${pendingApproval ? `<button class="btn btn-quiet" data-open-ws="approvals">Review</button>` : ""}
+      ${pendingApproval ? `<button class="btn btn-quiet" data-au-review>Review decision</button>` : ""}
       ${a.status === "active" ? `<button class="btn btn-quiet" data-au-pause="${a.id}">Pause</button>` : ""}
       ${a.status === "paused" || a.status === "waiting" ? `<button class="btn btn-quiet" data-au-resume="${a.id}">Resume</button>` : ""}
       <button class="btn btn-quiet" data-au-vacation-toggle="${a.id}" title="Vacation Mode rules decide whether this can run while you are away.">${allowedDuringVacation ? "Block in Vacation Mode" : "Allow in Vacation Mode"}</button>
@@ -243,7 +253,7 @@ function customAutomationEditPanel(a, pendingApproval, allowedDuringVacation) {
     </div>
     <div class="au-config-actions">
       <button class="btn btn-primary" data-au-save-agent="${esc(a.id)}" type="button">Save changes</button>
-      ${pendingApproval ? `<button class="btn btn-quiet" data-open-ws="approvals" type="button">Review approval</button>` : ""}
+      ${pendingApproval ? `<button class="btn btn-quiet" data-au-review type="button">Review decision</button>` : ""}
       ${a.status === "active" ? `<button class="btn btn-quiet" data-au-pause="${esc(a.id)}" type="button">Pause</button>` : ""}
       ${a.status === "paused" || a.status === "waiting" ? `<button class="btn btn-quiet" data-au-resume="${esc(a.id)}" type="button">Resume</button>` : ""}
       <button class="btn btn-quiet" data-au-vacation-toggle="${esc(a.id)}" type="button">${allowedDuringVacation ? "Block in Vacation Mode" : "Allow in Vacation Mode"}</button>
@@ -625,7 +635,7 @@ function logsTab() {
 function safetyTab() {
   const rules = [
     ["New automations start off", "Nothing runs the moment it's created — every automation lands in Configured as off or approval required until you approve it."],
-    ["Outward-facing actions always gate", "Sending, publishing, spending, or deleting always queues to Approvals — automations can't skip that, regardless of status."],
+    ["Outward-facing actions always gate", "Sending, publishing, spending, or deleting always lands in Automations → Decisions — workflows can't skip that, regardless of status."],
     ["Pause stops before the next run", "Pausing an active automation stops it cleanly; resuming picks back up from paused, not mid-action. Pausing this automation does not disable Vacation Mode."],
     ["Vacation Mode is a separate system", "Vacation Mode rules decide whether this can run while you are away. Automations can be used during Vacation Mode if allowed, but turning Vacation Mode on or off never starts, stops, or deletes an automation."],
     ["Connected app scope", "No per-automation third-party app connections are tracked yet — automations run against your PhantomForce workspace only."],
@@ -642,11 +652,13 @@ export function renderAutomation(el, opts = {}) {
   const automationAgents = agents.filter((a) => a.kind === "automation");
   const dailyConfig = dailyIdeaState().config;
   const count = automationAgents.length + 1;
-  const pending = automationAgents.filter((a) => a.status === "idle" || a.status === "needs-approval").length;
   const running = automationAgents.filter((a) => a.status === "active").length + (dailyConfig.enabled ? 1 : 0);
-  const off = Math.max(0, count - running);
+  const pendingApprovals = visible(store.state.approvals || []).filter((approval) => approval.status === "pending");
+  const risk = getAutomationRiskSummary();
 
   const panel = auTab === "configured" ? configuredAutomationTab(agents)
+    : auTab === "approvals" ? `<div class="au-embedded-workspace" data-au-decisions></div>`
+    : auTab === "risk" ? `<div class="au-embedded-workspace" data-au-exceptions></div>`
     : auTab === "autopilot" ? autopilotDeveloperTab()
     : auTab === "recipes" ? recipesTab()
     : auTab === "logs" ? logsTab()
@@ -654,23 +666,41 @@ export function renderAutomation(el, opts = {}) {
 
   el.innerHTML = `
     <div class="au">
-      <div class="bm-note au-note"><i></i>Configured automations live here. PhantomBot is the control plane for PhantomForce internals and workspace automations. Schedules, approvals, run-now controls, logs, and receipts stay together here.</div>
+      <section class="au-control-plane">
+        <div class="au-control-copy">
+          <p class="ch-eyebrow">PhantomBot / unified control plane</p>
+          <h2>One brain. Every workflow.</h2>
+          <p>Choose the AI route once, then manage schedules, decisions, exceptions, logs, and execution from this single command center.</p>
+        </div>
+        <details class="au-brain-details">
+          <summary><span>AI routing & execution</span><small>PhantomBot Hybrid · models, loop, and action rules</small></summary>
+          <div class="au-brain-control" data-au-brain-control></div>
+        </details>
+      </section>
       <div class="au-summary" aria-label="Automation summary">
         <span><b>${count}</b><i>Configured</i></span>
         <span><b>${running}</b><i>On</i></span>
-        <span><b>${off}</b><i>Off</i></span>
-        <span><b>${pending}</b><i>Approval required</i></span>
+        <span><b>${pendingApprovals.length}</b><i>Decisions</i></span>
+        <span><b>${risk.open}</b><i>Exceptions</i></span>
       </div>
       <nav class="ml-tabs au-tabs" role="tablist">
-        ${TABS.map(([id, label]) => `<button class="ml-tab ${auTab === id ? "is-active" : ""}" type="button" role="tab" data-au-tab="${id}">${label}</button>`).join("")}
+        ${TABS.map(([id, label]) => {
+          const total = id === "approvals" ? pendingApprovals.length : id === "risk" ? risk.open : null;
+          return `<button class="ml-tab ${auTab === id ? "is-active" : ""}" type="button" role="tab" data-au-tab="${id}">${label}${total == null ? "" : `<b>${total}</b>`}</button>`;
+        }).join("")}
       </nav>
       <section class="bm-card au-card">${panel}</section>
     </div>`;
+
+  renderOperatorMiniSettings(el.querySelector("[data-au-brain-control]"), { notify });
+  if (auTab === "approvals") renderApprovals(el.querySelector("[data-au-decisions]"), paint);
+  if (auTab === "risk") renderRiskWatch(el.querySelector("[data-au-exceptions]"), paint);
 
   if (auTab === "autopilot") loadAutopilotDiagnostics(el, paint);
   if (auTab === "autopilot") wireAutopilotDiagnostics(el, notify, paint);
 
   el.querySelectorAll("[data-au-tab]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auTab; paint(); });
+  el.querySelectorAll("[data-au-review]").forEach((btn) => btn.onclick = () => { auTab = "approvals"; paint(); });
 
   const toggleExpandedAutomation = (id) => {
     expandedAutomationId = expandedAutomationId === id ? null : id;

@@ -100,7 +100,7 @@ assert.match(adminCss, /--pf-green:\s*#35f59d/u, "Admin Next must own the bright
 assert.match(index, /<meta name="theme-color" content="#090d12"/u, "Browser and preload chrome must begin on the graphite brand base.");
 assert.match(index, /\.boot-fallback[\s\S]*?rgba\(24, 242, 143/u, "The pre-application loading state must already use Phantom green.");
 assert.doesNotMatch(index, /#(?:f3f2fa|f5f4fb|241f3f|5d5880)|rgba\((?:139,\s*103,\s*255|126,\s*103,\s*255|199,\s*153,\s*255|130,\s*112,\s*255|91,\s*76,\s*255)/iu, "The initial document cannot flash the retired light-purple experience.");
-assert.match(adminCss, /\.page-worker[\s\S]*?rgba\(24, 242, 143/u, "Page intelligence must use the green brand layer.");
+assert.doesNotMatch(main, /pageWorkerHtml|mountPageWorkers/u, "The retired Page intelligence prompt must not render above every workspace.");
 assert.match(adminCss, /\.os-primary-nav button::after[\s\S]*?var\(--pf-green\)/u, "Navigation state must use Phantom green.");
 assert.doesNotMatch(adminCss, /purple|violet|indigo|blue|#(?:5b4cff|b44bf0|7c6cff|4f8dff|6da4ff|74a9ff)|rgba\((?:91,\s*76,\s*255|124,\s*108,\s*255|79,\s*141,\s*255)/iu, "The final admin authority must not reintroduce the retired purple/blue palette.");
 assert.match(brandCss, /--neon:\s*#41ffa1/u, "The shared product chrome must use Phantom mint as its primary accent.");

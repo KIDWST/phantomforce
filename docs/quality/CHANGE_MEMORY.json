@@ -1635,11 +1635,11 @@
       "id": "primary-navigation-search-and-accounting-simplification",
       "status": "active",
       "title": "Primary navigation is general, media-first, and has one account-scoped relationship workspace",
-      "ownerDecision": "PhantomForce is a public multi-tenant product, so primary navigation stays general: Overview, Media Lab, Content Hub, Social Analytics, Relationships, Bookings, Quotes & Money, Sites & Stores, Approvals, and Risk Watch. ChicagoShots is organization data and a customer workspace, never global platform chrome. Leads, active clients, and follow-ups live as three account-scoped views inside Relationships and never compete as separate primary tabs. Each organization owns its CRM records, labels, defaults, filters, and current view. Analytics opens on social media and keeps business, commerce, revenue, competitor marketing, and game analytics in its source selector. System and ecosystem destinations remain available but quieter. Global Search only finds pages, records, and explicit actions; conversational prompting belongs in PhantomBot. Offers and review requests remain Quotes & Money sections, never separate desk products.",
+      "ownerDecision": "PhantomForce is a public multi-tenant product, so primary navigation stays general: Overview, Media Lab, Content Hub, Social Analytics, Relationships, Bookings, Quotes & Money, and Sites & Stores. Approvals and Risk Watch are operational layers inside Automations as Decisions and Exceptions, never separate primary tabs. ChicagoShots is organization data and a customer workspace, never global platform chrome. Leads, active clients, and follow-ups live as three account-scoped views inside Relationships and never compete as separate primary tabs. Each organization owns its CRM records, labels, defaults, filters, and current view. Analytics opens on social media and keeps business, commerce, revenue, competitor marketing, and game analytics in its source selector. System and ecosystem destinations remain available but quieter. Global Search only finds pages, records, and explicit actions; conversational prompting belongs in PhantomBot. Offers and review requests remain Quotes & Money sections, never separate desk products.",
       "requiredPatterns": [
         {
           "file": "app/index.html",
-          "pattern": "data-nav-id=\"dashboard\"[^>]*>Overview<[\\s\\S]*data-nav-id=\"media\"[^>]*>Media Lab<[\\s\\S]*data-nav-id=\"content\"[^>]*>Content Hub<[\\s\\S]*data-nav-id=\"analytics\"[^>]*>Social Analytics<[\\s\\S]*data-nav-id=\"leads\"[^>]*>Relationships<[\\s\\S]*data-nav-id=\"bookings\"[^>]*>Bookings<[\\s\\S]*data-nav-id=\"money\"[^>]*>Quotes &amp; Money<[\\s\\S]*data-nav-id=\"sites\"[^>]*>Sites &amp; Stores<[\\s\\S]*data-nav-id=\"approvals\"[^>]*>Approvals<[\\s\\S]*data-nav-id=\"riskwatch\"[^>]*>Risk Watch<",
+          "pattern": "data-nav-id=\"dashboard\"[^>]*>Overview<[\\s\\S]*data-nav-id=\"media\"[^>]*>Media Lab<[\\s\\S]*data-nav-id=\"content\"[^>]*>Content Hub<[\\s\\S]*data-nav-id=\"analytics\"[^>]*>Social Analytics<[\\s\\S]*data-nav-id=\"leads\"[^>]*>Relationships<[\\s\\S]*data-nav-id=\"bookings\"[^>]*>Bookings<[\\s\\S]*data-nav-id=\"money\"[^>]*>Quotes &amp; Money<[\\s\\S]*data-nav-id=\"sites\"[^>]*>Sites &amp; Stores<",
           "description": "The primary command rail directly exposes the media-first owner jobs in audited priority order."
         },
         {
@@ -1678,6 +1678,11 @@
           "file": "app/index.html",
           "pattern": "data-nav-id=\"(?:clients|followup)\"",
           "description": "Clients and Follow-up cannot return as separate primary navigation tabs."
+        },
+        {
+          "file": "app/index.html",
+          "pattern": "data-nav-id=\"(?:approvals|riskwatch)\"",
+          "description": "Approvals and Risk Watch cannot return as standalone navigation tabs."
         },
         {
           "file": "app/index.html",
@@ -1810,11 +1815,11 @@
       "id": "admin-pages-preloaded-green-black-ui-floor",
       "status": "active",
       "title": "Admin pages use one fast black and Phantom-green visual system",
-      "ownerDecision": "Global admin styles are applied before boot, while workspace-only styles warm in the background and are awaited when their route opens so initial paint stays inside the performance budget. A route may never insert raw workspace markup before its visual system is applied: the previous complete page remains intact and a branded Phantom transition appears only when loading takes long enough to be visible. Failed styling stays behind a truthful retry surface. Page modules remain in the static import graph with eager hints for primary surfaces. The admin shell, navigation state, page intelligence, shared controls, and Planner use black, graphite, and Phantom green. Purple and blue are not admin accent colors. Planner must retain a real responsive card, metric, week-board, and side-panel layout instead of collapsing to raw document flow.",
+      "ownerDecision": "Global admin styles are applied before boot, while workspace-only styles warm in the background and are awaited when their route opens so initial paint stays inside the performance budget. A route may never insert raw workspace markup before its visual system is applied: the previous complete page remains intact and a branded Phantom transition appears only when loading takes long enough to be visible. Failed styling stays behind a truthful retry surface. Page modules remain in the static import graph with eager hints for primary surfaces. The admin shell, navigation state, Automation control plane, shared controls, and Planner use black, graphite, and Phantom green. The generic Page intelligence prompt is retired from every workspace; platform-wide AI control belongs in PhantomBot Automations. Purple and blue are not admin accent colors. Planner must retain a real responsive card, metric, week-board, and side-panel layout instead of collapsing to raw document flow.",
       "requiredPatterns": [
         {
           "file": "app/index.html",
-          "pattern": "theme-color\" content=\"#020705\"[\\s\\S]*\\.boot-fallback[\\s\\S]*rgba\\(24, 242, 143[\\s\\S]*data-admin-page-style[^>]*phantom\\.css[\\s\\S]*data-admin-page-style[^>]*admin-next\\.css",
+          "pattern": "theme-color\" content=\"#090d12\"[\\s\\S]*\\.boot-fallback[\\s\\S]*rgba\\(24, 242, 143[\\s\\S]*data-admin-page-style[^>]*phantom\\.css[\\s\\S]*data-admin-page-style[^>]*admin-next\\.css",
           "description": "The initial loading state is black and green, then the document applies the global base and final unified styles before boot."
         },
         {
@@ -1829,7 +1834,7 @@
         },
         {
           "file": "app/admin-next.css",
-          "pattern": "--pf-black: #020705[\\s\\S]*--pf-green: #18f28f[\\s\\S]*\\.os-primary-nav button::after[\\s\\S]*var\\(--pf-green\\)[\\s\\S]*\\.page-worker",
+          "pattern": "--pf-black: #090d12[\\s\\S]*--pf-green: #35f59d[\\s\\S]*\\.os-primary-nav button::after[\\s\\S]*var\\(--pf-green\\)[\\s\\S]*Automation is the single command center",
           "description": "The final shell authority defines and applies the black and Phantom-green brand."
         },
         {
@@ -2546,12 +2551,12 @@
       "id": "admin-master-audit-and-phantom-empires-floor",
       "status": "active",
       "title": "The admin audit is executable and Phantom Empires is a shared playable release",
-      "ownerDecision": "The 2,186-case PhantomForce admin audit is source coverage, not permission to claim unverified passes. Its release floor requires real authentication and tenant gates, first-class Approvals and Risk Watch, an admin-only organization Audit Log with distinct loading, error, verified-empty, filtered-empty, and populated states, freshness, retry, and a redacted allowlist export. Phantom Empires: Sovereign is a real built-in PhantomPlay strategy game shared by web and the desktop shell, with three modes, four Ages, a four-resource economy, construction, training, land and naval forces, siege combat, enemy pressure, day/night weather, minimap, save/resume, sound, keyboard, and touch controls. The shipped browser game identifies its real PhantomPlay Strategy Engine and must not pretend to be a native Unreal executable.",
+      "ownerDecision": "The 2,186-case PhantomForce admin audit is source coverage, not permission to claim unverified passes. Its release floor requires real authentication and tenant gates, first-class Decisions and Exceptions inside the unified Automations control plane, an admin-only organization Audit Log with distinct loading, error, verified-empty, filtered-empty, and populated states, freshness, retry, and a redacted allowlist export. Legacy Approvals, Risk Watch, and Protect routes must resolve into Automations instead of returning as separate destinations. Phantom Empires: Sovereign is a real built-in PhantomPlay strategy game shared by web and the desktop shell, with three modes, four Ages, a four-resource economy, construction, training, land and naval forces, siege combat, enemy pressure, day/night weather, minimap, save/resume, sound, keyboard, and touch controls. The shipped browser game identifies its real PhantomPlay Strategy Engine and must not pretend to be a native Unreal executable.",
       "requiredPatterns": [
         {
           "file": "app/js/main.js",
-          "pattern": "id: \"riskwatch\"[\\s\\S]*label: \"Risk Watch\"[\\s\\S]*id: \"audit\"[\\s\\S]*label: \"Audit Log\"[\\s\\S]*navZone: \"bottom\"",
-          "description": "Risk Watch remains an owner destination and Audit Log remains available in the quieter operator system area."
+          "pattern": "id: \"audit\"[\\s\\S]*label: \"Audit Log\"[\\s\\S]*navZone: \"bottom\"[\\s\\S]*approvals: \"automation\"[\\s\\S]*riskwatch: \"automation\"[\\s\\S]*protect: \"automation\"",
+          "description": "Legacy decision and risk routes resolve into Automations while Audit Log remains available in the quieter operator system area."
         },
         {
           "file": "app/js/orgs.js",

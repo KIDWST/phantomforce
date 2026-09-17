@@ -5,6 +5,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const index = read("../app/index.html");
 const main = read("../app/js/main.js");
 const workspaces = read("../app/js/workspaces.js");
+const brandops = read("../app/js/brandops.js");
 const store = read("../app/js/store.js");
 const orgs = read("../app/js/orgs.js");
 const css = read("../app/phantom.css");
@@ -33,8 +34,6 @@ const primaryJobs = [
   ["bookings", "Bookings"],
   ["money", "Quotes &amp; Money"],
   ["sites", "Sites &amp; Stores"],
-  ["approvals", "Approvals"],
-  ["riskwatch", "Risk Watch"],
 ];
 
 let previousIndex = -1;
@@ -50,10 +49,9 @@ assert.doesNotMatch(primaryNav, /data-nav-id="(?:phantomplay|phantomstore|automa
 assert.doesNotMatch(primaryNav, /data-nav-id="(?:clients|followup)"/u, "Clients and Follow-up must live inside the single Relationships destination.");
 assert.doesNotMatch(primaryNav, /data-nav-id="chicagoshots"/u, "Customer organizations cannot appear in public platform navigation.");
 assert.doesNotMatch(main, /\{ id: "chicagoshots",\s+label: "ChicagoShots"/u, "ChicagoShots cannot be a global BASE_NAV destination.");
-assert.match(main, /\{ id: "approvals",\s+label: "Approvals",[^\n]*ws: "approvals"/u, "Approvals must be a persistent destination.");
-assert.doesNotMatch(main, /\{ id: "approvals"[^\n]*dashboardWidget/u, "Approvals cannot be hidden as a dashboard-only widget.");
-assert.match(main, /\{ id: "riskwatch",\s+label: "Risk Watch",[^\n]*ws: "riskwatch"/u, "Risk Watch must be a persistent destination.");
-assert.match(main, /crm: "leads"[\s\S]*protect: "riskwatch"/u, "Old CRM and Protect deep links must remain compatible.");
+assert.doesNotMatch(main, /\{ id: "(?:approvals|riskwatch)",\s+label:/u, "Approvals and Risk Watch must not remain standalone navigation destinations.");
+assert.match(main, /approvals: "automation"[\s\S]*riskwatch: "automation"[\s\S]*protect: "automation"/u, "Legacy decision and risk links must resolve into Automations.");
+assert.match(brandops, /\["approvals", "Decisions"\][\s\S]*\["risk", "Exceptions"\]/u, "Automations must contain Decisions and Exceptions.");
 
 for (const [id, renderer] of [
   ["leads", "renderRelationships"],
@@ -61,7 +59,6 @@ for (const [id, renderer] of [
   ["comms", "renderComms"],
   ["bookings", "renderBookings"],
   ["clients", "renderLegacyClientsRoute"],
-  ["riskwatch", "renderRiskWatch"],
   ["runtime", "renderRuntime"],
   ["audit", "renderAuditLog"],
   ["notifications", "renderNotifications"],
@@ -90,8 +87,8 @@ function gate(id, assertion, message) {
 
 gate("AUTH-01", /test:auth-boundaries/u.test(release) && /customerAuthForbiddenOnHost/u.test(server), "Public auth boundaries must stay release-gated and server enforced.");
 gate("TENANT-01", /tenant isolation \(the aggressive part\)/iu.test(databaseAuthTest) && /test:organization-record-isolation/u.test(release), "Cross-organization record isolation must stay in release-critical coverage.");
-gate("APPROVAL-01", /id: "approvals"[\s\S]*label: "Approvals"/u.test(main) && /decideServerRun/u.test(workspaces), "Approvals must be a real destination backed by server decisions.");
-gate("RISK-01", /id: "riskwatch"[\s\S]*label: "Risk Watch"[\s\S]*ws: "riskwatch"/u.test(main) && /protect: "riskwatch"/u.test(main), "Risk Watch must be first-class while preserving legacy Protect links.");
+gate("APPROVAL-01", /renderApprovals/u.test(brandops) && /decideServerRun/u.test(workspaces), "Automation Decisions must remain backed by server decisions.");
+gate("RISK-01", /renderRiskWatch/u.test(brandops) && /protect: "automation"/u.test(main), "Automation Exceptions must remain first-class while preserving legacy Protect links.");
 gate("AUDIT-01", /app\.get\("\/orgs\/:orgId\/audit"[\s\S]*requireOrgManager\(request, reply, orgId\)/u.test(server), "Organization audit reads must be server-side role scoped.");
 gate("AUDIT-02", /prevHash[\s\S]*stableHash\(body\)/u.test(accounts), "Organization audit events must remain hash chained.");
 gate("AUDIT-03", /export async function fetchOrgAuditEvents/u.test(orgs) && /auditlog: \{[^\n]*adminOnly: true/u.test(workspaces), "The protected server audit trail must have a real admin UI client and route.");

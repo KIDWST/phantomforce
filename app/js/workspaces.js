@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-217";
+} from "./store.js?v=phantom-live-20260914-218";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-217";
+} from "./orgs.js?v=phantom-live-20260914-218";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-217";
+} from "./proposalpipeline.js?v=phantom-live-20260914-218";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-217";
+} from "./approvalpipeline.js?v=phantom-live-20260914-218";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-217";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-217";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-217";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-217";
+} from "./financeledger.js?v=phantom-live-20260914-218";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-218";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-218";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-218";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -2289,16 +2289,16 @@ function buildRiskRecords() {
   visible(store.state.security).forEach((security) => {
     (security.findings || []).filter((finding) => finding.level === "warn").forEach((finding, index) => records.push({
       id: `security:${security.id}:${index}`, ws: security.ws, severity: "high", category: "Security", title: finding.text,
-      detail: `Posture ${security.posture || "unknown"}; next verified scan ${security.nextScan ? fmtDate(security.nextScan) : "not scheduled"}.`, owner: "Security Watch", open: "riskwatch",
+      detail: `Posture ${security.posture || "unknown"}; next verified scan ${security.nextScan ? fmtDate(security.nextScan) : "not scheduled"}.`, owner: "Automation Control", open: "automation",
     }));
     if (security.rotationDue && daysUntil(security.rotationDue) <= 30) records.push({
       id: `rotation:${security.id}`, ws: security.ws, severity: daysUntil(security.rotationDue) < 0 ? "critical" : "high", category: "Security", title: "Credential rotation window needs attention",
-      detail: `Window ${daysUntil(security.rotationDue) < 0 ? "closed" : `closes in ${daysUntil(security.rotationDue)} days`}. Credentials are never displayed here.`, owner: "Account owner", open: "riskwatch",
+      detail: `Window ${daysUntil(security.rotationDue) < 0 ? "closed" : `closes in ${daysUntil(security.rotationDue)} days`}. Credentials are never displayed here.`, owner: "Account owner", open: "automation",
     });
   });
   visible(store.state.approvals).filter((approval) => approval.status === "pending").forEach((approval) => {
     const ageHours = Math.max(0, (Date.now() - new Date(approval.at || approval.createdAt || Date.now()).getTime()) / 3600000);
-    records.push({ id: `approval:${approval.id}`, ws: approval.ws, severity: ageHours >= 24 ? "high" : "medium", category: "Approval", title: approval.title, detail: `${Math.floor(ageHours)}h waiting. ${approval.detail || "Owner decision required."}`, owner: "Business owner", open: "approvals" });
+    records.push({ id: `approval:${approval.id}`, ws: approval.ws, severity: ageHours >= 24 ? "high" : "medium", category: "Decision", title: approval.title, detail: `${Math.floor(ageHours)}h waiting. ${approval.detail || "Owner decision required."}`, owner: "Business owner", open: "automation" });
   });
   visible(store.state.leads).filter((lead) => ["new", "follow-up"].includes(lead.status) && lead.due && daysUntil(lead.due) < -2).forEach((lead) => records.push({
     id: `followup:${lead.id}`, ws: lead.ws, severity: "medium", category: "Pipeline", title: `Follow-up overdue: ${lead.name || lead.company}`, detail: `${dueLabel(lead)}. ${lead.next || "No next step recorded."}`, owner: lead.owner || "Follow-up Desk", open: "followup",
@@ -2313,22 +2313,34 @@ function buildRiskRecords() {
   return records.sort((left, right) => rank[left.severity] - rank[right.severity]);
 }
 
-function renderRiskWatch(el, rerender) {
-  const all = buildRiskRecords();
+export function getAutomationRiskSummary() {
+  const all = buildRiskRecords().filter((record) => record.category !== "Decision");
+  const active = all.filter((record) => !riskAcknowledged(record.id));
+  return {
+    total: all.length,
+    open: active.length,
+    critical: active.filter((record) => record.severity === "critical").length,
+    high: active.filter((record) => record.severity === "high").length,
+    acknowledged: all.length - active.length,
+  };
+}
+
+export function renderRiskWatch(el, rerender) {
+  const all = buildRiskRecords().filter((record) => record.category !== "Decision");
   const active = all.filter((record) => !riskAcknowledged(record.id));
   const acknowledged = all.filter((record) => riskAcknowledged(record.id));
   el.innerHTML = `
-    <section class="ops-summary" aria-label="Risk status">
+    <section class="ops-summary" aria-label="Automation exception status">
       <article class="is-critical"><span>Critical</span><b>${active.filter((item) => item.severity === "critical").length}</b><i>immediate owner attention</i></article>
       <article><span>High</span><b>${active.filter((item) => item.severity === "high").length}</b><i>action before routine work</i></article>
       <article><span>Open signals</span><b>${active.length}</b><i>${acknowledged.length} acknowledged</i></article>
     </section>
-    <div class="ws-toolbar"><p class="ws-note">Risk Watch aggregates real recorded exceptions across approvals, pipeline, bookings, security, and runtime. Acknowledging keeps the evidence and records who handled it.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Automation exceptions collect real recorded issues across decisions, pipeline, bookings, security, and runtime. Acknowledging keeps the evidence and records who handled it.</p></div>
     <div class="ops-risk-list">
       ${active.map((record) => `<article class="ops-risk ops-risk-${record.severity}">
         <div><span>${esc(record.severity)} · ${esc(record.category)}</span><h4>${esc(record.title)}</h4><p>${esc(record.detail)}</p><i>Owner: ${esc(record.owner)} · workspace ${esc(record.ws)}</i></div>
         <div class="record-actions"><button class="btn btn-primary" data-act="remediate-risk" data-id="${esc(record.id)}">Create remediation</button><button class="btn" data-act="ack-risk" data-id="${esc(record.id)}">Acknowledge</button></div>
-      </article>`).join("") || productStateHtml("empty", { title: "No open risk signals", detail: "Risk Watch found no recorded exceptions in this workspace." })}
+      </article>`).join("") || productStateHtml("empty", { title: "No open exceptions", detail: "PhantomBot found no recorded automation exceptions in this workspace." })}
     </div>
     ${acknowledged.length ? `<h3 class="ws-subhead">Acknowledged signals</h3><div class="ops-timeline">${acknowledged.map((record) => `<article><span>${esc(record.category)}</span><b>${esc(record.title)}</b><i>acknowledged</i></article>`).join("")}</div>` : ""}`;
   const find = (id) => all.find((record) => record.id === id);
@@ -2336,14 +2348,14 @@ function renderRiskWatch(el, rerender) {
     "ack-risk": (id) => {
       const record = find(id); if (!record || riskAcknowledged(id)) return;
       store.state.riskAcknowledgements.unshift({ id, ws: record.ws, title: record.title, at: new Date().toISOString(), actor: session.get()?.name || "Operator" });
-      pushActivity("Risk Watch", `acknowledged ${record.severity} signal: ${record.title}.`, record.ws);
+      pushActivity("Automation Control", `acknowledged ${record.severity} exception: ${record.title}.`, record.ws);
       store.save(); rerender();
     },
     "remediate-risk": (id) => {
       const record = find(id); if (!record) return;
       const existing = visible(store.state.tasks).some((task) => task.riskId === id && task.status !== "done");
-      if (!existing) store.state.tasks.unshift({ id: uid("task"), ws: record.ws, riskId: id, title: `Remediate: ${record.title}`, detail: record.detail, status: "new", priority: ["critical", "high"].includes(record.severity) ? "high" : "normal", source: "Risk Watch", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-      pushActivity("Risk Watch", `created remediation work for ${record.title}.`, record.ws);
+      if (!existing) store.state.tasks.unshift({ id: uid("task"), ws: record.ws, riskId: id, title: `Remediate: ${record.title}`, detail: record.detail, status: "new", priority: ["critical", "high"].includes(record.severity) ? "high" : "normal", source: "Automation Control", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      pushActivity("Automation Control", `created remediation work for ${record.title}.`, record.ws);
       store.save(); rerender();
     },
   });
@@ -2351,8 +2363,8 @@ function renderRiskWatch(el, rerender) {
 
 function notificationRecords() {
   const records = [];
-  visible(store.state.approvals).filter((item) => item.status === "pending").forEach((item) => records.push({ id: `approval:${item.id}`, ws: item.ws, tone: "approval", title: item.title, detail: item.detail || "Owner decision required.", at: item.at, open: "approvals" }));
-  buildRiskRecords().filter((item) => !riskAcknowledged(item.id)).forEach((item) => records.push({ id: `risk:${item.id}`, ws: item.ws, tone: item.severity, title: item.title, detail: item.detail, at: new Date().toISOString(), open: "riskwatch" }));
+  visible(store.state.approvals).filter((item) => item.status === "pending").forEach((item) => records.push({ id: `approval:${item.id}`, ws: item.ws, tone: "decision", title: item.title, detail: item.detail || "Owner decision required.", at: item.at, open: "automation" }));
+  buildRiskRecords().filter((item) => item.category !== "Decision" && !riskAcknowledged(item.id)).forEach((item) => records.push({ id: `risk:${item.id}`, ws: item.ws, tone: item.severity, title: item.title, detail: item.detail, at: new Date().toISOString(), open: "automation" }));
   visible(store.state.leads).filter((item) => ["new", "follow-up"].includes(item.status) && item.due && daysUntil(item.due) <= 0).forEach((item) => records.push({ id: `lead:${item.id}:${String(item.due).slice(0, 10)}`, ws: item.ws, tone: "follow-up", title: `${item.name || item.company} needs follow-up`, detail: `${dueLabel(item)} · ${item.next || "Next step not set"}`, at: item.due, open: "followup" }));
   visible(store.state.bookings).filter((item) => item.status !== "confirmed" && new Date(item.when).getTime() >= Date.now() && new Date(item.when).getTime() <= Date.now() + 2 * 86400000).forEach((item) => records.push({ id: `booking:${item.id}`, ws: item.ws, tone: "booking", title: `Upcoming booking draft: ${item.client}`, detail: fmtDateTime(item.when), at: item.when, open: "bookings" }));
   return records.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
@@ -3075,7 +3087,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-217")
+      import("./brain.js?v=phantom-live-20260914-218")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -4734,12 +4746,12 @@ async function hydrateServerApprovals(el, rerender) {
   });
 }
 
-function renderApprovals(el, rerender) {
+export function renderApprovals(el, rerender) {
   hydrateWorkspaceApprovalRecords(rerender);
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
   const done = visible(store.state.approvals).filter((a) => a.status !== "pending").slice(0, 6);
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">${esc(approvalUi.notice || "Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, and deploys.")} Drafting never waits on you. Workspace decisions update state only; external execution requires its separate verified connector.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">${esc(approvalUi.notice || "Automation decisions appear here only when PhantomBot needs a human call: sends, bookings, publishing, paid generation, invoices, and deploys.")} Drafting never waits on you. A decision updates workflow state only; external execution still requires its verified connector.</p></div>
     ${isDatabaseSession() ? `<div data-server-approvals></div>` : ""}
     ${pending.length ? `<div class="stack">
       ${pending.map((a) => `
@@ -4876,8 +4888,6 @@ export const WORKSPACE_DEFS = {
   proposals: { title: "Offers", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Offers to review", kicker: "Review requests and proof", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
-  protect: { title: "Risk Watch", kicker: "Legacy security route", render: renderRiskWatch },
-  riskwatch: { title: "Risk Watch", kicker: "Prioritized business, approval, and runtime risk", render: renderRiskWatch },
   money: { title: "Quotes & Money", kicker: "Cash, offers, and review", render: renderAccounting },
   memory: { title: "Memory", kicker: "Context intelligence database", render: renderMemory },
   workforce: { title: "Workforce", kicker: "Business ops network", render: renderWorkforce },
@@ -4885,7 +4895,6 @@ export const WORKSPACE_DEFS = {
   audit: { title: "Audit Log", kicker: "Tenant-scoped actor and execution evidence", render: renderAuditLog },
   auditlog: { title: "Organization Audit", kicker: "Verified organization receipts", render: renderOrganizationAuditLog, adminOnly: true },
   notifications: { title: "Notifications", kicker: "Prioritized business attention queue", render: renderNotifications },
-  approvals: { title: "Approvals", kicker: "Human decisions with execution evidence", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
@@ -4897,7 +4906,6 @@ export function missionWidgets() {
   const m = moneyView();
   const pend = visible(store.state.approvals).filter((a) => a.status === "pending");
   const pages = visible(store.state.sites);
-  const sec = visible(store.state.security)[0];
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
   const bks = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
   const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "standby", "gated", "sandbox", "setup-ready", "planning", "available", "owner-controlled"].includes(tool.mode)).length;
@@ -4905,15 +4913,15 @@ export function missionWidgets() {
   const onlineWorkers = workerRoster.filter((worker) => worker.status !== "offline");
   const subagentCount = workerRoster.filter((worker) => worker.worker_type === "subagent").length;
   const neuralCellCount = workerRoster.filter((worker) => worker.worker_type === "cell").length;
+  const automationRisk = getAutomationRiskSummary();
 
   const w = [
     { id: "leads", icon: "◉", title: "Client CRM", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "client memory current", alert: dueLeads.length > 0 },
     { id: "sites", icon: "▦", title: "Site Portfolio", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
-    { id: "riskwatch", icon: "⬡", title: "Risk Watch", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
     { id: "money", icon: "◈", title: "Quotes & Money", stat: m.transactions.length ? moneySigned(m.netCash) : `${m.open.length} offer${m.open.length === 1 ? "" : "s"}`, sub: `${m.transactions.length} transactions · ${revs.length} to review`, alert: false },
     { id: "workforce", icon: "⬢", title: "Workforce", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
-    { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
+    { id: "automation", icon: "⌁", title: "Automation Control", stat: `${visible(store.state.agents).filter((agent) => agent.kind === "automation" && agent.status === "active").length} running`, sub: `${pend.length} decision${pend.length === 1 ? "" : "s"} · ${automationRisk.open} exception${automationRisk.open === 1 ? "" : "s"}`, alert: pend.length > 0 || automationRisk.open > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
   return w;

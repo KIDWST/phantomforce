@@ -21,6 +21,8 @@ assert.match(
   "Automation must route customer or brand context to the real Memory/Hermes layer.",
 );
 assert.match(tabsBlock, /\["configured", "Configured"\]/u, "Automation must keep the Configured tab.");
+assert.match(tabsBlock, /\["approvals", "Decisions"\]/u, "Automation must own the decision queue.");
+assert.match(tabsBlock, /\["risk", "Exceptions"\]/u, "Automation must own operational exceptions.");
 assert.match(tabsBlock, /\["recipes", "Recipes"\]/u, "Automation must keep the Recipes tab.");
 assert.match(tabsBlock, /\["logs", "Logs"\]/u, "Automation must keep the Logs tab.");
 assert.match(tabsBlock, /\["safety", "Safety rules"\]/u, "Automation must keep the Safety rules tab.");
@@ -32,15 +34,16 @@ assert.doesNotMatch(
 );
 assert.match(
   brandops,
-  /renderAutomation\(el, opts = \{\}\)[\s\S]*Configured automations live here/u,
-  "Automation should describe itself as configured automations, not brand memory.",
+  /renderAutomation\(el, opts = \{\}\)[\s\S]*One brain\. Every workflow\./u,
+  "Automation should present one unified control plane.",
 );
 assert.match(
   brandops,
   /friendlyBackendError[\s\S]*Sign in to load automation jobs[\s\S]*Sign in to load the run engine/u,
   "Automation must hide raw auth transport errors for scheduled jobs and agent runs.",
 );
-assert.match(css, /Automation workspace — Configured\/Recipes\/Logs\/Safety/u, "Automation CSS should describe the four automation tabs.");
+assert.match(css, /Automation control plane — workflows, decisions, exceptions/u, "Automation CSS should describe the unified control plane.");
+assert.match(brandops, /renderOperatorMiniSettings[\s\S]*renderApprovals[\s\S]*renderRiskWatch/u, "Automations must combine AI routing, decisions, and exceptions.");
 assert.match(packageJson, /test:automation-workspace/u, "Root package must expose the Automation workspace regression test.");
 assert.match(main, /data-phantomai-tab="automations"[\s\S]*data-phantombot-automations-mount/u, "PhantomBot must contain the automation control plane.");
 assert.match(main, /\{ id: "automation",\s+label: "Automations"[\s\S]*navZone: "bottom"/u, "Automation must remain a quiet operator destination without entering the primary business rail.");

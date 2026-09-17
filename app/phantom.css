@@ -8069,7 +8069,7 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0;
-  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260914-217") center / contain no-repeat;
+  background: url("/app/assets/brand-phantom.png?v=phantom-live-20260914-218") center / contain no-repeat;
   filter: saturate(1.2) drop-shadow(0 0 28px rgba(65, 255, 161, 0.28));
   transform: translateY(10px) scale(0.96);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -8975,13 +8975,48 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
 /* the default view is a short stats list — never a transport/vendor name.
    Anything technical lives in the collapsed Details toggle beside it. */
 
-/* ============ Automation workspace — Configured/Recipes/Logs/Safety ============ */
+/* ============ Automation control plane — workflows, decisions, exceptions ============ */
+.au-control-plane {
+  display: grid;
+  grid-template-columns: minmax(240px, .82fr) minmax(420px, 1.4fr);
+  gap: clamp(14px, 2vw, 26px);
+  align-items: stretch;
+  margin-bottom: 12px;
+  padding: clamp(16px, 2vw, 24px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--glass);
+}
+.au-control-copy { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.au-control-copy h2 { margin: 4px 0 8px; font-size: clamp(23px, 2.4vw, 36px); letter-spacing: -.035em; }
+.au-control-copy > p:last-child { margin: 0; max-width: 560px; color: var(--dim); font-size: 13px; line-height: 1.55; }
+.au-brain-control { min-width: 0; }
+.au-brain-control .chat-mini-settings { height: 100%; margin: 0; }
+.au-brain-details {
+  align-self: center; min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.018);
+}
+.au-brain-details > summary {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+  min-height: 62px; padding: 0 16px; cursor: pointer; list-style: none;
+}
+.au-brain-details > summary::-webkit-details-marker { display: none; }
+.au-brain-details > summary::after { content: "+"; grid-column: 3; color: var(--neon); font: 800 18px "Spline Sans Mono", monospace; }
+.au-brain-details[open] > summary::after { content: "−"; }
+.au-brain-details > summary span { color: var(--ink); font-weight: 800; }
+.au-brain-details > summary small { color: var(--dim); font: 600 10px "Spline Sans Mono", monospace; text-align: right; }
+.au-brain-details[open] > .au-brain-control { border-top: 1px solid var(--line); padding: 12px; }
+.au-embedded-workspace { display: grid; gap: 14px; }
 .au-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, max-content));
+  grid-template-columns: repeat(7, minmax(0, max-content));
   justify-content: start;
   gap: 8px;
   margin: 2px 0 4px;
+}
+.au-tabs .ml-tab b {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: 6px; padding: 0 6px;
+  border-radius: 999px; background: rgba(65, 255, 161, .11); color: var(--neon);
+  font: 800 9px "Spline Sans Mono", monospace;
 }
 .au-recipes-note { margin: 0 0 12px; }
 .au-recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
@@ -9097,6 +9132,10 @@ kbd { font: 600 10px "Spline Sans Mono", monospace; padding: 2px 6px; border-rad
 .au-edit-grid textarea { min-height: 96px; resize: vertical; line-height: 1.45; text-transform: none; letter-spacing: 0; }
 .au-edit-grid input:disabled { opacity: .72; color: var(--dim); }
 @media (max-width: 720px) {
+  .au-control-plane { grid-template-columns: 1fr; }
+  .au-brain-details > summary { grid-template-columns: 1fr auto; }
+  .au-brain-details > summary::after { grid-column: 2; grid-row: 1; }
+  .au-brain-details > summary small { grid-column: 1 / -1; grid-row: 2; padding: 0 0 12px; text-align: left; }
   .au-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .au-tabs .ml-tab { justify-content: center; }
   .au-log-row { grid-template-columns: 1fr; gap: 2px; }

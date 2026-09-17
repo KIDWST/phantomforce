@@ -1,12 +1,12 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260914-217";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260914-217";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260914-217";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-217";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260914-217";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-217";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260914-218";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260914-218";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260914-218";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-218";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260914-218";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-218";
 import {
   AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
@@ -22,7 +22,7 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260914-217";
+} from "./ai-runtime.js?v=phantom-live-20260914-218";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -1430,7 +1430,7 @@ function renderModelTab(settings) {
           <div>
             <p class="set-eyebrow">Gateway control center</p>
             <h3>Choose exactly what powers PhantomForce</h3>
-            <p class="set-note">The platform brain controls pages, planning, workspace intelligence, and automations. PhantomBot has its own model choice, so changing chat never silently changes the rest of the business.</p>
+            <p class="set-note">The platform brain powers background intelligence and planning. PhantomBot Automations is the unified control plane for workflows, decisions, exceptions, and verified execution.</p>
           </div>
         </div>
         <div class="set-selection-summary set-runtime-summary">
@@ -1445,7 +1445,7 @@ function renderModelTab(settings) {
           <button class="btn btn-quiet" type="button" data-openrouter-model-refresh ${openRouterCatalogue.loading ? "disabled" : ""}>${openRouterCatalogue.loading ? "Loading models..." : "Refresh model list"}</button>
         </div>` : ""}
         <div class="set-route-grid">
-          ${renderAiRouteCard("platform", settings, "Platform brain", "Controls every AI-assisted page, planning flow, automation draft, workspace decision, and Prompt the Outcome request.")}
+          ${renderAiRouteCard("platform", settings, "Platform brain", "Controls automation planning, cross-platform actions, decisions, exceptions, and verified execution.")}
           ${renderAiRouteCard("phantombot", settings.phantomBot, "PhantomBot", "Controls PhantomBot conversations only. It can use a faster, local, subscription, or API model without changing the platform brain.")}
         </div>
         ${renderGatewayLoopControls()}

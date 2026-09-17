@@ -56,10 +56,8 @@ assert.match(worker, /store\.save\(\{ notify: false \}\)/u, "Saving Page Outcome
 assert.match(worker, /function renderPageWorkerResult[\s\S]{0,180}out\.hidden = false/u, "Completed Page Outcome output must always become visible.");
 assert.match(worker, /const refreshedOutput = currentWorkerOutput[\s\S]{0,240}renderPageWorkerResult\(refreshedOutput/u, "Page Outcome must repaint its completed receipt after activity notifications refresh the workspace.");
 
-assert.match(main, /import \{ pageWorkerHtml, mountPageWorkers \} from "\.\/pageworker\.js\?v=phantom-live-\d{8}-\d+"/u, "main.js must import the current page worker module.");
-assert.match(main, /\$\{key === "phantomplay" \? "" : pageWorkerHtml\(key, def\)\}/u, "Workspace pages must mount the worker prompt (PhantomPlay renders its own interface and intentionally skips the generic overlay).");
-assert.match(main, /mountPageWorkers\(root, mediaOpts\(\)\)/u, "Workspace pages must bind worker prompt events.");
-assert.match(main, /mountPageWorkers\(overlayRoot, mediaOpts\(\)\)/u, "Overlay pages must bind worker prompt events.");
+assert.doesNotMatch(main, /pageWorkerHtml|mountPageWorkers/u, "The retired Page intelligence prompt must not be injected into workspace pages or overlays.");
+assert.doesNotMatch(main, /from "\.\/pageworker\.js/u, "The global workspace renderer must not load the retired Page intelligence surface.");
 
 assert.match(css, /\.page-worker\b/u, "Page worker styles must exist.");
 assert.match(css, /\.page-worker-output\.is-thinking/u, "Backend thinking state must have visible styling.");

@@ -8,9 +8,9 @@ import {
   fmtMoney,
   session,
   workspaceStorageGetItem,
-} from "./store.js?v=phantom-live-20260914-217";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260914-217";
-import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings } from "./settings.js?v=phantom-live-20260914-217";
+} from "./store.js?v=phantom-live-20260914-218";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260914-218";
+import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings } from "./settings.js?v=phantom-live-20260914-218";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -405,7 +405,7 @@ function syncCommandOS() {
     audience.ready ? fmtCompact(audience.impressions) : marketing.connected,
     audience.ready ? `${plural(audience.platforms, "measured channel")} · ${audience.windowDays}d` : (marketing.connected ? plural(marketing.connected, "connected channel") : "Connect a social channel"),
   );
-  setNode("approvals", pendingApprovals, pendingApprovals ? plural(pendingApprovals, "decision waiting") : "None waiting");
+  setNode("approvals", pendingApprovals, pendingApprovals ? plural(pendingApprovals, "decision waiting") : "No decisions waiting");
   setNode("risk", leads, leads ? plural(leads, "tracked opportunity") : "No open relationships yet");
   setNode(
     "health",
@@ -459,7 +459,7 @@ function syncCommandOS() {
 
   setText("[data-os-user-name]", name.split(/\s+/)[0] || name);
   setText("[data-os-user-initial]", initial);
-  setText("[data-os-approval-label]", pendingApprovals ? `Approvals ${pendingApprovals}` : "Approvals");
+  setText("[data-os-approval-label]", pendingApprovals ? `Automations · ${pendingApprovals} decisions` : "Automations");
   setText("[data-os-mission-count]", `${agents.length} active`);
   setText("[data-os-agent-state]", plan.length || pendingApprovals ? "Attention ready" : "Ready");
   setText("[data-os-bridge-state]", bridge);
