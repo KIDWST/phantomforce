@@ -20,11 +20,12 @@ assert.match(
   /Customer\/brand context belongs in[\s\S]*the real Memory\/Hermes notes layer/u,
   "Automation must route customer or brand context to the real Memory/Hermes layer.",
 );
+assert.match(tabsBlock, /\["today", "Today"\]/u, "Automation must lead with the daily command center.");
 assert.match(tabsBlock, /\["configured", "Configured"\]/u, "Automation must keep the Configured tab.");
 assert.match(tabsBlock, /\["approvals", "Decisions"\]/u, "Automation must own the decision queue.");
 assert.match(tabsBlock, /\["risk", "Exceptions"\]/u, "Automation must own operational exceptions.");
 assert.match(tabsBlock, /\["recipes", "Recipes"\]/u, "Automation must keep the Recipes tab.");
-assert.match(tabsBlock, /\["logs", "Logs"\]/u, "Automation must keep the Logs tab.");
+assert.match(tabsBlock, /\["logs", "Activity"\]/u, "Automation must keep a unified Activity tab.");
 assert.match(tabsBlock, /\["safety", "Safety rules"\]/u, "Automation must keep the Safety rules tab.");
 assert.doesNotMatch(tabsBlock, /brand|memory/i, "Automation must not include a Brand Memory tab.");
 assert.doesNotMatch(
@@ -44,6 +45,7 @@ assert.match(
 );
 assert.match(css, /Automation control plane — workflows, decisions, exceptions/u, "Automation CSS should describe the unified control plane.");
 assert.match(brandops, /renderOperatorMiniSettings[\s\S]*renderApprovals[\s\S]*renderRiskWatch/u, "Automations must combine AI routing, decisions, and exceptions.");
+assert.match(brandops, /Daily command center[\s\S]*Attention queue[\s\S]*Provider receipt/u, "Automations must summarize real attention signals and distinguish provider receipts.");
 assert.match(packageJson, /test:automation-workspace/u, "Root package must expose the Automation workspace regression test.");
 assert.match(main, /data-phantomai-tab="automations"[\s\S]*data-phantombot-automations-mount/u, "PhantomBot must contain the automation control plane.");
 assert.match(main, /\{ id: "automation",\s+label: "Automations"[\s\S]*navZone: "bottom"/u, "Automation must remain a quiet operator destination without entering the primary business rail.");

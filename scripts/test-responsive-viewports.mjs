@@ -846,8 +846,10 @@ async function runViewportCase(cdp, baseUrl, screenshotDir, page, viewport, { na
       const visible = (element) => !!element && element.getBoundingClientRect().width > 1 && element.getBoundingClientRect().height > 1;
       return {
         visible: visible(root) && visible(control),
+        today: tabs.some((tab) => tab.dataset.auTab === "today"),
         decisions: tabs.some((tab) => tab.dataset.auTab === "approvals"),
         exceptions: tabs.some((tab) => tab.dataset.auTab === "risk"),
+        activity: tabs.some((tab) => tab.dataset.auTab === "logs"),
         pageWorkerVisible: visible(document.querySelector(".page-worker")),
       };
     })()`);
@@ -1177,8 +1179,10 @@ function assertCase(result) {
     assert.ok(audit.phantomBot.taskCount >= 1, `${label} ${viewport.width}: PhantomBot must start with a usable active task.`);
     if (automationTab) {
       assert.equal(audit.automationControl?.visible, true, `${label} ${viewport.width}: unified Automation control plane must be visible.`);
+      assert.equal(audit.automationControl?.today, true, `${label} ${viewport.width}: Automation Today command center must be present.`);
       assert.equal(audit.automationControl?.decisions, true, `${label} ${viewport.width}: Automation Decisions must be present.`);
       assert.equal(audit.automationControl?.exceptions, true, `${label} ${viewport.width}: Automation Exceptions must be present.`);
+      assert.equal(audit.automationControl?.activity, true, `${label} ${viewport.width}: Automation Activity must be present.`);
       assert.equal(audit.automationControl?.pageWorkerVisible, false, `${label} ${viewport.width}: retired Page intelligence must stay removed.`);
     } else {
     assert.equal(audit.phantomBot.composerVisible, true, `${label} ${viewport.width}: message composer must be visible on initial load. ${JSON.stringify({ rect: audit.phantomBot.composerRect, ancestors: audit.phantomBot.composerAncestors })}`);

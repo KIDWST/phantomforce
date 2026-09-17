@@ -7,13 +7,13 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260914-218";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260914-219";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260914-218";
-import { renderApprovals, renderRiskWatch, getAutomationRiskSummary } from "./workspaces.js?v=phantom-live-20260914-218";
-import { renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260914-218";
+} from "./content-ideas.js?v=phantom-live-20260914-219";
+import { renderApprovals, renderRiskWatch, getAutomationRiskSummary } from "./workspaces.js?v=phantom-live-20260914-219";
+import { renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260914-219";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -111,20 +111,22 @@ const RECIPES = [
 ];
 
 const TABS = [
+  ["today", "Today"],
   ["configured", "Configured"],
   ["approvals", "Decisions"],
   ["risk", "Exceptions"],
   ["autopilot", "Always-on"],
   ["recipes", "Recipes"],
-  ["logs", "Logs"],
+  ["logs", "Activity"],
   ["safety", "Safety rules"],
 ];
 
-let auTab = "configured";
+let auTab = "today";
 let expandedAutomationId = null;
 
 export function selectAutomationSection(requested = "automation") {
   const key = String(requested || "").trim().toLowerCase();
+  if (key === "automation" || key === "automations") auTab = "today";
   if (key === "approvals" || key === "approval" || key === "decisions") auTab = "approvals";
   if (key === "riskwatch" || key === "protect" || key === "risk" || key === "exceptions") auTab = "risk";
 }
@@ -627,9 +629,122 @@ function recipesTab() {
   </div>`;
 }
 
+function recordTime(value) {
+  const parsed = new Date(value || 0).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function dueFollowups() {
+  const now = Date.now();
+  return visible(store.state.leads || [])
+    .filter((lead) => ["new", "follow-up"].includes(lead.status) && lead.due && recordTime(lead.due) <= now)
+    .sort((left, right) => recordTime(left.due) - recordTime(right.due));
+}
+
+function communicationName(record) {
+  const lead = (store.state.leads || []).find((item) => item.id === record.leadId);
+  return lead?.name || lead?.company || "CRM contact";
+}
+
+function communicationSummary() {
+  const records = visible(store.state.communications || []);
+  const receipts = records.filter((item) => Boolean(item.providerReceipt?.messageId));
+  return {
+    records,
+    receipts,
+    replies: receipts.reduce((sum, item) => sum + Number(item.providerReceipt?.replyCount || (item.status === "replied" ? 1 : 0)), 0),
+    blocked: records.filter((item) => ["bounced", "failed", "blocked"].includes(item.status)).length,
+    sendReady: records.filter((item) => item.status === "send-ready").length,
+  };
+}
+
+function todayTab({ pendingApprovals, risk }) {
+  const followups = dueFollowups();
+  const comms = communicationSummary();
+  const attentionCount = pendingApprovals.length + risk.open + followups.length + comms.blocked + comms.sendReady + comms.replies;
+  const attention = [
+    ...pendingApprovals.slice(0, 4).map((item) => ({
+      tone: "decision", label: "Decision", title: item.title, detail: item.detail || "Owner decision required before work continues.", at: item.at || item.createdAt,
+      action: `<button class="btn btn-primary" type="button" data-au-today="approvals">Review</button>`,
+    })),
+    ...(risk.open ? [{
+      tone: risk.critical ? "critical" : "warning", label: "Exception", title: `${risk.open} open automation exception${risk.open === 1 ? "" : "s"}`,
+      detail: risk.critical ? `${risk.critical} critical signal${risk.critical === 1 ? "" : "s"} needs immediate attention.` : "Review the recorded issue and create remediation if needed.",
+      at: new Date().toISOString(), action: `<button class="btn" type="button" data-au-today="risk">Open exceptions</button>`,
+    }] : []),
+    ...comms.records.filter((item) => item.status === "replied").slice(0, 4).map((item) => ({
+      tone: "reply", label: "Reply", title: `${communicationName(item)} replied`,
+      detail: "A signed provider event is on file. Review the thread before the next response.", at: item.providerReceipt?.lastEventAt || item.updatedAt,
+      action: `<button class="btn" type="button" data-open-ws="leads">Open Relationships</button>`,
+    })),
+    ...comms.records.filter((item) => ["bounced", "failed", "blocked"].includes(item.status)).slice(0, 4).map((item) => ({
+      tone: "critical", label: "Delivery", title: `${communicationName(item)} · ${item.status}`,
+      detail: "Outbound work stopped. Inspect the verified delivery state before retrying.", at: item.providerReceipt?.lastEventAt || item.updatedAt,
+      action: `<button class="btn" type="button" data-open-ws="leads">Inspect</button>`,
+    })),
+    ...comms.records.filter((item) => item.status === "send-ready").slice(0, 4).map((item) => ({
+      tone: "ready", label: "Send-ready", title: `${communicationName(item)} is approved`,
+      detail: "The message is approved, but no provider delivery receipt exists yet.", at: item.updatedAt,
+      action: `<button class="btn" type="button" data-open-ws="leads">Open queue</button>`,
+    })),
+    ...followups.slice(0, 6).map((lead) => ({
+      tone: "followup", label: "Follow-up", title: lead.name || lead.company || "Relationship",
+      detail: lead.next || "The next step is due and has not been completed.", at: lead.due,
+      action: `<button class="btn" type="button" data-open-ws="leads">Open Relationships</button>`,
+    })),
+  ].sort((left, right) => recordTime(right.at) - recordTime(left.at)).slice(0, 10);
+
+  return `
+    <div class="au-today">
+      <section class="au-today-hero ${attentionCount ? "has-attention" : "is-clear"}">
+        <div><p class="ch-eyebrow">Daily command center</p><h3>${attentionCount ? `${attentionCount} signal${attentionCount === 1 ? "" : "s"} need a look` : "Everything recorded is moving"}</h3><p>${attentionCount ? "PhantomBot keeps routine work in motion and brings decisions, replies, failures, and overdue follow-ups here." : "No decisions, exceptions, delivery failures, replies, or overdue follow-ups are recorded for this account."}</p></div>
+        <span class="au-today-status"><i></i>${attentionCount ? "Needs you" : "Clear"}</span>
+      </section>
+      <div class="au-today-metrics" aria-label="Today's operating status">
+        <button type="button" data-au-today="approvals"><span>Decisions</span><b>${pendingApprovals.length}</b><i>waiting on owner</i></button>
+        <button type="button" data-au-today="risk"><span>Exceptions</span><b>${risk.open}</b><i>${risk.critical ? `${risk.critical} critical` : "recorded signals"}</i></button>
+        <button type="button" data-open-ws="leads"><span>Follow-ups</span><b>${followups.length}</b><i>due now</i></button>
+        <button type="button" data-open-ws="leads"><span>Replies</span><b>${comms.replies}</b><i>provider verified</i></button>
+      </div>
+      <section class="au-attention">
+        <header><div><p class="ch-eyebrow">Attention queue</p><h3>Only what can change the outcome</h3></div><button class="btn btn-quiet" type="button" data-au-today="logs">View all activity</button></header>
+        ${attention.length ? `<div class="au-attention-list">${attention.map((item) => `<article class="au-attention-item is-${esc(item.tone)}"><span class="au-attention-mark"></span><div><small>${esc(item.label)}</small><b>${esc(item.title)}</b><p>${esc(item.detail)}</p><i>${esc(ago(item.at))}</i></div>${item.action}</article>`).join("")}</div>` : `<div class="au-clear-state"><span>✓</span><div><b>No intervention needed</b><p>New provider receipts, replies, decisions, exceptions, and due follow-ups will appear here automatically from real account records.</p></div></div>`}
+      </section>
+    </div>`;
+}
+
+function activityKind(row) {
+  const value = `${row.who || ""} ${row.text || ""}`.toLowerCase();
+  if (/reply|replied/.test(value)) return "Reply";
+  if (/sent|delivered|submitted|provider/.test(value)) return "Delivery";
+  if (/approval|decision|approve|declin/.test(value)) return "Decision";
+  if (/fail|blocked|bounce|exception|risk/.test(value)) return "Exception";
+  if (/lead|relationship|follow-up|crm|comms/.test(value)) return "CRM";
+  return "Workflow";
+}
+
 function logsTab() {
-  const rows = (store.state.activity || []).filter((a) => a.text && /automation/i.test(a.text)).slice(0, 40);
-  return `<div class="au-logs">${rows.length ? rows.map((a) => `<div class="au-log-row"><b>${esc(a.who)}</b><span>${esc(a.text)}</span><i>${ago(a.at)}</i></div>`).join("") : `<p class="au-empty-note">No automation history yet.</p>`}</div>`;
+  const providerRows = communicationSummary().receipts.map((record) => ({
+    key: `receipt:${record.id}`,
+    who: "Provider receipt",
+    kind: record.status === "replied" ? "Reply" : ["bounced", "failed"].includes(record.status) ? "Exception" : "Delivery",
+    text: `${communicationName(record)} · ${record.providerReceipt?.deliveryStatus || record.status} · ${Number(record.providerReceipt?.replyCount || 0)} replies`,
+    at: record.providerReceipt?.lastEventAt || record.updatedAt || record.createdAt,
+    verified: true,
+  }));
+  const activityRows = visible(store.state.activity || []).map((record) => ({
+    key: `activity:${record.id}`,
+    who: record.who || "Workspace",
+    kind: activityKind(record),
+    text: record.text || "Activity recorded.",
+    at: record.at,
+    verified: false,
+  }));
+  const rows = [...providerRows, ...activityRows].sort((left, right) => recordTime(right.at) - recordTime(left.at)).slice(0, 60);
+  return `<div class="au-activity">
+    <header class="au-activity-head"><div><p class="ch-eyebrow">Account activity</p><h3>What happened, in order</h3><p>Provider receipts are marked verified. Workspace activity is an account record and never presented as proof of external delivery.</p></div><span>${rows.length} recent</span></header>
+    <div class="au-logs">${rows.length ? rows.map((row) => `<div class="au-log-row"><em class="au-log-kind">${esc(row.kind)}</em><div><b>${esc(row.who)}</b><span>${esc(row.text)}</span></div><i>${row.verified ? "Verified · " : ""}${esc(ago(row.at))}</i></div>`).join("") : `<div class="au-clear-state"><span>·</span><div><b>No account activity yet</b><p>Real workflow changes and provider receipts will appear here as they are recorded.</p></div></div>`}</div>
+  </div>`;
 }
 
 function safetyTab() {
@@ -647,7 +762,7 @@ export function renderAutomation(el, opts = {}) {
   const notify = opts.notify || (() => {});
   const paint = () => renderAutomation(el, opts);
   const allowedTabIds = new Set(TABS.map(([id]) => id));
-  if (!allowedTabIds.has(auTab)) auTab = "configured";
+  if (!allowedTabIds.has(auTab)) auTab = "today";
   const agents = visible(store.state.agents || []);
   const automationAgents = agents.filter((a) => a.kind === "automation");
   const dailyConfig = dailyIdeaState().config;
@@ -656,7 +771,8 @@ export function renderAutomation(el, opts = {}) {
   const pendingApprovals = visible(store.state.approvals || []).filter((approval) => approval.status === "pending");
   const risk = getAutomationRiskSummary();
 
-  const panel = auTab === "configured" ? configuredAutomationTab(agents)
+  const panel = auTab === "today" ? todayTab({ pendingApprovals, risk })
+    : auTab === "configured" ? configuredAutomationTab(agents)
     : auTab === "approvals" ? `<div class="au-embedded-workspace" data-au-decisions></div>`
     : auTab === "risk" ? `<div class="au-embedded-workspace" data-au-exceptions></div>`
     : auTab === "autopilot" ? autopilotDeveloperTab()
@@ -670,7 +786,7 @@ export function renderAutomation(el, opts = {}) {
         <div class="au-control-copy">
           <p class="ch-eyebrow">PhantomBot / unified control plane</p>
           <h2>One brain. Every workflow.</h2>
-          <p>Choose the AI route once, then manage schedules, decisions, exceptions, logs, and execution from this single command center.</p>
+          <p>Choose the AI route once, then see what needs you, what ran, and what happened across every connected workflow.</p>
         </div>
         <details class="au-brain-details">
           <summary><span>AI routing & execution</span><small>PhantomBot Hybrid · models, loop, and action rules</small></summary>
@@ -700,6 +816,7 @@ export function renderAutomation(el, opts = {}) {
   if (auTab === "autopilot") wireAutopilotDiagnostics(el, notify, paint);
 
   el.querySelectorAll("[data-au-tab]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auTab; paint(); });
+  el.querySelectorAll("[data-au-today]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auToday; paint(); });
   el.querySelectorAll("[data-au-review]").forEach((btn) => btn.onclick = () => { auTab = "approvals"; paint(); });
 
   const toggleExpandedAutomation = (id) => {
