@@ -2,8 +2,8 @@
    The browser never asks for developer credentials. Connect is enabled only
    when the server can create a real, signed authorization handoff. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-223";
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-223";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-224";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-224";
 
 let connectionState = { loaded: false, loading: false, error: "", connectors: [], emailExecution: null, notice: "", busyId: "" };
 let connectionMount = null;
@@ -38,7 +38,17 @@ function connectionErrorMessage(error) {
   if (Number(error?.status) === 401 || Number(error?.status) === 403) {
     return "Sign in with an account-backed workspace to configure inbox automation.";
   }
-  return error instanceof Error ? error.message : "Connections could not be checked.";
+  if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+    return "Inbox status could not be verified. Open Settings to reconnect safely.";
+  }
+  if (Number(error?.status) >= 500 || Number(error?.status) === 0) {
+    return "The connection service is temporarily unavailable. Try again from Settings.";
+  }
+  const message = error instanceof Error ? error.message : "";
+  if (/authorization|bearer|token|credential|secret|api[_ -]?key/i.test(message)) {
+    return "The inbox connection needs owner attention in Settings.";
+  }
+  return message || "Connections could not be checked. Try again from Settings.";
 }
 
 async function refreshConnections({ force = false } = {}) {
@@ -46,7 +56,7 @@ async function refreshConnections({ force = false } = {}) {
   connectionState = { ...connectionState, loading: true, error: "" };
   try {
     const tenant = encodeURIComponent(currentTenantId());
-    const payload = await connectionApi(`/api/connections/status?tenant_id=${tenant}`);
+    const payload = await connectionApi(`/api/connections/status?tenant_id=${tenant}`, { signal: AbortSignal.timeout(4_000) });
     connectionState = {
       ...connectionState,
       loaded: true,
@@ -72,12 +82,24 @@ export async function getEmailConnectionSnapshot({ force = false } = {}) {
     && connectionState.emailExecution?.trackingReady === true
     && connectionState.emailExecution?.replySyncReady === true;
   const connectedAndReady = Boolean(connected && executionReady);
+  const executionMessage = "Secure sending, delivery tracking, and reply sync still need platform activation.";
   return {
-    state: connectionState.error ? "error" : connectedAndReady ? "connected" : available && executionReady ? "available" : connected || configurationRequired || !executionReady ? "configuration_required" : "checking",
+    state: connectionState.error
+      ? "error"
+      : connectedAndReady
+        ? "connected"
+        : available && executionReady
+          ? "available"
+          : "configuration_required",
     provider: connected?.name || available?.name || "",
     message: connected && !executionReady
-      ? `Inbox authorization exists, but verified sending/tracking is not ready. ${connectionState.emailExecution?.reason || "The email executor needs platform setup."}`
-      : connected?.customerMessage || available?.customerMessage || connectionState.emailExecution?.reason || connectionState.error || "",
+      ? `Inbox authorization exists, but verified automation is not ready. ${executionMessage}`
+      : connected?.customerMessage
+        || available?.customerMessage
+        || (configurationRequired ? "The secure account connection service needs owner setup before provider sign-in can open." : "")
+        || (!executionReady ? executionMessage : "")
+        || connectionState.error
+        || "No inbox connection is available for this workspace yet.",
     sendReady: connectedAndReady,
     trackingReady: connectedAndReady,
     replySyncReady: connectedAndReady,

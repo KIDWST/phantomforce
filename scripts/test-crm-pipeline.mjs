@@ -78,6 +78,11 @@ must(files.workspaces, /Server record · immutable history/u, "Hydrated email hi
 must(files.workspaces, /providerReceipts/u, "CRM status must count real provider receipts instead of a placeholder.");
 must(files.connectionCenter, /emailExecution\?\.sendReady === true[\s\S]*trackingReady === true[\s\S]*replySyncReady === true/u, "Inbox status cannot claim connected until execution, tracking, and reply sync are ready.");
 must(files.connectionCenter, /error\?\.status\) === 401 \|\| Number\(error\?\.status\) === 403[\s\S]*Sign in with an account-backed workspace/u, "CRM inbox setup must translate authorization failures into customer-facing language.");
+must(files.connectionCenter, /available && executionReady[\s\S]*"configuration_required"/u, "A completed inbox check must resolve to an actionable state instead of remaining stuck on checking.");
+must(files.connectionCenter, /TimeoutError[\s\S]*AbortError[\s\S]*AbortSignal\.timeout\(4_000\)/u, "Inbox status checks must time out into a recoverable state instead of waiting forever.");
+assert.doesNotMatch(files.connectionCenter, /connectionState\.emailExecution\?\.reason \|\| connectionState\.error/u, "CRM status must not expose deployment configuration details as customer copy.");
+must(files.workspaces, /setupBlockerCount = autopilotRunning \? 0 : Math\.max\(autopilotBlockers\.length, emailConnected \? 0 : 1\)/u, "Disconnected inbox automation must never claim zero setup blockers.");
+must(files.workspaces, /emailChecking = crmEmailUi\.state === "checking" && crmEmailUi\.loading/u, "Checking copy must only appear while an inbox request is actively running.");
 must(files.emailConnector, /x-idempotency-key/u, "Provider submission must include a stable idempotency key.");
 must(files.emailConnector, /timingSafeEqual/u, "Provider events must use timing-safe signature verification.");
 must(files.workGraph, /recordWorkGraphEmailProviderEvent/u, "Work graph must durably record provider delivery and reply events.");
