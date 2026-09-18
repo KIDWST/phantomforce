@@ -1,14 +1,14 @@
-# This IS the live admin checkout
+# Canonical editing and live deployment
 
-`C:\Users\jorda\Documents\Codex\deployments\phantomforce-live` (this exact folder) is the canonical, live source for `admin.phantomforce.online` and `app.phantomforce.online`. Verified against the live `/health.root` — do not trust this claim blindly either; re-check `/health` every session, since it is the only thing that has ever been correct:
+`G:\Codex\Documents\Codex\deployments\phantomforce-live` is the dedicated live source for `admin.phantomforce.online` and `app.phantomforce.online`. It is serve/sync only: do not edit features, run generators, or build games there. The canonical editing checkout is `G:\Codex\Documents\Codex\worktrees\phantomforce-current`. This file exists in every clone; its presence does not make that clone live. Re-check `/health` every session:
 
 ```powershell
 (Invoke-WebRequest -UseBasicParsing "https://admin.phantomforce.online/health").Content
 ```
 
-Only the checkout whose path matches the returned `root` is live. If it ever stops matching this folder, treat this file as stale and go find whichever checkout `/health.root` actually names.
+The returned `root` must match the dedicated G: deployment. If it names an editing or retired C: checkout, repair the startup/update paths and verify the source doctor; do not bless the incorrect root as canonical.
 
-Every worktree under `C:\Users\jorda\Documents\Codex\worktrees` (there are 15+, plus several under `night-shift-worktrees`) is a stale or in-progress experiment branch, not this one. Work committed there does NOT reach `admin.phantomforce.online` or `app.phantomforce.online` until it is merged to `origin/main` and shipped from this canonical checkout — no worktree auto-promotes itself, no matter how complete the work is. This is the exact failure mode that caused finished games (chess, pizzeria, a puzzle game) built on `termina-qa/w2-fixes` to never appear on the live site. If you found this repo by following a stale worktree's "go to the canonical checkout" pointer, you're in the right place — don't bounce back out.
+Development and recovery worktrees are not live deployments. Their work reaches the product only after verified integration on `origin/main` and a clean deployment sync. Preserve unrelated dirty work in a named recovery stash/worktree rather than resetting it. The incomplete C: deployment is a migration remnant, not a fallback live root.
 
 Before making ANY admin/app UI change, run:
 
@@ -20,7 +20,7 @@ git log -1 --oneline
 
 If local `main` is behind `origin/main`, pull/merge first — concurrent sessions push here too; that is expected, not a conflict to flag or revert.
 
-Shipping: use `npm run ship:live-admin -- --commit "..."` from this checkout. It bumps the build id, runs the test gates, commits, pushes `origin/main`, and verifies the live URLs itself — do not commit-and-stop, and do not push from any other worktree. Do not report "shipped" or "live" without that command printing `LIVE ADMIN SHIP PASSED`.
+Shipping: use `npm run ship:live-admin -- --commit "..."` from a current, verified main editing checkout, not the deployment. It validates the clean dedicated deployment, bumps the build id, runs the full critical suite, commits, pushes `origin/main`, syncs the dedicated deployment, and verifies the live URLs/root. Do not report "shipped" or "live" without `LIVE ADMIN SHIP PASSED`; also run the source doctor from the deployment and disclose non-passing diagnostics.
 
 Any edit to `app/index.html`, `app/js/*.js`, or `app/phantom.css`/`app/phantom-skin.css` requires bumping the `phantom-live-YYYYMMDD-N` build id everywhere those files reference it, or browsers serve stale cached assets — the ship script does this for you.
 

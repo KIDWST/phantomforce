@@ -16,6 +16,12 @@ function Get-ListeningPids {
 }
 
 $repo = (Resolve-Path $RepoRoot).Path
+if ($Port -eq 5177 -and [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+  $canonicalLiveRoot = (Resolve-Path -LiteralPath "G:\Codex\Documents\Codex\deployments\phantomforce-live").Path
+  if ($repo -ne $canonicalLiveRoot) {
+    throw "Production UI must use the dedicated deployment checkout. Use another port for an editing preview."
+  }
+}
 $server = Join-Path $PSScriptRoot "admin-static-server.mjs"
 if (!(Test-Path -LiteralPath $server)) {
   throw "Missing static server: $server"

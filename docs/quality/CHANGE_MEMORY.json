@@ -28,7 +28,10 @@
         { "file": "app/js/workspaces.js", "pattern": "data-settings-target=\"media\" data-settings-focus=\"Email\"", "description": "CRM routes to the existing Connections category, not a dead tab." },
         { "file": "app/js/connection-center.js", "pattern": "function ensureConnectionScope[\\s\\S]*isCurrentConnectionScope", "description": "Readiness caches and asynchronous replies are scoped to the authenticated workspace." },
         { "file": "app/js/connection-center.js", "pattern": "Inbox account[\\s\\S]*Secure sending[\\s\\S]*Delivery tracking[\\s\\S]*Reply sync[\\s\\S]*CRM email autopilot[\\s\\S]*Open email setup", "description": "Inbox, sending, delivery, and reply readiness have a direct setup path." },
-        { "file": "scripts/ship-live-admin.mjs", "pattern": "assertDeploymentReady\\(\\);[\\s\\S]*scripts/test-release-critical\\.mjs[\\s\\S]*DEPLOY_ROOT,", "description": "Releases reject dirty deployments and pass the full critical suite before pushing." }
+        { "file": "scripts/ship-live-admin.mjs", "pattern": "assertDeploymentReady\\(\\);[\\s\\S]*scripts/test-release-critical\\.mjs[\\s\\S]*DEPLOY_ROOT,", "description": "Releases reject dirty deployments and pass the full critical suite before pushing." },
+        { "file": "ops/admin-live/Sync-AdminMain.ps1", "pattern": "requestedLiveRoot -ne \\$canonicalLiveRoot[\\s\\S]*& \\$canonicalSync -RepoRoot \\$canonicalLiveRoot", "description": "Retired watchers cannot redirect production back into an editing checkout." },
+        { "file": "ops/admin-live/Start-AdminLive.ps1", "pattern": "repo -ne \\$canonicalLiveRoot[\\s\\S]*Production UI must use the dedicated deployment checkout", "description": "A stale UI launcher fails before touching production listeners." },
+        { "file": "ops/admin-live/Start-Hermes.ps1", "pattern": "repo -ne \\$canonicalLiveRoot[\\s\\S]*Production API must use the dedicated deployment checkout", "description": "A stale API launcher fails before touching production listeners." }
       ]
     },
     {

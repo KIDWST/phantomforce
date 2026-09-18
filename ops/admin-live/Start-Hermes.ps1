@@ -244,6 +244,12 @@ function Ensure-LocalDatabase {
 }
 
 $repo = (Resolve-Path $RepoRoot).Path
+if ($Port -eq 5190 -and [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+  $canonicalLiveRoot = (Resolve-Path -LiteralPath "G:\Codex\Documents\Codex\deployments\phantomforce-live").Path
+  if ($repo -ne $canonicalLiveRoot) {
+    throw "Production API must use the dedicated deployment checkout. Use another port for an editing preview."
+  }
+}
 $serverDir = Join-Path $repo "server"
 if (!(Test-Path -LiteralPath (Join-Path $serverDir "src\index.ts"))) {
   throw "Missing Hermes entry: $serverDir\src\index.ts"

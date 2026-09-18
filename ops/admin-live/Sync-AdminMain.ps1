@@ -8,6 +8,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Retired watchers can retain their original -RepoRoot for days. They must not
+# reclaim production ports from an editing checkout after a successful release.
+if ($Port -eq 5177 -and [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+  $canonicalLiveRoot = (Resolve-Path -LiteralPath "G:\Codex\Documents\Codex\deployments\phantomforce-live").Path
+  $requestedLiveRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+  if ($requestedLiveRoot -ne $canonicalLiveRoot) {
+    Write-Warning "Redirecting retired live updater to the dedicated deployment checkout."
+    $canonicalSync = Join-Path $canonicalLiveRoot "ops\admin-live\Sync-AdminMain.ps1"
+    & $canonicalSync -RepoRoot $canonicalLiveRoot -Port $Port -HermesPort $HermesPort -RestartServer:$RestartServer -SkipHermes:$SkipHermes
+    return
+  }
+}
+
 function Invoke-Git {
   param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
   $output = & git -C $RepoRoot @Args 2>&1

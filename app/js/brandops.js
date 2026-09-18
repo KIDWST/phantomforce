@@ -7,13 +7,13 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260914-227";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260914-228";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260914-227";
-import { renderApprovals, renderRiskWatch, getAutomationRiskSummary } from "./workspaces.js?v=phantom-live-20260914-227";
-import { renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260914-227";
+} from "./content-ideas.js?v=phantom-live-20260914-228";
+import { renderApprovals, renderRiskWatch, getAutomationRiskSummary } from "./workspaces.js?v=phantom-live-20260914-228";
+import { renderOperatorMiniSettings } from "./settings.js?v=phantom-live-20260914-228";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
