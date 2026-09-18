@@ -151,7 +151,9 @@ try {
       $serverFile = Join-Path $PSScriptRoot "admin-static-server.mjs"
       $diskHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $serverFile).Hash.Substring(0, 16).ToLower()
       $runningHash = [string]$health.source_hash
-      if ($runningHash -ne $diskHash) {
+      # Identical server code can still be serving a stale sibling checkout.
+      $runningRoot = [string]$health.root
+      if ($runningHash -ne $diskHash -or $runningRoot -ne $RepoRoot) {
         $busy = 0
         try { $busy = [int]$health.jobs_running } catch { $busy = 0 }
         if ($busy -gt 0) {

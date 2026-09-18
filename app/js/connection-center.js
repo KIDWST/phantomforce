@@ -2,12 +2,36 @@
    The browser never asks for developer credentials. Connect is enabled only
    when the server can create a real, signed authorization handoff. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-226";
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-226";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-227";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-227";
 
-let connectionState = { loaded: false, loading: false, error: "", connectors: [], emailExecution: null, notice: "", busyId: "" };
+const emptyConnectionState = () => ({ loaded: false, loadedAt: 0, loading: false, error: "", connectors: [], emailExecution: null, notice: "", busyId: "" });
+let connectionState = emptyConnectionState();
+let connectionScopeKey = "";
+let connectionRequest = null;
 let connectionMount = null;
 let connectionOpts = {};
+
+function currentConnectionScopeKey() {
+  // Auth identity is compared only in memory, never persisted or displayed.
+  return JSON.stringify([currentTenantId(), session.token?.() || session.get?.()?.sessionId || ""]);
+}
+
+function ensureConnectionScope() {
+  const scope = currentConnectionScopeKey();
+  if (scope !== connectionScopeKey) {
+    connectionScopeKey = scope;
+    connectionState = emptyConnectionState();
+    connectionRequest = null;
+    connectionMount = null;
+    connectionOpts = {};
+  }
+  return scope;
+}
+
+function isCurrentConnectionScope(scope) {
+  return scope === connectionScopeKey && scope === currentConnectionScopeKey();
+}
 
 const esc = (value = "") => String(value)
   .replace(/&/g, "&amp;")
@@ -52,28 +76,41 @@ function connectionErrorMessage(error) {
 }
 
 async function refreshConnections({ force = false } = {}) {
-  if (connectionState.loading || (connectionState.loaded && !force)) return connectionState;
+  const scope = ensureConnectionScope();
+  if (connectionRequest) return connectionRequest;
+  if (!force && connectionState.loaded && !connectionState.error && Date.now() - connectionState.loadedAt < 30_000) return connectionState;
   connectionState = { ...connectionState, loading: true, error: "" };
+  const request = (async () => {
   try {
     const tenant = encodeURIComponent(currentTenantId());
     const payload = await connectionApi(`/api/connections/status?tenant_id=${tenant}`, { signal: AbortSignal.timeout(4_000) });
+    if (!isCurrentConnectionScope(scope)) return null;
     connectionState = {
       ...connectionState,
       loaded: true,
+      loadedAt: Date.now(),
       loading: false,
       error: "",
       connectors: Array.isArray(payload.connectors) ? payload.connectors : [],
       emailExecution: payload.email_execution && typeof payload.email_execution === "object" ? payload.email_execution : null,
     };
   } catch (error) {
-    connectionState = { ...connectionState, loaded: true, loading: false, error: connectionErrorMessage(error) };
+    if (!isCurrentConnectionScope(scope)) return null;
+    // A failed verification cannot keep a stale "ready" snapshot.
+    connectionState = { ...emptyConnectionState(), loaded: true, error: connectionErrorMessage(error) };
   }
   if (connectionMount?.isConnected) renderConnectionCenter(connectionMount, connectionOpts);
   return connectionState;
+  })();
+  connectionRequest = request;
+  try { return await request; }
+  finally { if (connectionRequest === request) connectionRequest = null; }
 }
 
 export async function getEmailConnectionSnapshot({ force = false } = {}) {
+  const scope = ensureConnectionScope();
   await refreshConnections({ force });
+  if (!isCurrentConnectionScope(scope)) return { state: "error", provider: "", message: "Workspace changed. Check inbox status again.", sendReady: false, trackingReady: false, replySyncReady: false };
   const email = connectionState.connectors.filter((connector) => connector.group === "Email");
   const connected = email.find((connector) => connector.state === "connected") || null;
   const available = email.find((connector) => connector.state === "available") || null;
@@ -81,7 +118,7 @@ export async function getEmailConnectionSnapshot({ force = false } = {}) {
   const executionReady = connectionState.emailExecution?.sendReady === true
     && connectionState.emailExecution?.trackingReady === true
     && connectionState.emailExecution?.replySyncReady === true;
-  const connectedAndReady = Boolean(connected && executionReady);
+  const connectedAndReady = Boolean(connected && executionReady && !connectionState.error);
   const executionMessage = "Secure sending, delivery tracking, and reply sync still need platform activation.";
   return {
     state: connectionState.error
@@ -92,14 +129,13 @@ export async function getEmailConnectionSnapshot({ force = false } = {}) {
           ? "available"
           : "configuration_required",
     provider: connected?.name || available?.name || "",
-    message: connected && !executionReady
+    message: connectionState.error || (connected && !executionReady
       ? `Inbox authorization exists, but verified automation is not ready. ${executionMessage}`
       : connected?.customerMessage
         || available?.customerMessage
         || (configurationRequired ? "The secure account connection service needs owner setup before provider sign-in can open." : "")
         || (!executionReady ? executionMessage : "")
-        || connectionState.error
-        || "No inbox connection is available for this workspace yet.",
+        || "No inbox connection is available for this workspace yet."),
     sendReady: connectedAndReady,
     trackingReady: connectedAndReady,
     replySyncReady: connectedAndReady,
@@ -137,9 +173,12 @@ function connectionHealth() {
 }
 
 async function diagnoseConnections() {
+  const scope = ensureConnectionScope();
   connectionState.notice = "Checking every brain route, bridge, API provider, and business account…";
   if (connectionMount?.isConnected) renderConnectionCenter(connectionMount, connectionOpts);
   await refreshConnections({ force: true });
+  if (!isCurrentConnectionScope(scope)) return;
+  if (connectionState.error) return;
   const health = connectionHealth();
   connectionState.notice = health.attention
     ? `${health.active} active · ${health.ready} ready to connect · ${health.attention} need owner setup. Every blocker now shows its exact next step.`
@@ -204,7 +243,31 @@ function connectionOverview() {
   </div>`;
 }
 
-function connectionGroups() {
+function emailAutomationOverview() {
+  const email = connectionState.connectors.filter((connector) => connector.group === "Email");
+  const connected = email.find((connector) => connector.state === "connected") || null;
+  const available = email.find((connector) => connector.state === "available") || null;
+  const execution = connectionState.emailExecution || {};
+  const checking = connectionState.loading || !connectionState.loaded;
+  const readiness = [
+    { label: "Inbox account", ready: Boolean(connected), detail: connected ? `${connected.name} connected` : available ? "Provider sign-in ready" : "Owner setup required" },
+    { label: "Secure sending", ready: execution.sendReady === true, detail: execution.sendReady === true ? "Sending configured" : "Executor required" },
+    { label: "Delivery tracking", ready: execution.trackingReady === true, detail: execution.trackingReady === true ? "Tracking configured" : "Webhook required" },
+    { label: "Reply sync", ready: execution.replySyncReady === true, detail: execution.replySyncReady === true ? "Reply sync configured" : "Webhook required" },
+  ];
+  const ready = !checking && !connectionState.error && readiness.every((item) => item.ready);
+  const status = checking ? "Checking" : connectionState.error ? "Unverified" : ready ? "Configured" : "Needs owner";
+  return `<section class="set-connect-brains set-email-readiness" aria-label="Email automation readiness">
+    <header class="set-connect-section-head"><div><p class="set-eyebrow">CRM email autopilot</p><h3>${ready ? "Inbox automation is configured" : "Finish email once. Then run by exception."}</h3></div><span>${esc(status)}</span></header>
+    <p class="set-note">${checking ? "Checking inbox authorization, sending, delivery tracking, and reply sync." : ready ? "Approved sends, delivery events, replies, and follow-ups can use verified provider receipts." : "PhantomForce will not send or claim replies until the inbox account and every delivery service are verified."}</p>
+    <div class="set-connect-brain-grid">${readiness.map((item) => `<article class="set-connect-brain is-${item.ready && !checking && !connectionState.error ? "connected" : "attention"}"><span class="set-connect-live-dot" aria-hidden="true"></span><div><p>${esc(item.label)}</p><b>${esc(item.detail)}</b></div><span class="set-connect-state-pill">${checking ? "Checking" : connectionState.error ? "Unverified" : item.ready ? "Configured" : "Needed"}</span></article>`).join("")}</div>
+    <button class="btn ${ready ? "btn-quiet" : "btn-primary"}" type="button" data-connection-focus-group="Email">${ready ? "Manage email" : "Open email setup"}</button>
+  </section>`;
+}
+
+const CONNECTION_GROUP_ORDER = Object.freeze(["Email", "Calendar", "Payments", "Accounting", "CRM", "Developer"]);
+
+function connectionGroups(focusGroup = "") {
   const grouped = new Map();
   connectionState.connectors.filter((connector) => connector.state !== "connected").forEach((connector) => {
     const group = connector.group || "Accounts";
@@ -212,13 +275,25 @@ function connectionGroups() {
     grouped.get(group).push(connector);
   });
   if (!grouped.size && connectionState.loading) return `<div class="set-connect-loading">Checking your connections…</div>`;
-  return [...grouped.entries()].map(([group, connectors], index) => `<details class="set-connect-group" ${index === 0 ? "open" : ""}>
+  const groups = [...grouped.entries()].sort(([groupA], [groupB]) => {
+    if (focusGroup) {
+      if (groupA === focusGroup) return -1;
+      if (groupB === focusGroup) return 1;
+    }
+    const rank = (group) => {
+      const index = CONNECTION_GROUP_ORDER.indexOf(group);
+      return index < 0 ? CONNECTION_GROUP_ORDER.length : index;
+    };
+    return rank(groupA) - rank(groupB) || groupA.localeCompare(groupB);
+  });
+  return groups.map(([group, connectors], index) => `<details class="set-connect-group" data-connection-focused="${group === focusGroup}" data-connection-group="${esc(group)}" ${index === 0 ? "open" : ""}>
     <summary class="set-connect-group-head"><h3>${esc(group)}</h3><span>${connectors.length} available</span></summary>
     <div class="set-connect-grid">${connectors.sort((a, b) => (a.state === "available" ? 0 : 1) - (b.state === "available" ? 0 : 1)).map(connectionCard).join("")}</div>
   </details>`).join("");
 }
 
 export function renderConnectionCenter(el, opts = {}) {
+  ensureConnectionScope();
   connectionMount = el;
   connectionOpts = opts;
   const health = connectionHealth();
@@ -231,14 +306,24 @@ export function renderConnectionCenter(el, opts = {}) {
     <section class="set-connect-health" aria-label="Connection health"><span><b>${health.active}</b><i>Active</i></span><span><b>${health.ready}</b><i>Ready to connect</i></span><span class="${health.attention ? "is-attention" : "is-clear"}"><b>${health.attention}</b><i>Needs owner</i></span><span><b>${health.checking}</b><i>Checking</i></span></section>
     ${connectionState.notice ? `<div class="set-social-notice">${esc(connectionState.notice)}</div>` : ""}
     ${connectionState.error ? `<div class="set-social-notice">${esc(connectionState.error)}</div>` : ""}
+    ${emailAutomationOverview()}
     ${connectionOverview()}
     <header class="set-connect-catalog-head"><p class="set-eyebrow">Available connectors</p><h3>Add a business account</h3><p>Choose a provider, sign in on its secure page, and return here to confirm it is active.</p></header>
-    ${connectionGroups()}
+    ${connectionGroups(connectionOpts.focusGroup)}
     <section class="set-connect-social"><div id="${socialMountId}"></div></section>
   </div>`;
 
   el.querySelector("[data-connections-refresh]")?.addEventListener("click", () => void refreshConnections({ force: true }));
   el.querySelector("[data-connections-diagnose]")?.addEventListener("click", () => void diagnoseConnections());
+  el.querySelectorAll("[data-connection-focus-group]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const group = el.querySelector(`[data-connection-group="${button.dataset.connectionFocusGroup || "Email"}"]`);
+      if (!group) return;
+      group.open = true;
+      group.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+      group.querySelector("summary")?.focus({ preventScroll: true });
+    });
+  });
   el.querySelectorAll("[data-connection-fix]").forEach((button) => {
     button.addEventListener("click", () => {
       if (connectionOpts.isOwnerOperator && typeof connectionOpts.openWorkspace === "function") {
@@ -255,6 +340,7 @@ export function renderConnectionCenter(el, opts = {}) {
   });
   el.querySelectorAll("[data-connection-start]").forEach((button) => {
     button.addEventListener("click", async () => {
+      const scope = ensureConnectionScope();
       const connectorId = button.dataset.connectionStart || "";
       connectionState.busyId = connectorId;
       connectionState.notice = "Opening secure connection…";
@@ -264,15 +350,18 @@ export function renderConnectionCenter(el, opts = {}) {
           method: "POST",
           body: JSON.stringify({ tenant_id: currentTenantId(), connector_id: connectorId }),
         });
+        if (!isCurrentConnectionScope(scope)) return;
         if (payload.authorizationUrl) window.open(payload.authorizationUrl, "_blank", "noopener,noreferrer");
         connectionState.notice = payload.customerMessage || "Secure provider sign-in opened. Return here after approval.";
         connectionState.loaded = false;
         await refreshConnections({ force: true });
       } catch (error) {
-        connectionState.notice = error instanceof Error ? error.message : "The connection could not start.";
+        if (isCurrentConnectionScope(scope)) connectionState.notice = connectionErrorMessage(error);
       } finally {
-        connectionState.busyId = "";
-        if (el.isConnected) renderConnectionCenter(el, opts);
+        if (isCurrentConnectionScope(scope)) {
+          connectionState.busyId = "";
+          if (el.isConnected) renderConnectionCenter(el, opts);
+        }
       }
     });
   });

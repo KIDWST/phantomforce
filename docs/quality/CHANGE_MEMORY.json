@@ -1,8 +1,36 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-09-04",
+  "lastUpdated": "2026-09-18",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
+    {
+      "id": "media-overview-graphite-action-first",
+      "status": "active",
+      "title": "Graphite Overview exposes actions without decorative competition",
+      "ownerDecision": "Use gray/graphite surfaces with bright green accents, remove the oversized Earth dashboard, and keep useful metrics, real decisions, and PhantomBot easy to reach. Activity remains available in an expandable area. Configured missions must never be presented as currently Working.",
+      "requiredPatterns": [
+        { "file": "app/index.html", "pattern": "dashboard-assistant[\\s\\S]*One conversation\\. Your whole workspace\\.", "description": "PhantomBot has a clear workspace-wide entry point." },
+        { "file": "app/index.html", "pattern": "details class=\"dashboard-activity\"[\\s\\S]*Activity &amp; work in motion", "description": "Activity remains accessible without a competing permanent rail." },
+        { "file": "app/command-os.css", "pattern": "dashboard-brief-metric[\\s\\S]{0,160}pointer-events: auto", "description": "Overview metric buttons remain usable despite the retired overlay styling." },
+        { "file": "app/js/main.js", "pattern": "No decisions waiting[\\s\\S]{0,220}Provider setup may still be needed", "description": "An empty work queue does not imply configured providers." }
+      ],
+      "forbiddenPatterns": [
+        { "file": "app/index.html", "pattern": "gravity-beams|hero2__earth|id=\"pose-wrap\"", "description": "The rejected decorative overview cannot be resurrected." },
+        { "file": "app/js/command-os.js", "pattern": "const coreStatus = agents\\.length", "description": "Configured agents cannot create a fake Working state." }
+      ]
+    },
+    {
+      "id": "crm-email-setup-scoped-readiness",
+      "status": "active",
+      "title": "CRM opens inbox setup and never reuses another account's readiness",
+      "ownerDecision": "Relationships contains leads, clients, and follow-ups. Email setup must open the actual Connections area, with Gmail visible, while credentials, provider receipts, and account isolation remain truthful.",
+      "requiredPatterns": [
+        { "file": "app/js/workspaces.js", "pattern": "data-settings-target=\"media\" data-settings-focus=\"Email\"", "description": "CRM routes to the existing Connections category, not a dead tab." },
+        { "file": "app/js/connection-center.js", "pattern": "function ensureConnectionScope[\\s\\S]*isCurrentConnectionScope", "description": "Readiness caches and asynchronous replies are scoped to the authenticated workspace." },
+        { "file": "app/js/connection-center.js", "pattern": "Inbox account[\\s\\S]*Secure sending[\\s\\S]*Delivery tracking[\\s\\S]*Reply sync[\\s\\S]*CRM email autopilot[\\s\\S]*Open email setup", "description": "Inbox, sending, delivery, and reply readiness have a direct setup path." },
+        { "file": "scripts/ship-live-admin.mjs", "pattern": "assertDeploymentReady\\(\\);[\\s\\S]*scripts/test-release-critical\\.mjs[\\s\\S]*DEPLOY_ROOT,", "description": "Releases reject dirty deployments and pass the full critical suite before pushing." }
+      ]
+    },
     {
       "id": "phantomplay-migrated-live-catalog",
       "status": "active",

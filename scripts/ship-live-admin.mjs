@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const DEPLOY_ROOT = path.resolve(process.env.PF_ADMIN_DEPLOY_ROOT || (process.platform === "win32"
+  ? "G:\\Codex\\Documents\\Codex\\deployments\\phantomforce-live"
+  : ROOT));
 const BUILD_RE = /phantom-live-\d{8}-\d+/g;
 const TEXT_EXTENSIONS = new Set([".css", ".html", ".js", ".json", ".mjs", ".svg", ".txt"]);
 const LIVE_URLS = [
@@ -34,7 +37,7 @@ function run(command, args, options = {}) {
   const rendered = [command, ...args].join(" ");
   console.log(`\n$ ${rendered}`);
   const result = spawnSync(command, args, {
-    cwd: ROOT,
+    cwd: options.cwd || ROOT,
     encoding: "utf8",
     stdio: options.capture ? "pipe" : "inherit",
     windowsHide: true
@@ -122,6 +125,15 @@ function assertOnMainAndCurrent() {
   if (behind > 0) fail(`local main is ${behind} commit(s) behind origin/main. Pull/rebase before shipping.`);
 }
 
+function assertDeploymentReady() {
+  if (process.platform === "win32" && DEPLOY_ROOT === ROOT) fail("The Windows live server must use a dedicated deployment checkout, not the editing checkout.");
+  if (!fs.existsSync(path.join(DEPLOY_ROOT, ".git"))) fail("The dedicated deployment checkout is unavailable.");
+  const deployGit = (args) => run("git", args, { capture: true, cwd: DEPLOY_ROOT });
+  if (deployGit(["rev-parse", "--abbrev-ref", "HEAD"]) !== "main") fail("The deployment checkout must be on main.");
+  if (deployGit(["remote", "get-url", "origin"]) !== git(["remote", "get-url", "origin"], { capture: true })) fail("Editing and deployment remotes differ.");
+  if (DEPLOY_ROOT !== ROOT && deployGit(["status", "--porcelain"])) fail("Deployment is dirty. Preserve its work in a recovery checkout before shipping; never serve an editing checkout.");
+}
+
 function statusPorcelain() {
   return git(["status", "--porcelain"], { capture: true });
 }
@@ -198,6 +210,7 @@ async function main() {
   }
 
   assertOnMainAndCurrent();
+  assertDeploymentReady();
   if (!statusPorcelain()) {
     fail("working tree is clean. Make the change first, then ship it.");
   }
@@ -209,6 +222,8 @@ async function main() {
   run(process.execPath, ["scripts/test-auth-boundaries.mjs"]);
   run(process.execPath, ["scripts/test-page-worker.mjs"]);
   run(process.execPath, ["scripts/test-vespergate-world.mjs"]);
+  run(process.execPath, ["scripts/test-customer-connections-ui.mjs"]);
+  run(process.execPath, ["scripts/test-release-critical.mjs"]);
   const lateBuildFixes = setAppBuild(build);
   if (lateBuildFixes) console.log(`\nNormalized ${lateBuildFixes} late app file(s) back to ${build}`);
   stageAllowedChanges();
@@ -226,13 +241,15 @@ async function main() {
     "-File",
     path.join("ops", "admin-live", "Sync-AdminMain.ps1"),
     "-RepoRoot",
-    ROOT,
+    DEPLOY_ROOT,
     "-Port",
     "5177",
     "-HermesPort",
     "5190"
   ]);
   await verifyLiveBuild(build);
+  const health = await fetch("http://127.0.0.1:5177/health", { signal: AbortSignal.timeout(8000) }).then((response) => response.json());
+  if (path.resolve(health.root || "") !== DEPLOY_ROOT) fail("The live server is not using the dedicated deployment checkout.");
   const head = git(["rev-parse", "--short", "HEAD"], { capture: true });
   console.log(`\nLIVE ADMIN SHIP PASSED ${head} ${build}`);
 }

@@ -73,6 +73,15 @@
   forbidden patterns there so another stale worktree cannot resurrect it.
 
 ## Recent, merged & live (newest first)
+- **Graphite action-first Overview and inbox setup (2026-09-18)** — removes the
+  Earth/orbit decoration, exposes usable media/CRM metrics, keeps Activity
+  expandable, and opens PhantomBot/Automations directly. Connections exposes
+  inbox, sending, tracking, and reply-sync prerequisites without fake provider
+  success. Scope-aware caches discard obsolete account responses. Shipping
+  now validates and syncs the dedicated G: deployment and runs the entire
+  critical suite. Unfinished engine edits were preserved in a named recovery
+  stash and worktree; no database reset or outreach occurred. See
+  `docs/quality/OVERVIEW_REDESIGN_20260918.md` for evidence and release limits.
 - **Explicit Phantom Engine edit target (2026-09-04)** — the Engine no longer
   silently chooses a catalog item. It opens behind a blocking select/create gate,
   keeps the command composer hidden until a game is chosen, and then pins the

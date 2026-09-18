@@ -1,12 +1,12 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260914-226";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260914-226";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260914-226";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-226";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260914-226";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-226";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260914-227";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260914-227";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260914-227";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-227";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260914-227";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-227";
 import {
   AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
@@ -22,10 +22,11 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260914-226";
+} from "./ai-runtime.js?v=phantom-live-20260914-227";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
+const SETTINGS_CONNECTION_FOCUS_KEY = "pf.settings.connection.focus.v1";
 const PHANTOMBOT_BRIDGE_PROMPT_KEY = "pf.phantombot.bridgePrompt.v1";
 const MEDIA_LAB_CONFIG_KEY = "pf.medialab.v1";
 const DEFAULT_MEDIA_CREDITS = 480;
@@ -44,6 +45,7 @@ const SETTINGS_TABS = [
 ];
 
 const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Connections"];
+const SETTINGS_TAB_ALIASES = Object.freeze({ connections: "media" });
 const SETTINGS_CONTEXT = {
   clientsetup: { title: "Workspace setup", note: "Configure the organization before lead, content, approval, and reporting work starts." },
   organization: { title: "Organization & access", note: "Manage employees, roles, invitations, and module access for this workspace." },
@@ -52,17 +54,32 @@ const SETTINGS_CONTEXT = {
   media: { title: "Connectors", note: "See active brain routes and connected business accounts first, then add anything else your workspace needs." },
 };
 
+function normalizeSettingsTab(value) {
+  const requested = String(value || "").trim().toLowerCase();
+  const normalized = SETTINGS_TAB_ALIASES[requested] || requested;
+  return SETTINGS_TABS.some((tab) => tab.id === normalized) ? normalized : SETTINGS_TABS[0].id;
+}
+
 function loadSettingsTab() {
   try {
-    const saved = localStorage.getItem(SETTINGS_TAB_KEY);
-    return SETTINGS_TABS.some((tab) => tab.id === saved) ? saved : SETTINGS_TABS[0].id;
+    return normalizeSettingsTab(localStorage.getItem(SETTINGS_TAB_KEY));
   } catch {
     return SETTINGS_TABS[0].id;
   }
 }
 
 function saveSettingsTab(id) {
-  try { localStorage.setItem(SETTINGS_TAB_KEY, id); } catch {}
+  try { localStorage.setItem(SETTINGS_TAB_KEY, normalizeSettingsTab(id)); } catch {}
+}
+
+function consumeSettingsConnectionFocus() {
+  try {
+    const focus = String(sessionStorage.getItem(SETTINGS_CONNECTION_FOCUS_KEY) || "").trim();
+    sessionStorage.removeItem(SETTINGS_CONNECTION_FOCUS_KEY);
+    return focus === "Email" ? focus : "";
+  } catch {
+    return "";
+  }
 }
 
 const KIMI_OLLAMA_MODEL = "kimi-k3-hf:latest";
@@ -2021,8 +2038,12 @@ export function renderOperatorSettings(el, opts = {}) {
   const modulesMountId = `workspace-modules-${Math.random().toString(36).slice(2)}`;
   const organizationMountId = `organization-${Math.random().toString(36).slice(2)}`;
   const planMountId = `plan-access-${Math.random().toString(36).slice(2)}`;
-  const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
-  const activeTab = initialTab || loadSettingsTab();
+  const initialTab = opts.initialTab ? normalizeSettingsTab(opts.initialTab) : null;
+  if (initialTab) saveSettingsTab(initialTab);
+  // A deep link selects only the first render, not every later tab click.
+  opts = { ...opts, initialTab: undefined };
+  const activeTab = loadSettingsTab();
+  const connectionFocus = activeTab === "media" ? consumeSettingsConnectionFocus() : "";
   const activeContext = SETTINGS_CONTEXT[activeTab];
   const hero = activeTab === "model"
     ? {
@@ -2041,7 +2062,6 @@ export function renderOperatorSettings(el, opts = {}) {
         title: "Phantom Console settings",
         note: "Phantom AI is the chatbot. Phantom Console is the operating layer around it: organization-wide model routing, Phantom Loop, memory depth, Termina hands, and the approval/autopilot boundary. Provider credentials stay encrypted on the server.",
       };
-  if (initialTab) saveSettingsTab(initialTab);
 
   const TAB_CONTENT = {
     model: () => renderModelTab(settings, activeProvider, activeModel),
@@ -2058,19 +2078,19 @@ export function renderOperatorSettings(el, opts = {}) {
 
   el.innerHTML = `
     <div class="settings settings-operator">
-      <div class="set-section set-ai-hero">
+      ${activeTab !== "media" ? `<div class="set-section set-ai-hero">
         <div>
           <p class="set-eyebrow">${esc(hero.eyebrow)}</p>
           <h3>${esc(hero.title)}</h3>
           <p class="set-note">${esc(hero.note)}</p>
         </div>
         ${renderSafetySummary(settings)}
-      </div>
+      </div>` : ""}
 
       <div class="set-settings-layout">
         ${renderSettingsCategories(activeTab)}
         <div class="set-tab-panel" data-set-panel role="tabpanel">
-          ${activeContext ? `<div class="set-panel-heading"><p class="set-eyebrow">Workspace settings</p><h3>${esc(activeContext.title)}</h3><p class="set-note">${esc(activeContext.note)}</p></div>` : ""}
+          ${activeContext && activeTab !== "media" ? `<div class="set-panel-heading"><p class="set-eyebrow">Workspace settings</p><h3>${esc(activeContext.title)}</h3><p class="set-note">${esc(activeContext.note)}</p></div>` : ""}
           ${(TAB_CONTENT[activeTab] || TAB_CONTENT.model)()}
         </div>
       </div>
@@ -2341,6 +2361,7 @@ export function renderOperatorSettings(el, opts = {}) {
     renderConnectionCenter(mediaMount, {
       ...opts,
       ...connectionOverview,
+      focusGroup: connectionFocus,
       onOpenSettingsTab: (tab) => {
         saveSettingsTab(tab);
         renderOperatorSettings(el, opts);

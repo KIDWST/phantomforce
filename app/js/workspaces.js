@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-226";
+} from "./store.js?v=phantom-live-20260914-227";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-226";
+} from "./orgs.js?v=phantom-live-20260914-227";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-226";
+} from "./proposalpipeline.js?v=phantom-live-20260914-227";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-226";
+} from "./approvalpipeline.js?v=phantom-live-20260914-227";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-226";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-226";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-226";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-226";
+} from "./financeledger.js?v=phantom-live-20260914-227";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-227";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-227";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-227";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1521,7 +1521,7 @@ function renderRelationships(el, rerender) {
         <div class="crm-mail-icon">@</div>
         <div><b>${esc(emailTitle)}</b><span>${esc(emailDetail)}</span></div>
         <div class="crm-mail-counts"><span><b>${Number(outcomes.sent || outcomes.delivered || 0)}</b> email sent</span><span><b>${Number(outcomes.followUpNeeded || 0)}</b> follow-up needed</span><span><b>${Number(outcomes.replied || 0)}</b> replies</span><span><b>${setupBlockerCount}</b> setup blocker${setupBlockerCount === 1 ? "" : "s"}</span></div>
-        <button class="btn" type="button" ${emailConnected ? "data-crm-settings" : `data-open-ws="settings" data-settings-target="connections"`}>${autopilotRunning ? "Autopilot settings" : emailConnected ? "Finish once" : emailAvailable ? `Connect ${preferredEmail}` : "Connection settings"}</button>
+        <button class="btn" type="button" ${emailConnected ? "data-crm-settings" : `data-open-ws="settings" data-settings-target="media" data-settings-focus="Email"`}>${autopilotRunning ? "Autopilot settings" : emailConnected ? "Finish once" : emailAvailable ? `Connect ${preferredEmail}` : "Connection settings"}</button>
       </section>
       ${leadsUi.notice ? `<div class="ops-notice" role="status" aria-live="polite">${esc(leadsUi.notice)}</div>` : ""}
       ${relationshipsUi.editorOpen ? contactEditorHtml(editing, prefs, canEdit) : ""}
@@ -3139,7 +3139,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-226")
+      import("./brain.js?v=phantom-live-20260914-227")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

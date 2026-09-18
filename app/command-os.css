@@ -2231,74 +2231,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
 /* ==== GRAVITY MAP — a living instrument, not a poster ======== */
 /* ============================================================= */
 
-/* energy conduits: node -> PHANTOM core, drawn in the map's own %-space */
-.os-gravity-beams {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-}
-.os-beam {
-  fill: none;
-  stroke: rgba(111, 168, 235, 0.15);
-  stroke-width: 1;
-  stroke-dasharray: 1 4;
-  vector-effect: non-scaling-stroke;
-  animation: osBeamDrift 3.4s linear infinite;
-}
-.os-beam.is-live {
-  stroke: rgba(122, 198, 255, 0.5);
-  filter: drop-shadow(0 0 2px rgba(96, 172, 255, 0.7));
-}
-@keyframes osBeamDrift { to { stroke-dashoffset: -10; } }
-
-/* data packets riding a live conduit into the core (the brain ingesting) */
-.os-flow {
-  position: absolute;
-  z-index: 3;
-  width: 5px;
-  height: 5px;
-  margin: -2.5px 0 0 -2.5px;
-  border-radius: 50%;
-  background: #aeddff;
-  box-shadow: 0 0 9px 1px rgba(130, 195, 255, 0.9);
-  opacity: 0;
-  pointer-events: none;
-}
-.os-flow.is-live[data-flow="revenue"] { animation: osFlowRevenue 3.6s linear infinite; }
-.os-flow.is-live[data-flow="clients"] { animation: osFlowClients 4s linear infinite 0.4s; }
-.os-flow.is-live[data-flow="missions"] { animation: osFlowMissions 3.2s linear infinite 0.9s; }
-.os-flow.is-live[data-flow="approvals"] { animation: osFlowApprovals 3.9s linear infinite 0.2s; }
-.os-flow.is-live[data-flow="risk"] { animation: osFlowRisk 4.4s linear infinite 1.1s; }
-.os-flow.is-live[data-flow="health"] { animation: osFlowHealth 3.4s linear infinite 0.6s; }
-@keyframes osFlowRevenue { 0% { left: 33%; top: 38%; opacity: 0; } 14% { opacity: 1; } 86% { opacity: 1; } 100% { left: 58%; top: 58%; opacity: 0; } }
-@keyframes osFlowClients { 0% { left: 45%; top: 30%; opacity: 0; } 14% { opacity: 1; } 86% { opacity: 1; } 100% { left: 58%; top: 58%; opacity: 0; } }
-@keyframes osFlowMissions { 0% { left: 58%; top: 27%; opacity: 0; } 14% { opacity: 1; } 86% { opacity: 1; } 100% { left: 58%; top: 58%; opacity: 0; } }
-@keyframes osFlowApprovals { 0% { left: 71%; top: 35%; opacity: 0; } 14% { opacity: 1; } 86% { opacity: 1; } 100% { left: 58%; top: 58%; opacity: 0; } }
-@keyframes osFlowRisk { 0% { left: 81%; top: 48%; opacity: 0; } 14% { opacity: 1; } 86% { opacity: 1; } 100% { left: 58%; top: 58%; opacity: 0; } }
-@keyframes osFlowHealth { 0% { left: 72%; top: 56%; opacity: 0; } 14% { opacity: 1; } 86% { opacity: 1; } 100% { left: 58%; top: 58%; opacity: 0; } }
-
-/* slow radar sweep across the field */
-.os-radar {
-  position: absolute;
-  left: 58%;
-  top: 58%;
-  z-index: 0;
-  height: 150%;
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  pointer-events: none;
-  background: conic-gradient(from 0deg, transparent 0deg, rgba(94, 164, 255, 0.09) 24deg, rgba(94, 164, 255, 0.02) 40deg, transparent 52deg);
-  -webkit-mask: radial-gradient(circle, #000 40%, transparent 72%);
-  mask: radial-gradient(circle, #000 40%, transparent 72%);
-  opacity: 0.75;
-  animation: osRadar 8s linear infinite;
-}
-@keyframes osRadar { to { transform: translate(-50%, -50%) rotate(360deg); } }
+/* Decorative gravity conduits removed from the overview. */
 
 /* metric nodes react when their number is real */
 .os-node.is-live::before {
@@ -2566,15 +2499,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .phantomwire {
 
 /* ---- ambient: faint scanlines + vignette, the console is never dead ---- */
 .os-ambient {
-  position: fixed;
-  inset: 0;
-  z-index: 8;
-  pointer-events: none;
-  background:
-    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px),
-    radial-gradient(130% 100% at 50% 45%, transparent 62%, rgba(2, 6, 11, 0.55) 100%);
-  opacity: 0.5;
-  mix-blend-mode: multiply;
+  display: none;
 }
 
 /* ---- go-mode: the map arms for a keyboard jump ---- */
@@ -7609,127 +7534,186 @@ html[data-command-os="2040"] .phantombot-session-clock {
   }
 }
 
-/* Overview layout contract: the workforce heartbeat supersedes the legacy
-   desktop decision strip and must always occupy its own document region. */
-@media (min-width: 901px) {
-  html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console:not(.console-workspace) {
-    position: relative !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .console-center {
+/* Graphite overview: useful work first, optional context in one document flow.
+   This replaces the decorative Earth stage and independently scrolling rail. */
+html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console:not(.console-workspace) {
+  display: block !important;
+  height: 100% !important;
+  padding: clamp(18px, 2.6vw, 40px) !important;
+  overflow: hidden auto !important;
+  background: #090d12 !important;
+  scrollbar-color: #39434f #090d12;
+  & .console-center {
     position: relative !important;
     display: flex !important;
     flex-direction: column !important;
-    min-width: 0 !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-    scrollbar-gutter: stable;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .console-center > .hero2 {
-    order: 1 !important;
-    flex: 0 0 clamp(400px, calc(100dvh - 360px), 640px) !important;
-    width: 100% !important;
+    gap: 24px !important;
+    width: min(1440px, 100%) !important;
     height: auto !important;
-    min-height: 400px !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    overflow: visible !important;
+    border: 0 !important;
   }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .console-center > .workforce-heartbeat {
-    order: 2 !important;
-    flex: 0 0 auto !important;
-    margin: 16px 18px !important;
+  & .dashboard-brief {
+    position: static !important;
+    inset: auto !important;
+    order: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
   }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .console-center:has(> .workforce-heartbeat) > .decision-deck:not([hidden]) {
-    display: none !important;
+  & .dashboard-brief-kicker { color: #41ffa1 !important; font-size: 10px !important; }
+  & .dashboard-brief h1 {
+    max-width: none !important;
+    margin: 0 0 8px !important;
+    font-size: clamp(26px, 2.5vw, 36px) !important;
+    line-height: 1.2 !important;
+    text-shadow: none !important;
   }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .console-center > .dashboard-intel-band {
-    order: 3 !important;
+  & .dashboard-brief-copy > p:last-child { max-width: none !important; color: #a6b4c2 !important; }
+  & .dashboard-brief-metrics {
     display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    width: 100% !important;
+    margin-top: 24px !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  & .dashboard-brief-metric {
+    pointer-events: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    min-width: 0 !important;
+    min-height: 120px !important;
+    padding: 20px !important;
+    border: 1px solid #28323e !important;
+    border-radius: 12px !important;
+    background: #111820 !important;
+    text-align: left !important;
+    opacity: 1 !important;
+    &:hover { border-color: #41ffa1 !important; }
+    & span { color: #a6b4c2 !important; font-size: 11px !important; }
+    & b { color: #f1f5f9 !important; font-size: 30px !important; line-height: 1 !important; }
+    & i { color: #a6b4c2 !important; font-size: 12px !important; overflow-wrap: anywhere; }
+  }
+  & .workforce-heartbeat {
+    order: 1 !important;
     flex: 0 0 auto !important;
-    grid-row: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    width: 100% !important;
+    margin: 0 !important;
+    border: 1px solid #28323e !important;
+    border-radius: 14px !important;
+    background: #111820 !important;
+    box-shadow: none !important;
+  }
+  & .workforce-heartbeat-head { gap: 16px !important; flex-wrap: wrap !important; }
+  & .workforce-heartbeat-head h2 { font-size: 24px !important; }
+  & .workforce-clear-proof { padding: 0 24px 20px; color: #a6b4c2; font-size: 12px; }
+  & .workforce-clear-proof summary { cursor: pointer; }
+  & .workforce-clear-proof p { margin: 12px 0 0; }
+  & :is(.workforce-next-move, .workforce-heartbeat-recovery, .workforce-heartbeat-body article) {
+    border-color: #28323e !important;
+    background: #17202a !important;
+    box-shadow: none !important;
+  }
+  & .workforce-next-move-copy :is(p, dd) { color: #a6b4c2 !important; overflow-wrap: anywhere; }
+  & .decision-deck { display: none !important; }
+  & .dashboard-assistant {
+    order: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 24px;
+    border: 1px solid #28323e;
+    border-radius: 14px;
+    background: #111820;
+    & h2 { margin: 0 0 8px; color: #f1f5f9; font-size: 22px; line-height: 1.3; }
+    & p:last-child { margin: 0; color: #a6b4c2; font-size: 14px; line-height: 1.5; }
+    & .os-node-core {
+      position: static !important;
+      display: block !important;
+      flex: 0 0 auto !important;
+      width: auto !important;
+      min-width: 180px !important;
+      height: auto !important;
+      aspect-ratio: auto !important;
+      padding: 14px 20px !important;
+      border: 0 !important;
+      border-radius: 8px !important;
+      background: #41ffa1 !important;
+      box-shadow: none !important;
+      transform: none !important;
+      opacity: 1 !important;
+      animation: none !important;
+      & b { color: #07150e !important; font-size: 14px !important; }
+      & :is(span, i), &::before, &::after { display: none !important; }
+    }
+  }
+  & .dashboard-activity {
+    order: 3;
+    border: 1px solid #28323e;
+    border-radius: 14px;
+    background: #111820;
+    & > summary { padding: 20px 24px; color: #c5ced7; font-size: 14px; font-weight: 600; cursor: pointer; }
+    &[open] > summary { border-bottom: 1px solid #28323e; }
+    & .dashboard-intel-band {
+      display: block !important;
+      width: 100% !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+    }
+    & .dashboard-intel-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+    & .dashboard-intel-card { min-height: 100px !important; background: transparent !important; }
+    & .console-rail {
+      position: static !important;
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 24px !important;
+      width: 100% !important;
+      height: auto !important;
+      padding: 24px !important;
+      overflow: visible !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      transform: none !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+  }
+  & :is(button, summary):focus-visible { outline: 2px solid #41ffa1 !important; outline-offset: 4px !important; }
+}
+@media (min-width: 901px) and (max-width: 1320px) {
+  html[data-command-os="2040"] .phantom.command-os-enabled .os-rail-action[data-nav-id="automation"] {
+    width: auto !important;
+    padding: 0 12px !important;
+    font-size: 11px !important;
   }
 }
-
-/* A 4K display at Windows 250-300% scaling presents a compact CSS viewport.
-   Use the whole center and move the mission stream to its existing drawer. */
-@media (min-width: 901px) and (max-width: 1320px) {
+@media (max-width: 900px) {
   html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console:not(.console-workspace) {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .console-center {
-    width: 100% !important;
-    border-right: 0 !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .console:not(.console-workspace) .console-rail {
-    position: absolute !important;
-    top: 14px !important;
-    right: 14px !important;
-    bottom: 14px !important;
-    z-index: 55 !important;
-    width: min(360px, calc(100vw - 28px)) !important;
     height: auto !important;
-    border: 1px solid rgba(126, 158, 185, 0.2) !important;
-    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.58) !important;
-    transform: translateX(calc(100% + 32px)) !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    transition: transform 220ms ease, opacity 180ms ease !important;
+    padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important;
   }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled.os-mission-open .console:not(.console-workspace) .console-rail {
-    transform: translateX(0) !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-mission-peek {
-    display: block !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav {
-    justify-content: flex-start !important;
-    min-width: 0 !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    scrollbar-width: none;
-    overscroll-behavior-inline: contain;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-primary-nav > button {
-    flex: 0 0 auto !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line {
-    display: grid !important;
-    grid-template-columns: minmax(170px, 1.35fr) minmax(120px, 0.9fr) minmax(120px, 0.9fr) minmax(190px, 1.3fr) minmax(150px, 1fr) !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > span,
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > button {
-    width: auto !important;
-    min-width: 0 !important;
-    padding-inline: 10px !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > [data-os-model-status] {
-    min-width: 0 !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > [data-nav-id="memory"],
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line > [data-nav-id="settings"] {
-    display: none !important;
-  }
-
-  html[data-command-os="2040"] .phantom.command-os-enabled .os-system-line .os-system-time {
-    margin-left: 0 !important;
+}
+@media (max-width: 680px) {
+  html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console:not(.console-workspace) {
+    & .dashboard-brief-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    & .dashboard-brief-metric { padding: 16px !important; }
+    & .dashboard-assistant { flex-direction: column; align-items: stretch; padding: 20px; }
+    & .dashboard-activity :is(.console-rail, .dashboard-intel-grid) { grid-template-columns: minmax(0, 1fr) !important; }
   }
 }

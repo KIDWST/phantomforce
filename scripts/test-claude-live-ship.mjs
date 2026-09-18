@@ -31,6 +31,11 @@ assert(ship.includes("http://127.0.0.1:5177/"), "ship script must verify the loc
 assert(ship.includes("http://127.0.0.1:5190/"), "ship script must verify the local Hermes/API UI route.");
 assert(ship.includes("git([\"commit\""), "ship script must commit.");
 assert(ship.includes("git([\"push\", \"origin\", \"main\"]"), "ship script must push origin/main.");
+assert(ship.includes("assertDeploymentReady();"), "Shipping must reject dirty or mismatched deployment checkouts before pushing.");
+assert(ship.includes("scripts/test-release-critical.mjs"), "Shipping must run the entire critical release suite before committing or pushing.");
+assert(ship.includes('process.platform === "win32" && DEPLOY_ROOT === ROOT'), "Windows releases cannot be redirected to an editing checkout.");
+assert(ship.includes("DEPLOY_ROOT,") && ship.includes("path.resolve(health.root"), "Shipping must sync and verify the dedicated deployment, not its editing clone.");
+assert(read("ops/admin-live/Sync-AdminMain.ps1").includes("$runningRoot -ne $RepoRoot"), "Equal server hashes cannot conceal an incorrect serving root.");
 assert(liveSourceDoctor.includes("Wait-Job -Job $processInspectionJob -Timeout 15"), "live-source doctor must time-box Windows process inventory.");
 assert(liveSourceDoctor.includes("Windows process inventory did not answer within 15 seconds"), "live-source doctor must report an honest process-inventory timeout.");
 assert(liveSourceDoctor.includes("schtasks.exe /Query /TN $TaskName /XML"), "live-source doctor must avoid the blocking ScheduledTasks CIM provider.");

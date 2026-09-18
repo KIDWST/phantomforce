@@ -8,9 +8,9 @@ import {
   fmtMoney,
   session,
   workspaceStorageGetItem,
-} from "./store.js?v=phantom-live-20260914-226";
-import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260914-226";
-import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings } from "./settings.js?v=phantom-live-20260914-226";
+} from "./store.js?v=phantom-live-20260914-227";
+import { loadSocialAccounts } from "./contenthub.js?v=phantom-live-20260914-227";
+import { getOperatorInfrastructureStatus, hydrateOperatorRuntimeSettings } from "./settings.js?v=phantom-live-20260914-227";
 
 let executionMode = "advise";
 let syncFrame = 0;
@@ -475,8 +475,10 @@ function syncCommandOS() {
   if (core) {
     const label = $("b", core);
     const detail = $("i", core);
-    if (label) label.textContent = agents.length ? "Working" : "Ready";
-    if (detail) detail.textContent = agents.length ? plural(agents.length, "mission routed") : "Growth intelligence";
+    // Configured missions are not proof of execution. This is a launcher;
+    // live work and completion belong to the server-backed heartbeat.
+    if (label) label.textContent = "Open PhantomBot";
+    if (detail) detail.textContent = "Chat, plan, create";
   }
 
   const time = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });

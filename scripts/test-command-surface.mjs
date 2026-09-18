@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 
 const main = readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
 const index = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
 const command = readFileSync(new URL("../app/js/command.js", import.meta.url), "utf8");
 const commandOsCss = readFileSync(new URL("../app/command-os.css", import.meta.url), "utf8");
+const commandOs = readFileSync(new URL("../app/js/command-os.js", import.meta.url), "utf8");
 const creatorStudioCss = readFileSync(new URL("../app/creator-studio.css", import.meta.url), "utf8");
 const mediaLab = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const contentHub = readFileSync(new URL("../app/js/contenthub.js", import.meta.url), "utf8");
@@ -64,6 +66,7 @@ assert.match(phantomAi, /Math\.min\(Math\.max\(input\.scrollHeight, 28\), 168\)/
 assert.match(phantomAi, /data-phantombot-jump/u, "Long task conversations must provide a jump-to-latest control.");
 assert.match(phantomAi, /event\.key\.toLowerCase\(\) === "n"/u, "PhantomBot must support the Ctrl/Cmd+N new-task shortcut.");
 assert.match(main, /data-phantomai-tab="automations"[\s\S]*data-phantombot-automations-mount/u, "PhantomBot must own the Automations control-plane tab.");
+assert.match(main, /import \{ activatePhantomAiTab, mountPhantomAI, queuePhantomAiPrompt \} from "\.\/phantomai\.js/u, "The Automations route must import its tab activator instead of throwing after navigation.");
 assert.match(phantomAi, /const TABS = \["chat", "automations", "media", "memory", "activity"\]/u, "PhantomBot tab routing must include Automations.");
 assert.match(phantomAi, /renderAutomation\(mount\)/u, "PhantomBot must mount the real automation workspace rather than a duplicate mock.");
 assert.match(main, /\{ id: "automation",\s+label: "Automations"[\s\S]*navZone: "bottom"/u, "Automations must remain a quiet system destination while PhantomBot keeps its embedded control-plane tab.");
@@ -74,6 +77,9 @@ assert.doesNotMatch(index, /data-chatbox-toggle/u, "Phantom Console minimize bel
 assert.match(index, /data-dashboard-brief-title/u, "Dashboard must keep a data-backed business brief.");
 assert.match(index, /data-dashboard-brief-status/u, "Dashboard must explain the real organization state.");
 assert.match(index, /data-dashboard-brief-metrics/u, "Dashboard must keep its compact real-data snapshot.");
+assert.doesNotMatch(index, /os-earth-horizon|os-gravity-beams|data-phantom-3d|class="hero2-stage"/u, "The overview cannot bring back the decorative space stage.");
+assert.match(index, /<details class="dashboard-activity">[\s\S]*Activity &amp; work in motion[\s\S]*data-plan[\s\S]*data-queue/u, "Optional context must remain accessible in one expandable region.");
+assert.doesNotMatch(commandOs, /label\.textContent = agents\.length \? "Working"/u, "Configured missions cannot masquerade as live execution.");
 assert.match(index, /data-nav-bottom/u, "Desktop navigation must keep the utility section separate.");
 assert.match(index, /data-plan/u, "Dashboard must retain the real owner-action summary.");
 assert.match(index, /data-queue/u, "Dashboard must retain real work-in-motion status.");
@@ -160,4 +166,23 @@ assert.match(productionCore, /real[\s\S]*sandbox[\s\S]*mock[\s\S]*degraded[\s\S]
 assert.match(productionCore, /\/api\/production-core\/admin\/diagnose/u, "PhantomOps must diagnose a correlation without database access.");
 assert.match(staticServer, /urlPath\.startsWith\("\/api\/production-core"\)/u, "The admin web server must proxy every Production Core API request to the authenticated backend.");
 
-console.log("Compact command surface checks passed.");
+// Run the actual opportunity renderer with isolated, network-free fixtures.
+// Legacy organization pulse totals cannot hide current scoped CRM prospects.
+const opportunitySource = main.slice(main.indexOf("function opportunityCard()"), main.indexOf("function appointmentsCard()"));
+const opportunityContext = {
+  pulse: null,
+  store: { state: { leads: [{ status: "new", tenant: "A" }, { status: "new", tenant: "A" }, { status: "won", tenant: "A" }, { status: "new", tenant: "B" }] } },
+  cachedOrganizationPulse() { return this.pulse; },
+  visible(rows) { return rows.filter((row) => row.tenant === "A"); },
+  signedMoney(value) { return `$${value}`; },
+};
+// Bind explicitly so the fixture does not depend on VM/global receiver semantics.
+opportunityContext.cachedOrganizationPulse = () => opportunityContext.pulse;
+runInNewContext(`${opportunitySource}; this.renderOpportunity = opportunityCard;`, opportunityContext);
+assert.equal(opportunityContext.renderOpportunity().value, "2 tracked leads", "Unloaded growth metrics must retain real scoped prospects.");
+opportunityContext.pulse = { managedGrowth: { available: true, openLeads: 0, proposalPipeline: 0, wonValue: 0, followUpsDue: 0 } };
+assert.equal(opportunityContext.renderOpportunity().value, "2 tracked leads", "A separate growth report's zero cannot replace the CRM count.");
+opportunityContext.pulse.managedGrowth.proposalPipeline = 1;
+assert.equal(opportunityContext.renderOpportunity().value, "1 in proposal", "Server-backed proposal evidence retains priority.");
+assert.match(opportunityContext.renderOpportunity().detail, /not confirmed bookings/u, "Proposal count cannot imply a booking or buyer intent.");
+console.log("Compact command surface and scoped opportunity behavior checks passed.");
