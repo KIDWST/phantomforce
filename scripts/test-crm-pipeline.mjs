@@ -59,13 +59,15 @@ must(files.workspaces, /wedding-ecosystem[\s\S]*Weddings[\s\S]*coaches-programs[
 must(files.workspaces, /capture a real contact manually/u, "Manual real-contact capture must remain available.");
 must(files.workspaces, /data-crm-account="\$\{esc\(ws\)\}"/u, "Relationships must expose the authenticated organization scope in the CRM shell.");
 must(files.workspaces, /data-relationship-tab="leads"[\s\S]*data-relationship-tab="clients"[\s\S]*data-relationship-tab="followups"/u, "Leads, clients, and follow-ups must remain inside one Relationships destination.");
+must(files.workspaces, /function isFollowUpRelationship[\s\S]*untouchedResearchProspect[\s\S]*records\.filter\(isFollowUpRelationship\)/u, "Research review dates must not inflate the human follow-up queue before a real touch or explicit follow-up stage.");
+must(files.workspaces, /function crmEmailPermissionReady[\s\S]*public-business[\s\S]*email:published-business/u, "The permission-ready count must follow the account's saved outreach policy and exclusions.");
 must(files.workspaces, /workspaceStorageSetItem\(CRM_VIEW_STORAGE_KEY/u, "The selected relationship view must persist in workspace-scoped storage.");
 must(files.workspaces, /crmPreferences[\s\S]*pipelineName[\s\S]*defaultValue[\s\S]*followUpDays/u, "Each organization must own customizable CRM labels and defaults.");
 must(files.workspaces, /data-crm-contact-form[\s\S]*name="email"[\s\S]*name="status"[\s\S]*name="due"[\s\S]*name="notes"/u, "The CRM must provide a complete contact editor instead of chained browser prompts.");
 must(files.workspaces, /data-crm-import[\s\S]*parseRelationshipCsv/u, "The account CRM must support scoped CSV import.");
 must(files.workspaces, /data-crm-export[\s\S]*exportRelationshipCsv/u, "The account CRM must support scoped CSV export.");
 assert.doesNotMatch(files.workspaces, /prompt\("Contact name|prompt\("Company \/ brand/u, "Relationship creation and editing cannot use chained browser prompts.");
-must(files.workspaces, /lead\.ws === ws && lead\.status !== "lost"/u, "Follow-up lists must be explicitly restricted to the active organization.");
+must(files.workspaces, /lead\.ws === ws && isFollowUpRelationship\(lead\)/u, "Follow-up lists must be explicitly restricted to the active organization and actionable relationships.");
 must(files.workspaces, /Show email activity details/u, "Follow-ups must expose the account email queue and reply stream inside Relationships.");
 must(files.workspaces, /proposeWorkGraphAction/u, "CRM sends must enter the durable work graph.");
 must(files.orgClient, /export async function fetchWorkGraphActions/u, "The browser must be able to rebuild the email queue from tenant-scoped server actions.");

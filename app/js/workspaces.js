@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-232";
+} from "./store.js?v=phantom-live-20260914-233";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-232";
+} from "./orgs.js?v=phantom-live-20260914-233";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-232";
+} from "./proposalpipeline.js?v=phantom-live-20260914-233";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-232";
+} from "./approvalpipeline.js?v=phantom-live-20260914-233";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-232";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-232";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-232";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-232";
+} from "./financeledger.js?v=phantom-live-20260914-233";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-233";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-233";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-233";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -600,8 +600,29 @@ function isActiveClient(lead) {
   return lead?.status === "won" || type === "client" || type === "active-client" || /^(active )?(client|customer)$/u.test(stage);
 }
 
+function isFollowUpRelationship(lead) {
+  const status = String(lead?.status || "").toLowerCase();
+  if (["lost", "archived"].includes(status)) return false;
+  const tags = (lead?.tags || []).map((tag) => String(tag).toLowerCase());
+  const hasOutreachMotion = tags.some((tag) => tag.startsWith("outreach:submitted") || tag === "outreach:replied");
+  if (status === "follow-up" || hasOutreachMotion) return true;
+  if (!lead?.due) return false;
+  const untouchedResearchProspect = String(lead?.crmStage || "").toLowerCase() === "prospect research"
+    && !lead?.lastTouch
+    && !hasOutreachMotion;
+  return !untouchedResearchProspect;
+}
+
+function crmEmailPermissionReady(lead, settings) {
+  if (!lead?.email) return false;
+  const tags = (lead.tags || []).map((tag) => String(tag).toLowerCase());
+  if (tags.some((tag) => ["consent:denied", "do-not-contact", "unsubscribed", "email:guessed"].includes(tag))) return false;
+  const permissionMode = settings?.brain?.autopilot?.permissionMode === "public-business" ? "public-business" : "opt-in-only";
+  return permissionMode === "public-business" ? tags.includes("email:published-business") : leadConsentStatus(lead) === "opt-in";
+}
+
 function crmContactCard(l) {
-  const due = l.due && daysUntil(l.due) <= 0 && ["new", "follow-up"].includes(l.status);
+  const due = isFollowUpRelationship(l) && l.due && daysUntil(l.due) <= 0;
   const sourceLinked = Boolean(crmSourceRecordUrl(l));
   return `<article class="crm-card ${due ? "is-due" : ""} ${leadsUi.selectedId === l.id ? "is-selected" : ""}" data-act="select" data-id="${esc(l.id)}">
     ${canEditRelationships() ? `<button class="record-x" data-act="remove" data-id="${esc(l.id)}" aria-label="Remove contact">×</button>` : ""}
@@ -1062,7 +1083,7 @@ function followUpLeads() {
   const ws = leadWorkspaceId();
   const query = operatorUi.followQuery.trim().toLowerCase();
   let records = store.state.leads
-    .filter((lead) => lead.ws === ws && lead.status !== "lost" && (lead.due || ["new", "follow-up"].includes(lead.status)))
+    .filter((lead) => lead.ws === ws && isFollowUpRelationship(lead))
     .sort((left, right) => leadDueTime(left) - leadDueTime(right));
   if (operatorUi.followFilter === "overdue") records = records.filter((lead) => lead.due && daysUntil(lead.due) < 0);
   if (operatorUi.followFilter === "today") records = records.filter((lead) => lead.due && daysUntil(lead.due) === 0);
@@ -1123,7 +1144,7 @@ function crmContactEmailTrail(lead) {
 
 function renderFollowUp(el, rerender) {
   const ws = leadWorkspaceId();
-  const all = store.state.leads.filter((lead) => lead.ws === ws && lead.status !== "lost" && (lead.due || ["new", "follow-up"].includes(lead.status)));
+  const all = store.state.leads.filter((lead) => lead.ws === ws && isFollowUpRelationship(lead));
   const records = followUpLeads();
   const overdue = all.filter((lead) => lead.due && daysUntil(lead.due) < 0).length;
   const today = all.filter((lead) => lead.due && daysUntil(lead.due) === 0).length;
@@ -1525,11 +1546,11 @@ function renderRelationships(el, rerender) {
   const records = store.state.leads.filter((lead) => lead.ws === ws);
   const activeClients = records.filter(isActiveClient);
   const leads = records.filter((lead) => !isActiveClient(lead));
-  const followUps = records.filter((lead) => lead.status !== "lost" && (lead.due || ["new", "follow-up"].includes(lead.status)));
+  const followUps = records.filter(isFollowUpRelationship);
   const dueNow = followUps.filter((lead) => lead.due && daysUntil(lead.due) <= 0).length;
   const pipelineValue = records.filter((lead) => lead.status !== "lost").reduce((sum, lead) => sum + Number(lead.value || 0), 0);
   const publishedEmails = records.filter((lead) => Boolean(lead.email)).length;
-  const permissionReady = records.filter((lead) => Boolean(lead.email) && leadConsentStatus(lead) === "opt-in").length;
+  const permissionReady = records.filter((lead) => crmEmailPermissionReady(lead, settings)).length;
   const communications = store.state.communications.filter((item) => item.ws === ws);
   const drafts = communications.filter((item) => item.status === "draft").length;
   const pendingSends = communications.filter((item) => ["pending", "awaiting_approval"].includes(item.status)).length;
@@ -3203,7 +3224,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-232")
+      import("./brain.js?v=phantom-live-20260914-233")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

@@ -16,6 +16,7 @@ export type GrowthContact = {
   dueAt: Date | null;
   lastTouchAt?: Date | null;
   nextStep?: string | null;
+  crmStage?: string | null;
 };
 
 export type GrowthSettings = {
@@ -222,6 +223,19 @@ export function crmFollowUpSchedule(
   };
 }
 
+export function isCrmFollowUpContact(contact: Pick<GrowthContact, "status" | "tags" | "dueAt" | "lastTouchAt" | "crmStage">) {
+  const status = contact.status.toLowerCase();
+  if (["lost", "archived"].includes(status)) return false;
+  const tags = contact.tags.map((tag) => tag.toLowerCase());
+  const hasOutreachMotion = tags.some((tag) => tag.startsWith("outreach:submitted") || tag === "outreach:replied");
+  if (status === "follow-up" || hasOutreachMotion) return true;
+  if (!contact.dueAt) return false;
+  const untouchedResearchProspect = clean(contact.crmStage).toLowerCase() === "prospect research"
+    && !contact.lastTouchAt
+    && !hasOutreachMotion;
+  return !untouchedResearchProspect;
+}
+
 function buildFollowUpDraft(contact: GrowthContact, settings: GrowthSettings, policy: CrmAutopilotPolicy) {
   const organization = clean(contact.organization || contact.name, "your team");
   const sender = policy.senderName || businessNameFor(settings);
@@ -263,7 +277,7 @@ export async function getCrmAutopilotStatus(args: {
   const graph = await getWorkGraphDocument(args.settings.orgId, "system:crm-autopilot-status", args.workGraphRoot);
   const sends = graph.actions.filter((action) => action.type === "email.send" && action.idempotencyKey.startsWith("crm-autopilot:"));
   const receipts = sends.map((action) => action.receipt?.providerReceipt).filter(Boolean);
-  const dueNow = args.contacts.filter((contact) => Boolean(contact.dueAt) && Number(contact.dueAt) <= Date.now() && !INACTIVE_STATUSES.has(contact.status.toLowerCase()));
+  const dueNow = args.contacts.filter((contact) => isCrmFollowUpContact(contact) && Boolean(contact.dueAt) && Number(contact.dueAt) <= Date.now());
   const eligible = selectAutomaticOutreachProspects(args.contacts, policy, policy.dailySendLimit);
   return {
     state: blockers.length ? "setup-required" as const : "running" as const,
@@ -453,7 +467,7 @@ export async function synchronizeCrmOutreachOutcomesForOrganization(args: {
       take: 2_000,
       select: {
         id: true, orgId: true, name: true, email: true, organization: true, status: true,
-        type: true, tags: true, fitScore: true, dueAt: true, lastTouchAt: true, nextStep: true,
+        type: true, tags: true, fitScore: true, dueAt: true, lastTouchAt: true, nextStep: true, crmStage: true,
       },
     }),
   ]);
@@ -670,7 +684,7 @@ export async function runCrmOutreachPrepForActiveOrganizations() {
       take: 2_000,
       select: {
         id: true, orgId: true, name: true, email: true, organization: true, status: true,
-        type: true, tags: true, fitScore: true, dueAt: true,
+        type: true, tags: true, fitScore: true, dueAt: true, crmStage: true,
       },
     });
     const result = await prepareCrmOutreachDrafts({ settings: row, contacts });
@@ -697,7 +711,7 @@ export async function runCrmAutopilotForActiveOrganizations() {
       take: 2_000,
       select: {
         id: true, orgId: true, name: true, email: true, organization: true, status: true, type: true,
-        tags: true, fitScore: true, dueAt: true, lastTouchAt: true, nextStep: true,
+        tags: true, fitScore: true, dueAt: true, lastTouchAt: true, nextStep: true, crmStage: true,
       },
     });
     const result = await runCrmAutopilotForOrganization({ settings: row, contacts });

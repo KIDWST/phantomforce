@@ -2414,3 +2414,9 @@ Cycle 31.
 - Made signed provider reply and bounce events synchronize the tenant-scoped CRM immediately after the durable work-graph event is recorded. Database sync failures are returned as deferred without discarding the provider receipt.
 - Added fail-closed provider consistency: an event from a different provider cannot mutate the original delivery receipt.
 - Added focused regressions for first-touch payload truth, verified thread continuation, provider mismatch rejection, immediate reply state, and replay idempotency.
+## 2026-09-19 — Actionable CRM follow-up truth
+
+- Removed untouched public-research review dates from the human Follow-ups tab and follow-up-needed outcome totals. A sourced prospect now enters follow-up only after an explicit follow-up stage, a real provider-submitted outreach sequence, or another intentionally scheduled relationship action.
+- Kept public-research records in Leads with their research due dates, without presenting them as 700 human follow-ups.
+- Aligned the permission-ready total with each account's saved outreach mode while continuing to exclude guessed, denied, suppressed, and unsubscribed addresses.
+- Added server and UI release guards so research volume cannot inflate seller work again.

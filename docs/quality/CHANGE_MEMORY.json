@@ -2837,6 +2837,34 @@
       ]
     },
     {
+      "id": "crm-actionable-followup-counts",
+      "status": "active",
+      "title": "Research review dates never masquerade as human follow-ups",
+      "ownerDecision": "The Relationships follow-up tab and its outcome counters represent actual relationship work: an explicit follow-up stage, a provider-submitted outreach sequence, or a manually scheduled relationship. Public-research prospects may have internal review dates, but an untouched research record must remain a lead until a real touch or explicit stage change occurs. Permission-ready totals must follow the account's saved public-business or opt-in policy and continue to exclude guessed, denied, suppressed, or unsubscribed addresses.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/crm/crm-growth-automation.ts",
+          "pattern": "isCrmFollowUpContact[\\s\\S]*untouchedResearchProspect[\\s\\S]*followUpNeeded: dueNow\\.length",
+          "description": "Server outcome counts exclude untouched public-research review dates."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "function isFollowUpRelationship[\\s\\S]*untouchedResearchProspect[\\s\\S]*records\\.filter\\(isFollowUpRelationship\\)",
+          "description": "The unified Relationships UI uses the same actionable follow-up definition."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "function crmEmailPermissionReady[\\s\\S]*public-business[\\s\\S]*email:published-business[\\s\\S]*records\\.filter\\(\\(lead\\) => crmEmailPermissionReady",
+          "description": "Permission-ready totals respect each account's saved outreach policy and suppression tags."
+        },
+        {
+          "file": "server/scripts/test-crm-growth-automation.ts",
+          "pattern": "research review date must not inflate the human follow-up queue[\\s\\S]*explicit follow-up stage must remain[\\s\\S]*provider-submitted relationship must enter",
+          "description": "Focused regression coverage proves the queue boundary."
+        }
+      ]
+    },
+    {
       "id": "crm-provider-thread-lineage-and-immediate-outcomes",
       "status": "active",
       "title": "CRM follow-ups use real provider threads and signed outcomes update the relationship immediately",

@@ -10,6 +10,7 @@ import {
   crmFollowUpSequence,
   crmAutopilotPolicy,
   isValidBusinessPostalAddress,
+  isCrmFollowUpContact,
   prepareCrmOutreachDrafts,
   runCrmAutopilotForOrganization,
   selectAutomaticOutreachProspects,
@@ -51,6 +52,17 @@ const selected = selectDailyOutreachProspects(candidates, 25);
 assert.deepEqual(selected.map((item) => item.id), ["contact-ready"], "Only eligible, published business emails may enter draft prep.");
 assert.equal(isValidBusinessPostalAddress("Elgin, IL"), false, "A city and state alone cannot unlock commercial sending.");
 assert.equal(isValidBusinessPostalAddress("123 Test Street, Chicago, IL 60601"), true, "A complete deliverable address should pass the format gate.");
+assert.equal(isCrmFollowUpContact(contact({
+  tags: ["business-prospect", "source:openstreetmap", "consent:unknown"],
+  crmStage: "Prospect research",
+  lastTouchAt: null,
+})), false, "A research review date must not inflate the human follow-up queue before any touch occurs.");
+assert.equal(isCrmFollowUpContact(contact({ status: "follow-up", crmStage: "Prospect research" })), true, "An explicit follow-up stage must remain in the follow-up queue.");
+assert.equal(isCrmFollowUpContact(contact({ status: "client", type: "client", crmStage: "Client" })), true, "A scheduled client touch must remain in the unified follow-up queue.");
+assert.equal(isCrmFollowUpContact(contact({
+  tags: ["business-prospect", "source:openstreetmap", "outreach:submitted"],
+  crmStage: "Prospect research",
+})), true, "A provider-submitted relationship must enter the follow-up queue.");
 
 const draft = buildOutreachDraft(selected[0], settings);
 assert.match(draft.body, /game coverage, athlete profiles, recruiting reels/u, "Lane-specific value must personalize the draft.");
