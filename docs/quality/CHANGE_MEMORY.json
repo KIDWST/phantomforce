@@ -2837,6 +2837,41 @@
       ]
     },
     {
+      "id": "crm-provider-thread-lineage-and-immediate-outcomes",
+      "status": "active",
+      "title": "CRM follow-ups use real provider threads and signed outcomes update the relationship immediately",
+      "ownerDecision": "CRM contact identity is internal metadata, never a Gmail or Outlook thread identifier. First-touch mail begins without a fabricated provider thread; follow-ups inherit only the latest verified provider thread and message IDs. A signed reply or bounce is recorded durably before CRM synchronization, then updates the tenant-scoped relationship immediately when the database is available. If CRM synchronization fails, the provider event remains accepted and the response truthfully reports deferred work. Events from a provider other than the one on the original receipt are rejected without mutating history.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/crm/crm-growth-automation.ts",
+          "pattern": "synchronizeCrmOutreachOutcomesForOrganization[\\s\\S]*latestProviderReplyContext[\\s\\S]*threadId: prior\\.threadId[\\s\\S]*replyToMessageId: prior\\.messageId",
+          "description": "Automatic follow-ups use verified provider lineage and provider outcomes have an immediate organization-scoped CRM synchronization entry point."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "recordWorkGraphEmailProviderEvent[\\s\\S]*synchronizeCrmOutreachOutcomesForOrganization[\\s\\S]*state: \\\"deferred\\\"[\\s\\S]*crm_sync",
+          "description": "The signed webhook persists provider evidence first and reports successful, unavailable, or deferred CRM synchronization truthfully."
+        },
+        {
+          "file": "server/src/workforce/work-graph.ts",
+          "pattern": "providerReceipt\\.provider !== options\\.event\\.provider[\\s\\S]*email_provider_mismatch",
+          "description": "A mismatched provider event cannot mutate another provider's receipt."
+        },
+        {
+          "file": "server/scripts/test-crm-growth-automation.ts",
+          "pattern": "Initial outreach must not send an internal CRM placeholder[\\s\\S]*Follow-ups must continue the verified provider thread[\\s\\S]*verified reply must immediately become a CRM reply outcome",
+          "description": "The focused test proves clean first-touch submission, provider-threaded follow-up, and idempotent immediate reply synchronization."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "server/src/crm/crm-growth-automation.ts",
+          "pattern": "threadId:\\s*`crm-contact:",
+          "description": "Internal CRM identity cannot be sent as a provider thread ID."
+        }
+      ]
+    },
+    {
       "id": "crm-official-website-contact-evidence",
       "status": "active",
       "title": "Public prospect research enriches only from bounded official-site evidence",

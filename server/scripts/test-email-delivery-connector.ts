@@ -115,6 +115,11 @@ try {
   assert.equal(applied.result.applied, true);
   const replay = await recordWorkGraphEmailProviderEvent({ event: verifiedDelivered, root });
   assert.equal(replay.result.replayed, true);
+  await assert.rejects(
+    recordWorkGraphEmailProviderEvent({ event: { ...verifiedDelivered, eventId: "evt-provider-mismatch", provider: "outlook", sequence: 2 }, root }),
+    (error: Error & { code?: string }) => error.code === "email_provider_mismatch",
+    "A signed event from a different provider must not mutate a Gmail receipt.",
+  );
 
   const replied: EmailProviderEvent = {
     ...delivered,

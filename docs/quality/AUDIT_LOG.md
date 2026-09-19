@@ -2407,3 +2407,10 @@ Cycle 31.
   gates.
 - PASS: all 46 release-critical checks, including authentication, tenant
   isolation, email delivery, provider receipts, automation, and responsive UI.
+## 2026-09-19 — Provider-threaded CRM follow-ups and immediate signed outcomes
+
+- Removed the synthetic `crm-contact:*` value from provider thread fields. Initial outreach now starts without a claimed Gmail or Outlook thread; automatic follow-ups use the latest verified provider `threadId` and `messageId`.
+- Added explicit `crmContactId` metadata to prepared drafts so cross-device CRM recovery no longer depends on overloading an external-provider field.
+- Made signed provider reply and bounce events synchronize the tenant-scoped CRM immediately after the durable work-graph event is recorded. Database sync failures are returned as deferred without discarding the provider receipt.
+- Added fail-closed provider consistency: an event from a different provider cannot mutate the original delivery receipt.
+- Added focused regressions for first-touch payload truth, verified thread continuation, provider mismatch rejection, immediate reply state, and replay idempotency.

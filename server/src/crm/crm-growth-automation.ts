@@ -1,7 +1,7 @@
 import { prisma } from "../access/prisma-runtime.js";
 import { recordOrgAuditEvent } from "../access/user-accounts.js";
 import { getEmailDeliveryConnectorStatus } from "../connectors/email-delivery-connector.js";
-import { decideWorkAction, getWorkGraphDocument, proposeWorkAction } from "../workforce/work-graph.js";
+import { decideWorkAction, getWorkGraphDocument, proposeWorkAction, type WorkGraphAction } from "../workforce/work-graph.js";
 
 export type GrowthContact = {
   id: string;
@@ -310,8 +310,31 @@ function receiptTime(value: string | undefined, fallback: string) {
   return new Date(Number.isFinite(parsed) ? parsed : Date.now());
 }
 
-async function syncCrmOutreachOutcomes(settings: GrowthSettings, contacts: GrowthContact[], workGraphRoot?: string) {
-  if (!prisma) return { updated: 0, replied: 0, bounced: 0, optedOut: 0 };
+export type CrmOutcomePatch = {
+  status: string;
+  tags: string[];
+  dueAt: Date | null;
+  lastTouchAt: Date;
+  nextStep: string;
+};
+
+export type CrmOutcomeWriter = (contactId: string, patch: CrmOutcomePatch) => Promise<void>;
+
+function databaseCrmOutcomeWriter(): CrmOutcomeWriter | null {
+  const database = prisma;
+  if (!database) return null;
+  return async (contactId, patch) => {
+    await database.contact.update({ where: { id: contactId }, data: patch });
+  };
+}
+
+export async function syncCrmOutreachOutcomes(
+  settings: GrowthSettings,
+  contacts: GrowthContact[],
+  workGraphRoot?: string,
+  outcomeWriter: CrmOutcomeWriter | null = databaseCrmOutcomeWriter(),
+) {
+  if (!outcomeWriter) return { updated: 0, replied: 0, bounced: 0, optedOut: 0 };
   const policy = crmAutopilotPolicy(settings);
   const graph = await getWorkGraphDocument(settings.orgId, "system:crm-autopilot-sync", workGraphRoot);
   const byId = new Map(contacts.map((contact) => [contact.id, contact]));
@@ -342,20 +365,20 @@ async function syncCrmOutreachOutcomes(settings: GrowthSettings, contacts: Growt
         tags.add("unsubscribed");
         tags.add("do-not-contact");
         optedOut += 1;
-        await prisma.contact.update({ where: { id: contact.id }, data: {
+        await outcomeWriter(contact.id, {
           status: "lost", tags: [...tags], dueAt: null, lastTouchAt: receiptTime(receipt.lastEventAt, receipt.submittedAt),
           nextStep: "Opt-out received — address suppressed immediately and automatic outreach stopped.",
-        } });
+        });
         updated += 1;
         continue;
       }
       if (tags.has("outreach:replied")) continue;
       tags.add("outreach:replied");
       replied += 1;
-      await prisma.contact.update({ where: { id: contact.id }, data: {
+      await outcomeWriter(contact.id, {
         status: "follow-up", tags: [...tags], dueAt: new Date(), lastTouchAt: receiptTime(receipt.lastEventAt, receipt.submittedAt),
         nextStep: "Reply received — follow-up needed. PhantomBot stopped the automatic sequence.",
-      } });
+      });
       updated += 1;
       continue;
     }
@@ -365,10 +388,10 @@ async function syncCrmOutreachOutcomes(settings: GrowthSettings, contacts: Growt
       tags.add("outreach:bounced");
       tags.add("do-not-contact");
       bounced += 1;
-      await prisma.contact.update({ where: { id: contact.id }, data: {
+      await outcomeWriter(contact.id, {
         status: "lost", tags: [...tags], dueAt: null, lastTouchAt: receiptTime(receipt.lastEventAt, receipt.submittedAt),
         nextStep: "Delivery bounced — automatic outreach stopped for this address.",
-      } });
+      });
       updated += 1;
       continue;
     }
@@ -399,7 +422,7 @@ async function syncCrmOutreachOutcomes(settings: GrowthSettings, contacts: Growt
     if (!changed) continue;
     const touchedAt = receiptTime(receipt.lastEventAt, receipt.submittedAt);
     const schedule = crmFollowUpSchedule({ tags: [...tags] }, policy, touchedAt);
-    await prisma.contact.update({ where: { id: contact.id }, data: {
+    await outcomeWriter(contact.id, {
       status: "follow-up",
       tags: [...tags],
       lastTouchAt: touchedAt,
@@ -407,10 +430,54 @@ async function syncCrmOutreachOutcomes(settings: GrowthSettings, contacts: Growt
       nextStep: schedule.sequenceComplete
         ? `Email ${receipt.deliveryStatus}; automatic sequence complete. Await a reply or review manually.`
         : `Email ${receipt.deliveryStatus}; PhantomBot will check for a reply and send follow-up ${schedule.nextFollowUp} when due.`,
-    } });
+    });
     updated += 1;
   }
   return { updated, replied, bounced, optedOut };
+}
+
+export async function synchronizeCrmOutreachOutcomesForOrganization(args: {
+  orgId: string;
+  actor?: string;
+  workGraphRoot?: string;
+}) {
+  if (!prisma) return { state: "database-unavailable" as const, updated: 0, replied: 0, bounced: 0, optedOut: 0 };
+  const [settings, contacts] = await Promise.all([
+    prisma.crmSettings.findUnique({
+      where: { orgId: args.orgId },
+      select: { orgId: true, dailyPullTarget: true, sourceMode: true, brain: true },
+    }),
+    prisma.contact.findMany({
+      where: { orgId: args.orgId },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 2_000,
+      select: {
+        id: true, orgId: true, name: true, email: true, organization: true, status: true,
+        type: true, tags: true, fitScore: true, dueAt: true, lastTouchAt: true, nextStep: true,
+      },
+    }),
+  ]);
+  if (!settings) return { state: "not-configured" as const, updated: 0, replied: 0, bounced: 0, optedOut: 0 };
+  const outcomes = await syncCrmOutreachOutcomes(settings, contacts, args.workGraphRoot);
+  if (outcomes.updated > 0) {
+    await recordOrgAuditEvent({
+      orgId: args.orgId,
+      actor: args.actor || "system:email-provider-event",
+      eventType: "crm_provider_outcome_synchronized",
+      targetType: "crm_automation",
+      targetId: args.orgId,
+      payload: outcomes,
+    }).catch(() => undefined);
+  }
+  return { state: "synchronized" as const, ...outcomes };
+}
+
+function latestProviderReplyContext(actions: WorkGraphAction[], contactId: string) {
+  const prior = actions
+    .filter((action) => action.type === "email.send" && contactIdFromAction(action) === contactId && Boolean(action.receipt?.providerReceipt))
+    .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt))
+    .at(-1)?.receipt?.providerReceipt;
+  return prior ? { threadId: prior.threadId || undefined, replyToMessageId: prior.messageId || undefined } : {};
 }
 
 async function executeAutopilotSend(args: {
@@ -419,6 +486,8 @@ async function executeAutopilotSend(args: {
   subject: string;
   body: string;
   sequence: "initial" | "followup-1" | "followup-2";
+  threadId?: string;
+  replyToMessageId?: string;
   workGraphRoot?: string;
 }) {
   const proposed = await proposeWorkAction({
@@ -436,7 +505,8 @@ async function executeAutopilotSend(args: {
         to: [String(args.contact.email)],
         subject: args.subject,
         body: args.body,
-        threadId: `crm-contact:${args.contact.id}`,
+        threadId: args.threadId,
+        replyToMessageId: args.replyToMessageId,
         crmContactId: args.contact.id,
       },
     },
@@ -512,7 +582,15 @@ export async function runCrmAutopilotForOrganization(args: {
       const sequence = crmFollowUpSequence(contact, policy);
       if (!sequence) continue;
       const followUp = buildFollowUpDraft(contact, args.settings, policy);
-      const result = await executeAutopilotSend({ ...args, contact, subject: followUp.subject, body: followUp.body, sequence }).catch(() => null);
+      const replyContext = latestProviderReplyContext(graph.actions, contact.id);
+      const result = await executeAutopilotSend({
+        ...args,
+        contact,
+        subject: followUp.subject,
+        body: followUp.body,
+        sequence,
+        ...replyContext,
+      }).catch(() => null);
       if (result?.executionAttempted) {
         attempted += 1;
         if (result.submittedNow) sent += 1;
@@ -560,7 +638,7 @@ export async function prepareCrmOutreachDrafts(args: {
           to: [draft.to],
           subject: draft.subject,
           body: draft.body,
-          threadId: `crm-contact:${draft.contactId}`,
+          crmContactId: draft.contactId,
         },
       },
     });

@@ -91,8 +91,11 @@ must(files.workspaces, /4_500[\s\S]*Promise\.race\(\[getEmailConnectionSnapshot\
 must(files.emailConnector, /x-idempotency-key/u, "Provider submission must include a stable idempotency key.");
 must(files.emailConnector, /timingSafeEqual/u, "Provider events must use timing-safe signature verification.");
 must(files.workGraph, /recordWorkGraphEmailProviderEvent/u, "Work graph must durably record provider delivery and reply events.");
+must(files.workGraph, /providerReceipt\.provider !== options\.event\.provider[\s\S]*email_provider_mismatch/u, "Provider events must match the executor that produced the original receipt.");
 must(files.actionContracts, /EmailSendActionSchema[\s\S]*threadId: z\.string\(\)\.max\(300\)\.optional\(\)[\s\S]*replyToMessageId[\s\S]*crmContactId[\s\S]*clientDraftId/u, "Email send contracts must support threaded, CRM-linked, cross-device replies.");
+must(files.actionContracts, /EmailDraftActionSchema[\s\S]*crmContactId: z\.string\(\)\.max\(120\)\.optional/u, "Prepared CRM drafts must carry explicit contact identity without fabricating a provider thread.");
 must(files.server, /app\.post\("\/api\/email\/provider\/events"/u, "A signed provider event endpoint is required.");
+must(files.server, /recordWorkGraphEmailProviderEvent[\s\S]*synchronizeCrmOutreachOutcomesForOrganization[\s\S]*crm_sync/u, "Verified provider events must synchronize CRM outcomes immediately and report deferred database work truthfully.");
 must(files.crmAutomation, /email:published-business/u, "Outreach prep must require a published business email tag.");
 must(files.crmAutomation, /consent:denied[\s\S]*do-not-contact[\s\S]*unsubscribed[\s\S]*email:guessed/u, "Outreach prep must exclude denied, opted-out, and guessed addresses.");
 must(files.crmAutomation, /type:\s*"email\.draft"[\s\S]*requiresApproval:\s*true/u, "PhantomBot CRM automation must create approval-bound drafts only.");
@@ -115,6 +118,9 @@ must(files.crmAutomation, /function completedFollowUpCount[\s\S]*outreach:follow
   "Automatic follow-ups must advance through durable per-contact sequence markers.");
 must(files.crmAutomation, /executionAttempted: false, submittedNow: false[\s\S]*submittedNow: !hadProviderReceipt/u,
   "An idempotent replay of a completed email action cannot be counted as a fresh provider attempt or send.");
+must(files.crmAutomation, /latestProviderReplyContext[\s\S]*threadId: prior\.threadId[\s\S]*replyToMessageId: prior\.messageId/u,
+  "Automatic follow-ups must use verified provider thread lineage instead of an internal CRM placeholder.");
+assert.doesNotMatch(files.crmAutomation, /threadId:\s*`crm-contact:/u, "CRM contact identity must never be sent to Gmail or Outlook as a provider thread ID.");
 must(files.organizationPulse, /readCrmIntelligence[\s\S]*Live account CRM/u, "PhantomBot workspace context must include tenant-scoped CRM intelligence.");
 
 must(files.server, /researchPublicProspects\(\{ \.\.\.parsed\.data, excludeSourceIds: \[\.\.\.existingSourceIds\] \}\)/u, "CRM pulls must use the real public-organization research adapter and advance past persisted directory sources.");

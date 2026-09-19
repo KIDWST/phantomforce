@@ -32,6 +32,7 @@ export const EmailDraftActionSchema = ActionBaseSchema.extend({
     subject: z.string().min(1),
     body: z.string().min(1),
     threadId: z.string().optional(),
+    crmContactId: z.string().max(120).optional(),
   }),
 });
 export type EmailDraftAction = z.infer<typeof EmailDraftActionSchema>;

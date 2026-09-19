@@ -424,6 +424,7 @@ async function executeAction(document: WorkGraphDocument, action: WorkGraphActio
         subject: cleanText(payload.subject, 300),
         body: cleanBody(payload.body),
         threadId: cleanText(payload.threadId, 180) || null,
+        crmContactId: cleanText(payload.crmContactId, 120) || null,
       },
       status: "draft",
       createdAt: now(),
@@ -676,6 +677,11 @@ export async function recordWorkGraphEmailProviderEvent(options: {
     const action = document.actions.find((candidate) => candidate.type === "email.send" && candidate.receipt?.providerReceipt?.messageId === options.event.messageId);
     if (!action?.receipt?.providerReceipt) throw new Error("Email provider message receipt was not found for this organization.");
     const providerReceipt = action.receipt.providerReceipt;
+    if (providerReceipt.provider !== options.event.provider) {
+      const mismatch = new Error("Email provider event does not match the provider that submitted this message.") as Error & { code?: string };
+      mismatch.code = "email_provider_mismatch";
+      throw mismatch;
+    }
     const existing = providerReceipt.events.find((event) => event.eventId === options.event.eventId);
     if (existing) return { action, event: existing, replayed: true, applied: true };
     const lastSequence = providerReceipt.events.reduce((largest, event) => Math.max(largest, event.sequence), -1);

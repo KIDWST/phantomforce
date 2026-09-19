@@ -14,9 +14,11 @@ import {
   runCrmAutopilotForOrganization,
   selectAutomaticOutreachProspects,
   selectDailyOutreachProspects,
+  syncCrmOutreachOutcomes,
+  type CrmOutcomePatch,
   type GrowthContact,
 } from "../src/crm/crm-growth-automation.js";
-import { getWorkGraphDocument } from "../src/workforce/work-graph.js";
+import { getWorkGraphDocument, recordWorkGraphEmailProviderEvent } from "../src/workforce/work-graph.js";
 
 const settings = {
   orgId: "chicagoshots-test",
@@ -61,14 +63,16 @@ const savedEnv = {
   secret: process.env.PHANTOMFORCE_EMAIL_EXECUTOR_SECRET,
   webhook: process.env.PHANTOMFORCE_EMAIL_WEBHOOK_SECRET,
 };
-const deliveredBodies: string[] = [];
+const deliveredMessages: Array<{ body?: string; thread_id?: string; in_reply_to_message_id?: string }> = [];
 const executor = createServer((request, response) => {
   let raw = "";
   request.on("data", (chunk) => { raw += String(chunk); });
   request.on("end", () => {
-    deliveredBodies.push(String((JSON.parse(raw) as { message?: { body?: string } }).message?.body || ""));
+    const message = (JSON.parse(raw) as { message?: { body?: string; thread_id?: string; in_reply_to_message_id?: string } }).message || {};
+    deliveredMessages.push(message);
+    const deliveryNumber = deliveredMessages.length;
     response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ accepted: true, provider: "gmail", message_id: "provider-message-1", thread_id: "thread-1", submitted_at: new Date().toISOString() }));
+    response.end(JSON.stringify({ accepted: true, provider: "gmail", message_id: `provider-message-${deliveryNumber}`, thread_id: "thread-1", submitted_at: new Date().toISOString() }));
   });
 });
 try {
@@ -81,6 +85,8 @@ try {
   assert.equal(graph.actions[0].type, "email.draft");
   assert.equal(graph.actions[0].status, "awaiting_approval");
   assert.equal(graph.actions[0].approval.status, "pending");
+  assert.equal(graph.actions[0].payload.crmContactId, "contact-ready", "Prepared drafts must carry explicit CRM identity.");
+  assert.equal(graph.actions[0].payload.threadId, undefined, "Prepared drafts cannot invent a provider thread ID.");
   assert.equal(graph.actions.some((action) => action.type === "email.send"), false, "Automation must never create a send action.");
 
   await new Promise<void>((resolve) => executor.listen(0, "127.0.0.1", resolve));
@@ -115,9 +121,11 @@ try {
   const autopilot = await runCrmAutopilotForOrganization({ settings: autopilotSettings, contacts: candidates, workGraphRoot: root });
   assert.equal(autopilot.state, "running");
   assert.equal(autopilot.sent, 1, "A verified provider receipt is required before autopilot counts a send.");
-  assert.match(deliveredBodies[0], /business introduction from ChicagoShots/u);
-  assert.match(deliveredBodies[0], /123 Test Street, Chicago, IL 60601/u);
-  assert.match(deliveredBodies[0], /reply “unsubscribe”/u);
+  assert.match(String(deliveredMessages[0]?.body), /business introduction from ChicagoShots/u);
+  assert.match(String(deliveredMessages[0]?.body), /123 Test Street, Chicago, IL 60601/u);
+  assert.match(String(deliveredMessages[0]?.body), /reply “unsubscribe”/u);
+  assert.equal(deliveredMessages[0]?.thread_id, null, "Initial outreach must not send an internal CRM placeholder as a Gmail thread ID.");
+  assert.equal(deliveredMessages[0]?.in_reply_to_message_id, null, "Initial outreach must not claim to reply to a provider message.");
   const autopilotGraph = await getWorkGraphDocument(settings.orgId, "test", root);
   const send = autopilotGraph.actions.find((action) => action.type === "email.send");
   assert.equal(send?.status, "verified_complete");
@@ -131,13 +139,49 @@ try {
   const followUp = await runCrmAutopilotForOrganization({ settings: autopilotSettings, contacts: [followUpContact], workGraphRoot: root });
   assert.equal(followUp.attempted, 1, "A due contact should execute its first durable follow-up exactly once.");
   assert.equal(followUp.sent, 1, "A new follow-up counts only after a provider receipt is recorded.");
-  assert.equal(deliveredBodies.length, 2, "The executor should receive one initial email and one follow-up.");
+  assert.equal(deliveredMessages.length, 2, "The executor should receive one initial email and one follow-up.");
+  assert.equal(deliveredMessages[1]?.thread_id, "thread-1", "Follow-ups must continue the verified provider thread.");
+  assert.equal(deliveredMessages[1]?.in_reply_to_message_id, "provider-message-1", "Follow-ups must reply to the latest verified provider message.");
   const afterFollowUp = await getWorkGraphDocument(settings.orgId, "test", root);
   assert.equal(afterFollowUp.actions.filter((action) => action.idempotencyKey.includes("crm-autopilot:followup-1:")).length, 1);
+  await recordWorkGraphEmailProviderEvent({
+    root,
+    event: {
+      eventId: "reply-followup-1",
+      tenantId: settings.orgId,
+      messageId: "provider-message-2",
+      provider: "gmail",
+      eventType: "replied",
+      occurredAt: "2026-09-19T12:00:00.000Z",
+      sequence: 1,
+      threadId: "thread-1",
+      replyPreview: "Yes, please send your October availability.",
+    },
+  });
+  const outcomeWrites: Array<{ contactId: string; patch: CrmOutcomePatch }> = [];
+  const synchronized = await syncCrmOutreachOutcomes(
+    autopilotSettings,
+    [followUpContact],
+    root,
+    async (contactId, patch) => { outcomeWrites.push({ contactId, patch }); },
+  );
+  assert.equal(synchronized.replied, 1, "A verified reply must immediately become a CRM reply outcome.");
+  assert.equal(outcomeWrites[0]?.contactId, followUpContact.id);
+  assert.equal(outcomeWrites[0]?.patch.status, "follow-up");
+  assert.match(outcomeWrites[0]?.patch.nextStep || "", /Reply received — follow-up needed/u);
+  assert.ok(outcomeWrites[0]?.patch.tags.includes("outreach:replied"));
+  const replayedSync = await syncCrmOutreachOutcomes(
+    autopilotSettings,
+    [{ ...followUpContact, tags: outcomeWrites[0]?.patch.tags || [] }],
+    root,
+    async (contactId, patch) => { outcomeWrites.push({ contactId, patch }); },
+  );
+  assert.equal(replayedSync.updated, 0, "Replaying the same provider reply must not rewrite CRM state.");
+  assert.equal(outcomeWrites.length, 1);
   const replayedFollowUp = await runCrmAutopilotForOrganization({ settings: autopilotSettings, contacts: [followUpContact], workGraphRoot: root });
   assert.equal(replayedFollowUp.attempted, 0, "A completed idempotent follow-up replay is not a new provider attempt.");
   assert.equal(replayedFollowUp.sent, 0, "A completed idempotent follow-up replay is not a new send.");
-  assert.equal(deliveredBodies.length, 2, "A completed follow-up must not call the provider again.");
+  assert.equal(deliveredMessages.length, 2, "A completed follow-up must not call the provider again.");
   const twoFollowUpPolicy = { ...policy, maxFollowUps: 2 };
   assert.equal(crmFollowUpSequence({ tags: [...followUpContact.tags, "outreach:followup-1-submitted"] }, twoFollowUpPolicy), "followup-2");
   assert.equal(crmFollowUpSequence({ tags: [...followUpContact.tags, "outreach:followup-1-submitted", "outreach:followup-2-submitted"] }, twoFollowUpPolicy), null);

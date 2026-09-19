@@ -436,7 +436,7 @@ import {
   getOrganizationPulse,
 } from "./phantom-ai/organization-pulse.js";
 import { getBrainContract, getSignals } from "./phantom-ai/signals.js";
-import { getCrmAutopilotStatus } from "./crm/crm-growth-automation.js";
+import { getCrmAutopilotStatus, synchronizeCrmOutreachOutcomesForOrganization } from "./crm/crm-growth-automation.js";
 import { researchPublicProspects } from "./crm/public-prospect-research.js";
 import { decide, listDecisions, type DecideAction } from "./phantom-ai/decisions.js";
 import {
@@ -8909,6 +8909,21 @@ app.post("/api/email/provider/events", async (request, reply) => {
   try {
     const event = parseVerifiedEmailProviderEvent(request.body, request.headers["x-phantomforce-email-signature"]);
     const result = await recordWorkGraphEmailProviderEvent({ event });
+    let crmSync: Awaited<ReturnType<typeof synchronizeCrmOutreachOutcomesForOrganization>> | { state: "not-applied" | "deferred"; updated: 0 } = {
+      state: "not-applied",
+      updated: 0,
+    };
+    if (result.result.applied) {
+      try {
+        crmSync = await synchronizeCrmOutreachOutcomesForOrganization({
+          orgId: event.tenantId,
+          actor: `provider:${event.provider}`,
+        });
+      } catch (syncError) {
+        request.log.warn({ err: syncError, tenantId: event.tenantId, messageId: event.messageId }, "Provider event recorded; CRM outcome sync deferred.");
+        crmSync = { state: "deferred", updated: 0 };
+      }
+    }
     return {
       ok: true,
       event_id: event.eventId,
@@ -8916,6 +8931,7 @@ app.post("/api/email/provider/events", async (request, reply) => {
       applied: result.result.applied,
       replayed: result.result.replayed,
       reason: "reason" in result.result ? result.result.reason : null,
+      crm_sync: crmSync,
       raw_reply_returned: false,
     };
   } catch (error) {
