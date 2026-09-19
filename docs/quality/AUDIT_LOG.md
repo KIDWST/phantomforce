@@ -2327,3 +2327,28 @@ Cycle 31.
 - Pending in this entry: final release-critical rerun, public cache stamp,
   origin synchronization, canonical deployment sync, and strict live-source
   verification.
+
+# 2026-09-18 - Focused CRM inbox automation setup
+
+## Release Scope
+
+- Replaced the Relationships-to-Settings handoff with a focused inbox setup
+  that shows only the account's email automation requirements and providers.
+- Preserved separate, provider-backed truth gates for inbox authorization,
+  secure sending, delivery tracking, and reply synchronization.
+- Kept focused state stable through internal settings refreshes and provided an
+  explicit **Show all connections** escape into the complete catalog.
+- Renamed the connected-provider action to **Reconnect** because it restarts
+  authorization instead of opening a passive management screen.
+
+## Verification Before Ship
+
+- PASS: authenticated in-app browser journey from Relationships to focused
+  inbox setup, Email provider scroll, and deliberate return to all connections.
+- PASS: visual review of the focused setup at the active desktop viewport.
+- PASS: customer-connections, CRM pipeline, autopilot-attention, Nexus
+  hardening, and whitespace gates before the final release-critical ship run.
+- PASS: `npm run test:release-critical` completed all 46/46 critical checks,
+  including build, type safety, authentication, tenant isolation, CRM,
+  provider receipts, email delivery, social publishing, automation, and
+  responsive UI gates.

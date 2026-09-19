@@ -1,12 +1,12 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260914-228";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260914-228";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260914-228";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-228";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260914-228";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-228";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20260914-229";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260914-229";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260914-229";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20260914-229";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20260914-229";
+import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-229";
 import {
   AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
@@ -22,7 +22,7 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20260914-228";
+} from "./ai-runtime.js?v=phantom-live-20260914-229";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -72,14 +72,17 @@ function saveSettingsTab(id) {
   try { localStorage.setItem(SETTINGS_TAB_KEY, normalizeSettingsTab(id)); } catch {}
 }
 
-function consumeSettingsConnectionFocus() {
+function loadSettingsConnectionFocus() {
   try {
     const focus = String(sessionStorage.getItem(SETTINGS_CONNECTION_FOCUS_KEY) || "").trim();
-    sessionStorage.removeItem(SETTINGS_CONNECTION_FOCUS_KEY);
     return focus === "Email" ? focus : "";
   } catch {
     return "";
   }
+}
+
+function clearSettingsConnectionFocus() {
+  try { sessionStorage.removeItem(SETTINGS_CONNECTION_FOCUS_KEY); } catch {}
 }
 
 const KIMI_OLLAMA_MODEL = "kimi-k3-hf:latest";
@@ -2040,10 +2043,13 @@ export function renderOperatorSettings(el, opts = {}) {
   const planMountId = `plan-access-${Math.random().toString(36).slice(2)}`;
   const initialTab = opts.initialTab ? normalizeSettingsTab(opts.initialTab) : null;
   if (initialTab) saveSettingsTab(initialTab);
-  // A deep link selects only the first render, not every later tab click.
-  opts = { ...opts, initialTab: undefined };
   const activeTab = loadSettingsTab();
-  const connectionFocus = activeTab === "media" ? consumeSettingsConnectionFocus() : "";
+  const requestedConnectionFocus = activeTab === "media" ? loadSettingsConnectionFocus() : "";
+  const connectionFocus = activeTab === "media" ? requestedConnectionFocus || String(opts.connectionFocus || "") : "";
+  // Deep links survive internal hydration rerenders, but a deliberate tab
+  // change or "show all" action exits the focused setup flow.
+  opts = { ...opts, initialTab: undefined };
+  opts = { ...opts, connectionFocus };
   const activeContext = SETTINGS_CONTEXT[activeTab];
   const hero = activeTab === "model"
     ? {
@@ -2077,7 +2083,7 @@ export function renderOperatorSettings(el, opts = {}) {
   };
 
   el.innerHTML = `
-    <div class="settings settings-operator">
+    <div class="settings settings-operator ${connectionFocus ? "is-connection-focus" : ""}">
       ${activeTab !== "media" ? `<div class="set-section set-ai-hero">
         <div>
           <p class="set-eyebrow">${esc(hero.eyebrow)}</p>
@@ -2098,8 +2104,9 @@ export function renderOperatorSettings(el, opts = {}) {
 
   el.querySelectorAll("[data-set-tab]").forEach((button) => {
     button.onclick = () => {
+      clearSettingsConnectionFocus();
       saveSettingsTab(button.dataset.setTab);
-      renderOperatorSettings(el, opts);
+      renderOperatorSettings(el, { ...opts, connectionFocus: "" });
     };
   });
 
@@ -2362,9 +2369,14 @@ export function renderOperatorSettings(el, opts = {}) {
       ...opts,
       ...connectionOverview,
       focusGroup: connectionFocus,
+      onClearFocus: () => {
+        clearSettingsConnectionFocus();
+        renderOperatorSettings(el, { ...opts, connectionFocus: "" });
+      },
       onOpenSettingsTab: (tab) => {
+        clearSettingsConnectionFocus();
         saveSettingsTab(tab);
-        renderOperatorSettings(el, opts);
+        renderOperatorSettings(el, { ...opts, connectionFocus: "" });
       },
     });
   }

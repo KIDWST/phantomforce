@@ -1254,6 +1254,11 @@ html[data-command-os="2040"] .workspace-page [role="tab"][aria-selected="true"] 
 }
 
 .settings-operator .set-connection-center { display: grid; gap: 12px; }
+.settings-operator.is-connection-focus .set-settings-layout { grid-template-columns: minmax(0, 1fr); }
+.settings-operator.is-connection-focus .set-category-nav { display: none; }
+.settings-operator .set-connection-center.is-focus-mode .set-connect-hero { border-color: rgba(24, 242, 143, .28); background: linear-gradient(120deg, rgba(24, 242, 143, .055), rgba(9, 16, 24, .9) 58%); }
+.settings-operator .set-connection-center.is-focus-mode .set-email-readiness { border-color: rgba(24, 242, 143, .3); }
+.settings-operator .set-connection-center.is-focus-mode .set-connect-group[data-connection-focused="true"] { border-color: rgba(24, 242, 143, .32); }
 .settings-operator .set-connect-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .settings-operator .set-connect-hero-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .settings-operator .set-connect-health { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }

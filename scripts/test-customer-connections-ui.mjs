@@ -25,6 +25,20 @@ assert.match(center, /CONNECTION_GROUP_ORDER = Object\.freeze\(\["Email"/u,
   "Email connections must lead the general catalogue instead of hiding behind accounting setup.");
 assert.match(center, /data-connection-group="\$\{esc\(group\)\}"/u,
   "A CRM deep link must be able to open and focus the Email connector group.");
+assert.match(center, /focusMode = focusGroup === "Email"[\s\S]*Inbox automation · Focused setup[\s\S]*Show all connections/u,
+  "A CRM email deep link must become a focused inbox-automation flow with a clear return path.");
+assert.match(center, /connectionGroups\(focusGroup, \{ onlyFocus: focusMode \}\)/u,
+  "Focused inbox setup must omit unrelated connector groups.");
+assert.match(settings, /settings settings-operator \$\{connectionFocus \? "is-connection-focus" : ""\}/u,
+  "Focused inbox setup must remove the unrelated settings category rail.");
+assert.match(settings, /requestedConnectionFocus \|\| String\(opts\.connectionFocus \|\| ""\)[\s\S]*opts = \{ \.\.\.opts, connectionFocus \}/u,
+  "Focused inbox setup must survive internal settings hydration rerenders.");
+assert.match(settings, /function loadSettingsConnectionFocus[\s\S]*sessionStorage\.getItem\(SETTINGS_CONNECTION_FOCUS_KEY\)[\s\S]*function clearSettingsConnectionFocus/u,
+  "Focused inbox setup must remain active through independent settings renders and expose an explicit clear path.");
+assert.match(settings, /onClearFocus: \(\) => \{[\s\S]*clearSettingsConnectionFocus\(\)[\s\S]*renderOperatorSettings\(el, \{ \.\.\.opts, connectionFocus: "" \}\)/u,
+  "Show all connections must restore the complete settings navigation instead of leaving a hidden rail.");
+assert.match(account, /key !== "settings"[\s\S]*sessionStorage\.removeItem\("pf\.settings\.connection\.focus\.v1"\)/u,
+  "Leaving Settings must clear the focused inbox route so normal navigation never reopens stale setup state.");
 assert.match(center, /needsConfiguration \? `data-connection-fix=[\s\S]*: `data-connection-start=/u,
   "Unavailable sign-in must become an actionable recovery path, never a fake provider start.");
 assert.match(center, /connector\.resolution/u, "Configuration blockers must explain the exact fix.");

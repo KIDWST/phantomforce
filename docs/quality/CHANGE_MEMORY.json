@@ -2762,6 +2762,46 @@
           "description": "GLM 5.2 cannot return as the visible PhantomBot/OpenRouter default."
         }
       ]
+    },
+    {
+      "id": "crm-focused-inbox-setup",
+      "status": "active",
+      "title": "CRM inbox automation opens as one focused and truthful account setup",
+      "ownerDecision": "Relationships is the single lead, client, and follow-up workspace. Its email-automation handoff must open a focused, account-scoped inbox setup instead of mixing Gmail with AI routes, social channels, and the full settings catalog. The focused path keeps inbox account, secure sending, delivery tracking, and reply sync as distinct truthful readiness gates; shows only email providers until the owner explicitly expands the catalog; survives asynchronous settings rerenders; and clears when the owner leaves Settings. A connected provider must say Reconnect when the action restarts authorization. PhantomForce must never invent a connection, send, delivery, or reply receipt.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/connection-center.js",
+          "pattern": "function connectionGroups\\(focusGroup = \\\"\\\", \\{ onlyFocus = false \\} = \\{\\}\\)[\\s\\S]*is-focus-mode[\\s\\S]*Inbox automation · Focused setup[\\s\\S]*Show all connections[\\s\\S]*onClearFocus",
+          "description": "The connection center retains its explicit email-only focus mode and owner-controlled expansion path."
+        },
+        {
+          "file": "app/js/connection-center.js",
+          "pattern": "function emailAutomationOverview[\\s\\S]*Inbox account[\\s\\S]*Secure sending[\\s\\S]*Delivery tracking[\\s\\S]*Reply sync[\\s\\S]*CRM email autopilot",
+          "description": "The focused setup keeps the four provider-backed automation readiness gates distinct."
+        },
+        {
+          "file": "app/js/settings.js",
+          "pattern": "loadSettingsConnectionFocus[\\s\\S]*clearSettingsConnectionFocus[\\s\\S]*is-connection-focus[\\s\\S]*onClearFocus",
+          "description": "Settings persists the CRM focus through internal rerenders and clears it only on an explicit owner navigation."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "if \\(key !== \\\"settings\\\"\\)[\\s\\S]*sessionStorage\\.removeItem\\(\\\"pf.settings.connection.focus.v1\\\"\\)",
+          "description": "Leaving Settings clears the temporary focused handoff so it cannot reopen stale."
+        },
+        {
+          "file": "scripts/test-customer-connections-ui.mjs",
+          "pattern": "A CRM email deep link must become[\\s\\S]*Focused inbox setup must survive internal settings hydration rerenders[\\s\\S]*Leaving Settings must clear the focused inbox route",
+          "description": "The focused account-setup behavior remains protected by the customer-connections release gate."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/connection-center.js",
+          "pattern": "const actionLabel = connected \\? \\\"Manage\\\"",
+          "description": "A connected-provider action cannot imply passive management when it restarts authorization."
+        }
+      ]
     }
   ]
 }

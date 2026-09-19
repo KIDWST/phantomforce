@@ -12,12 +12,12 @@ import {
   recentChatTurns, addMemory,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260914-228";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260914-228";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260914-228";
-import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260914-228";
-import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260914-228";
-import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260914-228";
+} from "./store.js?v=phantom-live-20260914-229";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260914-229";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260914-229";
+import { parseInvoiceRequest, createInvoiceFromDraft, invoiceCard, fmtMoneyMinor } from "./invoices.js?v=phantom-live-20260914-229";
+import { buildPromptIntegrityEnvelope } from "./prompt-integrity.js?v=phantom-live-20260914-229";
+import { buildAiRuntimeRequest, waitForAiRuntimeSave } from "./ai-runtime.js?v=phantom-live-20260914-229";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus

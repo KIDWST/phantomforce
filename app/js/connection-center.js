@@ -2,8 +2,8 @@
    The browser never asks for developer credentials. Connect is enabled only
    when the server can create a real, signed authorization handoff. */
 
-import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-228";
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-228";
+import { renderSocialSettings } from "./social-settings.js?v=phantom-live-20260914-229";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260914-229";
 
 const emptyConnectionState = () => ({ loaded: false, loadedAt: 0, loading: false, error: "", connectors: [], emailExecution: null, notice: "", busyId: "" });
 let connectionState = emptyConnectionState();
@@ -146,7 +146,7 @@ function connectionCard(connector) {
   const connected = connector.state === "connected";
   const needsConfiguration = connector.state === "configuration_required";
   const status = connected ? "Connected" : needsConfiguration ? "Needs configuration" : "Ready to connect";
-  const button = connected ? "Manage" : needsConfiguration ? (connectionOpts.isOwnerOperator ? "Open owner setup" : "Ask platform owner") : "Connect";
+  const button = connected ? "Reconnect" : needsConfiguration ? (connectionOpts.isOwnerOperator ? "Open owner setup" : "Ask platform owner") : "Connect";
   const busy = connectionState.busyId === connector.id;
   return `<article class="set-connect-card is-${esc(connector.state || "disconnected")}">
     <div class="set-connect-card-top">
@@ -267,9 +267,12 @@ function emailAutomationOverview() {
 
 const CONNECTION_GROUP_ORDER = Object.freeze(["Email", "Calendar", "Payments", "Accounting", "CRM", "Developer"]);
 
-function connectionGroups(focusGroup = "") {
+function connectionGroups(focusGroup = "", { onlyFocus = false } = {}) {
   const grouped = new Map();
-  connectionState.connectors.filter((connector) => connector.state !== "connected").forEach((connector) => {
+  connectionState.connectors.filter((connector) => {
+    if (onlyFocus && connector.group !== focusGroup) return false;
+    return onlyFocus || connector.state !== "connected";
+  }).forEach((connector) => {
     const group = connector.group || "Accounts";
     if (!grouped.has(group)) grouped.set(group, []);
     grouped.get(group).push(connector);
@@ -297,24 +300,30 @@ export function renderConnectionCenter(el, opts = {}) {
   connectionMount = el;
   connectionOpts = opts;
   const health = connectionHealth();
+  const focusGroup = String(connectionOpts.focusGroup || "").trim();
+  const focusMode = focusGroup === "Email";
   const socialMountId = `social-connect-${Math.random().toString(36).slice(2)}`;
-  el.innerHTML = `<div class="set-connection-center">
+  el.innerHTML = `<div class="set-connection-center ${focusMode ? "is-focus-mode" : ""}">
     <section class="set-section set-connect-hero">
-      <div><p class="set-eyebrow">One-click connections · Command center</p><h3>Everything connected to PhantomForce</h3><p class="set-note">Phantom continuously checks every brain route, bridge, API provider, and business account. Broken configured services rise first with the exact owner or user action required.</p></div>
-      <div class="set-connect-hero-actions"><button class="btn btn-primary" type="button" data-connections-diagnose ${connectionState.loading ? "disabled" : ""}>${connectionState.loading ? "Checking…" : "Diagnose & recheck all"}</button><button class="btn btn-quiet" type="button" data-connections-refresh ${connectionState.loading ? "disabled" : ""}>Refresh</button></div>
+      <div><p class="set-eyebrow">${focusMode ? "Inbox automation · Focused setup" : "One-click connections · Command center"}</p><h3>${focusMode ? "Connect once. Phantom handles the follow-up loop." : "Everything connected to PhantomForce"}</h3><p class="set-note">${focusMode ? "Verify this account's inbox, secure sender, delivery events, and replies without leaving the CRM path." : "Phantom continuously checks every brain route, bridge, API provider, and business account. Broken configured services rise first with the exact owner or user action required."}</p></div>
+      <div class="set-connect-hero-actions">${focusMode ? `<button class="btn btn-quiet" type="button" data-connections-clear-focus>Show all connections</button>` : ""}<button class="btn btn-primary" type="button" data-connections-diagnose ${connectionState.loading ? "disabled" : ""}>${connectionState.loading ? "Checking…" : focusMode ? "Recheck inbox" : "Diagnose & recheck all"}</button>${focusMode ? "" : `<button class="btn btn-quiet" type="button" data-connections-refresh ${connectionState.loading ? "disabled" : ""}>Refresh</button>`}</div>
     </section>
-    <section class="set-connect-health" aria-label="Connection health"><span><b>${health.active}</b><i>Active</i></span><span><b>${health.ready}</b><i>Ready to connect</i></span><span class="${health.attention ? "is-attention" : "is-clear"}"><b>${health.attention}</b><i>Needs owner</i></span><span><b>${health.checking}</b><i>Checking</i></span></section>
+    ${focusMode ? "" : `<section class="set-connect-health" aria-label="Connection health"><span><b>${health.active}</b><i>Active</i></span><span><b>${health.ready}</b><i>Ready to connect</i></span><span class="${health.attention ? "is-attention" : "is-clear"}"><b>${health.attention}</b><i>Needs owner</i></span><span><b>${health.checking}</b><i>Checking</i></span></section>`}
     ${connectionState.notice ? `<div class="set-social-notice">${esc(connectionState.notice)}</div>` : ""}
     ${connectionState.error ? `<div class="set-social-notice">${esc(connectionState.error)}</div>` : ""}
     ${emailAutomationOverview()}
-    ${connectionOverview()}
-    <header class="set-connect-catalog-head"><p class="set-eyebrow">Available connectors</p><h3>Add a business account</h3><p>Choose a provider, sign in on its secure page, and return here to confirm it is active.</p></header>
-    ${connectionGroups(connectionOpts.focusGroup)}
-    <section class="set-connect-social"><div id="${socialMountId}"></div></section>
+    ${focusMode ? "" : connectionOverview()}
+    <header class="set-connect-catalog-head"><p class="set-eyebrow">${focusMode ? "Choose an inbox" : "Available connectors"}</p><h3>${focusMode ? "Email account" : "Add a business account"}</h3><p>${focusMode ? "Gmail leads the list for this workspace. Other providers remain available without mixing in unrelated setup." : "Choose a provider, sign in on its secure page, and return here to confirm it is active."}</p></header>
+    ${connectionGroups(focusGroup, { onlyFocus: focusMode })}
+    ${focusMode ? "" : `<section class="set-connect-social"><div id="${socialMountId}"></div></section>`}
   </div>`;
 
   el.querySelector("[data-connections-refresh]")?.addEventListener("click", () => void refreshConnections({ force: true }));
   el.querySelector("[data-connections-diagnose]")?.addEventListener("click", () => void diagnoseConnections());
+  el.querySelector("[data-connections-clear-focus]")?.addEventListener("click", () => {
+    if (typeof opts.onClearFocus === "function") opts.onClearFocus();
+    else renderConnectionCenter(el, { ...opts, focusGroup: "" });
+  });
   el.querySelectorAll("[data-connection-focus-group]").forEach((button) => {
     button.addEventListener("click", () => {
       const group = el.querySelector(`[data-connection-group="${button.dataset.connectionFocusGroup || "Email"}"]`);
@@ -367,6 +376,6 @@ export function renderConnectionCenter(el, opts = {}) {
   });
 
   const socialMount = el.querySelector(`#${socialMountId}`);
-  if (socialMount) renderSocialSettings(socialMount, opts);
+  if (socialMount && !focusMode) renderSocialSettings(socialMount, opts);
   if (!connectionState.loaded && !connectionState.loading) void refreshConnections();
 }
