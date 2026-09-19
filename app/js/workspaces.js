@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-230";
+} from "./store.js?v=phantom-live-20260914-231";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-230";
+} from "./orgs.js?v=phantom-live-20260914-231";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-230";
+} from "./proposalpipeline.js?v=phantom-live-20260914-231";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-230";
+} from "./approvalpipeline.js?v=phantom-live-20260914-231";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-230";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-230";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-230";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-230";
+} from "./financeledger.js?v=phantom-live-20260914-231";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-231";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-231";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-231";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -577,8 +577,15 @@ function crmSourceRecordUrl(lead) {
   return noteMatch?.[0] || "";
 }
 
+function crmOfficialWebsiteSourceUrl(lead) {
+  const direct = String(lead?.socials?.officialWebsiteSource || "").trim();
+  if (/^https?:\/\//iu.test(direct)) return direct;
+  const noteMatch = String(lead?.notes || "").match(/Official website evidence:\s*(https?:\/\/[^\s]+)/iu);
+  return noteMatch?.[1] || "";
+}
+
 function crmEvidenceSignals(lead) {
-  const socialCount = Object.entries(lead?.socials || {}).filter(([key, value]) => key !== "source" && key !== "website" && String(value || "").trim()).length;
+  const socialCount = Object.entries(lead?.socials || {}).filter(([key, value]) => !["source", "website", "officialWebsiteSource"].includes(key) && String(value || "").trim()).length;
   return [
     lead?.email ? "email" : "",
     lead?.phone ? "phone" : "",
@@ -616,6 +623,7 @@ function renderLeads(el, rerender) {
   const leads = filteredCrmContacts();
   const selected = leads.find((lead) => lead.id === leadsUi.selectedId) || leads[0] || null;
   const selectedSourceUrl = crmSourceRecordUrl(selected);
+  const selectedWebsiteEvidenceUrl = crmOfficialWebsiteSourceUrl(selected);
   const selectedEvidence = crmEvidenceSignals(selected);
   const lanes = [["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["lost", "Lost / archived"]];
   const pageSize = 40;
@@ -674,7 +682,7 @@ function renderLeads(el, rerender) {
           <section class="crm-source-proof" aria-label="Research proof">
             <div><p>Research proof</p><strong>${esc(selected.source || "Account record")}</strong></div>
             <span>${selectedEvidence.length ? `${selectedEvidence.length} public signal${selectedEvidence.length === 1 ? "" : "s"}: ${esc(selectedEvidence.join(" · "))}` : "No public contact signals saved"} · added ${selected.createdAt ? esc(fmtDate(selected.createdAt, { year: "numeric" })) : "date unavailable"}</span>
-            ${selectedSourceUrl ? `<a href="${esc(selectedSourceUrl)}" target="_blank" rel="noopener noreferrer">Open source record ↗</a>` : `<i>Source link not attached</i>`}
+            <div>${selectedSourceUrl ? `<a href="${esc(selectedSourceUrl)}" target="_blank" rel="noopener noreferrer">Open directory record ↗</a>` : `<i>Directory source not attached</i>`}${selectedWebsiteEvidenceUrl ? ` · <a href="${esc(selectedWebsiteEvidenceUrl)}" target="_blank" rel="noopener noreferrer">Open official-site evidence ↗</a>` : ""}</div>
           </section>
           ${crmContactEmailTrail(selected)}
           <div class="crm-socials is-detail">${leadSocialLinks(selected) || "<span>No social handles saved yet.</span>"}</div>
@@ -737,7 +745,11 @@ function renderLeads(el, rerender) {
               : `No new organizations were added from ${market}.`;
             const skippedCopy = skipped ? ` ${skipped.toLocaleString()} existing record${skipped === 1 ? " was" : "s were"} skipped.` : "";
             const limitCopy = result.truncated ? " The request was capped at 100 records for this run; run it again to continue." : "";
-            leadsUi.notice = `${createdCopy}${skippedCopy}${limitCopy} Source proof is attached; permission remains unknown until reviewed.`;
+            const enrichment = result.source?.websiteEnrichment || {};
+            const enrichmentCopy = Number(enrichment.attempted || 0)
+              ? ` Verified ${Number(enrichment.verified || 0).toLocaleString()} official website${Number(enrichment.verified || 0) === 1 ? "" : "s"} and added ${Number(enrichment.publishedEmailsAdded || 0).toLocaleString()} published email${Number(enrichment.publishedEmailsAdded || 0) === 1 ? "" : "s"}.`
+              : "";
+            leadsUi.notice = `${createdCopy}${skippedCopy}${enrichmentCopy}${limitCopy} Source proof is attached; permission remains unknown until reviewed.`;
             pushActivity("Easy CRM", `pulled ${Number(result.created || 0).toLocaleString()} CRM candidate${result.created === 1 ? "" : "s"} for ${leadWorkspaceName()}.`, ws);
             store.save();
           } else {
@@ -3191,7 +3203,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-230")
+      import("./brain.js?v=phantom-live-20260914-231")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

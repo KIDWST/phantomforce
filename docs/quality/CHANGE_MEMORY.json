@@ -326,7 +326,7 @@
         },
         {
           "file": "server/src/index.ts",
-          "pattern": "researchPublicProspects[(]parsed[.]data[)][\\s\\S]*crm_public_prospects_imported[\\s\\S]*outbound_action_executed: false",
+          "pattern": "researchPublicProspects[(]\\{ [.][.][.]parsed[.]data, excludeSourceIds: \\[[.][.][.]existingSourceIds\\] \\}[)][\\s\\S]*crm_public_prospects_imported[\\s\\S]*outbound_action_executed: false",
           "description": "Account-scoped research records an audit receipt and never performs outreach as part of discovery."
         },
         {
@@ -2833,6 +2833,44 @@
           "file": "app/js/workspaces.js",
           "pattern": "function crmContactEmailTrail[\\s\\S]*SERVER EMAIL HISTORY[\\s\\S]*providerReceipt[\\s\\S]*Open full email queue[\\s\\S]*providerReplies[\\s\\S]*verifiedEmailCount[\\s\\S]*verifiedReplyCount",
           "description": "Selected relationships show server/provider evidence and the CRM totals reconcile all hydrated receipts."
+        }
+      ]
+    },
+    {
+      "id": "crm-official-website-contact-evidence",
+      "status": "active",
+      "title": "Public prospect research enriches only from bounded official-site evidence",
+      "ownerDecision": "Account-scoped prospect research may verify a discovered organization's official public website and one same-site contact page, but it must never guess an email, infer consent, access a private-network target, follow a cross-domain redirect, or claim an outbound action. Literal mailto, tel, and social links retain their exact evidence page. Enrichment is capped, byte-bounded, cached, audited, and visible on the selected relationship alongside the original directory record. Repeated pulls must exclude persisted directory source IDs before selecting the next batch so a large sourced list can advance instead of replaying its first page.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/crm/public-prospect-research.ts",
+          "pattern": "MAX_WEBSITE_ENRICHMENTS_PER_PULL[\\s\\S]*MAX_WEBSITE_DOCUMENT_BYTES[\\s\\S]*WEBSITE_EVIDENCE_TTL_MS[\\s\\S]*assertPublicWebsiteUrl[\\s\\S]*redirect: \\\"manual\\\"[\\s\\S]*public_website_cross_domain_redirect_blocked",
+          "description": "Official-site verification remains capped, byte-bounded, cached, private-network safe, and redirect constrained."
+        },
+        {
+          "file": "server/src/crm/public-prospect-research.ts",
+          "pattern": "mailto:[\\s\\S]*tel:[\\s\\S]*officialWebsiteSource[\\s\\S]*source:official-website[\\s\\S]*websiteEnrichment",
+          "description": "Only literal published contact links become sourced enrichment fields and every pull reports factual coverage."
+        },
+        {
+          "file": "server/scripts/test-public-prospect-research.ts",
+          "pattern": "literal mailto address on the official website[\\s\\S]*exact public evidence page[\\s\\S]*Private-network website targets must be blocked before any request",
+          "description": "The focused test proves exact evidence retention and zero requests to private targets."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "lastResearchReceipt:[\\s\\S]*websiteEnrichment: research.websiteEnrichment[\\s\\S]*crm_public_prospects_imported[\\s\\S]*outbound_action_executed: false",
+          "description": "Account research receipts and audit events persist enrichment outcomes without claiming outreach."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "existingSourceIds[\\s\\S]*researchPublicProspects\\(\\{ \\.\\.\\.parsed\\.data, excludeSourceIds: \\[\\.\\.\\.existingSourceIds\\] \\}\\)[\\s\\S]*skippedExisting",
+          "description": "Each account's persisted directory sources are excluded before the next bounded research batch is chosen."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "function crmOfficialWebsiteSourceUrl[\\s\\S]*Open directory record[\\s\\S]*Open official-site evidence[\\s\\S]*publishedEmailsAdded[\\s\\S]*permission remains unknown",
+          "description": "Relationships exposes both evidence layers and keeps consent visibly unknown."
         }
       ]
     }

@@ -1,6 +1,11 @@
+import { lookup } from "node:dns/promises";
+
 const OSM_SOURCE = "OpenStreetMap public business directory";
 const OSM_COPYRIGHT = "https://www.openstreetmap.org/copyright";
 const MAX_RESULTS_PER_PULL = 100;
+const MAX_WEBSITE_ENRICHMENTS_PER_PULL = 12;
+const MAX_WEBSITE_DOCUMENT_BYTES = 512_000;
+const WEBSITE_EVIDENCE_TTL_MS = 24 * 60 * 60 * 1_000;
 
 export type ProspectLane =
   | "healthcare"
@@ -49,6 +54,16 @@ export type PublicProspectResearchResult = {
   requested: number;
   limitApplied: number;
   truncated: boolean;
+  directoryCandidates: number;
+  excludedExistingSources: number;
+  websiteEnrichment: {
+    attempted: number;
+    verified: number;
+    publishedEmailsAdded: number;
+    publishedPhonesAdded: number;
+    failed: number;
+    capped: boolean;
+  };
   candidates: PublicProspectCandidate[];
 };
 
@@ -123,9 +138,190 @@ const OVERPASS_ENDPOINTS = [
 ] as const;
 
 const queryCache = new Map<string, { expiresAt: number; elements: OsmElement[] }>();
+const websiteEvidenceCache = new Map<string, { expiresAt: number; evidence: PublicWebsiteEvidence }>();
+
+type PublicWebsiteEvidence = {
+  sourceUrl: string;
+  email: string | null;
+  phone: string | null;
+  socials: Record<string, string>;
+};
+
+type ResolvePublicHost = (hostname: string, options: { all: true }) => Promise<Array<{ address: string }>>;
 
 function clean(value: unknown, max = 500) {
   return typeof value === "string" ? value.replace(/\s+/gu, " ").trim().slice(0, max) : "";
+}
+
+function privateNetworkAddress(value: string) {
+  const address = value.toLowerCase().replace(/^\[|\]$/gu, "");
+  if (["localhost", "0.0.0.0", "::1", "0:0:0:0:0:0:0:1"].includes(address)) return true;
+  if ([".localhost", ".local", ".internal", ".lan", ".home"].some((suffix) => address.endsWith(suffix))) return true;
+  if (/^(?:10|127|169\.254|192\.168)\./u.test(address)) return true;
+  const private172 = address.match(/^172\.(\d{1,3})\./u);
+  if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return true;
+  const carrier100 = address.match(/^100\.(\d{1,3})\./u);
+  if (carrier100 && Number(carrier100[1]) >= 64 && Number(carrier100[1]) <= 127) return true;
+  if (/^198\.(?:18|19)\./u.test(address)) return true;
+  return /^(?:fc|fd|fe80):/u.test(address);
+}
+
+async function assertPublicWebsiteUrl(url: URL, resolveImpl: ResolvePublicHost) {
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || privateNetworkAddress(url.hostname)) {
+    throw new Error("public_website_target_blocked");
+  }
+  const records = await resolveImpl(url.hostname, { all: true });
+  if (!records.length || records.some((record) => privateNetworkAddress(record.address))) {
+    throw new Error("public_website_target_blocked");
+  }
+}
+
+async function readBoundedText(response: Response) {
+  const declared = Number(response.headers.get("content-length") || 0);
+  if (declared > MAX_WEBSITE_DOCUMENT_BYTES) throw new Error("public_website_too_large");
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > MAX_WEBSITE_DOCUMENT_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error("public_website_too_large");
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function decodeHtmlValue(value: string) {
+  return value
+    .replace(/&amp;/giu, "&")
+    .replace(/&#x([0-9a-f]+);/giu, (match, hex: string) => {
+      const point = Number.parseInt(hex, 16);
+      return Number.isSafeInteger(point) && point <= 0x10ffff ? String.fromCodePoint(point) : match;
+    })
+    .replace(/&#(\d+);/gu, (match, decimal: string) => {
+      const point = Number(decimal);
+      return Number.isSafeInteger(point) && point <= 0x10ffff ? String.fromCodePoint(point) : match;
+    })
+    .replace(/&commat;/giu, "@");
+}
+
+function validPublishedEmail(value: string) {
+  let decoded = decodeHtmlValue(value);
+  try { decoded = decodeURIComponent(decoded); } catch { /* malformed escapes are not interpreted */ }
+  const email = decoded.split(/[?#]/u)[0]?.trim().toLowerCase() || "";
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) && !/^(?:no-?reply|donotreply)@/u.test(email) ? email : null;
+}
+
+function publicWebsiteEvidence(html: string, pageUrl: URL): PublicWebsiteEvidence {
+  const links = [...html.matchAll(/\bhref\s*=\s*["']([^"']+)["']/giu)].map((match) => decodeHtmlValue(match[1]));
+  const email = links
+    .filter((href) => /^mailto:/iu.test(href))
+    .map((href) => validPublishedEmail(href.replace(/^mailto:/iu, "")))
+    .find(Boolean) || null;
+  const phone = links
+    .filter((href) => /^tel:/iu.test(href))
+    .map((href) => {
+      const raw = href.replace(/^tel:/iu, "");
+      try { return clean(decodeURIComponent(raw), 80); } catch { return clean(raw, 80); }
+    })
+    .find(Boolean) || null;
+  const socials: Record<string, string> = {};
+  const platforms = [
+    ["instagram", /(?:^|\.)instagram\.com$/iu],
+    ["facebook", /(?:^|\.)facebook\.com$/iu],
+    ["linkedin", /(?:^|\.)linkedin\.com$/iu],
+    ["x", /(?:^|\.)(?:x|twitter)\.com$/iu],
+    ["tiktok", /(?:^|\.)tiktok\.com$/iu],
+  ] as const;
+  for (const href of links) {
+    try {
+      const link = new URL(href, pageUrl);
+      const platform = platforms.find(([, host]) => host.test(link.hostname))?.[0];
+      if (platform && !socials[platform]) socials[platform] = link.toString().slice(0, 300);
+    } catch { /* malformed public links are ignored */ }
+  }
+  return { sourceUrl: pageUrl.toString(), email, phone, socials };
+}
+
+function samePublicWebsite(left: URL, right: URL) {
+  return left.hostname.toLowerCase().replace(/^www\./u, "") === right.hostname.toLowerCase().replace(/^www\./u, "");
+}
+
+function contactPageUrl(html: string, current: URL) {
+  for (const match of html.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/giu)) {
+    const label = clean(match[2].replace(/<[^>]+>/gu, " "), 160);
+    const href = decodeHtmlValue(match[1]);
+    if (!/\b(contact|connect|reach us|get in touch)\b/iu.test(`${label} ${href}`)) continue;
+    try {
+      const candidate = new URL(href, current);
+      if (["http:", "https:"].includes(candidate.protocol) && samePublicWebsite(candidate, current)) return candidate;
+    } catch { /* malformed links are ignored */ }
+  }
+  return null;
+}
+
+async function fetchOfficialWebsitePage(
+  url: URL,
+  root: URL,
+  fetchImpl: typeof fetch,
+  resolveImpl: ResolvePublicHost,
+  redirects = 0,
+) {
+  await assertPublicWebsiteUrl(url, resolveImpl);
+  const response = await fetchImpl(url, {
+    method: "GET",
+    redirect: "manual",
+    headers: {
+      accept: "text/html,application/xhtml+xml;q=0.9",
+      "user-agent": "PhantomForce-CRM/1.0 (bounded public business contact verification)",
+    },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (response.status >= 300 && response.status < 400) {
+    if (redirects >= 3) throw new Error("public_website_redirect_limit");
+    const location = response.headers.get("location");
+    if (!location) throw new Error("public_website_redirect_without_location");
+    const next = new URL(location, url);
+    if (!samePublicWebsite(next, root)) throw new Error("public_website_cross_domain_redirect_blocked");
+    return fetchOfficialWebsitePage(next, root, fetchImpl, resolveImpl, redirects + 1);
+  }
+  if (!response.ok) throw new Error(`public_website_http_${response.status}`);
+  if (!/text\/html|application\/xhtml\+xml/iu.test(response.headers.get("content-type") || "")) {
+    throw new Error("public_website_not_html");
+  }
+  return { url, html: await readBoundedText(response) };
+}
+
+async function researchOfficialWebsite(
+  value: string,
+  fetchImpl: typeof fetch,
+  resolveImpl: ResolvePublicHost,
+): Promise<PublicWebsiteEvidence> {
+  const cached = websiteEvidenceCache.get(value);
+  if (cached && cached.expiresAt > Date.now()) return cached.evidence;
+  const root = new URL(value);
+  const home = await fetchOfficialWebsitePage(root, root, fetchImpl, resolveImpl);
+  let evidence = publicWebsiteEvidence(home.html, home.url);
+  if (!evidence.email || !evidence.phone) {
+    const contact = contactPageUrl(home.html, home.url);
+    if (contact && contact.toString() !== home.url.toString()) {
+      const page = await fetchOfficialWebsitePage(contact, root, fetchImpl, resolveImpl);
+      const extra = publicWebsiteEvidence(page.html, page.url);
+      evidence = {
+        sourceUrl: extra.email || extra.phone ? extra.sourceUrl : evidence.sourceUrl,
+        email: evidence.email || extra.email,
+        phone: evidence.phone || extra.phone,
+        socials: { ...extra.socials, ...evidence.socials },
+      };
+    }
+  }
+  websiteEvidenceCache.set(value, { expiresAt: Date.now() + WEBSITE_EVIDENCE_TTL_MS, evidence });
+  return evidence;
 }
 
 function resolveMarket(text: string) {
@@ -274,6 +470,61 @@ function balancedCandidates(candidates: PublicProspectCandidate[], plans: typeof
   return selected;
 }
 
+async function enrichFromOfficialWebsites(
+  candidates: PublicProspectCandidate[],
+  fetchImpl: typeof fetch,
+  resolveImpl: ResolvePublicHost,
+) {
+  const targets = candidates.filter((candidate) => Boolean(candidate.website)).slice(0, MAX_WEBSITE_ENRICHMENTS_PER_PULL);
+  let verified = 0;
+  let publishedEmailsAdded = 0;
+  let publishedPhonesAdded = 0;
+  let failed = 0;
+  await Promise.all(targets.map(async (candidate) => {
+    try {
+      const evidence = await researchOfficialWebsite(candidate.website!, fetchImpl, resolveImpl);
+      verified += 1;
+      const addedEmail = !candidate.email && Boolean(evidence.email);
+      const addedPhone = !candidate.phone && Boolean(evidence.phone);
+      if (addedEmail) {
+        candidate.email = evidence.email;
+        publishedEmailsAdded += 1;
+      }
+      if (addedPhone) {
+        candidate.phone = evidence.phone;
+        publishedPhonesAdded += 1;
+      }
+      candidate.socials = { ...candidate.socials, ...evidence.socials, officialWebsiteSource: evidence.sourceUrl };
+      candidate.tags = candidate.tags.filter((tag) => tag !== "email:research-needed");
+      if (candidate.email && !candidate.tags.includes("email:published-business")) candidate.tags.push("email:published-business");
+      if (!candidate.email) candidate.tags.push("email:research-needed");
+      if (!candidate.tags.includes("source:official-website")) candidate.tags.push("source:official-website");
+      candidate.notes = `${candidate.notes} Official website evidence: ${evidence.sourceUrl}`;
+      candidate.qualification = [
+        candidate.qualification[0],
+        candidate.email
+          ? "Published business email found; permission still requires review"
+          : "Official website checked; no published email found on the reviewed pages",
+        candidate.website ? "Official website verified for public contact evidence" : candidate.qualification[2],
+      ].filter(Boolean);
+      const evidenceCount = [candidate.email, candidate.phone, candidate.website, ...Object.keys(evidence.socials)].filter(Boolean).length;
+      candidate.fitScore = Math.min(96, Math.max(candidate.fitScore, 62 + evidenceCount * 7));
+    } catch {
+      failed += 1;
+      if (!candidate.tags.includes("enrichment:website-pending")) candidate.tags.push("enrichment:website-pending");
+      candidate.qualification = [...candidate.qualification, "Official website contact verification could not be completed this run"].slice(0, 5);
+    }
+  }));
+  return {
+    attempted: targets.length,
+    verified,
+    publishedEmailsAdded,
+    publishedPhonesAdded,
+    failed,
+    capped: candidates.filter((candidate) => Boolean(candidate.website)).length > targets.length,
+  };
+}
+
 async function fetchOverpass(query: string, fetchImpl: typeof fetch) {
   const cached = queryCache.get(query);
   if (cached && cached.expiresAt > Date.now()) return cached.elements;
@@ -310,6 +561,9 @@ export async function researchPublicProspects(input: {
   prompt?: string;
   count: number;
   fetchImpl?: typeof fetch;
+  websiteFetchImpl?: typeof fetch;
+  resolveImpl?: ResolvePublicHost;
+  excludeSourceIds?: string[];
 }): Promise<PublicProspectResearchResult> {
   const text = clean(`${input.prompt || ""} ${input.audience || ""}`, 1_500);
   const market = resolveMarket(text);
@@ -318,11 +572,22 @@ export async function researchPublicProspects(input: {
   const limitApplied = Math.min(requested, MAX_RESULTS_PER_PULL);
   const query = buildOverpassQuery(plans, market.bbox, limitApplied);
   const elements = await fetchOverpass(query, input.fetchImpl || fetch);
+  const directoryCandidates = elements
+    .map((element) => toCandidate(element, plans, market))
+    .filter((candidate): candidate is PublicProspectCandidate => Boolean(candidate));
+  const excluded = new Set((input.excludeSourceIds || []).map((value) => clean(value, 300).toLowerCase()).filter(Boolean));
+  const availableCandidates = directoryCandidates.filter((candidate) => !excluded.has(candidate.sourceId.toLowerCase()) && !excluded.has(candidate.sourceUrl.toLowerCase()));
   const candidates = balancedCandidates(
-    elements.map((element) => toCandidate(element, plans, market)).filter((candidate): candidate is PublicProspectCandidate => Boolean(candidate)),
+    availableCandidates,
     plans,
     limitApplied,
   );
+  const websiteEnrichment = await enrichFromOfficialWebsites(
+    candidates,
+    input.websiteFetchImpl || input.fetchImpl || fetch,
+    input.resolveImpl || ((hostname, options) => lookup(hostname, options)),
+  );
+  const truncated = requested > limitApplied || availableCandidates.length > limitApplied;
   return {
     provider: "openstreetmap",
     providerCalled: true,
@@ -331,7 +596,10 @@ export async function researchPublicProspects(input: {
     market: market.label,
     requested,
     limitApplied,
-    truncated: requested > limitApplied,
+    truncated,
+    directoryCandidates: directoryCandidates.length,
+    excludedExistingSources: directoryCandidates.length - availableCandidates.length,
+    websiteEnrichment,
     candidates,
   };
 }

@@ -3601,11 +3601,23 @@ app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
   const existingBrain = existingSettings?.brain && typeof existingSettings.brain === "object" && !Array.isArray(existingSettings.brain)
     ? existingSettings.brain as Record<string, unknown>
     : {};
+  const existingContacts = await db.contact.findMany({
+    where: { orgId },
+    select: { organization: true, website: true, notes: true, socials: true },
+  });
+  const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?/u, "").replace(/\/$/u, "");
+  const existingKeys = new Set(existingContacts.map((contact) => `${normalize(contact.organization)}|${normalize(contact.website)}`));
+  const existingSourceIds = new Set(existingContacts.flatMap((contact) => {
+    const notes = contact.notes?.match(/openstreetmap\.org\/((?:node|way|relation)\/\d+)/giu)?.map((url) => url.replace(/^.*openstreetmap\.org\//iu, "")) || [];
+    const socials = contact.socials && typeof contact.socials === "object" && !Array.isArray(contact.socials) ? contact.socials as Record<string, unknown> : {};
+    const socialSource = String(socials.source || "").match(/openstreetmap\.org\/((?:node|way|relation)\/\d+)/iu)?.[1];
+    return [...notes, socialSource || ""].map((value) => value.toLowerCase()).filter(Boolean);
+  }));
   const command = parsed.data.prompt || `pull ${parsed.data.count} ${parsed.data.audience}`;
   const researchStartedAt = new Date().toISOString();
   let research: Awaited<ReturnType<typeof researchPublicProspects>>;
   try {
-    research = await researchPublicProspects(parsed.data);
+    research = await researchPublicProspects({ ...parsed.data, excludeSourceIds: [...existingSourceIds] });
   } catch (error) {
     request.log.warn({ err: error, orgId }, "Public CRM research failed");
     const failedBrain = {
@@ -3642,23 +3654,17 @@ app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
     });
   }
 
-  const existingContacts = await db.contact.findMany({
-    where: { orgId },
-    select: { organization: true, website: true, notes: true },
-  });
-  const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?/u, "").replace(/\/$/u, "");
-  const existingKeys = new Set(existingContacts.map((contact) => `${normalize(contact.organization)}|${normalize(contact.website)}`));
-  const existingSourceIds = new Set(existingContacts.flatMap((contact) => contact.notes?.match(/openstreetmap\.org\/(?:node|way|relation)\/\d+/giu) || []).map(normalize));
   const selectedKeys = new Set<string>();
   const selectedSourceIds = new Set<string>();
   const pending = research.candidates.filter((candidate) => {
     const key = `${normalize(candidate.name)}|${normalize(candidate.website)}`;
-    const sourceId = normalize(candidate.sourceUrl);
+    const sourceId = candidate.sourceId.toLowerCase();
     if (existingKeys.has(key) || existingSourceIds.has(sourceId) || selectedKeys.has(key) || selectedSourceIds.has(sourceId)) return false;
     selectedKeys.add(key);
     selectedSourceIds.add(sourceId);
     return true;
   });
+  const skippedExisting = research.excludedExistingSources + (research.candidates.length - pending.length);
   const now = Date.now();
   const researchFinishedAt = new Date().toISOString();
   const updatedBrain = {
@@ -3675,10 +3681,11 @@ app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
       market: research.market,
       requested: research.requested,
       limitApplied: research.limitApplied,
-      discovered: research.candidates.length,
+      discovered: research.directoryCandidates,
       created: pending.length,
-      skippedExisting: research.candidates.length - pending.length,
+      skippedExisting,
       truncated: research.truncated,
+      websiteEnrichment: research.websiteEnrichment,
       sourceLicense: research.sourceLicense,
       startedAt: researchStartedAt,
       finishedAt: researchFinishedAt,
@@ -3730,15 +3737,16 @@ app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
     targetId: batchId,
     payload: {
       requested: research.requested,
-      discovered: research.candidates.length,
+      discovered: research.directoryCandidates,
       created: result.contacts.length,
-      skippedExisting: research.candidates.length - pending.length,
+      skippedExisting,
       truncated: research.truncated,
       source: research.source,
       sourceLicense: research.sourceLicense,
       market: research.market,
       providerCalled: research.providerCalled,
       publishedBusinessEmails: pending.filter((candidate) => candidate.email).length,
+      websiteEnrichment: research.websiteEnrichment,
       outreachExecuted: false,
     },
   });
@@ -3746,11 +3754,17 @@ app.post("/orgs/:orgId/crm/pull", async (request, reply) => {
     ok: true,
     batchId,
     requested: research.requested,
-    discovered: research.candidates.length,
+    discovered: research.directoryCandidates,
     created: result.contacts.length,
-    skippedExisting: research.candidates.length - pending.length,
+    skippedExisting,
     truncated: research.truncated,
-    source: { provider: research.provider, label: research.source, license: research.sourceLicense, market: research.market },
+    source: {
+      provider: research.provider,
+      label: research.source,
+      license: research.sourceLicense,
+      market: research.market,
+      websiteEnrichment: research.websiteEnrichment,
+    },
     settings: { dailyPullTarget: result.settings.dailyPullTarget, sourceMode: result.settings.sourceMode, notes: result.settings.notes || "", brain: result.settings.brain || {} },
     contacts: result.contacts.map(crmContactView),
     provider_called: research.providerCalled,

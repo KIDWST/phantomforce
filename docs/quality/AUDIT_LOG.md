@@ -2375,3 +2375,35 @@ Cycle 31.
 - PASS: authenticated in-app browser review of the account follow-up control,
   selected-contact email history, and contact-to-full-queue handoff.
 - PASS: all 46 release-critical checks before deployment.
+
+# 2026-09-19 - Official website contact enrichment
+
+## Release Scope
+
+- Extended account-scoped public prospect research from the directory record
+  to a bounded verification pass against each discovered official website and
+  at most one same-site contact page.
+- Added literal `mailto:`, `tel:`, and official-site social-link extraction
+  without guessing addresses, handles, people, consent, or relationship state.
+- Attached the exact official evidence page to each enriched CRM relationship
+  and surfaced it next to the original directory source.
+- Added per-run enrichment counts to the account research receipt and audit
+  event while preserving the explicit no-outreach result.
+- Made repeated pulls exclude persisted directory source IDs before selecting
+  the next bounded batch, so large sourced-list runs advance instead of
+  replaying the same first records.
+- Added private-network, cross-domain redirect, content-type, response-size,
+  timeout, per-pull, and cache boundaries around website verification.
+
+## Verification Before Ship
+
+- PASS: official website fixture added one exact published email, one phone,
+  and one social link from a same-site contact page.
+- PASS: private-network fixture produced zero website requests and no contact
+  data.
+- PASS: repeated-pull fixture skipped the saved source ID and returned the
+  next sourced organization from cached directory and website evidence.
+- PASS: public-prospect research, CRM regression, typecheck, and whitespace
+  gates.
+- PASS: all 46 release-critical checks, including authentication, tenant
+  isolation, email delivery, provider receipts, automation, and responsive UI.

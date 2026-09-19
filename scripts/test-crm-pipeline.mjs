@@ -54,7 +54,7 @@ must(files.workspaces, /function syncServerCrm/u, "Clients page must synchronize
 must(files.workspaces, /function crmPullIntent/u, "Clients page must recognize natural discovery requests.");
 must(files.workspaces, /No placeholder or invented contacts were added/u, "Clients page must disclose that unavailable research creates zero placeholders.");
 must(files.workspaces, /function crmSourceRecordUrl[\s\S]*openstreetmap/u, "Sourced CRM records must expose their public evidence link.");
-must(files.workspaces, /Research proof[\s\S]*Open source record/u, "The selected relationship must show a compact research proof receipt.");
+must(files.workspaces, /Research proof[\s\S]*Open directory record[\s\S]*Open official-site evidence/u, "The selected relationship must show both directory and official-site research proof when available.");
 must(files.workspaces, /wedding-ecosystem[\s\S]*Weddings[\s\S]*coaches-programs[\s\S]*Coaches/u, "Wedding and coaching prospects must be first-class CRM segments.");
 must(files.workspaces, /capture a real contact manually/u, "Manual real-contact capture must remain available.");
 must(files.workspaces, /data-crm-account="\$\{esc\(ws\)\}"/u, "Relationships must expose the authenticated organization scope in the CRM shell.");
@@ -117,7 +117,7 @@ must(files.crmAutomation, /executionAttempted: false, submittedNow: false[\s\S]*
   "An idempotent replay of a completed email action cannot be counted as a fresh provider attempt or send.");
 must(files.organizationPulse, /readCrmIntelligence[\s\S]*Live account CRM/u, "PhantomBot workspace context must include tenant-scoped CRM intelligence.");
 
-must(files.server, /researchPublicProspects\(parsed\.data\)/u, "CRM pulls must use the real public-organization research adapter.");
+must(files.server, /researchPublicProspects\(\{ \.\.\.parsed\.data, excludeSourceIds: \[\.\.\.existingSourceIds\] \}\)/u, "CRM pulls must use the real public-organization research adapter and advance past persisted directory sources.");
 must(files.server, /sourceMode:\s*"public-research"/u, "Successful public research must be recorded in the account-scoped CRM settings.");
 must(files.server, /sourceMode:\s*"research-required"/u, "Failed public research must remain actionable in the account-scoped CRM settings.");
 must(files.server, /error:\s*"public_research_temporarily_unavailable"/u, "Unavailable research must return a stable retryable error code.");
@@ -133,6 +133,20 @@ must(files.publicResearch, /sourceUrl = `https:\/\/www\.openstreetmap\.org\/\$\{
 must(files.publicResearch, /email \? "email:published-business" : "email:research-needed"/u, "CRM research must distinguish published business email from missing email.");
 must(files.publicResearch, /"consent:unknown"/u, "CRM research must never infer outreach consent.");
 must(files.publicResearch, /!value\.includes\(";"\)[\s\S]*@/u, "Ambiguous public email fields must be rejected instead of guessed.");
+must(files.publicResearch, /MAX_WEBSITE_ENRICHMENTS_PER_PULL[\s\S]*MAX_WEBSITE_DOCUMENT_BYTES[\s\S]*WEBSITE_EVIDENCE_TTL_MS/u,
+  "Official-site enrichment must remain bounded by a per-pull cap, response limit, and cache TTL.");
+must(files.publicResearch, /assertPublicWebsiteUrl[\s\S]*privateNetworkAddress[\s\S]*redirect: "manual"[\s\S]*public_website_cross_domain_redirect_blocked/u,
+  "Official-site enrichment must reject private-network targets and cross-domain redirects.");
+must(files.publicResearch, /mailto:[\s\S]*tel:[\s\S]*officialWebsiteSource[\s\S]*source:official-website/u,
+  "Website-enriched contact details must be literal published links with an exact evidence page and source tag.");
+must(files.publicResearch, /publishedEmailsAdded[\s\S]*publishedPhonesAdded[\s\S]*consent:unknown/u,
+  "Website enrichment must report factual coverage without changing consent state.");
+must(files.server, /websiteEnrichment: research\.websiteEnrichment/u,
+  "The account research receipt and audit event must preserve official-site enrichment outcomes.");
+must(files.publicResearch, /excludeSourceIds[\s\S]*availableCandidates[\s\S]*balancedCandidates[\s\S]*excludedExistingSources/u,
+  "Repeated research must continue past already-saved source records before selecting the next bounded batch.");
+must(files.server, /existingSourceIds[\s\S]*researchPublicProspects\(\{ \.\.\.parsed\.data, excludeSourceIds: \[\.\.\.existingSourceIds\] \}\)[\s\S]*skippedExisting/u,
+  "The account route must pass its persisted directory sources into research and report skipped coverage truthfully.");
 must(files.coreClient, /export function friendlyBackendError/u, "Shared client core must expose a friendly backend error formatter.");
 must(files.packageJson, /test:crm-pipeline/u, "Root package must expose the CRM regression test.");
 
