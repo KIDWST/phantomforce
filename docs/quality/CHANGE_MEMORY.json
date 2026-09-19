@@ -2802,6 +2802,39 @@
           "description": "A connected-provider action cannot imply passive management when it restarts authorization."
         }
       ]
+    },
+    {
+      "id": "crm-durable-followup-sequence-and-contact-receipts",
+      "status": "active",
+      "title": "CRM follow-ups advance once and every relationship shows provider-backed email history",
+      "ownerDecision": "Exception-only CRM automation records initial, follow-up 1, and follow-up 2 as durable per-contact sequence markers. A completed idempotent action must never count as a fresh provider attempt or send, an account can choose zero, one, or two automatic follow-ups, and the sequence stops when that bound is reached. Replies, opt-outs, and bounces remain terminal. Relationships shows the selected contact's server email work records and provider receipts in context, reconciles manual and autopilot receipts in its totals, and never promotes a draft or approval into a delivered or replied state without provider evidence.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/crm/crm-growth-automation.ts",
+          "pattern": "function completedFollowUpCount[\\s\\S]*crmFollowUpSequence[\\s\\S]*sequenceFromAction[\\s\\S]*outreach:\\$\\{sequence\\}-submitted[\\s\\S]*automatic sequence complete",
+          "description": "The backend persists bounded per-contact sequence progress and closes the sequence after the configured final follow-up."
+        },
+        {
+          "file": "server/src/crm/crm-growth-automation.ts",
+          "pattern": "executionAttempted: false, submittedNow: false[\\s\\S]*submittedNow: !hadProviderReceipt[\\s\\S]*if \\(result\\?\\.executionAttempted\\)",
+          "description": "Completed idempotent replays cannot inflate attempted or sent counts."
+        },
+        {
+          "file": "server/scripts/test-crm-growth-automation.ts",
+          "pattern": "A due contact should execute its first durable follow-up exactly once[\\s\\S]*completed idempotent follow-up replay is not a new provider attempt[\\s\\S]*completed follow-up must not call the provider again",
+          "description": "The focused provider test proves one execution, one receipt, and zero duplicate provider calls on replay."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "name=\\\"autopilotMaxFollowUps\\\"[\\s\\S]*None[\\s\\S]*2 follow-ups[\\s\\S]*maxFollowUps: Math.max\\(0, Math.min\\(2",
+          "description": "Each account retains a bounded zero-to-two automatic follow-up control."
+        },
+        {
+          "file": "app/js/workspaces.js",
+          "pattern": "function crmContactEmailTrail[\\s\\S]*SERVER EMAIL HISTORY[\\s\\S]*providerReceipt[\\s\\S]*Open full email queue[\\s\\S]*providerReplies[\\s\\S]*verifiedEmailCount[\\s\\S]*verifiedReplyCount",
+          "description": "Selected relationships show server/provider evidence and the CRM totals reconcile all hydrated receipts."
+        }
+      ]
     }
   ]
 }

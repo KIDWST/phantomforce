@@ -94,7 +94,7 @@ export function crmAutopilotPolicy(settings: Pick<GrowthSettings, "brain">): Crm
     automaticReplies: false,
     dailySendLimit: Math.max(1, Math.min(25, Math.floor(Number(raw.dailySendLimit) || DEFAULT_AUTOPILOT_POLICY.dailySendLimit))),
     followUpAfterDays: Math.max(2, Math.min(30, Math.floor(Number(raw.followUpAfterDays) || DEFAULT_AUTOPILOT_POLICY.followUpAfterDays))),
-    maxFollowUps: Math.max(0, Math.min(2, Math.floor(Number(raw.maxFollowUps) || DEFAULT_AUTOPILOT_POLICY.maxFollowUps))),
+    maxFollowUps: Math.max(0, Math.min(2, Math.floor(Number.isFinite(Number(raw.maxFollowUps)) ? Number(raw.maxFollowUps) : DEFAULT_AUTOPILOT_POLICY.maxFollowUps))),
     permissionMode: raw.permissionMode === "public-business" ? "public-business" : "opt-in-only",
     senderName: clean(raw.senderName),
     senderBusiness: clean(raw.senderBusiness),
@@ -194,6 +194,34 @@ export function selectAutomaticOutreachProspects(contacts: GrowthContact[], poli
     .slice(0, limit);
 }
 
+function completedFollowUpCount(contact: Pick<GrowthContact, "tags">) {
+  return contact.tags.reduce((highest, tag) => {
+    const sequence = tag.match(/^outreach:followup-([12])-submitted$/u)?.[1];
+    return sequence ? Math.max(highest, Number(sequence)) : highest;
+  }, 0);
+}
+
+export function crmFollowUpSequence(contact: Pick<GrowthContact, "tags">, policy: Pick<CrmAutopilotPolicy, "maxFollowUps">) {
+  const completed = completedFollowUpCount(contact);
+  if (completed >= policy.maxFollowUps) return null;
+  return completed === 0 ? "followup-1" as const : "followup-2" as const;
+}
+
+export function crmFollowUpSchedule(
+  contact: Pick<GrowthContact, "tags">,
+  policy: Pick<CrmAutopilotPolicy, "maxFollowUps" | "followUpAfterDays">,
+  touchedAt: Date,
+) {
+  const followUpsSent = completedFollowUpCount(contact);
+  const sequenceComplete = followUpsSent >= policy.maxFollowUps;
+  return {
+    followUpsSent,
+    sequenceComplete,
+    dueAt: sequenceComplete ? null : new Date(touchedAt.getTime() + policy.followUpAfterDays * 86_400_000),
+    nextFollowUp: sequenceComplete ? null : followUpsSent + 1,
+  };
+}
+
 function buildFollowUpDraft(contact: GrowthContact, settings: GrowthSettings, policy: CrmAutopilotPolicy) {
   const organization = clean(contact.organization || contact.name, "your team");
   const sender = policy.senderName || businessNameFor(settings);
@@ -273,6 +301,15 @@ function contactIdFromAction(action: { payload: Record<string, unknown> }) {
   return clean(action.payload.threadId, "").match(/^crm-contact:(.+)$/)?.[1] || "";
 }
 
+function sequenceFromAction(action: { idempotencyKey: string }) {
+  return action.idempotencyKey.match(/^crm-autopilot:(initial|followup-[12]):/u)?.[1] as "initial" | "followup-1" | "followup-2" | undefined;
+}
+
+function receiptTime(value: string | undefined, fallback: string) {
+  const parsed = Date.parse(value || fallback);
+  return new Date(Number.isFinite(parsed) ? parsed : Date.now());
+}
+
 async function syncCrmOutreachOutcomes(settings: GrowthSettings, contacts: GrowthContact[], workGraphRoot?: string) {
   if (!prisma) return { updated: 0, replied: 0, bounced: 0, optedOut: 0 };
   const policy = crmAutopilotPolicy(settings);
@@ -282,15 +319,23 @@ async function syncCrmOutreachOutcomes(settings: GrowthSettings, contacts: Growt
   let replied = 0;
   let bounced = 0;
   let optedOut = 0;
-  for (const action of graph.actions.filter((candidate) => candidate.type === "email.send" && Boolean(candidate.receipt?.providerReceipt))) {
-    const contact = byId.get(contactIdFromAction(action));
-    const receipt = action.receipt?.providerReceipt;
-    if (!contact || !receipt) continue;
+  const receiptActions = graph.actions
+    .filter((candidate) => candidate.type === "email.send" && Boolean(candidate.receipt?.providerReceipt))
+    .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+  const grouped = new Map<string, (typeof receiptActions)[number][]>();
+  for (const action of receiptActions) {
+    const contactId = contactIdFromAction(action);
+    if (!contactId || !byId.has(contactId)) continue;
+    grouped.set(contactId, [...(grouped.get(contactId) || []), action]);
+  }
+  for (const [contactId, actions] of grouped) {
+    const contact = byId.get(contactId)!;
     const tags = new Set(contact.tags);
-    if (receipt.deliveryStatus === "replied") {
-      const latestReply = [...receipt.events]
-        .reverse()
-        .find((event) => event.eventType === "replied")?.replyPreview || "";
+    const replyAction = [...actions].reverse().find((action) => action.receipt?.providerReceipt?.deliveryStatus === "replied");
+    const bounceAction = [...actions].reverse().find((action) => action.receipt?.providerReceipt?.deliveryStatus === "bounced");
+    if (replyAction?.receipt?.providerReceipt) {
+      const receipt = replyAction.receipt.providerReceipt;
+      const latestReply = [...receipt.events].reverse().find((event) => event.eventType === "replied")?.replyPreview || "";
       const isOptOut = /\b(unsubscribe|remove me|stop emailing|do not contact)\b/iu.test(latestReply);
       if (isOptOut) {
         if (tags.has("unsubscribed")) continue;
@@ -298,7 +343,7 @@ async function syncCrmOutreachOutcomes(settings: GrowthSettings, contacts: Growt
         tags.add("do-not-contact");
         optedOut += 1;
         await prisma.contact.update({ where: { id: contact.id }, data: {
-          status: "lost", tags: [...tags], dueAt: null, lastTouchAt: new Date(receipt.lastEventAt),
+          status: "lost", tags: [...tags], dueAt: null, lastTouchAt: receiptTime(receipt.lastEventAt, receipt.submittedAt),
           nextStep: "Opt-out received — address suppressed immediately and automatic outreach stopped.",
         } });
         updated += 1;
@@ -308,27 +353,61 @@ async function syncCrmOutreachOutcomes(settings: GrowthSettings, contacts: Growt
       tags.add("outreach:replied");
       replied += 1;
       await prisma.contact.update({ where: { id: contact.id }, data: {
-        status: "follow-up", tags: [...tags], dueAt: new Date(), lastTouchAt: new Date(receipt.lastEventAt),
+        status: "follow-up", tags: [...tags], dueAt: new Date(), lastTouchAt: receiptTime(receipt.lastEventAt, receipt.submittedAt),
         nextStep: "Reply received — follow-up needed. PhantomBot stopped the automatic sequence.",
       } });
-    } else if (receipt.deliveryStatus === "bounced") {
+      updated += 1;
+      continue;
+    }
+    if (bounceAction?.receipt?.providerReceipt) {
+      const receipt = bounceAction.receipt.providerReceipt;
       if (tags.has("outreach:bounced")) continue;
       tags.add("outreach:bounced");
       tags.add("do-not-contact");
       bounced += 1;
       await prisma.contact.update({ where: { id: contact.id }, data: {
-        status: "lost", tags: [...tags], dueAt: null, lastTouchAt: new Date(receipt.lastEventAt),
+        status: "lost", tags: [...tags], dueAt: null, lastTouchAt: receiptTime(receipt.lastEventAt, receipt.submittedAt),
         nextStep: "Delivery bounced — automatic outreach stopped for this address.",
       } });
-    } else {
-      if (tags.has("outreach:submitted")) continue;
-      tags.add("outreach:submitted");
-      await prisma.contact.update({ where: { id: contact.id }, data: {
-        status: "follow-up", tags: [...tags], lastTouchAt: new Date(receipt.submittedAt),
-        dueAt: new Date(Date.parse(receipt.submittedAt) + policy.followUpAfterDays * 86_400_000),
-        nextStep: `Email ${receipt.deliveryStatus}; PhantomBot will check for a reply and follow up automatically.`,
-      } });
+      updated += 1;
+      continue;
     }
+    let changed = false;
+    for (const action of actions) {
+      const sequence = sequenceFromAction(action);
+      if (!sequence) continue;
+      const marker = `outreach:${sequence}-submitted`;
+      if (tags.has(marker)) continue;
+      tags.add(marker);
+      tags.add("outreach:submitted");
+      changed = true;
+    }
+    const latestAction = actions.at(-1);
+    const receipt = latestAction?.receipt?.providerReceipt;
+    if (!receipt) continue;
+    const statusMarker = `outreach:status:${receipt.deliveryStatus}`;
+    for (const tag of [...tags]) {
+      if (tag.startsWith("outreach:status:") && tag !== statusMarker) {
+        tags.delete(tag);
+        changed = true;
+      }
+    }
+    if (!tags.has(statusMarker)) {
+      tags.add(statusMarker);
+      changed = true;
+    }
+    if (!changed) continue;
+    const touchedAt = receiptTime(receipt.lastEventAt, receipt.submittedAt);
+    const schedule = crmFollowUpSchedule({ tags: [...tags] }, policy, touchedAt);
+    await prisma.contact.update({ where: { id: contact.id }, data: {
+      status: "follow-up",
+      tags: [...tags],
+      lastTouchAt: touchedAt,
+      dueAt: schedule.dueAt,
+      nextStep: schedule.sequenceComplete
+        ? `Email ${receipt.deliveryStatus}; automatic sequence complete. Await a reply or review manually.`
+        : `Email ${receipt.deliveryStatus}; PhantomBot will check for a reply and send follow-up ${schedule.nextFollowUp} when due.`,
+    } });
     updated += 1;
   }
   return { updated, replied, bounced, optedOut };
@@ -362,7 +441,10 @@ async function executeAutopilotSend(args: {
       },
     },
   });
-  if (proposed.result.action.status !== "awaiting_approval") return proposed.result.action;
+  if (proposed.result.action.status !== "awaiting_approval") {
+    return { action: proposed.result.action, executionAttempted: false, submittedNow: false };
+  }
+  const hadProviderReceipt = Boolean(proposed.result.action.receipt?.providerReceipt);
   const decided = await decideWorkAction({
     tenantId: args.settings.orgId,
     actionId: proposed.result.action.id,
@@ -371,7 +453,11 @@ async function executeAutopilotSend(args: {
     note: "Standing owner policy: exception-only CRM autopilot.",
     root: args.workGraphRoot,
   });
-  return decided.result.action;
+  return {
+    action: decided.result.action,
+    executionAttempted: true,
+    submittedNow: !hadProviderReceipt && Boolean(decided.result.action.receipt?.providerReceipt),
+  };
 }
 
 export async function runCrmAutopilotForOrganization(args: {
@@ -398,7 +484,7 @@ export async function runCrmAutopilotForOrganization(args: {
   if (policy.automaticInitialOutreach && capacity > 0) {
     for (const contact of selectAutomaticOutreachProspects(args.contacts, policy, capacity)) {
       const draft = buildOutreachDraft(contact, args.settings);
-      const action = await executeAutopilotSend({
+      const result = await executeAutopilotSend({
         settings: args.settings,
         contact,
         subject: draft.subject,
@@ -406,10 +492,12 @@ export async function runCrmAutopilotForOrganization(args: {
         sequence: "initial",
         workGraphRoot: args.workGraphRoot,
       }).catch(() => null);
-      attempted += 1;
-      if (action?.receipt?.providerReceipt) sent += 1;
-      else failed += 1;
-      capacity -= 1;
+      if (result?.executionAttempted) {
+        attempted += 1;
+        if (result.submittedNow) sent += 1;
+        else failed += 1;
+        capacity -= 1;
+      }
       if (capacity <= 0) break;
     }
   }
@@ -418,13 +506,19 @@ export async function runCrmAutopilotForOrganization(args: {
       .filter((contact) => Boolean(contact.email) && Boolean(contact.dueAt) && Number(contact.dueAt) <= Date.now())
       .filter((contact) => contact.tags.includes("outreach:submitted") && !contact.tags.some((tag) => ["outreach:replied", "outreach:bounced", "do-not-contact", "unsubscribed"].includes(tag)))
       .filter((contact) => contactPermissionReady(contact, policy))
-      .slice(0, capacity);
+      .filter((contact) => Boolean(crmFollowUpSequence(contact, policy)));
     for (const contact of followUps) {
+      if (capacity <= 0) break;
+      const sequence = crmFollowUpSequence(contact, policy);
+      if (!sequence) continue;
       const followUp = buildFollowUpDraft(contact, args.settings, policy);
-      const action = await executeAutopilotSend({ ...args, contact, subject: followUp.subject, body: followUp.body, sequence: "followup-1" }).catch(() => null);
-      attempted += 1;
-      if (action?.receipt?.providerReceipt) sent += 1;
-      else failed += 1;
+      const result = await executeAutopilotSend({ ...args, contact, subject: followUp.subject, body: followUp.body, sequence }).catch(() => null);
+      if (result?.executionAttempted) {
+        attempted += 1;
+        if (result.submittedNow) sent += 1;
+        else failed += 1;
+        capacity -= 1;
+      }
     }
   }
   if (attempted || synced.updated) {

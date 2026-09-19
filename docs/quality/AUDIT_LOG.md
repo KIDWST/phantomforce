@@ -2352,3 +2352,26 @@ Cycle 31.
   including build, type safety, authentication, tenant isolation, CRM,
   provider receipts, email delivery, social publishing, automation, and
   responsive UI gates.
+
+# 2026-09-18 - Durable CRM follow-up sequences and contact receipts
+
+## Release Scope
+
+- Added durable initial, follow-up 1, and follow-up 2 markers to the account
+  CRM outcome loop so an idempotent replay cannot be mistaken for a new send.
+- Made the account policy explicitly choose zero, one, or two automatic
+  follow-ups; the due date clears when the selected sequence completes.
+- Kept reply, opt-out, and bounce outcomes terminal and provider-evidenced.
+- Added a selected-contact email timeline inside Relationships, backed by the
+  account's server work graph and provider receipts.
+- Reconciled manual and autopilot provider receipts in the Sales desk outcome
+  totals instead of showing only the autopilot subset.
+
+## Verification Before Ship
+
+- PASS: provider fixture received one initial email and one follow-up; replaying
+  the completed follow-up produced zero provider calls and zero new sends.
+- PASS: CRM regression gate and server typecheck.
+- PASS: authenticated in-app browser review of the account follow-up control,
+  selected-contact email history, and contact-to-full-queue handoff.
+- PASS: all 46 release-critical checks before deployment.

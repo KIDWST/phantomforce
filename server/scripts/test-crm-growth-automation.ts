@@ -6,6 +6,8 @@ import { join } from "node:path";
 
 import {
   buildOutreachDraft,
+  crmFollowUpSchedule,
+  crmFollowUpSequence,
   crmAutopilotPolicy,
   isValidBusinessPostalAddress,
   prepareCrmOutreachDrafts,
@@ -59,12 +61,12 @@ const savedEnv = {
   secret: process.env.PHANTOMFORCE_EMAIL_EXECUTOR_SECRET,
   webhook: process.env.PHANTOMFORCE_EMAIL_WEBHOOK_SECRET,
 };
-let deliveredBody = "";
+const deliveredBodies: string[] = [];
 const executor = createServer((request, response) => {
   let raw = "";
   request.on("data", (chunk) => { raw += String(chunk); });
   request.on("end", () => {
-    deliveredBody = String((JSON.parse(raw) as { message?: { body?: string } }).message?.body || "");
+    deliveredBodies.push(String((JSON.parse(raw) as { message?: { body?: string } }).message?.body || ""));
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ accepted: true, provider: "gmail", message_id: "provider-message-1", thread_id: "thread-1", submitted_at: new Date().toISOString() }));
   });
@@ -113,14 +115,49 @@ try {
   const autopilot = await runCrmAutopilotForOrganization({ settings: autopilotSettings, contacts: candidates, workGraphRoot: root });
   assert.equal(autopilot.state, "running");
   assert.equal(autopilot.sent, 1, "A verified provider receipt is required before autopilot counts a send.");
-  assert.match(deliveredBody, /business introduction from ChicagoShots/u);
-  assert.match(deliveredBody, /123 Test Street, Chicago, IL 60601/u);
-  assert.match(deliveredBody, /reply “unsubscribe”/u);
+  assert.match(deliveredBodies[0], /business introduction from ChicagoShots/u);
+  assert.match(deliveredBodies[0], /123 Test Street, Chicago, IL 60601/u);
+  assert.match(deliveredBodies[0], /reply “unsubscribe”/u);
   const autopilotGraph = await getWorkGraphDocument(settings.orgId, "test", root);
   const send = autopilotGraph.actions.find((action) => action.type === "email.send");
   assert.equal(send?.status, "verified_complete");
   assert.equal(send?.approval.decidedBy, "system:crm-standing-approval");
   assert.equal(send?.receipt?.providerReceipt?.messageId, "provider-message-1");
+  const followUpContact = contact({
+    dueAt: new Date("2026-09-15T12:00:00.000Z"),
+    tags: ["lane:sports-fitness", "email:published-business", "consent:unknown", "outreach:submitted", "outreach:initial-submitted"],
+  });
+  assert.equal(crmFollowUpSequence(followUpContact, policy), "followup-1");
+  const followUp = await runCrmAutopilotForOrganization({ settings: autopilotSettings, contacts: [followUpContact], workGraphRoot: root });
+  assert.equal(followUp.attempted, 1, "A due contact should execute its first durable follow-up exactly once.");
+  assert.equal(followUp.sent, 1, "A new follow-up counts only after a provider receipt is recorded.");
+  assert.equal(deliveredBodies.length, 2, "The executor should receive one initial email and one follow-up.");
+  const afterFollowUp = await getWorkGraphDocument(settings.orgId, "test", root);
+  assert.equal(afterFollowUp.actions.filter((action) => action.idempotencyKey.includes("crm-autopilot:followup-1:")).length, 1);
+  const replayedFollowUp = await runCrmAutopilotForOrganization({ settings: autopilotSettings, contacts: [followUpContact], workGraphRoot: root });
+  assert.equal(replayedFollowUp.attempted, 0, "A completed idempotent follow-up replay is not a new provider attempt.");
+  assert.equal(replayedFollowUp.sent, 0, "A completed idempotent follow-up replay is not a new send.");
+  assert.equal(deliveredBodies.length, 2, "A completed follow-up must not call the provider again.");
+  const twoFollowUpPolicy = { ...policy, maxFollowUps: 2 };
+  assert.equal(crmFollowUpSequence({ tags: [...followUpContact.tags, "outreach:followup-1-submitted"] }, twoFollowUpPolicy), "followup-2");
+  assert.equal(crmFollowUpSequence({ tags: [...followUpContact.tags, "outreach:followup-1-submitted", "outreach:followup-2-submitted"] }, twoFollowUpPolicy), null);
+  const finalSchedule = crmFollowUpSchedule(
+    { tags: [...followUpContact.tags, "outreach:followup-1-submitted", "outreach:followup-2-submitted"] },
+    twoFollowUpPolicy,
+    new Date("2026-09-18T12:00:00.000Z"),
+  );
+  assert.equal(finalSchedule.sequenceComplete, true);
+  assert.equal(finalSchedule.dueAt, null, "The final configured follow-up must clear the automatic due date.");
+  const pendingSchedule = crmFollowUpSchedule(
+    { tags: [...followUpContact.tags, "outreach:followup-1-submitted"] },
+    twoFollowUpPolicy,
+    new Date("2026-09-18T12:00:00.000Z"),
+  );
+  assert.equal(pendingSchedule.sequenceComplete, false);
+  assert.equal(pendingSchedule.nextFollowUp, 2);
+  assert.equal(pendingSchedule.dueAt?.toISOString(), "2026-09-23T12:00:00.000Z");
+  assert.equal(crmAutopilotPolicy({ ...autopilotSettings, brain: { ...autopilotSettings.brain, autopilot: { ...autopilotSettings.brain.autopilot, maxFollowUps: 0 } } }).maxFollowUps, 0,
+    "An owner must be able to disable automatic follow-ups without the default silently re-enabling them.");
 } finally {
   await new Promise<void>((resolve) => executor.close(() => resolve()));
   if (savedEnv.url === undefined) delete process.env.PHANTOMFORCE_EMAIL_EXECUTOR_URL; else process.env.PHANTOMFORCE_EMAIL_EXECUTOR_URL = savedEnv.url;
@@ -133,7 +170,9 @@ console.log(JSON.stringify({
   ok: true,
   eligible: selected.length,
   behavior: "exception-only standing-policy CRM autopilot",
-  verifiedAutopilotSends: 1,
+  verifiedAutopilotSends: 2,
+  idempotentFollowUpReplay: true,
+  boundedSequence: true,
   complianceFooter: true,
   providerReceiptRequired: true,
 }, null, 2));

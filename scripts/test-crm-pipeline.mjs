@@ -105,6 +105,16 @@ must(files.crmAutomation, /unsubscribe\|remove me\|stop emailing\|do not contact
 must(files.automationEngine, /id:\s*"crm-outreach-autopilot"[\s\S]*cadence:\s*"hourly"[\s\S]*external_action:\s*true/u, "The CRM outcome loop must run hourly and disclose that it may execute an external action.");
 must(files.workspaces, /Autopilot running — only exceptions need you[\s\S]*email sent[\s\S]*follow-up needed[\s\S]*replies/u, "Relationships must default to the outcome-only operator view.");
 must(files.workspaces, /AUTOMATION AUDIT TRAIL[\s\S]*Show email activity details/u, "Detailed email activity must remain available in a collapsed audit trail.");
+must(files.workspaces, /function crmContactEmailTrail[\s\S]*SERVER EMAIL HISTORY[\s\S]*providerReceipt[\s\S]*Open full email queue/u,
+  "Every selected relationship must expose its server-backed email history and provider proof in context.");
+must(files.workspaces, /providerReplies[\s\S]*verifiedEmailCount[\s\S]*verifiedReplyCount[\s\S]*email sent[\s\S]*replies/u,
+  "Relationship outcome totals must reconcile all hydrated provider receipts, not only autopilot aggregates.");
+must(files.workspaces, /name="autopilotMaxFollowUps"[\s\S]*None[\s\S]*2 follow-ups[\s\S]*maxFollowUps: Math\.max\(0, Math\.min\(2/u,
+  "Each account must control a bounded zero-to-two automatic follow-up sequence.");
+must(files.crmAutomation, /function completedFollowUpCount[\s\S]*outreach:followup-[\s\S]*crmFollowUpSequence/u,
+  "Automatic follow-ups must advance through durable per-contact sequence markers.");
+must(files.crmAutomation, /executionAttempted: false, submittedNow: false[\s\S]*submittedNow: !hadProviderReceipt/u,
+  "An idempotent replay of a completed email action cannot be counted as a fresh provider attempt or send.");
 must(files.organizationPulse, /readCrmIntelligence[\s\S]*Live account CRM/u, "PhantomBot workspace context must include tenant-scoped CRM intelligence.");
 
 must(files.server, /researchPublicProspects\(parsed\.data\)/u, "CRM pulls must use the real public-organization research adapter.");

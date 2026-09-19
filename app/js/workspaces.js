@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-229";
+} from "./store.js?v=phantom-live-20260914-230";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-229";
+} from "./orgs.js?v=phantom-live-20260914-230";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-229";
+} from "./proposalpipeline.js?v=phantom-live-20260914-230";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-229";
+} from "./approvalpipeline.js?v=phantom-live-20260914-230";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-229";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-229";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-229";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-229";
+} from "./financeledger.js?v=phantom-live-20260914-230";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-230";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-230";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-230";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -269,6 +269,7 @@ function relationshipSettingsHtml(settings, prefs, canEdit) {
         <label><span>Sending inbox</span><select name="autopilotEmailProvider"><option value="gmail" ${autopilot.preferredEmailProvider === "outlook" ? "" : "selected"}>Gmail</option><option value="outlook" ${autopilot.preferredEmailProvider === "outlook" ? "selected" : ""}>Outlook</option></select></label>
         <label><span>Daily automatic send limit</span><input name="autopilotDailyLimit" type="number" min="1" max="25" value="${Math.max(1, Math.min(25, Number(autopilot.dailySendLimit || 10)))}" /></label>
         <label><span>Automatic follow-up delay</span><input name="autopilotFollowUpDays" type="number" min="2" max="30" value="${Math.max(2, Math.min(30, Number(autopilot.followUpAfterDays || 5)))}" /></label>
+        <label><span>Automatic follow-ups</span><select name="autopilotMaxFollowUps">${[[0, "None"], [1, "1 follow-up"], [2, "2 follow-ups"]].map(([value, label]) => `<option value="${value}" ${Number(autopilot.maxFollowUps ?? 1) === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
         <label><span>Outreach eligibility</span><select name="autopilotPermissionMode"><option value="public-business" ${autopilot.permissionMode === "public-business" ? "selected" : ""}>Published business emails</option><option value="opt-in-only" ${autopilot.permissionMode === "public-business" ? "" : "selected"}>Confirmed opt-in only</option></select></label>
         <label><span>Sender name</span><input name="autopilotSenderName" maxlength="120" value="${esc(autopilot.senderName || "")}" placeholder="Your name" /></label>
         <label><span>Sender business</span><input name="autopilotSenderBusiness" maxlength="120" value="${esc(autopilot.senderBusiness || "")}" placeholder="Business name" /></label>
@@ -675,6 +676,7 @@ function renderLeads(el, rerender) {
             <span>${selectedEvidence.length ? `${selectedEvidence.length} public signal${selectedEvidence.length === 1 ? "" : "s"}: ${esc(selectedEvidence.join(" · "))}` : "No public contact signals saved"} · added ${selected.createdAt ? esc(fmtDate(selected.createdAt, { year: "numeric" })) : "date unavailable"}</span>
             ${selectedSourceUrl ? `<a href="${esc(selectedSourceUrl)}" target="_blank" rel="noopener noreferrer">Open source record ↗</a>` : `<i>Source link not attached</i>`}
           </section>
+          ${crmContactEmailTrail(selected)}
           <div class="crm-socials is-detail">${leadSocialLinks(selected) || "<span>No social handles saved yet.</span>"}</div>
           <p class="record-next">▸ ${esc(selected.next || "No next step set")}</p>
           <p class="record-notes">${esc(selected.notes || "No notes yet.")}</p>
@@ -788,6 +790,7 @@ function renderLeads(el, rerender) {
       store.save(); rerender();
     },
     "copy-outreach": (id, btn) => copyText(btn, leadDraftText(find(id))),
+    "email-audit": () => { setRelationshipView("followups"); rerender(); },
     advance: (id) => { const l = find(id); l.status = "follow-up"; persistLead(l); store.save(); rerender(); },
     propose: (id) => {
       const l = find(id);
@@ -1060,6 +1063,50 @@ function communicationTarget(lead, channel, draft = null) {
   if (channel === "email") return lead?.email || draft?.to?.[0] || "";
   if (channel === "sms") return lead?.phone || "";
   return lead?.socials?.instagram || lead?.socials?.linkedin || lead?.socials?.x || "";
+}
+
+function crmContactEmailActivity(lead) {
+  if (!lead) return [];
+  const email = String(lead.email || "").trim().toLowerCase();
+  return store.state.communications
+    .filter((item) => item.ws === lead.ws && item.channel === "email")
+    .filter((item) => item.leadId === lead.id || (!item.leadId && email && (item.to || []).some((target) => String(target).trim().toLowerCase() === email)))
+    .slice()
+    .sort((left, right) => new Date(right.providerReceipt?.lastEventAt || right.updatedAt || right.createdAt) - new Date(left.providerReceipt?.lastEventAt || left.updatedAt || left.createdAt));
+}
+
+function crmEmailActivityStatus(item) {
+  return ({
+    draft: "Private draft",
+    pending: "Waiting approval",
+    awaiting_approval: "Waiting approval",
+    approved: "Send ready",
+    claimed: "Sending",
+    executing: "Sending",
+    submitted: "Provider accepted",
+    delivered: "Delivered",
+    replied: "Reply received",
+    bounced: "Bounced",
+    failed: "Failed",
+    blocked: "Blocked",
+  })[String(item?.status || "").toLowerCase()] || statusLabel(item?.status || "Recorded");
+}
+
+function crmContactEmailTrail(lead) {
+  const activity = crmContactEmailActivity(lead);
+  const latest = activity[0];
+  return `<details class="crm-comms-workbench" open data-relationship-email-audit>
+    <summary><div><p>SERVER EMAIL HISTORY</p><h3>Email activity</h3></div><span>${latest ? esc(crmEmailActivityStatus(latest)) : "No activity yet"}</span></summary>
+    ${activity.length ? `<div class="ops-timeline">${activity.slice(0, 5).map((item) => {
+      const receipt = item.providerReceipt || null;
+      const latestReply = receipt?.events?.filter((event) => event.eventType === "replied" && event.replyPreview).slice(-1)[0] || null;
+      const proof = receipt
+        ? `${receipt.provider || "Email provider"} receipt · ${Number(receipt.replyCount || 0)} repl${Number(receipt.replyCount || 0) === 1 ? "y" : "ies"}`
+        : item.serverBacked ? "Server work record · no provider delivery receipt yet" : "Private browser draft · nothing sent";
+      return `<article><span>${esc(crmEmailActivityStatus(item))}</span><b>${esc(item.subject || "CRM email")}</b><p>${esc(latestReply?.replyPreview || proof)}</p><i>${esc(fmtDateTime(receipt?.lastEventAt || item.updatedAt || item.createdAt))}</i></article>`;
+    }).join("")}</div>` : `<p class="ws-note">No email has been drafted, approved, submitted, delivered, or replied to for this relationship.</p>`}
+    <div class="record-actions"><button class="btn btn-quiet" type="button" data-act="email-audit">Open full email queue</button></div>
+  </details>`;
 }
 
 function renderFollowUp(el, rerender) {
@@ -1387,6 +1434,7 @@ function renderClients(el, rerender) {
             <span><b>Email</b><i>${esc(selected.email || "Missing")}</i></span><span><b>Phone</b><i>${esc(selected.phone || "Missing")}</i></span>
             <span><b>Next step</b><i>${esc(selected.next || "Not set")}</i></span><span><b>Due</b><i>${esc(dueLabel(selected))}</i></span>
           </div>
+          ${crmContactEmailTrail(selected)}
           ${canEditRelationships() ? `<div class="record-actions"><button class="btn btn-primary" data-act="edit-client" data-id="${esc(selected.id)}">Edit client</button><button class="btn" data-act="client-followup" data-id="${esc(selected.id)}">Schedule follow-up</button><button class="btn btn-quiet" data-act="return-to-lead" data-id="${esc(selected.id)}">Return to pipeline</button></div>` : ""}
           <h3 class="ws-subhead">Recent evidence</h3>
           <div class="ops-timeline">${activity.map((item) => `<article><span>${esc(item.who)}</span><b>${esc(item.text)}</b><i>${fmtDateTime(item.at)}</i></article>`).join("") || empty("No activity mentions this client yet.")}</div>
@@ -1396,6 +1444,7 @@ function renderClients(el, rerender) {
   const find = (id) => store.state.leads.find((lead) => lead.ws === ws && lead.id === id);
   bindActions(el, {
     "select-client": (id) => { operatorUi.clientId = id; rerender(); },
+    "email-audit": () => { setRelationshipView("followups"); rerender(); },
     "edit-client": (id) => {
       if (!find(id) || !canEditRelationships()) return;
       relationshipsUi.editingId = id;
@@ -1473,8 +1522,11 @@ function renderRelationships(el, rerender) {
   const drafts = communications.filter((item) => item.status === "draft").length;
   const pendingSends = communications.filter((item) => ["pending", "awaiting_approval"].includes(item.status)).length;
   const providerReceipts = communications.filter((item) => Boolean(item.providerReceipt?.messageId)).length;
+  const providerReplies = communications.reduce((sum, item) => sum + Number(item.providerReceipt?.replyCount || 0), 0);
   const autopilot = leadsUi.autopilot && typeof leadsUi.autopilot === "object" ? leadsUi.autopilot : null;
   const outcomes = autopilot?.outcomes || {};
+  const verifiedEmailCount = Math.max(Number(outcomes.sent || 0), providerReceipts);
+  const verifiedReplyCount = Math.max(Number(outcomes.replied || 0), providerReplies);
   const autopilotRunning = autopilot?.state === "running";
   const autopilotBlockers = Array.isArray(autopilot?.blockers) ? autopilot.blockers : [];
   const emailConnected = crmEmailUi.state === "connected";
@@ -1520,7 +1572,7 @@ function renderRelationships(el, rerender) {
       <section class="crm-mail-status is-${esc(crmEmailUi.state)}" aria-label="Email automation status">
         <div class="crm-mail-icon">@</div>
         <div><b>${esc(emailTitle)}</b><span>${esc(emailDetail)}</span></div>
-        <div class="crm-mail-counts"><span><b>${Number(outcomes.sent || outcomes.delivered || 0)}</b> email sent</span><span><b>${Number(outcomes.followUpNeeded || 0)}</b> follow-up needed</span><span><b>${Number(outcomes.replied || 0)}</b> replies</span><span><b>${setupBlockerCount}</b> setup blocker${setupBlockerCount === 1 ? "" : "s"}</span></div>
+        <div class="crm-mail-counts"><span><b>${verifiedEmailCount}</b> email sent</span><span><b>${Number(outcomes.followUpNeeded || 0)}</b> follow-up needed</span><span><b>${verifiedReplyCount}</b> replies</span><span><b>${setupBlockerCount}</b> setup blocker${setupBlockerCount === 1 ? "" : "s"}</span></div>
         <button class="btn" type="button" ${emailConnected ? "data-crm-settings" : `data-open-ws="settings" data-settings-target="media" data-settings-focus="Email"`}>${autopilotRunning ? "Autopilot settings" : emailConnected ? "Finish once" : emailAvailable ? `Connect ${preferredEmail}` : "Connection settings"}</button>
       </section>
       ${leadsUi.notice ? `<div class="ops-notice" role="status" aria-live="polite">${esc(leadsUi.notice)}</div>` : ""}
@@ -1640,7 +1692,7 @@ function renderRelationships(el, rerender) {
           automaticReplies: false,
           dailySendLimit: Math.max(1, Math.min(25, Math.round(Number(data.get("autopilotDailyLimit")) || 10))),
           followUpAfterDays: Math.max(2, Math.min(30, Math.round(Number(data.get("autopilotFollowUpDays")) || 5))),
-          maxFollowUps: 1,
+          maxFollowUps: Math.max(0, Math.min(2, Math.round(Number(data.get("autopilotMaxFollowUps")) || 0))),
           permissionMode: String(data.get("autopilotPermissionMode")) === "public-business" ? "public-business" : "opt-in-only",
           senderName: String(data.get("autopilotSenderName") || "").trim().slice(0, 120),
           senderBusiness: String(data.get("autopilotSenderBusiness") || "").trim().slice(0, 120),
@@ -3139,7 +3191,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-229")
+      import("./brain.js?v=phantom-live-20260914-230")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
