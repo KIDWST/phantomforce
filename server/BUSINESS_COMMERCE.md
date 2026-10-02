@@ -1,7 +1,8 @@
 # Organization commerce and studio workspaces
 
 Implemented September 27, 2026 on the existing local business-workspaces candidate.
-Build: `phantom-live-20260927-235`. Not deployed.
+Build: `phantom-live-20260927-235`. Deployed October 2, 2026 from application
+commit `59386f09d7`; canonical UI/API and both public app hosts verified.
 
 ## Business boundary
 

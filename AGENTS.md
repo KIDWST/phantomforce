@@ -101,6 +101,18 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Organization commerce and media workspaces (2026-10-02)** — application
+  commit `59386f09d7`, build `phantom-live-20260927-235`. Both public app hosts
+  serve the organization selector and new workspaces; the canonical G: UI/API
+  deployment matches main. Production owner memberships were added for
+  ChicagoShots and Occasionally Odd without moving existing data or changing
+  existing roles. The existing `phantomforce-internal` organization is preserved.
+  Release-critical passed 46/46, commerce and isolation checks passed, and public
+  business APIs reject unauthenticated requests. Source doctor verified live
+  build/commit/root and 495 change-memory checks, but strict mode reports existing
+  stale sibling worktrees and a timed-out Windows process inventory. Browser
+  verification was unavailable because saved browser permissions could not be
+  verified. Marketplace adapters and printer telemetry are not connected.
 - **Graphite action-first Overview and inbox setup (2026-09-18)** — removes the
   Earth/orbit decoration, exposes usable media/CRM metrics, keeps Activity
   expandable, and opens PhantomBot/Automations directly. Connections exposes
