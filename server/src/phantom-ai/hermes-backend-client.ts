@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { redactSensitiveText } from "./hermes-ledger.js";
+import { businessAssistantContext } from "../business-workspaces/business-scope.js";
 
 const DEFAULT_HERMES_API_URL = "http://127.0.0.1:8642";
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -339,7 +340,7 @@ async function prepareHermesBackendChat(input: HermesBackendChatInput, options: 
       id: sessionId,
       source: "phantomforce_phantombot",
       title: `PhantomBot ${sessionId.slice(-16)}`,
-      system_prompt: "You are PhantomBot, the PhantomForce interface to this Hermes backend. Use Hermes memory, skills, tools, web access, browser, files, terminal, and delegation when useful and configured. Be direct, truthful, and outcome focused. Preserve Hermes approval gates for consequential actions.",
+      system_prompt: "You are the business assistant in PhantomForce. " + businessAssistantContext(input.tenantId) + " Be direct, truthful, and outcome focused. Preserve Hermes approval gates for consequential actions.",
       ...selectedRuntime,
     },
   });

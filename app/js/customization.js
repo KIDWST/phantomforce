@@ -1,4 +1,4 @@
-import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260914-233";
+import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260927-235";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -209,14 +209,17 @@ export function customizeNavigation(baseItems, role = "owner") {
 }
 
 export async function loadOrganizationCustomization({ onApplied } = {}) {
+  const tenant = currentTenantId();
   try {
     const payload = await api(`/phantom-ai/customization/config?${tenantQuery()}`);
+    if (tenant !== currentTenantId()) return null;
     activeConfiguration = payload.configuration;
     activeEntitlements = payload.entitlements;
     applyOrganizationCustomization(activeConfiguration);
     if (typeof onApplied === "function") onApplied(activeConfiguration);
     return activeConfiguration;
   } catch (error) {
+    if (tenant !== currentTenantId() || error?.name === "AbortError") return null;
     console.warn("Workspace customization is unavailable; using PhantomForce defaults.", error);
     activeConfiguration = defaultConfiguration();
     activeEntitlements = DEFAULT_ENTITLEMENTS;

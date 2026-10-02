@@ -81,11 +81,12 @@ const options = {
   env: { ...process.env },
 };
 
+const revokedTokens = new Set<string>();
 const app = Fastify({ logger: false });
 await app.register(fastifyWebsocket);
 registerHermesOperatorStream(app, {
   resolveToken: async (token) =>
-    token === "owner-token" ? owner
+    revokedTokens.has(token) ? null : token === "owner-token" ? owner
       : token === "other-token" ? other
         : null,
 });
@@ -138,13 +139,14 @@ async function connect(
   token: string,
   workspace: string,
   cursor = 0,
+  businessId: string | undefined = "phantomforce",
 ) {
   const socket = new WebSocket(socketUrl(id));
   await new Promise<void>((resolvePromise, rejectPromise) => {
     socket.once("open", () => resolvePromise());
     socket.once("error", rejectPromise);
   });
-  socket.send(JSON.stringify({ type: "authenticate", token, workspace, cursor }));
+  socket.send(JSON.stringify({ type: "authenticate", token, workspace, cursor, business_id: businessId }));
   return socket;
 }
 
@@ -161,27 +163,39 @@ async function waitForOperator(id: string, state: string, timeoutMs = 15_000) {
 try {
   const created = await createHermesOperatorSession(
     owner,
-    { prompt: "Prepare the harmless governed documentation fixture.", workspace: "fixture-workspace" },
+    { prompt: "Prepare the harmless governed documentation fixture.", workspace: "phantomforce" },
     options,
   );
 
-  const invalid = await connect(created.id, "invalid-token", "fixture-workspace");
+  const invalid = await connect(created.id, "invalid-token", "phantomforce");
   assert.equal(await waitForClose(invalid), 1008);
 
-  const crossWorkspace = await connect(created.id, "other-token", "fixture-workspace");
+  const crossWorkspace = await connect(created.id, "other-token", "phantomforce");
   assert.equal(await waitForClose(crossWorkspace), 1008);
 
   const wrongBinding = await connect(created.id, "owner-token", "wrong-workspace");
   assert.equal(await waitForClose(wrongBinding), 1008);
 
-  const forged = await connect(created.id, "owner-token", "fixture-workspace", 999_999);
+  const missingScope = await connect(created.id, "owner-token", "phantomforce", 0, "");
+  let unauthorizedFrames = 0;
+  missingScope.on("message", () => { unauthorizedFrames += 1; });
+  assert.equal(await waitForClose(missingScope), 1008);
+  assert.equal(unauthorizedFrames, 0);
+  const otherBusiness = await connect(created.id, "owner-token", "phantomforce", 0, "occasionally-odd");
+  otherBusiness.on("message", () => { unauthorizedFrames += 1; });
+  assert.equal(await waitForClose(otherBusiness), 1008);
+  assert.equal(unauthorizedFrames, 0);
+  const stalePrivateScope = await connect(created.id, "owner-token", "phantomforce", 0, "phantomforce-owner");
+  assert.equal(await waitForClose(stalePrivateScope), 1008);
+
+  const forged = await connect(created.id, "owner-token", "phantomforce", 999_999);
   const cursorRejected = await waitForMessage(forged, (value) => value.type === "cursor_rejected");
   assert.equal(cursorRejected.reason, "cursor_ahead_of_authoritative_state");
   const recovered = await waitForMessage(forged, (value) => value.type === "operator_update");
   assert(Number(recovered.cursor) < 999_999);
   forged.close();
 
-  const first = await connect(created.id, "owner-token", "fixture-workspace");
+  const first = await connect(created.id, "owner-token", "phantomforce");
   const pendingUpdate = await waitForMessage(
     first,
     (value) =>
@@ -206,7 +220,7 @@ try {
   assert(pending.agentRunId);
   assert.equal((await rejectAgentRun(pending.agentRunId, owner, "stream denial")).ok, true);
 
-  const reconnected = await connect(created.id, "owner-token", "fixture-workspace", cursor);
+  const reconnected = await connect(created.id, "owner-token", "phantomforce", cursor);
   const terminal = await waitForMessage(
     reconnected,
     (value) =>
@@ -219,7 +233,7 @@ try {
   const terminalCursor = Number(terminal.cursor);
   reconnected.close();
 
-  const replay = await connect(created.id, "owner-token", "fixture-workspace", terminalCursor);
+  const replay = await connect(created.id, "owner-token", "phantomforce", terminalCursor);
   const replayUpdate = await waitForMessage(replay, (value) => value.type === "operator_update");
   assert.equal((replayUpdate.session as { events: unknown[] }).events.length, 0);
   assert.equal(replayUpdate.terminal, true);
@@ -227,10 +241,10 @@ try {
 
   const cancellable = await createHermesOperatorSession(
     owner,
-    { prompt: "Prepare another harmless governed documentation fixture.", workspace: "fixture-workspace" },
+    { prompt: "Prepare another harmless governed documentation fixture.", workspace: "phantomforce" },
     options,
   );
-  const cancelSocket = await connect(cancellable.id, "owner-token", "fixture-workspace");
+  const cancelSocket = await connect(cancellable.id, "owner-token", "phantomforce");
   await waitForMessage(cancelSocket, (value) => value.type === "operator_update");
   cancelSocket.send(JSON.stringify({ type: "cancel" }));
   const cancelledUpdate = await waitForMessage(
@@ -243,12 +257,21 @@ try {
   cancelSocket.close();
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 500));
 
+  const revoked = await connect(created.id, "owner-token", "phantomforce");
+  await waitForMessage(revoked, (value) => value.type === "operator_update");
+  revokedTokens.add("owner-token");
+  revoked.send(JSON.stringify({ type: "cancel" }));
+  assert.equal(await waitForClose(revoked), 1008);
+
   process.stdout.write(`${JSON.stringify({
     ok: true,
     authenticated: true,
     invalidTokenRejected: true,
     crossWorkspaceRejected: true,
     workspaceBindingEnforced: true,
+    selectedBusinessRequired: true,
+    otherBusinessRejectedBeforeEvents: true,
+    revokedTokenRejected: true,
     forgedCursorRecovered: true,
     missedEventsRecovered: true,
     duplicatesSuppressed: true,

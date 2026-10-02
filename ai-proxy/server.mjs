@@ -20,6 +20,7 @@
  */
 
 import http from "node:http";
+import { ownerMediaScope } from "../ops/admin-live/business-media-scope.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -302,6 +303,8 @@ function handleGenerate(req, res, send) {
   req.on("end", async () => {
     let payload;
     try { payload = JSON.parse(body) || {}; } catch { return send({ error: "bad_request" }, 400); }
+    try { ownerMediaScope(req.headers, payload); }
+    catch (error) { return send({ error: error.code, message: error.message }, error.statusCode); }
     const providerId = String(payload.provider || "").toLowerCase();
     const prov = MEDIA_PROVIDERS[providerId];
     if (!prov) return send({ error: "unknown_provider" }, 200);
@@ -603,7 +606,7 @@ function handleRequest(req, res) {
   const base = {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-admin-key, x-provider-key, x-pf-visitor",
+    "Access-Control-Allow-Headers": "Content-Type, x-admin-key, x-provider-key, x-pf-visitor, x-phantomforce-business",
     "Vary": "Origin",
     "Connection": "close",
   };
@@ -614,6 +617,8 @@ function handleRequest(req, res) {
   };
 
   if (req.method === "OPTIONS") { res.writeHead(204, { ...base, "Content-Length": 0 }); return res.end(); }
+  try { ownerMediaScope(req.headers); }
+  catch (error) { return send({ error: error.code, message: error.message }, error.statusCode); }
   const [path, queryString = ""] = (req.url || "").split("?");
   const query = Object.fromEntries(new URLSearchParams(queryString));
   if (req.method === "GET" && path === "/health") return send({ ok: true, configured: !!KEY, provider: PROVIDER, model: MODEL, perUserDaily: PER_USER_DAILY, demoEmail: !!RESEND_API_KEY, media: mediaConfigured() });
@@ -669,7 +674,11 @@ function handleRequest(req, res) {
   req.on("data", (c) => { body += c; if (body.length > 4000) req.destroy(); });
   req.on("end", async () => {
     let message;
-    try { message = String((JSON.parse(body) || {}).message || "").trim().slice(0, 400); }
+    try {
+      const payload = JSON.parse(body) || {};
+      ownerMediaScope(req.headers, payload);
+      message = String(payload.message || "").trim().slice(0, 400);
+    }
     catch { return send({ error: "bad_request" }, 400); }
     if (!message) return send({ error: "empty" }, 400);
     try {

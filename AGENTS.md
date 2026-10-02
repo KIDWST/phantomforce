@@ -72,6 +72,34 @@
   `docs/quality/CHANGE_MEMORY.json`. When Jordan rejects or removes old behavior, add
   forbidden patterns there so another stale worktree cannot resurrect it.
 
+## Organization workspace release — deployment authorized October 2, 2026
+- The owner explicitly requested this candidate be made live. Preserve the existing
+  `phantomforce-internal` organization; bootstrap only `client-chicagoshots` and
+  `occasionally-odd` memberships for the verified production owner. The live
+  gateway forwards the business catalog, records and commerce API. Verify the
+  source doctor and public build before reporting deployment complete.
+
+## Prior local review candidate
+- **Commerce and media organization workspaces (2026-09-27)** — extends the
+  existing business-workspaces candidate in this checkout, build
+  `phantom-live-20260927-235`. Occasionally Odd now has durable orders, SKU/BOM
+  inventory, printer-hour planning, production/QC/packing/shipping, customer
+  identity, economics and blocked channel synchronization intents. ChicagoShots
+  adds dedicated calendar, media projects and gear records. See
+  `server/BUSINESS_COMMERCE.md` and `docs/quality/COMMERCE_CHANNEL_ARCHITECTURE_20260927.md`.
+  Channel authorization/adapters and live printer telemetry remain pending.
+  This is a local candidate; no production migration, external connection,
+  push or deployment was performed.
+- **Business workspaces (2026-09-25)** — branch
+  `feature/business-workspaces-20260924`, build `phantom-live-20260925-234`,
+  based on verified production commit `ac9e419a43e946a62b8dbe844c8665b7c41389dd`.
+  Implements PhantomForce, ChicagoShots and Occasionally Odd experiences with
+  explicit business request boundaries, scoped records/credentials and conservative
+  legacy preservation. See `server/BUSINESS_WORKSPACES.md` for architecture,
+  bootstrap and integration requirements. No push, deployment, production
+  migration or channel connection was performed. Deployment requires the owner's
+  explicit approval; do not interpret this candidate as live.
+
 ## Recent, merged & live (newest first)
 - **Graphite action-first Overview and inbox setup (2026-09-18)** — removes the
   Earth/orbit decoration, exposes usable media/CRM metrics, keeps Activity

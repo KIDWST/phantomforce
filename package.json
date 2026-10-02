@@ -8,6 +8,7 @@
     "server"
   ],
   "scripts": {
+    "test:business-commerce": "node scripts/test-business-navigation.mjs && node scripts/test-commerce-experience.mjs && npm run test:business-commerce --workspace @phantomforce/server && npm run test:commerce-http --workspace @phantomforce/server && npm run test:studio-workspace-records --workspace @phantomforce/server",
     "build": "npm run build --workspace @phantomforce/contracts && npm run build --workspace @phantomforce/server",
     "verify": "npm run build && npm run test:phantomplay-game-identities && npm run test:phantomplay-production && npm run test:phantomplay-discovery && npm run test:phantomplay-desktop-shell",
     "dev:server": "npm run dev --workspace @phantomforce/server",
@@ -102,7 +103,9 @@
     "ship:live-admin": "node scripts/ship-live-admin.mjs",
     "test:sites": "npm run test:workspace-site-builder && npm run test:site-store-render --workspace @phantomforce/server",
     "typecheck": "npm run build --workspace @phantomforce/contracts && npm run typecheck --workspace @phantomforce/server",
-    "prisma:generate": "npm run prisma:generate --workspace @phantomforce/server"
+    "prisma:generate": "npm run prisma:generate --workspace @phantomforce/server",
+    "test:business-workspaces": "node scripts/test-business-workspaces.mjs && node scripts/test-business-experience.mjs && node scripts/test-business-media-boundary.mjs && npm run test:business-workspaces --workspace @phantomforce/server",
+    "test:business-workspaces:browser": "node scripts/test-business-workspaces-browser.mjs"
   },
   "engines": {
     "node": ">=22"

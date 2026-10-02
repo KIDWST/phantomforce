@@ -1,4 +1,4 @@
-import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260914-233";
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20260927-235";
 
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
@@ -8,6 +8,8 @@ import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-2026091
 const DB_KEY = "pf.phantom.v4";
 const SESSION_KEY = "pf.session.v3";
 const LIVE_TOKEN_KEY = "pf.live.sessionToken.v1";
+const BUSINESS_ALIASES = Object.freeze({ chicagoshots: "client-chicagoshots", occasionallyodd: "occasionally-odd" });
+export const canonicalBusinessId = (id) => BUSINESS_ALIASES[String(id || "")] || String(id || "");
 const DAY = 86400000;
 
 export const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 8)}${(Date.now() % 100000).toString(36)}`;
@@ -206,9 +208,19 @@ function isTrivialChat(prompt = "", reply = "") {
   return wordCount < 3 && !hasDurableMemorySignal(cleanPrompt);
 }
 
+function limitRecordsPerBusiness(entries, limit) {
+  const counts = new Map();
+  return entries.filter((entry) => {
+    const business = entry.ws || "__unassigned__";
+    const count = counts.get(business) || 0;
+    counts.set(business, count + 1);
+    return count < limit;
+  });
+}
+
 export function pruneMemory(entries = []) {
   const cutoff = Date.now() - MEMORY_RETENTION_DAYS * DAY;
-  return entries
+  return limitRecordsPerBusiness(entries
     .filter(Boolean)
     .map((entry) => {
       const createdAt = entry.createdAt || entry.at || new Date().toISOString();
@@ -216,7 +228,7 @@ export function pruneMemory(entries = []) {
       const category = entry.category || classifyMemory(text);
       return {
         id: entry.id || uid("mem"),
-        ws: entry.ws || "phantomforce",
+        ws: entry.ws || "__unassigned__",
         source: entry.source || "manual",
         category,
         title: sanitizeMemoryText(entry.title || memoryTitle(text, category)).slice(0, 90),
@@ -231,13 +243,12 @@ export function pruneMemory(entries = []) {
       };
     })
     .filter((entry) => entry.text && !isInvalidAutoMemory(entry) && (entry.pinnedByUser || entry.pinnedByAi || new Date(entry.createdAt).getTime() >= cutoff))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, MEMORY_LIMIT);
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), MEMORY_LIMIT);
 }
 
 export function pruneChatHistory(entries = []) {
   const cutoff = Date.now() - CHAT_HISTORY_RETENTION_DAYS * DAY;
-  return entries
+  return limitRecordsPerBusiness(entries
     .filter(Boolean)
     .map((entry) => {
       const createdAt = entry.createdAt || entry.at || new Date().toISOString();
@@ -247,7 +258,7 @@ export function pruneChatHistory(entries = []) {
       const category = entry.category || classifyMemory(prompt);
       return {
         id: entry.id || uid("hist"),
-        ws: entry.ws || "phantomforce",
+        ws: entry.ws || "__unassigned__",
         source: "temporary-chat",
         category,
         title: sanitizeMemoryText(entry.title || memoryTitle(prompt, category)).slice(0, 90),
@@ -261,8 +272,7 @@ export function pruneChatHistory(entries = []) {
       };
     })
     .filter((entry) => entry.prompt && !isTrivialChat(entry.prompt, entry.reply) && new Date(entry.createdAt).getTime() >= cutoff)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, CHAT_HISTORY_LIMIT);
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), CHAT_HISTORY_LIMIT);
 }
 
 export function memoryRetention(entry) {
@@ -452,20 +462,18 @@ function financeSeed() {
 
 function normalizeFinance(finance) {
   const input = finance && typeof finance === "object" ? finance : financeSeed();
-  // Connector requests are business records too. Older builds stored one
-  // global connector state, so migrate those entries into PhantomForce only
-  // and keep every subsequent status change explicitly workspace-scoped.
+  // Unattributed legacy finance stays quarantined until ownership is reviewed.
   const connectors = Array.isArray(input.connectors) ? input.connectors
     .filter((item) => FINANCE_CONNECTORS.some((definition) => definition.id === item?.id))
     .map((item) => ({
       ...FINANCE_CONNECTORS.find((definition) => definition.id === item.id),
       ...item,
       status: item.status === "not-connected" || item.status === "setup-ready" ? "disconnected" : item.status,
-      ws: item.ws || "phantomforce",
+      ws: item.ws || "__unassigned__",
     })) : [];
   const accounts = Array.isArray(input.accounts) ? input.accounts.map((account) => ({
     id: account.id || uid("acct"),
-    ws: account.ws || "phantomforce",
+    ws: account.ws || "__unassigned__",
     name: String(account.name || "Business account").slice(0, 80),
     type: account.type || "manual",
     institution: String(account.institution || "").slice(0, 80),
@@ -476,7 +484,7 @@ function normalizeFinance(finance) {
     const amount = Number(tx.amount || 0);
     return {
       id: tx.id || uid("txn"),
-      ws: tx.ws || "phantomforce",
+      ws: tx.ws || "__unassigned__",
       date: tx.date || new Date().toISOString().slice(0, 10),
       description: String(tx.description || "Transaction").slice(0, 160),
       amount: Number.isFinite(amount) ? amount : 0,
@@ -523,6 +531,8 @@ const REQUIRED_WORKSPACES = [
     assetNamespace: "phantomforce",
     tagline: "Brand-new workspace. Real records appear only after you create or connect them.",
   },
+  { id: "client-chicagoshots", name: "ChicagoShots", kind: "Studio", brainKey: "chicagoshots-brain", memoryNamespace: "client-chicagoshots", assetNamespace: "client-chicagoshots", tagline: "Sports stories, from media day to the final cut." },
+  { id: "occasionally-odd", name: "Occasionally Odd", kind: "Workshop", brainKey: "occasionally-odd-brain", memoryNamespace: "occasionally-odd", assetNamespace: "occasionally-odd", tagline: "Seasonal curiosities, made to order.", contactEmail: "occasionallyoddsupport@gmail.com" },
 ];
 
 function seed() {
@@ -551,6 +561,7 @@ function seed() {
     chatHistory: [],
     toolSpine: TOOL_SPINE,
     activity: [],
+    businessWorkItems: [],
   };
 }
 
@@ -561,13 +572,37 @@ function normalizeData(data) {
   const savedWorkspaces = Array.isArray(d.workspaces) ? d.workspaces : [];
   d.workspaces = REQUIRED_WORKSPACES.map((required) => ({
     ...required,
-    ...(savedWorkspaces.find((workspace) => workspace?.id === required.id) || {}),
+    ...(savedWorkspaces.find((workspace) => canonicalBusinessId(workspace?.id) === required.id) || {}),
     id: required.id,
     name: required.name,
     brainKey: required.brainKey,
     memoryNamespace: required.memoryNamespace,
     assetNamespace: required.assetNamespace,
   }));
+  // Preserve explicitly configured future businesses. Never discard their records.
+  for (const workspace of savedWorkspaces) {
+    if (workspace?.id && !d.workspaces.some((item) => item.id === canonicalBusinessId(workspace.id))) d.workspaces.push({ ...workspace, id: canonicalBusinessId(workspace.id) });
+  }
+  d.businessWorkItems = Array.isArray(d.businessWorkItems) ? d.businessWorkItems : [];
+  // A real organization may legitimately have the same ID as an old local
+  // workspace alias. Only migrate records with local provenance; server IDs
+  // and ambiguous ownership must remain exact, including nested finance data.
+  let savedSession = null;
+  try { savedSession = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch {}
+  const legacyLocalSession = savedSession?.role === "admin"
+    && !savedSession.database && !savedSession.localCustomer && !savedSession.orgId
+    && ["owner-admin", "local-admin"].includes(savedSession.sessionId);
+  const migrateLocalAlias = (record) => {
+    if (!record || typeof record !== "object" || !record.ws) return;
+    const serverRecord = record.serverBacked || record.serverAuthoritative || record.tenantId
+      || record.tenant_id || record.organizationId || record.organization_id || record.orgId;
+    const explicitLocal = record.localOnly === true || record.source === "local"
+      || (legacyLocalSession && savedWorkspaces.some((workspace) => workspace.id === record.ws && !workspace.businessProfileId));
+    if (!serverRecord && explicitLocal) record.ws = canonicalBusinessId(record.ws);
+  };
+  for (const records of [...Object.values(d), ...Object.values(d.finance || {})]) {
+    if (Array.isArray(records)) records.forEach(migrateLocalAlias);
+  }
   d.leads = Array.isArray(d.leads) ? d.leads : [];
   d.crmSettings = d.crmSettings && typeof d.crmSettings === "object" ? d.crmSettings : {};
   d.proposals = Array.isArray(d.proposals) ? d.proposals : [];
@@ -590,7 +625,7 @@ function normalizeData(data) {
   d.chatHistory = pruneChatHistory(Array.isArray(d.chatHistory) ? d.chatHistory : []);
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...((d.toolSpine || []).find((x) => x.id === tool.id) || {}), ...tool }));
   d.activity = Array.isArray(d.activity) ? d.activity : [];
-  d.activity = d.activity.slice(0, 80);
+  d.activity = limitRecordsPerBusiness(d.activity, 80);
   d.version = 4;
   return d;
 }
@@ -759,7 +794,10 @@ export function resolveSession() {
       saved.role = "employee";
       saved.name = "Team Member";
     }
-    if (!store.state.workspaces.some((w) => w.id === saved.ws)) saved.ws = "phantomforce";
+    if (!saved.database && !saved.localCustomer) {
+      saved.ws = canonicalBusinessId(saved.ws);
+      if (!store.state.workspaces.some((w) => w.id === saved.ws)) saved.ws = "phantomforce";
+    }
     session.set(saved);
   }
   if (saved?.role === "admin" && isStaticPublicHost()) {
@@ -779,7 +817,7 @@ async function authConfigForLogin() {
   }
 }
 
-function databaseSessionFromLogin(payload) {
+export function databaseSessionFromLogin(payload) {
   const incoming = payload?.session || {};
   const localCustomer = payload?.authMode === "local-customer" || String(incoming.id || "").startsWith("local:");
   const managesOrg = incoming.isSuperAdmin || ["owner", "admin"].includes(incoming.orgRole || "");
@@ -920,11 +958,17 @@ export async function verifyLiveSession() {
   }
   const sessionId = payload.session.id || OWNER_SESSION_ID;
   const isOwnerSession = sessionId === OWNER_SESSION_ID;
+  const previous = session.get();
+  if (payload.session.orgId && Array.isArray(payload.session.memberships)) {
+    const validated = databaseSessionFromLogin({ ...payload, token });
+    session.set(validated);
+    return validated;
+  }
   const s = {
     role: "admin",
     name: payload.session.name || (isOwnerSession ? "Jordan" : payload.session.label || "Operator"),
     label: payload.session.label || (isOwnerSession ? "PhantomForce Owner" : ""),
-    ws: "phantomforce",
+    ws: previous?.sessionId === sessionId && workspaceExists(canonicalBusinessId(previous?.ws)) ? canonicalBusinessId(previous.ws) : "phantomforce",
     sessionId,
     canManageAccess: !!payload.session.canManageAccess,
     token,
@@ -946,26 +990,27 @@ export const isOwnerOperator = () => {
 export const currentWs = () => {
   const activeSession = ctx.session || {};
   if (activeSession.database || activeSession.localCustomer) {
-    return cleanTenantSegment(activeSession.orgId || activeSession.ws || "phantomforce");
+    return activeSession.orgId ? String(activeSession.orgId) : "__unselected__";
   }
-  return activeSession.ws || "phantomforce";
+  return canonicalBusinessId(activeSession.ws || "phantomforce");
 };
 export const workspaceExists = (id) => store.state.workspaces.some((workspace) => workspace.id === id);
-export const workspaceMeta = (id = currentWs()) => store.state.workspaces.find((workspace) => workspace.id === id) || store.state.workspaces[0];
+export const workspaceMeta = (id = currentWs()) => store.state.workspaces.find((workspace) => workspace.id === canonicalBusinessId(id));
 const cleanTenantSegment = (value) => String(value || "phantomforce")
   .trim()
   .replace(/\s+/g, "-")
   .replace(/[^a-zA-Z0-9_.:-]+/g, "-")
   .replace(/^-+|-+$/g, "")
   .slice(0, 80) || "phantomforce";
-export const currentTenantId = () => cleanTenantSegment(ctx.session?.orgId || workspaceMeta(currentWs())?.id || currentWs());
+export const currentTenantId = () => currentWs();
 export const setWorkspace = (id) => {
   if (!isAdmin()) return false;
-  const target = workspaceExists(id) ? id : "phantomforce";
+  const target = canonicalBusinessId(id);
+  if (!workspaceExists(target) || ctx.session?.database || ctx.session?.localCustomer) return false;
   if (!ctx.session) return false;
   ctx.session.ws = target;
   session.set(ctx.session);
-  store.save();
+  store.save({ notify: false });
   return true;
 };
 
@@ -984,14 +1029,15 @@ function markWorkspaceKeyMigrated(baseKey) {
   try { localStorage.setItem(scopedStorageMigrationKey, JSON.stringify([...keys].slice(0, 500))); } catch {}
 }
 export function workspaceStorageKey(baseKey, ws = null) {
-  return `${baseKey}::workspace::${cleanTenantSegment(ws || ctx.session?.orgId || currentWs())}`;
+  const scope = ws || currentTenantId();
+  return `${baseKey}::workspace::${encodeURIComponent(scope)}`;
 }
 export function workspaceStorageGetItem(baseKey, { migrateGlobal = true } = {}) {
   try {
     const key = workspaceStorageKey(baseKey);
     const scoped = localStorage.getItem(key);
     if (scoped !== null) return scoped;
-    if (!migrateGlobal) return null;
+    if (!migrateGlobal || currentTenantId() !== "phantomforce" || ctx.session?.database || ctx.session?.localCustomer) return null;
     const migrated = migratedWorkspaceKeys();
     if (migrated.has(baseKey)) return null;
     const legacy = localStorage.getItem(baseKey);
@@ -1012,12 +1058,10 @@ export function workspaceStorageRemoveItem(baseKey) {
   try { localStorage.removeItem(workspaceStorageKey(baseKey)); } catch {}
 }
 
-/* Admin at HQ sees everything; admin inside a workspace or an employee sees
-   only that workspace's records. */
+/* A business is a security boundary, including for the platform owner. */
 export function visible(list) {
   const ws = currentWs();
-  if (isAdmin() && ws === "phantomforce") return list;
-  return list.filter((r) => r.ws === ws);
+  return (Array.isArray(list) ? list : []).filter((r) => r?.ws === ws);
 }
 export const wsName = (id) => {
   const databaseMembership = (ctx.session?.memberships || []).find((membership) => membership?.orgId === id);
@@ -1026,7 +1070,7 @@ export const wsName = (id) => {
 
 export function pushActivity(who, text, ws = currentWs()) {
   store.state.activity.unshift({ id: uid("act"), ws, who, text, at: new Date().toISOString() });
-  store.state.activity = store.state.activity.slice(0, 80);
+  store.state.activity = limitRecordsPerBusiness(store.state.activity, 80);
 }
 
 export function pushToolPulse(toolId) {
@@ -1036,17 +1080,20 @@ export function pushToolPulse(toolId) {
   for (const tool of tools.slice().reverse()) {
     store.state.activity.unshift({
       id: uid("act"),
-      ws: "phantomforce",
+      ws: currentWs(),
       who: tool.worker,
       text: tool.activity,
       at: new Date().toISOString(),
       toolId: tool.id,
     });
   }
-  store.state.activity = store.state.activity.slice(0, 80);
+  store.state.activity = limitRecordsPerBusiness(store.state.activity, 80);
 }
 
 export function addMemory(entry = {}) {
+  // A caller cannot save a memory into a different business through an input
+  // object. Imports and migrations must retain explicit ownership separately.
+  if (entry.ws && entry.ws !== currentWs()) return null;
   const rawText = sanitizeMemoryText(entry.text || entry.summary || entry.title || "");
   if (!rawText) return null;
   const sourceText = `${entry.title || ""} ${entry.summary || ""} ${rawText}`;
@@ -1054,7 +1101,7 @@ export function addMemory(entry = {}) {
   const now = new Date().toISOString();
   const memory = {
     id: entry.id || uid("mem"),
-    ws: entry.ws || (currentWs() === "phantomforce" ? "phantomforce" : currentWs()),
+    ws: currentWs(),
     source: entry.source || "manual",
     category,
     title: sanitizeMemoryText(entry.title || memoryTitle(rawText, category)).slice(0, 90),
@@ -1073,7 +1120,7 @@ export function addMemory(entry = {}) {
     pinnedByAi: entry.pinnedByAi === true,
   };
   const recentDuplicate = (store.state.memory || []).find((item) =>
-    item.text === memory.text && Date.now() - new Date(item.createdAt).getTime() < 60000);
+    item.ws === memory.ws && item.text === memory.text && Date.now() - new Date(item.createdAt).getTime() < 60000);
   if (recentDuplicate) return recentDuplicate;
   store.state.memory = pruneMemory([memory, ...(store.state.memory || [])]);
   store.save();
@@ -1123,7 +1170,7 @@ export function rememberConversation({ prompt = "", reply = "", mode = "ask", ro
 }
 
 export function toggleMemoryRemember(id) {
-  const memory = store.state.memory.find((item) => item.id === id);
+  const memory = visible(store.state.memory).find((item) => item.id === id);
   if (!memory) return null;
   memory.pinnedByUser = !memory.pinnedByUser;
   memory.updatedAt = new Date().toISOString();
@@ -1133,12 +1180,12 @@ export function toggleMemoryRemember(id) {
 }
 
 export function forgetMemory(id) {
-  store.state.memory = (store.state.memory || []).filter((item) => item.id !== id);
+  store.state.memory = (store.state.memory || []).filter((item) => item.id !== id || item.ws !== currentWs());
   store.save();
 }
 
 export function forgetChatHistory(id) {
-  store.state.chatHistory = (store.state.chatHistory || []).filter((item) => item.id !== id);
+  store.state.chatHistory = (store.state.chatHistory || []).filter((item) => item.id !== id || item.ws !== currentWs());
   store.save();
 }
 
@@ -1290,7 +1337,7 @@ export function todaysPlan() {
    work) and routes the item to a distinct "changes requested" status
    instead of approved/declined, carrying the owner's notes with it. */
 export function resolveApproval(id, approved, opts = {}) {
-  const a = store.state.approvals.find((x) => x.id === id);
+  const a = visible(store.state.approvals).find((x) => x.id === id);
   if (!a || a.status !== "pending") return;
   const { changesRequested = false, notes = "" } = opts;
   a.status = changesRequested ? "changes-requested" : (approved ? "approved" : "declined");
@@ -1298,23 +1345,23 @@ export function resolveApproval(id, approved, opts = {}) {
   a.ownerNotes = notes || "";
   a.decision = changesRequested ? (approved ? "approve-with-changes" : "disapprove-with-changes") : (approved ? "approve" : "disapprove");
   if (approved && !changesRequested) {
-    if (a.type === "publish-review") { const r = store.state.reviews.find((x) => x.id === a.ref); if (r) r.status = "published-ready"; }
+    if (a.type === "publish-review") { const r = store.state.reviews.find((x) => x.ws === a.ws && x.id === a.ref); if (r) r.status = "published-ready"; }
     if (a.type === "send-message") {
-      const message = store.state.communications.find((x) => x.id === a.communicationId || x.id === a.ref);
+      const message = store.state.communications.find((x) => x.ws === a.ws && (x.id === a.communicationId || x.id === a.ref));
       const leadId = message?.leadId || a.ref;
-      const l = store.state.leads.find((x) => x.id === leadId);
+      const l = store.state.leads.find((x) => x.ws === a.ws && x.id === leadId);
       if (message) { message.status = "send-ready"; message.updatedAt = new Date().toISOString(); }
       if (l) { l.status = "follow-up"; l.next = "Message approved - send-ready in Comms"; }
     }
-    if (a.type === "publish-page") { const s = store.state.sites.find((x) => x.id === a.ref); if (s) s.status = "approved-to-publish"; }
-    if (a.type === "media-generation") { const m = store.state.media.find((x) => x.id === a.ref); if (m) m.status = "generation-approved"; }
-    if (a.type === "booking") { const b = store.state.bookings.find((x) => x.id === a.ref); if (b) b.status = "approved"; }
+    if (a.type === "publish-page") { const s = store.state.sites.find((x) => x.ws === a.ws && x.id === a.ref); if (s) s.status = "approved-to-publish"; }
+    if (a.type === "media-generation") { const m = store.state.media.find((x) => x.ws === a.ws && x.id === a.ref); if (m) m.status = "generation-approved"; }
+    if (a.type === "booking") { const b = store.state.bookings.find((x) => x.ws === a.ws && x.id === a.ref); if (b) b.status = "approved"; }
     if (a.type === "automation") {
-      const agent = store.state.agents.find((x) => x.id === a.ref);
+      const agent = store.state.agents.find((x) => x.ws === a.ws && x.id === a.ref);
       if (agent) { agent.status = "active"; agent.updatedAt = new Date().toISOString(); }
     }
   } else if (!approved && !changesRequested && a.type === "automation") {
-    const agent = store.state.agents.find((x) => x.id === a.ref);
+    const agent = store.state.agents.find((x) => x.ws === a.ws && x.id === a.ref);
     if (agent) { agent.status = "blocked"; agent.updatedAt = new Date().toISOString(); }
   }
   const verb = changesRequested ? `requested changes on (${approved ? "approve" : "disapprove"} path)` : (approved ? "approved" : "declined");
@@ -1410,14 +1457,14 @@ function normalizePhantomLaneConfig(input = {}) {
 }
 export function loadPhantomLaneConfig() {
   try {
-    return normalizePhantomLaneConfig(JSON.parse(localStorage.getItem(PHANTOM_LANE_KEY) || "{}"));
+    return normalizePhantomLaneConfig(JSON.parse(workspaceStorageGetItem(PHANTOM_LANE_KEY) || "{}"));
   } catch {
     return normalizePhantomLaneConfig({});
   }
 }
 export function savePhantomLaneConfig(next) {
   const normalized = normalizePhantomLaneConfig({ ...(next || {}), updatedAt: new Date().toISOString() });
-  try { localStorage.setItem(PHANTOM_LANE_KEY, JSON.stringify(normalized)); } catch {}
+  workspaceStorageSetItem(PHANTOM_LANE_KEY, JSON.stringify(normalized));
   return normalized;
 }
 export function getPhantomLaneTarget(laneId) {
@@ -1445,7 +1492,7 @@ export const PHANTOM_LOOP_DEFAULTS = Object.freeze({
 });
 export function loadPhantomLoop() {
   try {
-    const saved = JSON.parse(localStorage.getItem(PHANTOM_LOOP_KEY) || "{}");
+    const saved = JSON.parse(workspaceStorageGetItem(PHANTOM_LOOP_KEY) || "{}");
     return {
       ...PHANTOM_LOOP_DEFAULTS,
       ...saved,
@@ -1456,6 +1503,6 @@ export function loadPhantomLoop() {
   }
 }
 export function savePhantomLoop(next) {
-  try { localStorage.setItem(PHANTOM_LOOP_KEY, JSON.stringify(next)); } catch {}
+  workspaceStorageSetItem(PHANTOM_LOOP_KEY, JSON.stringify(next));
   return next;
 }

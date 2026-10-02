@@ -69,6 +69,13 @@ function providerEnvironmentKey(providerId: AiCredentialProviderId, env: Credent
   return "";
 }
 
+/** Machine environment keys belong only to the legacy PhantomForce installation.
+ * Other businesses must save their own encrypted credentials; never inherit keys on switching. */
+function tenantEnvironmentKey(tenantId: string, providerId: AiCredentialProviderId, env: CredentialStoreOptions["env"] = process.env) {
+  return ["phantomforce", "phantomforce-owner", "phantomforce-admin", "phantomforce-internal"].includes(tenantId)
+    ? providerEnvironmentKey(providerId, env) : "";
+}
+
 function cleanCredential(value: unknown) {
   if (typeof value !== "string") return "";
   const credential = value.trim();
@@ -143,7 +150,7 @@ export async function getAiProviderCredentialStatus(tenantId: string, options: C
   const document = await readDocument(tenantId, options);
   return Object.fromEntries(AI_CREDENTIAL_PROVIDER_IDS.map((providerId) => {
     const stored = document.credentials[providerId];
-    const environmentCredential = providerEnvironmentKey(providerId, options.env);
+    const environmentCredential = tenantEnvironmentKey(tenantId, providerId, options.env);
     return [providerId, {
       configured: Boolean(stored || environmentCredential),
       source: stored ? "encrypted_server_vault" : environmentCredential ? "server_environment" : "none",
@@ -163,7 +170,7 @@ export async function getAiProviderCredential(
   const document = await readDocument(tenantId, options);
   const stored = document.credentials[providerId];
   if (stored) return decryptCredential(stored, options);
-  return providerEnvironmentKey(providerId, options.env) || null;
+  return tenantEnvironmentKey(tenantId, providerId, options.env) || null;
 }
 
 export async function saveAiProviderCredential(options: CredentialStoreOptions & {

@@ -18,6 +18,9 @@ export type AccessSession = {
   role: SessionRole;
   clientId?: string;
   canManageAccess: boolean;
+  /** Authenticated per-request business boundary; never populated from an unchecked header. */
+  businessTenantId?: string;
+  businessProfileId?: string;
   visibleOnLogin?: boolean;
   /** Paid access, resolved server-side from the subscription store. Never client-set. */
   subscriptionActive?: boolean;

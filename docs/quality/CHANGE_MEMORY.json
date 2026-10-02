@@ -1,8 +1,70 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-09-18",
+  "lastUpdated": "2026-09-27",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
+    {
+      "id": "organization-commerce-and-studio-workspaces",
+      "status": "active",
+      "title": "Separate commerce manufacturing and media service experiences",
+      "ownerDecision": "Occasionally Odd and ChicagoShots are completely separate organization workspaces. The former tracks inventory, production, capacity and shipping; the latter has media projects, bookings, calendar, deliverables and gear. Channel setup must not claim authorization or synchronization.",
+      "requiredPatterns": [
+        {"file":"app/js/main.js","pattern":"renderActiveBusinessWorkspace[\\s\\S]*renderCommerceWorkspace","description":"The selected organization chooses its complete operating experience."},
+        {"file":"app/js/business-profiles.js","pattern":"business-inventory[\\s\\S]*business-shipping","description":"Occasionally Odd retains its commerce modules."},
+        {"file":"app/js/business-profiles.js","pattern":"business-calendar[\\s\\S]*business-gear","description":"ChicagoShots retains calendar and equipment workflows."},
+        {"file":"server/src/business-workspaces/commerce-store.ts","pattern":"ORDER_IDEMPOTENCY_CONFLICT","description":"Duplicate channel orders cannot double reserve inventory."},
+        {"file":"server/src/business-workspaces/commerce-store.ts","pattern":"COMMERCE_SCOPE_INVALID","description":"Commerce documents validate organization ownership."},
+        {"file":"server/src/business-workspaces/commerce-store.ts","pattern":"adapterReady: z.literal\\(false\\)","description":"Saving channel preferences cannot claim a live provider adapter."}
+      ]
+    },
+    {
+      "id": "business-workspaces-whole-platform-isolation",
+      "status": "active",
+      "title": "Explicit business workspaces change the whole platform and preserve data boundaries",
+      "ownerDecision": "PhantomForce, ChicagoShots and Occasionally Odd have distinct dashboards, navigation, workflows, templates and AI context. The global switcher must enforce exact business access and keep records, storage, credentials and notifications separate. Preserve legacy records; production deployment and migration need explicit approval.",
+      "requiredPatterns": [
+        {
+          "file": "app/index.html",
+          "pattern": "data-business-select[^>]+aria-label=\"Switch business\"",
+          "description": "A labeled global business selector stays visible."
+        },
+        {
+          "file": "app/js/business-profiles.js",
+          "pattern": "occasionallyoddsupport@gmail.com",
+          "description": "Occasionally Odd retains its supplied contact identity."
+        },
+        {
+          "file": "app/js/business-boundary.js",
+          "pattern": "headers.set\\(\"x-phantomforce-business\", scope\\)",
+          "description": "Authenticated browser requests carry the selected business."
+        },
+        {
+          "file": "server/src/business-workspaces/business-scope.ts",
+          "pattern": "assertBusinessAccess\\(session, requested\\)[\\s\\S]*BUSINESS_SCOPE_MISMATCH",
+          "description": "The server validates membership and rejects conflicting business identities."
+        },
+        {
+          "file": "server/src/business-workspaces/business-records.ts",
+          "pattern": "expectedVersion",
+          "description": "Concurrent record edits carry a version check."
+        },
+        {
+          "file": "server/BUSINESS_WORKSPACES.md",
+          "pattern": "phantomforce-owner[\\s\\S]*Nothing automatically copies",
+          "description": "Legacy owner-private data is preserved separately."
+        },
+        {
+          "file": "scripts/test-business-workspaces.mjs",
+          "pattern": "database",
+          "description": "Behavioral switching tests include authenticated organizations."
+        },
+        {
+          "file": "scripts/test-business-workspaces-browser.mjs",
+          "pattern": "create",
+          "description": "Browser tests cover real business forms as well as switching."
+        }
+      ]
+    },
     {
       "id": "media-overview-graphite-action-first",
       "status": "active",
@@ -293,8 +355,8 @@
         },
         {
           "file": "server/src/index.ts",
-          "pattern": "if \\(session\\.canManageAccess\\) \\{[\\s\\S]{0,1800}Termina mission gate",
-          "description": "Termina mission controls remain explicitly nested behind platform-admin authority."
+          "pattern": "if \\(session\\.canManageAccess && \\(!session\\.businessTenantId \\|\\| \\[\\\"phantomforce\\\", \\\"phantomforce-owner\\\", \\\"phantomforce-internal\\\"\\]\\.includes\\(session\\.businessTenantId\\)\\)\\) \\{[\\s\\S]{0,1800}Termina mission gate",
+          "description": "Termina mission controls require platform-admin authority and an explicit PhantomForce business boundary when scoped; switching companies cannot grant shared machine execution."
         },
         {
           "file": "server/scripts/test-ai-runtime-http.ts",
@@ -650,8 +712,8 @@
         },
         {
           "file": "app/js/store.js",
-          "pattern": "export const currentTenantId = \\(\\) => cleanTenantSegment\\(ctx\\.session\\?\\.orgId \\|\\| workspaceMeta\\(currentWs\\(\\)\\)\\?\\.id \\|\\| currentWs\\(\\)\\);",
-          "description": "Workspace storage derives a tenant id from the active authenticated org first, then the active local workspace."
+          "pattern": "activeSession\\.database \\|\\| activeSession\\.localCustomer[\\s\\S]*return activeSession\\.orgId \\? String\\(activeSession\\.orgId\\) : \"__unselected__\";[\\s\\S]*export const currentTenantId = \\(\\) => currentWs\\(\\);",
+          "description": "Authenticated storage uses the exact active organization and fails closed without one; local workspaces use their explicit identity."
         },
         {
           "file": "server/scripts/test-database-auth.mjs",
@@ -1106,8 +1168,8 @@
         },
         {
           "file": "app/js/main.js",
-          "pattern": "setDatabaseOrganizationSwitching\\(true\\)[\\s\\S]*refreshNavEntitlements[\\s\\S]*setDatabaseOrganizationSwitching\\(false\\)[\\s\\S]*dataset\\.orgSwitching",
-          "description": "The organization switch keeps the selector and chat composer disabled until session, entitlements, and isolated chat UI have all crossed the same boundary."
+          "pattern": "setDatabaseOrganizationSwitching\\(true\\)[\\s\\S]*shell\\.inert = true[\\s\\S]*await switchOrg\\(id\\)[\\s\\S]*chatHistory\\.length = 0;[\\s\\S]*location\\.replace[\\s\\S]*pf:business-switch-failed[\\s\\S]*setDatabaseOrganizationSwitching\\(false\\)",
+          "description": "The entire workspace stays locked through the authorized business switch and document reload; a rejected switch explicitly restores the original workspace."
         }
       ],
       "forbiddenPatterns": [
@@ -1171,13 +1233,13 @@
       "requiredPatterns": [
         {
           "file": "app/js/store.js",
-          "pattern": "activeSession\\.database \\|\\| activeSession\\.localCustomer[\\s\\S]*activeSession\\.orgId \\|\\| activeSession\\.ws",
-          "description": "Database and customer browser storage use the active organization id instead of the legacy global workspace id."
+          "pattern": "activeSession\\.database \\|\\| activeSession\\.localCustomer[\\s\\S]*return activeSession\\.orgId \\? String\\(activeSession\\.orgId\\) : \"__unselected__\";",
+          "description": "Database and customer browser storage require the exact active organization and never fall back to a legacy global workspace."
         },
         {
           "file": "app/js/main.js",
-          "pattern": "const result = await switchOrg[\\s\\S]*chatHistory\\.length = 0;[\\s\\S]*renderConsole",
-          "description": "A successful authenticated organization switch removes the previous organization's visible transcript before rerendering."
+          "pattern": "const result = await switchOrg[\\s\\S]*chatHistory\\.length = 0;[\\s\\S]*location\\.replace",
+          "description": "A successful authenticated organization switch clears the transcript and reloads the document to destroy previous-business module state."
         },
         {
           "file": "scripts/test-memory-retention.mjs",

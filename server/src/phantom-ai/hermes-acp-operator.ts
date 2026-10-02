@@ -263,6 +263,9 @@ export function subscribeHermesOperatorSession(id: string, listener: () => void)
 }
 
 function sessionScope(session: AccessSession, workspace: string) {
+  if (session.businessTenantId && workspace !== session.businessTenantId) {
+    throw Object.assign(new Error("Operator workspace differs from the selected business."), { statusCode: 403, code: "BUSINESS_SCOPE_MISMATCH" });
+  }
   return {
     organizationId: clean(session.orgId || session.clientId || workspace, 180),
     actorUserId: clean(session.userId || session.email || session.id, 180),
@@ -271,6 +274,7 @@ function sessionScope(session: AccessSession, workspace: string) {
 }
 
 function canAccessRecord(session: AccessSession, record: HermesOperatorSessionRecord) {
+  if (session.businessTenantId && record.workspace !== session.businessTenantId) return false;
   const orgId = clean(session.orgId || session.clientId || record.workspace, 180);
   const actorId = clean(session.userId || session.email || session.id, 180);
   return record.organizationId === orgId && record.actorUserId === actorId;

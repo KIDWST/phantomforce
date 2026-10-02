@@ -1,6 +1,7 @@
 import type { AccessSession } from "../access/session.js";
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
+import { bindBusinessRequest, BUSINESS_HEADER, validBusinessTenant } from "../business-workspaces/business-scope.js";
 
 import {
   getAgentRun,
@@ -26,6 +27,7 @@ type AuthenticateMessage = {
   token?: unknown;
   cursor?: unknown;
   workspace?: unknown;
+  business_id?: unknown;
 };
 
 type StreamRegistrationOptions = {
@@ -58,6 +60,8 @@ export function registerHermesOperatorStream(
     (socket, request) => {
       const operatorId = String((request.params as { id?: string }).id || "").slice(0, 180);
       let accessSession: AccessSession | null = null;
+      let authenticationToken = "";
+      let businessId = "";
       let cursor = 0;
       let closed = false;
       let updateScheduled = false;
@@ -66,9 +70,30 @@ export function registerHermesOperatorStream(
       let unsubscribeRun: (() => void) | null = null;
       let heartbeat: NodeJS.Timeout | null = null;
 
+      const bindStreamBusiness = (resolved: AccessSession, selected: string) => bindBusinessRequest({
+        headers: { [BUSINESS_HEADER]: selected },
+        url: "/phantom-ai/hermes-acp/sessions",
+        params: {}, query: {}, body: {},
+      }, resolved);
+
+      const reauthorize = async () => {
+        if (closed) return false;
+        try {
+          const resolved = await options.resolveToken(authenticationToken);
+          if (!resolved) throw new Error("authentication_failed");
+          accessSession = bindStreamBusiness(resolved, businessId);
+          return !closed;
+        } catch {
+          accessSession = null;
+          socket.close(1008, "business_authorization_failed");
+          return false;
+        }
+      };
+
       const cleanup = () => {
         if (closed) return;
         closed = true;
+        clearTimeout(authTimer);
         if (heartbeat) clearInterval(heartbeat);
         unsubscribeOperator?.();
         unsubscribeRun?.();
@@ -84,9 +109,9 @@ export function registerHermesOperatorStream(
 
       const sendUpdate = async () => {
         updateScheduled = false;
-        if (closed || !accessSession) return;
+        if (closed || !accessSession || !await reauthorize()) return;
         const operatorSession = await getHermesOperatorSession(accessSession, operatorId);
-        if (!operatorSession) {
+        if (!operatorSession || operatorSession.workspace !== businessId) {
           sendFrame(socket, { type: "error", error: "operator_session_not_found" });
           socket.close(1008, "operator_session_not_found");
           return;
@@ -156,7 +181,18 @@ export function registerHermesOperatorStream(
           socket.close(1008, "authentication_failed");
           return;
         }
-        const operatorSession = await getHermesOperatorSession(resolved, operatorId);
+        if (!validBusinessTenant(message.business_id)) {
+          socket.close(1008, "business_scope_required");
+          return;
+        }
+        let scoped: AccessSession;
+        try {
+          scoped = bindStreamBusiness(resolved, message.business_id);
+        } catch {
+          socket.close(1008, "business_authorization_failed");
+          return;
+        }
+        const operatorSession = await getHermesOperatorSession(scoped, operatorId);
         if (!operatorSession) {
           socket.close(1008, "operator_session_not_found");
           return;
@@ -164,18 +200,22 @@ export function registerHermesOperatorStream(
         if (
           typeof message.workspace !== "string"
           || message.workspace !== operatorSession.workspace
+          || message.business_id !== operatorSession.workspace
         ) {
           socket.close(1008, "workspace_binding_failed");
           return;
         }
-        accessSession = resolved;
+        accessSession = scoped;
+        authenticationToken = message.token;
+        businessId = message.business_id;
         cursor = Number.isSafeInteger(message.cursor) && Number(message.cursor) >= 0
           ? Number(message.cursor)
           : 0;
         clearTimeout(authTimer);
         unsubscribeOperator = subscribeHermesOperatorSession(operatorId, scheduleUpdate);
         bindRun(operatorSession.agentRunId);
-        heartbeat = setInterval(() => {
+        heartbeat = setInterval(async () => {
+          if (!await reauthorize()) return;
           sendFrame(socket, {
             type: "heartbeat",
             cursor,
@@ -191,6 +231,7 @@ export function registerHermesOperatorStream(
             return;
           }
           if (next.type !== "cancel") return;
+          if (!await reauthorize() || !accessSession) return;
           const cancelled = await cancelHermesOperatorSession(accessSession, operatorId);
           if (cancelled?.agentRunId) await requestAgentRunCancel(cancelled.agentRunId);
           scheduleUpdate();

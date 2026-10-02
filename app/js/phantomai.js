@@ -14,16 +14,16 @@ import {
   workspaceStorageGetItem,
   workspaceStorageSetItem,
   session,
-} from "./store.js?v=phantom-live-20260914-233";
-import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260914-233";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260914-233";
-import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260914-233";
-import { esc } from "./workspaces.js?v=phantom-live-20260914-233";
-import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260914-233";
-import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260914-233";
-import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260914-233";
-import { setCompanionState } from "./companion.js?v=phantom-live-20260914-233";
-import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260914-233";
+} from "./store.js?v=phantom-live-20260927-235";
+import { mountAgentConsole } from "./agentops.js?v=phantom-live-20260927-235";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260927-235";
+import { handleCommand, handleSmartCommand, handleInvoiceRequest } from "./command.js?v=phantom-live-20260927-235";
+import { esc } from "./workspaces.js?v=phantom-live-20260927-235";
+import { analyzeFile, humanSize } from "./docanalyzer.js?v=phantom-live-20260927-235";
+import { openInvoicePrintable } from "./invoices.js?v=phantom-live-20260927-235";
+import { getMediaRetentionDays, setMediaRetentionDays, MEDIA_RETENTION_OPTIONS, loadContentAssets, contentAssetDisplayUrl, registerContentAsset } from "./contenthub.js?v=phantom-live-20260927-235";
+import { setCompanionState } from "./companion.js?v=phantom-live-20260927-235";
+import { mountPhantomPresence } from "./phantom-presence.js?v=phantom-live-20260927-235";
 import {
   getOperatorBrainChoices,
   getOperatorBrainMesh,
@@ -31,12 +31,12 @@ import {
   getOperatorInfrastructureStatus,
   hydrateOperatorBrainMesh,
   setOperatorBrainChoice,
-} from "./settings.js?v=phantom-live-20260914-233";
+} from "./settings.js?v=phantom-live-20260927-235";
 import {
   buildPromptIntegrityEnvelope,
   MAX_PROMPT_CHARS,
   promptSizeError,
-} from "./prompt-integrity.js?v=phantom-live-20260914-233";
+} from "./prompt-integrity.js?v=phantom-live-20260927-235";
 
 const TABS = ["chat", "automations", "media", "memory", "activity"];
 const TASKS_KEY = "pf.phantombot.tasks.v1";
@@ -1530,7 +1530,9 @@ async function streamOperatorMessage(task, message, paint, stream = null) {
   if (typeof WebSocket !== "function") throw new Error("websocket_unavailable");
   const operatorId = message.operator?.id;
   const token = session.token();
+  const businessId = currentTenantId();
   if (!operatorId || !token) throw new Error("operator_stream_auth_unavailable");
+  if (!businessId || message.operator.workspace !== businessId) throw new Error("operator_stream_business_mismatch");
   const configuredPath = cleanText(stream?.url || "", 500);
   const path = configuredPath || `/ws/phantom-ai/hermes-acp/sessions/${encodeURIComponent(operatorId)}`;
   const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -1571,12 +1573,18 @@ async function streamOperatorMessage(task, message, paint, stream = null) {
           socket.send(JSON.stringify({
             type: "authenticate",
             token,
+            business_id: businessId,
             cursor,
             workspace: message.operator.workspace,
           }));
           armLiveness();
         });
         socket.addEventListener("message", (event) => {
+          if (currentTenantId() !== businessId) {
+            socket.close(1008, "business_changed");
+            fail(new Error("operator_stream_business_changed"));
+            return;
+          }
           received = true;
           armLiveness();
           let payload;
@@ -2175,7 +2183,7 @@ function mountMemoryTab() {
   const mount = pane("memory")?.querySelector("[data-phantomai-memory-mount]");
   if (!mount || mount.dataset.mounted) return;
   mount.dataset.mounted = "1";
-  import("./brain.js?v=phantom-live-20260914-233")
+  import("./brain.js?v=phantom-live-20260927-235")
     .then((module) => { if (mount.isConnected) module.renderPhantomBrain(mount); })
     .catch(() => { mount.innerHTML = `<p class="ws-note">Memory could not load. Try again in a moment.</p>`; });
 }

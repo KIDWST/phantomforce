@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ownerMediaScope, canReadMediaJob } from "./business-media-scope.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const __selfPath = fileURLToPath(import.meta.url);
@@ -248,6 +249,8 @@ function shouldProxy(urlPath) {
     || urlPath.startsWith("/api/competitor-intelligence")
     || urlPath.startsWith("/api/brain")
     || urlPath.startsWith("/api/organization")
+    || urlPath === "/api/business-workspaces"
+    || urlPath.startsWith("/api/business-workspaces/")
     || urlPath.startsWith("/api/client-setup")
     || urlPath.startsWith("/api/crm")
     || urlPath.startsWith("/api/proposals")
@@ -742,7 +745,7 @@ async function handleMediaJobStatus(req, res, urlPath) {
     return;
   }
   const job = mediaJobs.get(urlPath.slice("/generate/job/".length));
-  if (!job) {
+  if (!canReadMediaJob(job, ownerMediaScope(req.headers), session.id || "")) {
     sendJson(res, 404, { error: "job_not_found", message: "This render job is gone — the studio server probably restarted mid-render." });
     return;
   }
@@ -787,6 +790,9 @@ async function handleMediaGenerate(req, res) {
   }
 
   const prompt = clampText(payload.prompt || payload.original_prompt, 3000);
+  let tenantId;
+  try { tenantId = ownerMediaScope(req.headers, payload); }
+  catch (error) { sendJson(res, error.statusCode, { error: error.code, message: error.message }); return; }
   if (!prompt) {
     sendJson(res, 400, { error: "empty" });
     return;
@@ -824,7 +830,7 @@ async function handleMediaGenerate(req, res) {
     const makeHermesJob = () => {
       const id = `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
       const job = {
-        id, at: now, createdAt: now, updatedAt: now,
+        id, tenantId, sessionId: session.id || "", at: now, createdAt: now, updatedAt: now,
         status: "queued", transport: "hermes_mcp",
         brief: prompt, prompt, type: modality,
         approvalRequired: true, approvedAt: null,
@@ -919,7 +925,7 @@ async function handleMediaGenerate(req, res) {
   if (payload.async === true || /[?&]async=1/.test(req.url || "")) {
     const id = `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const job = {
-      id, at: Date.now(), createdAt: Date.now(), updatedAt: Date.now(),
+      id, tenantId, sessionId: session.id || "", at: Date.now(), createdAt: Date.now(), updatedAt: Date.now(),
       status: "running", transport: "cli_fallback",
       brief: plan.prompt, prompt: plan.prompt, type: plan.modality,
       approvalRequired: true, approvedAt: Date.now(),
@@ -971,6 +977,10 @@ async function handleMediaGenerate(req, res) {
 
 createServer(async (req, res) => {
   const urlPath = (req.url || "/").split("?")[0];
+  if (urlPath === "/generate" || urlPath.startsWith("/generate/job/") || urlPath === "/api/creative-engine/status") {
+    try { ownerMediaScope(req.headers); }
+    catch (error) { sendJson(res, error.statusCode, { error: error.code, message: error.message, status: "not_configured" }); return; }
+  }
 
   if (urlPath === "/health") {
     // answer INSTANTLY from cache — the console probes with a short timeout.

@@ -6,27 +6,27 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260914-233";
+import { currentTenantId, ctx, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260927-235";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
   loadContentAssets, saveContentAssets, contentAssetDisplayUrl, hydrateContentAssetUrl,
   loadRecycledContentAssets, recycleContentAssets, restoreRecycledContentAssets, purgeRecycledContentAssets,
-} from "./contenthub.js?v=phantom-live-20260914-233";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260914-233";
+} from "./contenthub.js?v=phantom-live-20260927-235";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260927-235";
 import {
   addImageLayer, addTextLayer, alignSelectedLayers, applyLayerDragWithSnap, cloneImageEditState, compositionSnapshot, distributeSelectedLayers, duplicateLayer,
   canvasPoint, drawCompositionOverlay, freshComposition, hitTestLayer, hitTestResizeHandle,
   loadCompositionImages, moveLayerOrder, moveLayerToIndex, pushEditorSnapshot, removeSelectedLayers,
   renderComposition, restoreComposition, selectAllLayers, selectLayer, selectedLayers,
-} from "./content-editor.js?v=phantom-live-20260914-233";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260914-233";
-import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260914-233";
-import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260914-233";
+} from "./content-editor.js?v=phantom-live-20260927-235";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260927-235";
+import { createMediaJob, listMediaJobs, retryMediaJob, transitionMediaJob } from "./mediageneration.js?v=phantom-live-20260927-235";
+import { mountVideoEditor } from "./videocut.js?v=phantom-live-20260927-235";
 import {
   assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud,
   uploadAsset, patchAsset, assetLifecycle,
   listLocalAssets, refreshLocalAssets, localAssetBlobUrl, localAssetThumbnailBlobUrl,
-} from "./orgs.js?v=phantom-live-20260914-233";
+} from "./orgs.js?v=phantom-live-20260927-235";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -675,6 +675,7 @@ const provider = (cfg, id) => cfg.providers.find((p) => p.id === id);
 const providersFor = (cfg, modality) => cfg.providers.filter((p) => p.enabled && p.modalities.includes(modality));
 function genBase(cfg) {
   if (cfg.endpointBase) return cfg.endpointBase.replace(/\/+$/, "");
+  if (!["phantomforce", "phantomforce-owner"].includes(currentTenantId())) return "/api/business-workspaces/media";
   return (location.hostname === "127.0.0.1" || location.hostname === "localhost")
     ? "http://127.0.0.1:8788" : "https://ai.phantomforce.online";
 }
@@ -707,7 +708,7 @@ async function checkEngineHealth(cfg, force = false) {
     (async () => {
       const r = await probe("/health", 3000);
       const d = await r.json().catch(() => null);
-      if (r.ok && d && d.ok && /admin-static/i.test(String(d.service || ""))) {
+      if (r.ok && d && d.ok && /admin-static/i.test(String(d.service || "")) && ["phantomforce", "phantomforce-owner"].includes(currentTenantId())) {
         next.studio = true;
         next.studioCli = null;
         next.studioCliDetail = "";
@@ -1121,7 +1122,7 @@ async function enhancePrompt(cfg, prompt) {
   try {
     const r = await fetch(`${base}/chat`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: `Rewrite this into a single vivid, specific image/video generation prompt (one line, no preamble): ${prompt}` }),
+      body: JSON.stringify({ tenant_id: currentTenantId(), message: `Rewrite this into a single vivid, specific image/video generation prompt (one line, no preamble): ${prompt}` }),
     });
     const d = await r.json().catch(() => null);
     if (d && d.reply) return String(d.reply).replace(/^["']|["']$/g, "").trim();

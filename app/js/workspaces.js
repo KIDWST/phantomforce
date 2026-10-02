@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260914-233";
+} from "./store.js?v=phantom-live-20260927-235";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260914-233";
+} from "./orgs.js?v=phantom-live-20260927-235";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260914-233";
+} from "./proposalpipeline.js?v=phantom-live-20260927-235";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260914-233";
+} from "./approvalpipeline.js?v=phantom-live-20260927-235";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260914-233";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260914-233";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260914-233";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260914-233";
+} from "./financeledger.js?v=phantom-live-20260927-235";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260927-235";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260927-235";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260927-235";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -722,7 +722,7 @@ function renderLeads(el, rerender) {
         ` : productStateHtml("empty", { title: "No contact selected", detail: "Choose a contact to open its organization-scoped CRM profile." })}
       </aside>
     </div>`;
-  const find = (id) => store.state.leads.find((l) => l.id === id);
+  const find = (id) => visible(store.state.leads).find((l) => l.id === id);
   const persistLead = (lead) => { if (lead && isDatabaseSession()) updateOrgCrmContact(lead.id, crmPayload(lead)).catch(() => {}); };
   el.querySelector("[data-crm-search]")?.addEventListener("input", (event) => { leadsUi.query = event.currentTarget.value; leadsUi.page = 1; rerender(); });
   el.querySelector("[data-crm-status]")?.addEventListener("change", (event) => { leadsUi.status = event.currentTarget.value; leadsUi.page = 1; rerender(); });
@@ -817,7 +817,7 @@ function renderLeads(el, rerender) {
           return;
         }
       }
-      store.state.leads = store.state.leads.filter((item) => item.id !== id);
+      store.state.leads = store.state.leads.filter((item) => item.id !== id || item.ws !== currentWs());
       if (leadsUi.selectedId === id) setCrmSelection("");
       pushActivity("Relationships", `removed relationship: ${l.name || l.company}.`, l.ws);
       store.save(); rerender();
@@ -842,8 +842,8 @@ function renderLeads(el, rerender) {
       }).catch((error) => { proposalUi.notice = error?.message || "Server proposal save failed; the local draft remains available."; });
       store.save(); rerender();
     },
-    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; persistLead(l); pushActivity("Client CRM", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
-    lost: (id) => { const l = find(id); l.status = "lost"; l.next = "Re-engage in 90 days"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "lost"; persistLead(l); store.save(); rerender(); },
+    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = visible(store.state.proposals).find((x) => x.id === l.proposalId); if (p) p.status = "won"; persistLead(l); pushActivity("Client CRM", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
+    lost: (id) => { const l = find(id); l.status = "lost"; l.next = "Re-engage in 90 days"; const p = visible(store.state.proposals).find((x) => x.id === l.proposalId); if (p) p.status = "lost"; persistLead(l); store.save(); rerender(); },
     revive: (id) => { const l = find(id); l.status = "follow-up"; l.next = "Warm re-engage with a proof point"; persistLead(l); store.save(); rerender(); },
     review: (id) => {
       const l = find(id);
@@ -923,7 +923,7 @@ function renderProposals(el, rerender) {
         </article>`;
       }).join("") || empty("No proposals yet. Convert a lead or ask Phantom AI to draft one.")}
     </div>`;
-  const find = (id) => store.state.proposals.find((p) => p.id === id);
+  const find = (id) => visible(store.state.proposals).find((p) => p.id === id);
   bindActions(el, {
     add: () => {
       const client = prompt("Client / business name:");
@@ -942,8 +942,8 @@ function renderProposals(el, rerender) {
     copy: (id, btn) => copyText(btn, proposalText(find(id))),
     remove: (id) => {
       const p = find(id);
-      store.state.proposals = store.state.proposals.filter((item) => item.id !== id);
-      store.state.leads.forEach((lead) => { if (lead.proposalId === id) lead.proposalId = null; });
+      store.state.proposals = store.state.proposals.filter((item) => item.id !== id || item.ws !== currentWs());
+      visible(store.state.leads).forEach((lead) => { if (lead.proposalId === id) lead.proposalId = null; });
       if (p) pushActivity("Proposal Forge", `removed proposal: ${p.client}.`, p.ws);
       if (p?.serverBacked && proposalServerAvailable()) deleteServerProposal(id).catch((error) => { proposalUi.notice = error?.message || "Server proposal delete failed."; });
       store.save(); rerender();
@@ -980,7 +980,7 @@ function renderReviews(el, rerender) {
           </div>
         </article>`).join("") || empty("No reviews in the pipeline. Mark a lead won, or draft a request.")}
     </div>`;
-  const find = (id) => store.state.reviews.find((r) => r.id === id);
+  const find = (id) => visible(store.state.reviews).find((r) => r.id === id);
   bindActions(el, {
     add: () => {
       const client = prompt("Who are we asking for a review?");
@@ -992,7 +992,7 @@ function renderReviews(el, rerender) {
     copy: (id, btn) => { const r = find(id); copyText(btn, `${r.draft}\n\n${r.link || ""}`); },
     remove: (id) => {
       const r = find(id);
-      store.state.reviews = store.state.reviews.filter((item) => item.id !== id);
+      store.state.reviews = store.state.reviews.filter((item) => item.id !== id || item.ws !== currentWs());
       if (r) pushActivity("Offers to review", `removed review request: ${r.client}.`, r.ws);
       store.save(); rerender();
     },
@@ -1038,7 +1038,7 @@ function renderBookings(el, rerender) {
           </div>
         </article>`).join("") || empty("No appointments in the pipe. Draft one, or ask Phantom AI to book a call.")}
     </div>`;
-  const find = (id) => store.state.bookings.find((b) => b.id === id);
+  const find = (id) => visible(store.state.bookings).find((b) => b.id === id);
   bindActions(el, {
     add: () => {
       const client = prompt("Who is the appointment with?");
@@ -1050,7 +1050,7 @@ function renderBookings(el, rerender) {
     copy: (id, btn) => copyText(btn, find(id).copy),
     remove: (id) => {
       const b = find(id);
-      store.state.bookings = store.state.bookings.filter((item) => item.id !== id);
+      store.state.bookings = store.state.bookings.filter((item) => item.id !== id || item.ws !== currentWs());
       if (b) pushActivity("Booking Coordinator", `removed booking draft: ${b.client}.`, b.ws);
       store.save(); rerender();
     },
@@ -1193,7 +1193,7 @@ function renderFollowUp(el, rerender) {
       }).join("") || productStateHtml("empty", { title: "No follow-ups in this view", detail: "Change the filter or add a lead with a next step and due date." })}
     </div>
     ${records.length ? `<footer class="crm-pager"><span>${(pageStart + 1).toLocaleString()}–${Math.min(pageStart + pageSize, records.length).toLocaleString()} of ${records.length.toLocaleString()}</span><div><button class="btn btn-quiet" type="button" data-follow-page="prev" ${operatorUi.followPage <= 1 ? "disabled" : ""}>← Previous</button><b>${operatorUi.followPage} / ${pageCount}</b><button class="btn btn-quiet" type="button" data-follow-page="next" ${operatorUi.followPage >= pageCount ? "disabled" : ""}>Next →</button></div></footer>` : ""}`;
-  const find = (id) => store.state.leads.find((lead) => lead.id === id);
+  const find = (id) => visible(store.state.leads).find((lead) => lead.id === id);
   el.querySelector("[data-follow-query]")?.addEventListener("input", (event) => { operatorUi.followQuery = event.currentTarget.value; operatorUi.followPage = 1; rerender(); });
   el.querySelector("[data-follow-filter]")?.addEventListener("change", (event) => { operatorUi.followFilter = event.currentTarget.value; operatorUi.followPage = 1; rerender(); });
   el.querySelectorAll("[data-follow-page]").forEach((button) => button.addEventListener("click", () => {
@@ -1214,7 +1214,7 @@ function renderFollowUp(el, rerender) {
   bindActions(el, {
     "draft-followup": (id) => {
       const lead = find(id); if (!lead) return;
-      const existing = store.state.communications.find((item) => item.leadId === id && item.status === "draft");
+      const existing = visible(store.state.communications).find((item) => item.leadId === id && item.status === "draft");
       const channel = lead.email ? "email" : lead.phone ? "sms" : "social";
       const draft = existing || { id: uid("comm"), ws: lead.ws, leadId: lead.id, channel, status: "draft", createdAt: new Date().toISOString() };
       draft.body = lead.outreach || `${String(lead.name || "there").split(" ")[0]} - following up on ${lead.next || "our last conversation"}. What is the best next step from your side?`;
@@ -1286,7 +1286,7 @@ function syncServerCommunicationActions(ws, rerender) {
         createdAt: action.createdAt,
         updatedAt: action.updatedAt,
       };
-      const existing = store.state.communications.find((item) => item.workActionId === action.id || item.id === localId);
+      const existing = visible(store.state.communications).find((item) => item.workActionId === action.id || item.id === localId);
       const currentSignature = existing ? JSON.stringify([
         existing.status, existing.subject, existing.body, existing.leadId, existing.updatedAt,
         existing.providerReceipt?.lastEventAt, existing.providerReceipt?.replyCount,
@@ -1330,7 +1330,7 @@ function renderComms(el, rerender) {
     <div class="ws-toolbar"><p class="ws-note">One account-scoped queue for outbound drafts and replies. Approval changes a draft to send-ready; it does not invent a provider delivery receipt. Execution requires a verified provider, and delivery or reply states require signed events.</p></div>
     <div class="stack ops-stack">
       ${drafts.map((draft) => {
-        const lead = store.state.leads.find((item) => item.id === draft.leadId);
+        const lead = visible(store.state.leads).find((item) => item.id === draft.leadId);
         const consent = leadConsentStatus(lead);
         const target = communicationTarget(lead, draft.channel, draft);
         const canQueue = draft.status === "draft" && draft.channel === "email" && consent === "opt-in" && Boolean(target);
@@ -1356,7 +1356,7 @@ function renderComms(el, rerender) {
         </article>`;
       }).join("") || productStateHtml("empty", { title: "No communication drafts", detail: "Prepare one from Follow-up. Drafting stays private and does not require approval." })}
     </div>`;
-  const find = (id) => store.state.communications.find((item) => item.id === id);
+  const find = (id) => visible(store.state.communications).find((item) => item.id === id);
   bindActions(el, {
     "edit-comm": (id) => {
       const draft = find(id); if (!draft) return;
@@ -1367,7 +1367,7 @@ function renderComms(el, rerender) {
     },
     "queue-comm": async (id) => {
       const draft = find(id); if (!draft) return;
-      const lead = store.state.leads.find((item) => item.id === draft.leadId);
+      const lead = visible(store.state.leads).find((item) => item.id === draft.leadId);
       const target = communicationTarget(lead, draft.channel, draft);
       if (draft.channel !== "email" || leadConsentStatus(lead) !== "opt-in" || !target) return;
       if (isDatabaseSession()) {
@@ -1411,9 +1411,9 @@ function renderComms(el, rerender) {
     },
     "draft-reply": (id) => {
       const source = find(id); if (!source) return;
-      const lead = store.state.leads.find((item) => item.id === source.leadId);
+      const lead = visible(store.state.leads).find((item) => item.id === source.leadId);
       if (!lead?.email || !source.providerReceipt?.messageId) return;
-      const existing = store.state.communications.find((item) => item.replyToMessageId === source.providerReceipt.messageId && item.status === "draft");
+      const existing = visible(store.state.communications).find((item) => item.replyToMessageId === source.providerReceipt.messageId && item.status === "draft");
       const draft = existing || {
         id: uid("comm"),
         ws: source.ws,
@@ -1434,7 +1434,7 @@ function renderComms(el, rerender) {
     },
     "remove-comm": (id) => {
       const draft = find(id);
-      store.state.communications = store.state.communications.filter((item) => item.id !== id);
+      store.state.communications = store.state.communications.filter((item) => item.id !== id || item.ws !== currentWs());
       if (draft) pushActivity("Comms", "removed a local communication draft.", draft.ws);
       store.save(); rerender();
     },
@@ -1474,7 +1474,7 @@ function renderClients(el, rerender) {
         ` : productStateHtml("empty", { title: "No client selected", detail: "Add a CRM contact to create a client 360 record." })}
       </section>
     </div>`;
-  const find = (id) => store.state.leads.find((lead) => lead.ws === ws && lead.id === id);
+  const find = (id) => visible(store.state.leads).find((lead) => lead.ws === ws && lead.id === id);
   bindActions(el, {
     "select-client": (id) => { operatorUi.clientId = id; rerender(); },
     "email-audit": () => { setRelationshipView("followups"); rerender(); },
@@ -2291,12 +2291,12 @@ function renderProtect(el, rerender) {
     </div>`;
   bindActions(el, {
     remind: (id) => {
-      const s = store.state.security.find((x) => x.id === id);
+      const s = visible(store.state.security).find((x) => x.id === id);
       pushActivity("Security Watch", `prepared a password-rotation reminder for ${wsName(s.ws)} (due ${fmtDate(s.rotationDue)}).`, s.ws);
       store.save(); rerender();
     },
     summary: (id, btn) => {
-      const s = store.state.security.find((x) => x.id === id);
+      const s = visible(store.state.security).find((x) => x.id === id);
       copyText(btn, `Security summary — ${wsName(s.ws)}\nPosture: ${s.posture}. Last scan ${fmtDate(s.lastScan)} (proof ${s.proofId}); next scan ${fmtDate(s.nextScan)}. ${s.findings.filter((f) => f.level === "warn").length || "No"} item(s) need attention.`);
     },
   });
@@ -2537,7 +2537,7 @@ function renderAuditLog(el, rerender) {
   const localEvents = visible(store.state.activity).map((item) => ({ id: item.id, source: "Operator activity", actor: item.who, summary: item.text, at: item.at, ws: item.ws }));
   const serverEvents = (approvalUi.serverAudit || []).map((item) => ({ id: item.id, source: "Protected approval audit", actor: item.actor, summary: item.summary, at: item.createdAt, ws: item.tenantId }));
   const runEvents = (approvalUi.serverRuns || []).map((run) => ({ id: `run:${run.id}`, source: "Agent execution", actor: run.requested_by, summary: `${run.title}: ${run.state}${run.receipt?.actual_effect ? ` · ${run.receipt.actual_effect}` : run.error ? ` · ${run.error}` : ""}`, at: run.updated_at, ws: run.organization_id }));
-  let events = [...serverEvents, ...runEvents, ...localEvents].sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
+  let events = visible([...serverEvents, ...runEvents, ...localEvents]).sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
   if (q) events = events.filter((item) => `${item.source} ${item.actor} ${item.summary} ${item.ws}`.toLowerCase().includes(q));
   el.innerHTML = `
     <div class="ws-toolbar"><p class="ws-note">Server-backed approval entries carry the tenant document checksum and cannot be rewritten through this screen. Local activity is clearly labeled as browser evidence.</p><input class="crm-search" data-audit-query value="${esc(operatorUi.auditQuery)}" placeholder="Search actor, action, workspace..." /></div>
@@ -3224,7 +3224,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260914-233")
+      import("./brain.js?v=phantom-live-20260927-235")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -4776,6 +4776,7 @@ function hydrateWorkspaceApprovalRecords(rerender) {
   if (!approvalServerAvailable() || !tenant || approvalUi.loadedTenant === tenant || approvalUi.loadingTenant === tenant) return;
   approvalUi.loadingTenant = tenant;
   loadWorkspaceApprovals().then((payload) => {
+    if (tenant !== currentTenantId()) return;
     if (!payload?.ok) return;
     const serverApprovals = payload.document?.approvals || [];
     approvalUi.serverAudit = payload.document?.audit || [];
@@ -4797,6 +4798,7 @@ function hydrateServerRunRecords(rerender) {
   if (!isDatabaseSession() || !tenant || approvalUi.runLoadedTenant === tenant || approvalUi.runLoadingTenant === tenant) return;
   approvalUi.runLoadingTenant = tenant;
   fetchOrgRuns(50).then((runs) => {
+    if (tenant !== currentTenantId()) return;
     approvalUi.serverRuns = runs;
     approvalUi.runLoadedTenant = tenant;
     rerender();
@@ -4809,7 +4811,7 @@ function hydrateServerRunRecords(rerender) {
 
 function applyApprovalSideEffects(id, approved, options = {}) {
   resolveApproval(id, approved, options);
-  return store.state.approvals.find((approval) => approval.id === id) || null;
+  return visible(store.state.approvals).find((approval) => approval.id === id) || null;
 }
 
 function decideWorkspaceApprovalRecord(id, approved, options = {}) {
@@ -4828,13 +4830,14 @@ function decideWorkspaceApprovalRecord(id, approved, options = {}) {
    the super-admin) decides. Rendered only for database-auth sessions;
    fetched live, never fabricated. */
 async function hydrateServerApprovals(el, rerender) {
+  const tenant = currentTenantId();
   const mount = el.querySelector("[data-server-approvals]");
   if (!mount) return;
   const [runs, recentRuns] = await Promise.all([
     fetchServerApprovals().catch(() => []),
     fetchOrgRuns(12).catch(() => []),
   ]);
-  if (!document.body.contains(mount)) return;
+  if (!document.body.contains(mount) || tenant !== currentTenantId()) return;
   approvalUi.serverRuns = recentRuns;
   const manager = canManageActiveOrg();
   mount.innerHTML = `
@@ -4925,8 +4928,8 @@ export function renderApprovals(el, rerender) {
     "decline-changes": (id) => { approvalChangesFormOpen.add(id); rerender(); },
     "cancel-changes": (id) => { approvalChangesFormOpen.delete(id); rerender(); },
     remove: (id) => {
-      const a = store.state.approvals.find((item) => item.id === id);
-      store.state.approvals = store.state.approvals.filter((item) => item.id !== id);
+      const a = visible(store.state.approvals).find((item) => item.id === id);
+      store.state.approvals = store.state.approvals.filter((item) => item.id !== id || item.ws !== currentWs());
       approvalChangesFormOpen.delete(id);
       if (a) pushActivity("Approval Desk", `removed approval request: ${a.title}.`, a.ws);
       if (a?.serverBacked && approvalServerAvailable()) deleteServerWorkspaceApproval(id).catch((error) => { approvalUi.notice = error?.message || "Server approval delete failed."; });

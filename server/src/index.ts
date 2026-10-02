@@ -14,6 +14,9 @@ import {
 } from "@phantomforce/contracts";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
+import { authorizedBusinessWorkspaces, bindBusinessRequest, businessAssistantContext, businessCanManage, businessError, businessHermesEnvironment, businessProfile, selectedBusinessTenant } from "./business-workspaces/business-scope.js";
+import { createBusinessRecord, listBusinessRecords, updateBusinessRecord } from "./business-workspaces/business-records.js";
+import { registerCommerceRoutes } from "./business-workspaces/commerce-routes.js";
 import { WorkspaceProfileSchema } from "./customization/schemas.js";
 import { generateLocalMediaThumbnail, localMediaFallbackSvg, type LocalThumbnailKind } from "./assets/local-media-thumbnail.js";
 
@@ -56,6 +59,7 @@ import {
   readBearerToken,
   requireAdminAccessSession,
   requireAccessSession,
+  resolveAccessSession,
   requireClientWorkspaceView,
   verifyOwnerCredentials,
   verifyAccessSessionTokenSid,
@@ -863,6 +867,7 @@ function safeCustomizationTenantId(value: unknown, fallback: string) {
 }
 
 function customizationTenantForSession(session: AccessSession, requestedTenantId?: string) {
+  if (session.businessTenantId) return selectedBusinessTenant(session, requestedTenantId);
   const fallback = safeCustomizationTenantId(session.orgId || session.clientId, `client-${session.id}`);
   if (!requestedTenantId) return session.canManageAccess ? "phantomforce-owner" : fallback;
   const requested = safeCustomizationTenantId(requestedTenantId, fallback);
@@ -893,7 +898,7 @@ function customizationTenantForSession(session: AccessSession, requestedTenantId
 function customizationEntitlements(session: AccessSession, tenantId: string): CustomizationEntitlements {
   const workspace = getWorkspaceAccess(tenantId);
   const modules = new Set((workspace?.decision.modules ?? []).map((module) => module.trim().toLowerCase()));
-  const internalPhantomForce = session.canManageAccess && ["phantomforce", "phantomforce-owner"].includes(tenantId);
+  const internalPhantomForce = session.canManageAccess && ["phantomforce", "phantomforce-owner", "phantomforce-internal"].includes(tenantId);
   return {
     internalPhantomForce,
     coBranded: internalPhantomForce || modules.has("co-branded") || modules.has("white-label"),
@@ -918,12 +923,14 @@ function actorModuleIds(session: AccessSession) {
 }
 
 function canManageWorkspaceModules(session: AccessSession, tenantId: string) {
+  if (session.businessTenantId) return businessCanManage(session, selectedBusinessTenant(session, tenantId));
   if (session.canManageAccess || session.isSuperAdmin) return true;
   const ownTenant = session.orgId || session.clientId;
   return ownTenant === tenantId && (session.orgRole === "owner" || session.orgRole === "admin");
 }
 
 function canWriteCrm(session: AccessSession) {
+  if (session.businessTenantId) return businessCanManage(session, session.businessTenantId);
   return Boolean(session.canManageAccess || session.isSuperAdmin || session.orgId || session.clientId);
 }
 
@@ -992,7 +999,7 @@ await app.register(cors, {
     ...PUBLIC_WEB_ORIGINS,
   ],
   credentials: true,
-  allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER],
+  allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER, "x-phantomforce-business"],
 });
 
 /* Keep API responses safe to inspect in browsers without weakening the
@@ -1023,8 +1030,71 @@ app.addHook("preHandler", async (request) => {
   }
 });
 
+// Authenticate the selector before any route or entitlement check sees business data.
+app.addHook("preHandler", async (request, reply) => {
+  if (request.url.startsWith("/auth/")) return;
+  const session = resolveAccessSession(request);
+  if (!session) {
+    if (request.headers["x-phantomforce-business"]) {
+      return reply.code(401).send({ ok: false, error: "Authentication is required to select a business." });
+    }
+    return;
+  }
+  const scoped = bindBusinessRequest(request, session);
+  if (scoped.businessTenantId && request.url.startsWith("/phantom-ai/runs")) {
+    const runId = (request.params as { id?: string })?.id;
+    const run = runId ? getAgentRun(runId) : undefined;
+    const workspace = (request.body as { workspace?: string })?.workspace;
+    if ((run && run.workspace !== scoped.businessTenantId) || (workspace && workspace !== scoped.businessTenantId)) {
+      return reply.code(404).send({ ok: false, error: "Run not found in the selected business." });
+    }
+  }
+  if (scoped.businessTenantId && scoped.businessTenantId !== session.orgId && Array.isArray(session.memberships) && !session.isSuperAdmin) {
+    const entitlement = await getOrgEntitlements(scoped.businessTenantId).catch(() => null);
+    scoped.subscriptionActive = Boolean(entitlement?.canWrite && scoped.orgRole !== "client");
+  }
+  attachDatabaseSession(request, scoped);
+});
+
 // Un-bypassable paywall: free/anonymous sessions may view but not mutate.
 app.addHook("preHandler", paywallPreHandler);
+registerCommerceRoutes(app);
+
+app.get("/api/business-workspaces", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const workspaces = authorizedBusinessWorkspaces(session);
+  const preferred = session.businessTenantId || session.orgId || session.clientId;
+  return { ok: true, workspaces,
+    activeTenantId: workspaces.some((workspace) => workspace.tenantId === preferred) ? preferred : null,
+    defaultTenantId: workspaces.find((workspace) => workspace.tenantId === "phantomforce")?.tenantId || workspaces[0]?.tenantId || null };
+});
+
+app.get("/api/business-workspaces/records", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const tenantId = selectedBusinessTenant(session, (request.query as { tenant_id?: string })?.tenant_id);
+  return { ok: true, tenant_id: tenantId, canManage: businessCanManage(session, tenantId), records: await listBusinessRecords(tenantId) };
+});
+
+app.post("/api/business-workspaces/records", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const { tenant_id, ...input } = (request.body ?? {}) as Record<string, unknown>;
+  const tenantId = selectedBusinessTenant(session, tenant_id);
+  if (!businessCanManage(session, tenantId)) return reply.code(403).send({ ok: false, error: "Business owner or administrator access is required." });
+  return { ok: true, tenant_id: tenantId, record: await createBusinessRecord(tenantId, input, session.userId || session.id) };
+});
+
+app.patch("/api/business-workspaces/records/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const { tenant_id, ...input } = (request.body ?? {}) as Record<string, unknown>;
+  const tenantId = selectedBusinessTenant(session, tenant_id);
+  if (!businessCanManage(session, tenantId)) return reply.code(403).send({ ok: false, error: "Business owner or administrator access is required." });
+  return { ok: true, tenant_id: tenantId,
+    record: await updateBusinessRecord(tenantId, (request.params as { id: string }).id, input, session.userId || session.id) };
+});
 
 const falconBroker = createFalconBroker({
   baseUrl: process.env.FALCON_BASE_URL ?? "http://127.0.0.1:8765",
@@ -4683,6 +4753,7 @@ function cleanMemoryScopeId(value: unknown, fallback = "") {
 }
 
 function tenantIdForAccessSession(session: AccessSession) {
+  if (session.businessTenantId) return session.businessTenantId;
   if (session.canManageAccess) {
     return OWNER_MEMORY_TENANT_ID;
   }
@@ -4699,6 +4770,15 @@ function resolveMemoryScopeFromBody(
 ) {
   const requestedTenantId = cleanMemoryScopeId(body.tenant_id);
   const requestedActorUserId = cleanMemoryScopeId(body.actor_user_id);
+
+  if (session.businessTenantId) {
+    const tenantId = selectedBusinessTenant(session, requestedTenantId);
+    return { tenant_id: tenantId, actor_user_id: session.id,
+      memory_scope: "business_workspace_only" as const,
+      requested_tenant_id: requestedTenantId || null, requested_actor_user_id: requestedActorUserId || null,
+      tenant_override_blocked: false,
+      actor_override_blocked: Boolean(requestedActorUserId && requestedActorUserId !== session.id) };
+  }
 
   if (!session.canManageAccess) {
     const tenantId = tenantIdForAccessSession(session);
@@ -4744,11 +4824,12 @@ function buildModelRouterRequestFromBody(
 ) {
   const actorRole: ActorRole = session.canManageAccess ? "platform_admin" : "business_owner";
   const memoryScope = resolveMemoryScopeFromBody(body, session);
+  const activeBusiness = session.businessTenantId ? businessProfile(session.businessTenantId) : undefined;
 
   return {
     tenant_id: memoryScope.tenant_id,
     business_name:
-      typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "PhantomForce",
+      activeBusiness?.name || (typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "PhantomForce"),
     actor_user_id: memoryScope.actor_user_id,
     actor_role: actorRole,
     request_id:
@@ -4760,7 +4841,7 @@ function buildModelRouterRequestFromBody(
         ? body.user_request.slice(0, MAX_PROMPT_CHARS)
         : "Summarize the PhantomForce workspace and recommend the next safe business action.",
     business_summary:
-      typeof body.business_summary === "string"
+      session.businessTenantId ? businessAssistantContext(session.businessTenantId) : typeof body.business_summary === "string"
         ? body.business_summary.slice(0, 900)
         : "Owner-only PhantomForce workspace. External actions approval-only.",
     module_data: parseContextModuleData(body.module_data),
@@ -4814,6 +4895,7 @@ function buildMemoryScopeProof(normalized: {
 }
 
 function brainStoreOptionsForSession(session: AccessSession, carrier?: { tenant_id?: unknown }): BrainStoreOptions {
+  if (session.businessTenantId) return { tenantId: selectedBusinessTenant(session, carrier?.tenant_id) };
   const requestedTenantId = cleanMemoryScopeId(carrier?.tenant_id);
   return {
     tenantId: session.canManageAccess ? requestedTenantId || OWNER_MEMORY_TENANT_ID : tenantIdForAccessSession(session),
@@ -4822,7 +4904,7 @@ function brainStoreOptionsForSession(session: AccessSession, carrier?: { tenant_
 
 function brainScopeProofForSession(session: AccessSession, carrier?: { tenant_id?: unknown }) {
   const requestedTenantId = cleanMemoryScopeId(carrier?.tenant_id);
-  const tenantId = session.canManageAccess ? requestedTenantId || OWNER_MEMORY_TENANT_ID : tenantIdForAccessSession(session);
+  const tenantId = session.businessTenantId ? selectedBusinessTenant(session, requestedTenantId) : session.canManageAccess ? requestedTenantId || OWNER_MEMORY_TENANT_ID : tenantIdForAccessSession(session);
   return {
     tenant_id: tenantId,
     requested_tenant_id: requestedTenantId || null,
@@ -4971,6 +5053,7 @@ function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
 }
 
 type AdminPhantomAiChatContext = {
+  businessScoped?: boolean;
   requestId: string;
   tenantId: string;
   businessName: string;
@@ -5037,6 +5120,11 @@ function adminPhantomAiProviderTimeoutMs(providerId: AdminPhantomAiProviderId, c
 }
 
 async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, ctx: AdminPhantomAiChatContext) {
+  if (ctx.businessScoped) ctx = { ...ctx, compactContext: businessAssistantContext(ctx.tenantId) + "\n\n" + ctx.compactContext };
+  if (ctx.businessScoped && !["phantomforce", "phantomforce-owner", "phantomforce-internal"].includes(ctx.tenantId)
+    && ["codex_cli", "claude_cli", "chatgpt_bridge"].includes(providerId)) {
+    throw businessError("BUSINESS_AI_CONNECTION_REQUIRED", "Connect an AI provider for this business. Shared machine tools are unavailable in this workspace.", 409);
+  }
   const timeoutMs = adminPhantomAiProviderTimeoutMs(providerId, ctx);
   if (providerId === "deepseek_api") {
     const credential = await getAiProviderCredential(ctx.tenantId, "deepseek_api");
@@ -5812,15 +5900,19 @@ async function publicAiRuntimeState(config: AiRuntimeConfig) {
         const credentialConfigured = providerId === "deepseek_api" || providerId === "openrouter_glm"
           ? Boolean(providerCredentials[providerId]?.configured)
           : false;
+        const isolatedBusiness = !["phantomforce", "phantomforce-owner", "phantomforce-internal"].includes(config.tenant_id);
+        const workspaceProvider = isolatedBusiness
+          ? { ...provider, status: "offline" as const, last_success_at: null }
+          : provider;
         return {
-          ...provider,
+          ...workspaceProvider,
           selected: config.allowed_provider_ids.includes(providerId) || config.phantom_bot.allowed_provider_ids.includes(providerId),
           selected_for_platform: config.allowed_provider_ids.includes(providerId),
           selected_for_phantombot: config.phantom_bot.allowed_provider_ids.includes(providerId),
           selected_model: aiRuntimeProviderModel(config, providerId),
           phantombot_selected_model: aiRuntimeProviderModel(config.phantom_bot, providerId),
           credential_configured: credentialConfigured,
-          truth_state: provider.status === "online"
+          truth_state: isolatedBusiness ? credentialConfigured ? "configured" : "unavailable" : provider.status === "online"
             ? provider.display_id === "claude" && !provider.last_success_at ? "degraded" : "real"
             : credentialConfigured
               ? "configured"
@@ -8487,8 +8579,8 @@ async function pulseAccessFor(session: AccessSession, requestedTenant: unknown) 
   // is honored only for platform admins/owners (same rule as every store).
   const requested = typeof requestedTenant === "string" && requestedTenant.trim() ? requestedTenant.trim().slice(0, 120) : "";
   return {
-    tenantId: canManage && requested ? requested : own,
-    orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+    tenantId: session.businessTenantId ? selectedBusinessTenant(session, requestedTenant) : canManage && requested ? requested : own,
+    orgId: process.env.DATABASE_URL ? (session.businessTenantId || dbSession?.orgId || null) : null,
     competitorEntitled: ciAccess.entitled,
     canManage,
   };
@@ -10130,7 +10222,7 @@ app.get("/phantom-ai/hermes/backend", async (request, reply) => {
   if (!session) return reply;
   const parsed = HermesBackendQuerySchema.safeParse(request.query ?? {});
   if (!parsed.success) return reply.code(400).send({ ok: false, error: "bad_request", detail: parsed.error.flatten() });
-  const backend = await getHermesBackendInventory({ force: parsed.data.refresh === "true" });
+  const backend = await getHermesBackendInventory({ force: parsed.data.refresh === "true", env: businessHermesEnvironment(session.businessTenantId) });
   return reply.code(backend.online ? 200 : 503).send({ ok: backend.online, backend });
 });
 
@@ -10167,7 +10259,7 @@ app.post("/phantom-ai/hermes/chat", async (request, reply) => {
       providerId: parsed.data.provider_id,
       modelId: parsed.data.model_id,
       effort: parsed.data.effort,
-    });
+    }, { env: businessHermesEnvironment(session.businessTenantId) });
     return reply.send({ ok: true, result });
   } catch (error) {
     const status = typeof (error as { status?: unknown }).status === "number" ? Number((error as { status: number }).status) : 502;
@@ -10231,6 +10323,7 @@ app.post("/phantom-ai/hermes/chat/stream", async (request, reply) => {
       modelId: parsed.data.model_id,
       effort: parsed.data.effort,
     }, {
+      env: businessHermesEnvironment(session.businessTenantId),
       signal: controller.signal,
       onEvent: ({ event, data }) => emit(event, data),
     });
@@ -10378,7 +10471,7 @@ app.get("/phantom-ai/runs/operations", async (request, reply) => {
 app.get("/phantom-ai/runs", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
-  return { ok: true, runs: listAgentRuns({ limit: 20 }).map(serializeAgentRun) };
+  return { ok: true, runs: listAgentRuns({ limit: 200 }).filter((run) => !session.businessTenantId || run.workspace === session.businessTenantId).slice(0, 20).map(serializeAgentRun) };
 });
 
 app.get("/phantom-ai/runs/:id", async (request, reply) => {
@@ -10999,7 +11092,7 @@ app.post("/phantom-ai/ops/finance/parse-receipt", { bodyLimit: 24 * 1024 * 1024 
 
   const provider = getReceiptAssetStorageProvider();
   const stored = await provider.putAsset({
-    ownerScope: FINANCE_RECEIPT_OWNER_SCOPE,
+    ownerScope: session.businessTenantId || FINANCE_RECEIPT_OWNER_SCOPE,
     dataUrl: parsed.data.image,
     originalName: parsed.data.filename,
   });
@@ -11027,7 +11120,7 @@ app.get("/phantom-ai/ops/finance/receipt/:id", async (request, reply) => {
 
   const { id } = request.params as { id: string };
   const provider = getReceiptAssetStorageProvider();
-  const result = await provider.getAssetFile(id, FINANCE_RECEIPT_OWNER_SCOPE);
+  const result = await provider.getAssetFile(id, session.businessTenantId || FINANCE_RECEIPT_OWNER_SCOPE);
 
   if (!result.ok) {
     return reply.code(404).send({ ok: false, error: result.error });
@@ -11775,6 +11868,7 @@ app.get("/phantom-ai/media-lab/proxy-image", async (request, reply) => {
    after 30 days — this is a temporary sync/archive layer, not permanent
    storage; see content-asset-storage.ts for the pluggable provider seam. */
 function contentAssetOwnerScope(session: AccessSession, requestedTenantId?: unknown) {
+  if (session.businessTenantId) return selectedBusinessTenant(session, requestedTenantId);
   if (session.canManageAccess) return cleanMemoryScopeId(requestedTenantId, OWNER_MEMORY_TENANT_ID);
   return cleanMemoryScopeId(session.clientId, `client-${session.id}`);
 }
@@ -13365,7 +13459,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     && needsBusinessContext(normalized.user_request, normalized.task_type);
   normalized.module_data = filterConversationModules(normalized.module_data, normalized.user_request, normalized.task_type);
   if (!businessContextRelevant) {
-    normalized.business_summary = "General conversation. Business workspace status is intentionally excluded unless the current request asks for it.";
+    normalized.business_summary = session.businessTenantId ? businessAssistantContext(session.businessTenantId) : "General conversation. Business workspace status is intentionally excluded unless the current request asks for it.";
   }
   if (!actionFreeConversation && recentConversation.length && !normalized.module_data.some((module) => module.module === "recent_conversation")) {
     normalized.module_data.push({
@@ -13386,7 +13480,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     const dbSession = asDatabaseSession(session);
     if (dbSession?.orgId && process.env.DATABASE_URL) {
       try {
-        const aiAssets = await searchAssetsForAi(dbSession.orgId, normalized.user_request);
+        const aiAssets = await searchAssetsForAi(session.businessTenantId || dbSession.orgId, normalized.user_request);
         if (aiAssets.length) {
           normalized.module_data.push({
             module: "asset_library",
@@ -13410,13 +13504,13 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     const ciAccess = await competitorIntelligenceAccess(session);
     const pulse = await getOrganizationPulse(session, {
       tenantId: normalized.tenant_id,
-      orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+      orgId: process.env.DATABASE_URL ? (session.businessTenantId || dbSession?.orgId || null) : null,
       competitorEntitled: ciAccess.entitled,
       canManage: Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin"),
     });
     const opportunityReport = await getOrganizationOpportunities(session, {
       tenantId: normalized.tenant_id,
-      orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+      orgId: process.env.DATABASE_URL ? (session.businessTenantId || dbSession?.orgId || null) : null,
       competitorEntitled: ciAccess.entitled,
       canManage: Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin"),
     }, pulse);
@@ -13546,6 +13640,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         : buildInstantConversationUserMessage(recentConversation, normalized.user_request),
       compactContext: actionFreeContext,
       tenantId: runtimeTenantId,
+      businessScoped: Boolean(session.businessTenantId),
       sensitivityLevel: normalized.sensitivity_level,
       approvalRequired: false,
       executionMode: adminExecutionMode,
@@ -13648,6 +13743,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       route_tier: adminRouteTier,
       provider_timeout_ms: adminPhantomAiProviderTimeoutMs(respondingProviderId, {
         tenantId: runtimeTenantId,
+      businessScoped: Boolean(session.businessTenantId),
         requestId: normalized.request_id,
         businessName: normalized.business_name,
         taskType: normalized.task_type,
@@ -13733,7 +13829,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       };
     }
 
-    if (session.canManageAccess) {
+    if (session.canManageAccess && (!session.businessTenantId || ["phantomforce", "phantomforce-owner", "phantomforce-internal"].includes(session.businessTenantId))) {
     /* ---- Termina mission gate --------------------------------------------
        NON-NEGOTIABLE: a Termina mission (real multi-agent coding agents,
        real API/token cost, real filesystem/git changes) must NEVER start
@@ -13882,6 +13978,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       userMessage: normalized.user_request,
       compactContext: memoryContext.augmented_context_preview,
       tenantId: runtimeTenantId,
+      businessScoped: Boolean(session.businessTenantId),
       sensitivityLevel: preview.decision.sensitivity_level,
       approvalRequired,
       executionMode: adminExecutionMode,

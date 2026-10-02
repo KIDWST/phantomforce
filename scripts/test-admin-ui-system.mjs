@@ -17,7 +17,7 @@ const escapedBuildId = buildId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const requiredStyles = [
   "phantom.css",
-  "competitor-intelligence.css",
+  "business-workspaces.css",
   "orggraph.css",
   "phantom-skin.css",
   "command-os.css",
@@ -35,7 +35,7 @@ for (const file of requiredStyles) {
   );
 }
 
-for (const file of ["phantomplay.css", "phantomplay-v2.css", "phantomstore.css", "creator-studio.css", "phantomhunter.css", "phantomhunter-connect.css"]) {
+for (const file of ["competitor-intelligence.css", "phantomplay.css", "phantomplay-v2.css", "phantomstore.css", "creator-studio.css", "phantomhunter.css", "phantomhunter-connect.css"]) {
   assert.doesNotMatch(index, new RegExp(`<link rel="stylesheet"[^>]*href="/app/${file.replaceAll(".", "\\.")}`), `${file} must stay isolated from the initial shell.`);
   assert.match(index, new RegExp(`<link rel="preload" as="style"[^>]*data-workspace-style-preload[^>]*href="/app/${file.replaceAll(".", "\\.")}`), `${file} must be downloaded before first navigation.`);
   assert.match(main, new RegExp(`/${file.replaceAll(".", "\\.")}\\?v=${escapedBuildId}`), `${file} must remain available through the workspace style loader at ${buildId}.`);

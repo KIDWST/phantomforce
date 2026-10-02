@@ -5,6 +5,11 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "test:business-commerce": "tsx scripts/test-business-commerce.ts",
+    "test:commerce-http": "tsx scripts/test-commerce-http.ts",
+    "test:studio-workspace-records": "tsx scripts/test-studio-workspace-records.ts",
+    "test:business-workspaces": "tsx scripts/test-business-workspaces.ts",
+    "business-workspaces:migration-plan": "tsx scripts/migrate-business-workspaces.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

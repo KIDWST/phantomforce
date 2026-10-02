@@ -127,7 +127,8 @@ export async function callDeepSeekV4Flash(
   } = {},
 ): Promise<DeepSeekV4ChatResult> {
   const env = options.env ?? process.env;
-  const credential = options.credential?.trim() || env.DEEPSEEK_API_KEY?.trim() || "";
+  const credential = Object.prototype.hasOwnProperty.call(options, "credential")
+    ? options.credential?.trim() || "" : env.DEEPSEEK_API_KEY?.trim() || "";
   const modelId = options.modelId?.trim() || env.DEEPSEEK_MODEL?.trim() || DEEPSEEK_V4_FLASH_MODEL_ID;
   const endpoint = `${(env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com").replace(/\/$/, "")}/chat/completions`;
   const blocked = (reason: string): DeepSeekV4ChatResult => ({

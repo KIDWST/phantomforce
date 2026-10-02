@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260914-233";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260914-233";
+import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260927-235";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260927-235";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -27,6 +27,7 @@ function aiProxyBase() {
     const cfg = JSON.parse(workspaceStorageGetItem("pf.medialab.v1") || "{}");
     if (cfg.endpointBase) return String(cfg.endpointBase).replace(/\/+$/, "");
   } catch { /* fall through to default */ }
+  if (!["phantomforce", "phantomforce-owner"].includes(currentTenantId())) return "/api/business-workspaces/media";
   return (location.hostname === "127.0.0.1" || location.hostname === "localhost")
     ? "http://127.0.0.1:8788" : "https://ai.phantomforce.online";
 }

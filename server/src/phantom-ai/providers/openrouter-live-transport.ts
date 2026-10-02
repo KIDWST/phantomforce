@@ -162,7 +162,8 @@ export async function callOpenRouterGlm52(
   } = {},
 ): Promise<OpenRouterGlm52ChatResult> {
   const env = options.env ?? process.env;
-  const apiKey = options.credential?.trim() || env.OPENROUTER_API_KEY?.trim();
+  const apiKey = Object.prototype.hasOwnProperty.call(options, "credential")
+    ? options.credential?.trim() : env.OPENROUTER_API_KEY?.trim();
   const modelId = options.modelId?.trim() || env.OPENROUTER_MODEL?.trim() || OPENROUTER_GLM_52_MODEL_ID;
 
   if (!envEnabled(env.PHANTOM_LIVE_PROVIDERS_ENABLED)) {
