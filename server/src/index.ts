@@ -254,6 +254,8 @@ import {
   isSocialAnalyticsPlatform,
   saveSocialOAuthSetup,
   syncSocialAnalytics,
+  selectSocialOAuthAsset,
+  disconnectSocialOAuth,
 } from "./connectors/social-analytics-connector.js";
 import {
   getHermesInteractionMemoryStoreStatus,
@@ -11173,7 +11175,9 @@ app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
   // callback URLs, console URLs, env-var names, or redirect URIs.
   const canManage = Boolean((session as { canManageAccess?: boolean; isSuperAdmin?: boolean }).canManageAccess
     || (session as { isSuperAdmin?: boolean }).isSuperAdmin);
+  const canManageAccounts = canManageWorkspaceModules(session, tenantId);
   const customer = getCustomerSocialConnectionStatus(tenantId);
+  if (!canManageAccounts) customer.asset_selections = [];
   if (socialConnectV2Enabled() && !canManage) {
     return {
       ok: true,
@@ -11182,6 +11186,8 @@ app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
       read_only: true,
       social_connect_v2: true,
       social_connections: customer, // sanitized, credential-free
+      asset_selections: customer.asset_selections,
+      can_manage_accounts: canManageAccounts,
     };
   }
   return {
@@ -11191,6 +11197,8 @@ app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
     read_only: true,
     social_connect_v2: socialConnectV2Enabled(),
     social_connections: customer,
+    asset_selections: customer.asset_selections,
+    can_manage_accounts: canManageAccounts,
     social_analytics: getSocialAnalyticsConnectorStatus(tenantId),
   };
 });
@@ -11211,6 +11219,7 @@ app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
     return reply.code(400).send({ ok: false, error: "Unsupported social platform." });
   }
   const tenantId = customizationTenantForSession(session, typeof body.tenant_id === "string" ? body.tenant_id : undefined);
+  if (!canManageWorkspaceModules(session, tenantId)) return reply.code(403).send({ ok: false, error: "Only a business administrator can connect social accounts." });
   try {
     return {
       ok: true,
@@ -11240,6 +11249,32 @@ app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
   }
 });
 
+app.post("/phantom-ai/ops/social-oauth/select-asset", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { platform?: unknown; selectionId?: unknown; pageId?: unknown; tenant_id?: unknown };
+  if (!isSocialAnalyticsPlatform(body.platform) || typeof body.selectionId !== "string" || typeof body.pageId !== "string"
+    || body.selectionId.length > 100 || body.pageId.length > 200) return reply.code(400).send({ ok: false, error: "Choose an account from the available list." });
+  const tenantId = customizationTenantForSession(session, typeof body.tenant_id === "string" ? body.tenant_id : undefined);
+  if (!canManageWorkspaceModules(session, tenantId)) return reply.code(403).send({ ok: false, error: "Only a business administrator can choose social accounts." });
+  try {
+    const result = selectSocialOAuthAsset(body.platform, body.selectionId, body.pageId, tenantId);
+    return { ok: true, tenant_id: tenantId, platform: result.platform, type: result.type };
+  } catch {
+    return reply.code(409).send({ ok: false, tenant_id: tenantId, error: "This selection is unavailable or expired. Reconnect and choose the intended business account." });
+  }
+});
+
+app.post("/phantom-ai/ops/social-oauth/disconnect", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { platform?: unknown; tenant_id?: unknown };
+  if (!isSocialAnalyticsPlatform(body.platform)) return reply.code(400).send({ ok: false, error: "Choose a supported social account." });
+  const tenantId = customizationTenantForSession(session, typeof body.tenant_id === "string" ? body.tenant_id : undefined);
+  if (!canManageWorkspaceModules(session, tenantId)) return reply.code(403).send({ ok: false, error: "Only a business administrator can disconnect social accounts." });
+  return { ok: true, ...disconnectSocialOAuth(body.platform, tenantId) };
+});
+
 app.get("/phantom-ai/ops/social-oauth/callback", async (request, reply) => {
   try {
     const result = await completeSocialOAuthCallback((request.query ?? {}) as Record<string, unknown>);
@@ -11258,30 +11293,31 @@ app.get("/phantom-ai/ops/social-oauth/callback", async (request, reply) => {
   </head>
   <body>
     <main>
-      <p style="letter-spacing:.24em;text-transform:uppercase;color:#45ffad;font-weight:800;">Connection saved</p>
-      <h1>${String(result.platform).replace(/</g, "&lt;")} is connected to PhantomForce.</h1>
-      <p>Return to the admin app and press <code>Sync analytics</code>. Tokens were stored locally and were not printed in this page.</p>
+      <p style="letter-spacing:.24em;text-transform:uppercase;color:#45ffad;font-weight:800;">${result.type === "asset_selection_required" ? "Choose your business account" : "Connection saved"}</p>
+      <h1>${result.type === "asset_selection_required" ? "Return to PhantomForce to choose a Page." : "Your social account is connected."}</h1>
+      <p>${result.type === "asset_selection_required" ? "Your account has more than one eligible Page. Choose the correct business Page to finish connecting." : "Return to your business workspace to review the connected account and its permissions."}</p>
       <script>
         const payload = {
           protocol: "phantomforce.social-oauth.v1",
-          type: "connected",
+          type: ${JSON.stringify(result.type)},
           platform: ${JSON.stringify(result.platform)},
+          tenant_id: ${JSON.stringify(result.tenant_id).replace(/</g, "\\u003c")},
           connectedAt: new Date().toISOString()
         };
         try { localStorage.setItem("pf.social.oauth.last", JSON.stringify(payload)); } catch {}
-        try { if (window.opener) window.opener.postMessage(payload, "*"); } catch {}
+        try { if (window.opener) { window.opener.postMessage(payload, "https://admin.phantomforce.online"); window.opener.postMessage(payload, "https://app.phantomforce.online"); } } catch {}
         setTimeout(() => { try { window.close(); } catch {} }, 1800);
       </script>
     </main>
   </body>
 </html>`);
-  } catch (error) {
+  } catch {
     return reply.code(400).type("text/html; charset=utf-8").send(`<!doctype html>
 <html lang="en"><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#090202;color:#ffe8e8;font-family:Arial,sans-serif;">
   <main style="max-width:560px;border:1px solid rgba(255,80,110,.4);border-radius:24px;padding:28px;background:rgba(30,4,8,.85);">
     <p style="letter-spacing:.22em;text-transform:uppercase;color:#ff8095;font-weight:800;">Connection blocked</p>
     <h1>PhantomForce could not save this social connection.</h1>
-    <p>${(error instanceof Error ? error.message : "OAuth callback failed.").replace(/</g, "&lt;").slice(0, 500)}</p>
+    <p>Account authorization could not be completed. Return to your business workspace, reconnect, and choose the intended account.</p>
   </main>
 </body></html>`);
   }

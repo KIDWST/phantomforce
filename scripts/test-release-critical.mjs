@@ -38,6 +38,7 @@ const checks = [
   "test:media-generation-lifecycle",
   "test:content-publication-lifecycle",
   "test:social-publishing",
+  "test:social-accounts",
   "test:workspace-approvals",
   "test:work-graph",
   "test:email-delivery",

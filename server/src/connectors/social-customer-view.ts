@@ -50,6 +50,8 @@ export type CustomerProviderView = {
   selectedAssetName: string;
   grantedCapabilities: string[];
   reconnectRequired: boolean;
+  authorizationPending: boolean;
+  connectionUpdatedAt: string;
   /** Truthful reference to a public handle the user typed; never implies auth. */
   savedHandleReference: string;
   /** The single customer-facing action label from the approved vocabulary. */
@@ -99,6 +101,9 @@ export type InternalConnectorRow = {
   } | null;
   /** A public handle the user typed that is NOT a provider authorization. */
   typedHandleReference?: string;
+  assetSelectionPending?: boolean;
+  authorizationPending?: boolean;
+  connectionUpdatedAt?: string;
 };
 
 const FEATURE_FLAG_NAME = "SOCIAL_CONNECT_V2";
@@ -168,6 +173,7 @@ function grantedCapabilitiesFor(row: InternalConnectorRow, connected: boolean): 
  */
 export function deriveConnectionStatus(row: InternalConnectorRow): CustomerConnectionStatus {
   if (!row.oauthConfigured) return "PLATFORM_UNCONFIGURED";
+  if (row.assetSelectionPending) return "ASSET_SELECTION_REQUIRED";
   const c = row.savedConnection;
   if (c?.providerReviewPending) return "PROVIDER_REVIEW_PENDING";
   const hasRealConnection = !!c && !!c.connected;
@@ -201,6 +207,8 @@ function projectProvider(row: InternalConnectorRow): CustomerProviderView {
     selectedAssetName: connected ? String(c?.selectedAssetName || "") : "",
     grantedCapabilities: grantedCapabilitiesFor(row, connected),
     reconnectRequired: status === "REAUTH_REQUIRED" || status === "DEGRADED",
+    authorizationPending: Boolean(row.authorizationPending),
+    connectionUpdatedAt: String(row.connectionUpdatedAt || ""),
     savedHandleReference: String(row.typedHandleReference || ""),
     action,
     customerMessage: messageFor(status, row.name),

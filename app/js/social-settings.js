@@ -1,751 +1,206 @@
-/* PhantomForce — Social account settings.
- *
- * Extracted from the former Media Lab settings panel. This is the single UI for
- * connecting and managing social accounts (public handle + official OAuth). The
- * standalone Analytics tab and the dashboard audience widget both depend on the
- * social-account store, so this module keeps only the account-connection surface
- * and its OAuth/Hermes bridge machinery — no media generation.
- */
+/* Provider-verified social accounts. Public references never imply authorization. */
+import { currentTenantId, session as accessSession } from "./store.js?v=phantom-live-20261003-237";
+import { loadSocialAccounts, saveSocialAccounts } from "./contenthub.js?v=phantom-live-20261003-237";
+import { socialConnectorsFromResponse } from "./social-connection-state.js?v=phantom-live-20261003-237";
 
-import { session as accessSession, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20261002-236";
-import { PLATFORMS, loadSocialAccounts, saveSocialAccounts, socialStatus } from "./contenthub.js?v=phantom-live-20261002-236";
-import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20261002-236";
-
-const SOCIAL_LOGIN_URLS = {
-  instagram: "https://www.instagram.com/accounts/login/",
-  tiktok: "https://www.tiktok.com/login",
-  youtube: "https://accounts.google.com/",
-  facebook: "https://www.facebook.com/login",
-  x: "https://x.com/i/flow/login",
-  linkedin: "https://www.linkedin.com/login",
-  pinterest: "https://www.pinterest.com/login/",
-};
-let socialNotice = "";
-const HERMES_EXTENSION_PROTOCOL = "phantomforce.hermes.extension.v1";
-const HERMES_EXTENSION_KEY = "pf.hermes.extension.connect.v1";
-let socialSettingsMount = null;
-let socialSettingsOpts = {};
-let hermesExtensionListenerReady = false;
-let socialOAuthListenerReady = false;
-let socialBridgePollTimer = 0;
-let socialOAuthPollTimer = 0;
-let socialOAuthState = {
-  loaded: false,
-  loading: false,
-  error: "",
-  connectors: [],
-  preflight: null,
-};
-let socialOAuthSetupState = { loaded: false, loading: false, error: "", setup: null };
-
+const API = "/phantom-ai/ops/social-oauth";
+const esc = (value = "") => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+const scopeKey = () => JSON.stringify([currentTenantId(), accessSession.token?.() || accessSession.get?.()?.sessionId || ""]);
+const providerHosts = new Set(["accounts.google.com", "www.facebook.com", "www.tiktok.com", "x.com", "twitter.com", "www.linkedin.com", "www.pinterest.com"]);
+let mounted = null;
 function canManageSocialProviderApps() {
-  const active = typeof accessSession?.get === "function" ? accessSession.get() : null;
-  return Boolean(active?.canManageAccess || active?.isSuperAdmin);
-}
-
-async function refreshSocialOAuthSetup({ force = false } = {}) {
-  if (!canManageSocialProviderApps()) return null;
-  if (socialOAuthSetupState.loading || (socialOAuthSetupState.loaded && !force)) return socialOAuthSetupState.setup;
-  socialOAuthSetupState = { ...socialOAuthSetupState, loading: true, error: "" };
-  try {
-    const response = await fetch("/phantom-ai/ops/social-oauth/setup", { headers: socialAuthHeaders() });
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(typeof json?.error === "string" ? json.error : `Provider setup check failed (${response.status}).`);
-    socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
-  } catch (error) {
-    socialOAuthSetupState = { ...socialOAuthSetupState, loaded: true, loading: false, error: error?.message || "Provider setup could not be checked." };
-  }
-  rerenderSocialSettings();
-  return socialOAuthSetupState.setup;
-}
-
-async function saveSocialOAuthSetup(form) {
-  const data = new FormData(form);
-  const response = await fetch("/phantom-ai/ops/social-oauth/setup", {
-    method: "POST",
-    headers: socialAuthHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({
-      platform: data.get("platform"),
-      clientId: data.get("clientId"),
-      clientSecret: data.get("clientSecret"),
-      redirectUri: data.get("redirectUri"),
-    }),
-  });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(typeof json?.error === "string" ? json.error : "Provider setup could not be saved.");
-  socialOAuthSetupState = { loaded: true, loading: false, error: "", setup: json.setup || null };
-  await refreshSocialOAuthStatus({ force: true });
-  return json.setup;
-}
-
-function cleanSocialHandle(value = "") {
-  return String(value || "")
-    .trim()
-    .replace(/^https?:\/\/(www\.)?/i, "")
-    .replace(/^(instagram\.com|tiktok\.com|youtube\.com|youtu\.be|facebook\.com|x\.com|twitter\.com|linkedin\.com|pinterest\.com)\//i, "")
-    .replace(/^@+/, "")
-    .replace(/^in\//i, "")
-    .replace(/^company\//i, "")
-    .replace(/[/?#].*$/, "")
-    .trim();
-}
-function normalizeSocialUrl(value = "") {
-  const text = String(value || "").trim();
-  if (!text || text === "https://") return "";
-  return /^https?:\/\//i.test(text) ? text : `https://${text}`;
-}
-function socialProfileFromHandle(platformId, handle = "") {
-  const h = cleanSocialHandle(handle);
-  if (!h) return "";
-  if (platformId === "instagram") return `https://www.instagram.com/${h}/`;
-  if (platformId === "tiktok") return `https://www.tiktok.com/@${h}`;
-  if (platformId === "youtube") return `https://www.youtube.com/@${h}`;
-  if (platformId === "facebook") return `https://www.facebook.com/${h}`;
-  if (platformId === "x") return `https://x.com/${h}`;
-  if (platformId === "linkedin") return `https://www.linkedin.com/company/${h}/`;
-  if (platformId === "pinterest") return `https://www.pinterest.com/${h}/`;
-  return "";
-}
-function socialProfileTarget(account) {
-  return normalizeSocialUrl(account.url) || socialProfileFromHandle(account.id, account.handle);
-}
-function socialLoginTarget(account) {
-  return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
-}
-function socialAuthHeaders(extra = {}) {
-  const token = typeof accessSession?.token === "function" ? accessSession.token() : "";
-  const sessionId = typeof accessSession?.get === "function" ? accessSession.get()?.sessionId : "";
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(sessionId ? { "x-phantomforce-session": sessionId } : {}) };
-}
-async function requestSocialOAuthStart(platform) {
-  const response = await fetch("/phantom-ai/ops/social-oauth/start", {
-    method: "POST",
-    headers: socialAuthHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ platform }),
-  });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(String(json?.error || `Account connection failed (${response.status}).`));
-  if (json?.oauth?.authorizationUrl) return { mode: "oauth", oauth: json.oauth, message: "" };
-  throw new Error("This provider needs its app ID and secret configured before account authorization can start.");
-}
-function openSocialAuthWindow(accountName = "account") {
-  const safeName = String(accountName || "account").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "account";
-  const popup = window.open("about:blank", `phantomforce-social-${safeName}-${Date.now()}`, "popup,width=820,height=860");
-  if (!popup) return null;
-  try {
-    popup.document.title = `Connecting ${accountName}`;
-    popup.document.body.style.cssText = "margin:0;display:grid;place-items:center;min-height:100vh;background:#05070d;color:#e9fff4;font:16px system-ui,sans-serif;";
-    popup.document.body.innerHTML = `<main style="text-align:center;max-width:420px;padding:28px;"><b>Opening ${accountName} sign-in...</b><p style="color:#9fb7aa;line-height:1.45;">Use the account you are already signed into and approve PhantomForce when the provider asks.</p></main>`;
-  } catch {}
-  return popup;
-}
-function routeSocialAuthWindow(popup, url) {
-  if (!url) return false;
-  if (popup && !popup.closed) {
-    try {
-      popup.opener = null;
-      popup.location.href = url;
-      return true;
-    } catch {}
-  }
-  const fallback = window.open(url, "_blank", "noopener,noreferrer");
-  return Boolean(fallback);
-}
-async function beginSocialAccountConnection(account, popup = null) {
-  const start = await requestSocialOAuthStart(account.id);
-  if (start.mode === "oauth") {
-    const opened = routeSocialAuthWindow(popup, start.oauth.authorizationUrl);
-    account.connectMode = "oauth-started";
-    account.lastConnectAt = new Date().toISOString();
-    socialNotice = opened
-      ? `${account.name} authorization opened. Approve it once; PhantomForce refreshes this panel when the callback returns.`
-      : `${account.name} authorization is ready, but the browser blocked the popup. Allow popups for PhantomForce and click again.`;
-    startSocialOAuthAuthorizationPolling(account.id);
-    return { mode: "oauth", opened };
-  }
-  try { popup?.close(); } catch {}
-  throw new Error("The secure account connection could not start.");
-}
-async function refreshSocialOAuthStatus({ force = false } = {}) {
-  if (socialOAuthState.loading || (socialOAuthState.loaded && !force)) return socialOAuthState;
-  socialOAuthState = { ...socialOAuthState, loading: true, error: "" };
-  try {
-    const response = await fetch("/phantom-ai/ops/social-analytics/status", {
-      headers: socialAuthHeaders(),
-    });
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(String(json?.error || `OAuth status failed (${response.status}).`));
-    const connectors = socialConnectorsFromResponse(json);
-    socialOAuthState = {
-      loaded: true,
-      loading: false,
-      error: "",
-      connectors,
-      preflight: socialPreflightFromResponse(json, connectors),
-    };
-  } catch (error) {
-    socialOAuthState = {
-      ...socialOAuthState,
-      loaded: true,
-      loading: false,
-      error: error?.message || "OAuth status could not be checked.",
-    };
-  }
-  rerenderSocialSettings();
-  return socialOAuthState;
-}
-function socialConnectorFor(platform) {
-  return socialOAuthState.connectors.find((connector) => connector.id === platform) || null;
-}
-function parseSocialOAuthPayload(value) {
-  if (!value) return null;
-  if (typeof value === "object") return value;
-  try { return JSON.parse(String(value)); } catch { return null; }
-}
-function handleSocialOAuthComplete(payload = {}) {
-  const platform = String(payload.platform || "").toLowerCase();
-  if (!platform) return;
-  stopSocialOAuthAuthorizationPolling();
-  const accounts = loadSocialAccounts();
-  const account = accounts.find((row) => row.id === platform);
-  if (account) {
-    account.enabled = true;
-    account.connectMode = "oauth-connected";
-    account.lastConnectAt = payload.connectedAt || new Date().toISOString();
-    saveSocialAccounts(accounts);
-  }
-  socialNotice = `${socialAccountName(platform)} connected. Refreshing live authorization state…`;
-  socialOAuthState.loaded = false;
-  void refreshSocialOAuthStatus({ force: true });
-}
-function stopSocialOAuthAuthorizationPolling() {
-  if (socialOAuthPollTimer) clearInterval(socialOAuthPollTimer);
-  socialOAuthPollTimer = 0;
-}
-function startSocialOAuthAuthorizationPolling(platform = "") {
-  if (typeof window === "undefined" || !platform) return;
-  stopSocialOAuthAuthorizationPolling();
-  let attempts = 0;
-  const tick = async () => {
-    attempts += 1;
-    if (!socialSettingsMount?.isConnected || attempts > 45) {
-      stopSocialOAuthAuthorizationPolling();
-      return;
-    }
-    await refreshSocialOAuthStatus({ force: true });
-    const connector = socialConnectorFor(platform);
-    if (connector?.configured) {
-      const accounts = loadSocialAccounts();
-      const account = accounts.find((row) => row.id === platform);
-      if (account) {
-        account.enabled = true;
-        account.connectMode = "oauth-connected";
-        account.lastConnectAt = new Date().toISOString();
-        saveSocialAccounts(accounts);
-      }
-      socialNotice = `${connector.name || socialAccountName(platform)} connected. Live analytics can sync now. Posting still stays approval-gated.`;
-      stopSocialOAuthAuthorizationPolling();
-      rerenderSocialSettings();
-    } else if (attempts === 45) {
-      socialNotice = `${connector?.name || socialAccountName(platform)} sign-in is still pending. Finish provider approval, then return here.`;
-      rerenderSocialSettings();
-    }
-  };
-  setTimeout(tick, 1400);
-  socialOAuthPollTimer = setInterval(tick, 3500);
-}
-function ensureSocialOAuthCompletionListener() {
-  if (socialOAuthListenerReady || typeof window === "undefined") return;
-  socialOAuthListenerReady = true;
-  window.addEventListener("message", (event) => {
-    if (event.origin !== window.location.origin) return;
-    const data = parseSocialOAuthPayload(event.data);
-    if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
-  });
-  window.addEventListener("storage", (event) => {
-    if (event.key !== "pf.social.oauth.last") return;
-    const data = parseSocialOAuthPayload(event.newValue);
-    if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
-  });
-  const refreshWhenReturned = () => {
-    if (!socialSettingsMount?.isConnected) return;
-    void refreshSocialOAuthStatus({ force: true });
-  };
-  window.addEventListener("focus", refreshWhenReturned);
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) refreshWhenReturned();
-  });
-}
-function socialStatusLabel(account) {
-  const connector = socialConnectorFor(account.id);
-  if (connector?.configured) return "live authorized";
-  if (socialOAuthState.loading) return "checking connection";
-  const st = socialStatus(account);
-  if (account.connectMode === "live-api" && account.analytics?.live) return "live OAuth";
-  if (st === "linked") return "handle saved — not connected";
-  if (account.handle) return "handle saved — not connected";
-  if (st === "pending") return "connecting";
-  return "ready to connect";
-}
-function socialPostingState(account) {
-  const connector = socialConnectorFor(account.id);
-  if (connector?.configured) return "live feed + posting gated";
-  if (socialOAuthState.loading) return "checking connection";
-  const st = socialStatus(account);
-  if (account.connectMode === "live-api" && account.analytics?.live) return "live data";
-  if (account.analytics) return "report imported";
-  if (st === "linked") return "OAuth needed";
-  if (account.handle) return "handle ready";
-  if (st === "pending") return "connecting";
-  return "connect account";
-}
-function socialActionLabel(account) {
-  const connector = socialConnectorFor(account.id);
-  if (account.connectMode === "live-api" && account.analytics?.live) return `Sync ${account.name}`;
-  if (connector?.configured) return `Reconnect ${account.name}`;
-  if (socialOAuthState.loading) return "Checking…";
-  if (!connector?.oauthConfigured) return canManageSocialProviderApps() ? `Set up ${account.name}` : "Owner setup required";
-  return `Connect ${account.name}`;
-}
-function clampHermesText(value = "", limit = 180) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
-}
-function redactHermesVisibleText(value = "", limit = 180) {
-  return clampHermesText(String(value || "")
-    .replace(/-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]")
-    .replace(/\bBearer\s+[^\s'"`;&]+/gi, "Bearer [REDACTED_BEARER]")
-    .replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g, "[REDACTED_SECRET]")
-    .replace(/\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})\b/g, "[REDACTED_SECRET]")
-    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED_JWT]")
-    .replace(/\b(api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|password|passwd|secret|private[_-]?key)\b["'`]?\s*[:=]\s*["'`]?([^\s'"`;&]+)/gi, (_match, key) => `${key}=[REDACTED_SECRET]`), limit);
-}
-function loadHermesExtensionState() {
-  try {
-    return JSON.parse(workspaceStorageGetItem(HERMES_EXTENSION_KEY) || "{}") || {};
-  } catch {
-    return {};
-  }
-}
-function saveHermesExtensionState(patch = {}) {
-  const next = {
-    ...loadHermesExtensionState(),
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  try { workspaceStorageSetItem(HERMES_EXTENSION_KEY, JSON.stringify(next)); } catch {}
-  return next;
-}
-function sanitizeHermesProfilePacket(payload = {}) {
-  const platform = String(payload.platform || "").toLowerCase().trim();
-  if (!PLATFORMS.some((p) => p.id === platform)) {
-    return { ok: false, reason: "unsupported platform" };
-  }
-  const url = normalizeSocialUrl(payload.url || "");
-  const handle = cleanSocialHandle(payload.handle || url);
-  return {
-    ok: Boolean(url || handle),
-    platform,
-    handle,
-    url,
-    displayName: redactHermesVisibleText(payload.displayName || ""),
-    pageTitle: redactHermesVisibleText(payload.pageTitle || ""),
-    source: "hermes-extension",
-    sourceTab: redactHermesVisibleText(payload.sourceTab || "visible social profile", 80),
-    connectedAt: payload.capturedAt || new Date().toISOString(),
-    userConfirmed: Boolean(payload.userConfirmed),
-    safety: {
-      cookiesRead: false,
-      passwordsRead: false,
-      tokensRead: false,
-      privateMessagesRead: false,
-      browserHistoryRead: false,
-    },
-  };
-}
-function rerenderSocialSettings() {
-  if (socialSettingsMount) renderSocialSettings(socialSettingsMount, socialSettingsOpts);
-}
-function socialAccountName(platform = "") {
-  return PLATFORMS.find((p) => p.id === platform)?.name || "the platform";
-}
-function applyHermesProfilePacket(payload = {}) {
-  const packet = sanitizeHermesProfilePacket(payload);
-  const pendingPlatform = String(loadHermesExtensionState().pendingPlatform || "").toLowerCase().trim();
-  if (!packet.ok) {
-    socialNotice = pendingPlatform
-      ? `${socialAccountName(pendingPlatform)} sign-in is open. PhantomForce will link it automatically when the browser bridge sees the signed-in public profile.`
-      : "Sign-in did not find a supported public social profile yet. Open the platform sign-in once, then return here.";
-    saveHermesExtensionState({ detected: true, lastSeenAt: new Date().toISOString(), lastResult: "unsupported" });
-    rerenderSocialSettings();
-    return;
-  }
-  if (pendingPlatform && packet.platform !== pendingPlatform) {
-    socialNotice = `${socialAccountName(pendingPlatform)} is still waiting. Ignored a saved ${socialAccountName(packet.platform)} profile so the wrong profile was not changed.`;
-    saveHermesExtensionState({ detected: true, lastSeenAt: new Date().toISOString(), lastResult: "platform_mismatch" });
-    rerenderSocialSettings();
-    return;
-  }
-  const accounts = loadSocialAccounts();
-  const account = accounts.find((row) => row.id === packet.platform);
-  if (!account) return;
-  account.handle = packet.handle || account.handle || "";
-  account.url = packet.url || socialProfileFromHandle(account.id, account.handle);
-  account.enabled = true;
-  account.connectMode = "hermes-extension";
-  account.lastConnectAt = packet.connectedAt;
-  account.hermesProof = packet;
-  saveSocialAccounts(accounts);
-  saveHermesExtensionState({
-    detected: true,
-    lastSeenAt: new Date().toISOString(),
-    lastLinkedPlatform: packet.platform,
-    pendingPlatform: "",
-    lastResult: "linked",
-  });
-  socialNotice = `${account.name} profile saved from the visible browser page. This stores public identity fields only and does not authorize analytics APIs.`;
-  rerenderSocialSettings();
-}
-function handleHermesExtensionPageMessage(event) {
-  if (event.source !== window) return;
-  const data = event.data || {};
-  if (data.protocol !== HERMES_EXTENSION_PROTOCOL) return;
-  if (data.type === "PF_HERMES_EXTENSION_READY") {
-    saveHermesExtensionState({
-      detected: true,
-      version: redactHermesVisibleText(data.payload?.version || "", 80),
-      lastSeenAt: new Date().toISOString(),
-    });
-    rerenderSocialSettings();
-    return;
-  }
-  if (data.type === "PF_HERMES_LINK_CURRENT_TAB_RESULT") {
-    applyHermesProfilePacket(data.payload || {});
-  }
-}
-function ensureHermesExtensionListener() {
-  if (hermesExtensionListenerReady || typeof window === "undefined") return;
-  hermesExtensionListenerReady = true;
-  window.addEventListener("message", handleHermesExtensionPageMessage);
-  setTimeout(() => requestHermesExtensionPing(), 300);
-}
-function requestHermesExtensionPing() {
-  if (typeof window === "undefined") return;
-  window.postMessage({
-    protocol: HERMES_EXTENSION_PROTOCOL,
-    type: "PF_HERMES_EXTENSION_PING",
-    requestedAt: new Date().toISOString(),
-    forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
-  }, window.location.origin);
-}
-function requestHermesExtensionProfileLink(targetPlatform = "", options = {}) {
-  if (typeof window === "undefined") return;
-  if (!options.quiet) {
-    socialNotice = `${socialAccountName(targetPlatform)} sign-in requested. PhantomForce will link it from the browser bridge using public profile fields only.`;
-  }
-  saveHermesExtensionState({ pendingPlatform: targetPlatform || "", lastLinkRequestedAt: new Date().toISOString() });
-  window.postMessage({
-    protocol: HERMES_EXTENSION_PROTOCOL,
-    type: "PF_HERMES_LINK_CURRENT_TAB_REQUEST",
-    requestedAt: new Date().toISOString(),
-    userConfirmed: true,
-    preferredPlatform: targetPlatform || "",
-    allowedFields: ["platform", "handle", "url", "displayName", "pageTitle"],
-    forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
-  }, window.location.origin);
-  if (!options.quiet) rerenderSocialSettings();
-}
-function startSocialBridgePolling(targetPlatform = "") {
-  if (typeof window === "undefined" || !targetPlatform) return;
-  if (socialBridgePollTimer) clearInterval(socialBridgePollTimer);
-  let attempts = 0;
-  const tick = () => {
-    attempts += 1;
-    requestHermesExtensionProfileLink(targetPlatform, { quiet: true });
-    if (attempts >= 24 && socialBridgePollTimer) {
-      clearInterval(socialBridgePollTimer);
-      socialBridgePollTimer = 0;
-    }
-  };
-  setTimeout(tick, 900);
-  socialBridgePollTimer = setInterval(tick, 2500);
-}
-
-function socialProviderSetupPanel(esc) {
-  if (!canManageSocialProviderApps()) return "";
-  if (socialOAuthSetupState.loading && !socialOAuthSetupState.setup) {
-    return `<section class="set-social-provider-setup"><div><span>Provider apps</span><h4>Checking secure sign-in setup…</h4></div></section>`;
-  }
-  const providers = (socialOAuthSetupState.setup?.providers || []).filter((provider) => !provider.oauthConfigured);
-  if (!providers.length) return "";
-  return `<section class="set-social-provider-setup" data-social-provider-setup>
-    <header>
-      <div><span>One-time owner setup</span><h4>Enable secure social sign-in</h4><p>Add each provider app once. Secrets stay on the server and are never returned to this page.</p></div>
-      <b>${providers.length} provider${providers.length === 1 ? "" : "s"} to configure</b>
-    </header>
-    ${socialOAuthSetupState.error ? `<div class="set-social-notice">${esc(socialOAuthSetupState.error)}</div>` : ""}
-    <div class="set-social-provider-grid">
-      ${providers.map((provider) => `<form class="set-social-provider-card" data-social-provider-form>
-        <input type="hidden" name="platform" value="${esc(provider.id)}" />
-        <div class="set-social-provider-head"><span>${esc(provider.name)}</span><a href="${esc(provider.consoleUrl)}" target="_blank" rel="noopener noreferrer">Open provider console ↗</a></div>
-        <label><span>${esc(provider.idLabel)}</span><input name="clientId" type="text" autocomplete="off" placeholder="Paste ${esc(provider.idLabel)}" /></label>
-        <label><span>${esc(provider.secretLabel)}</span><input name="clientSecret" type="password" autocomplete="new-password" placeholder="Paste ${esc(provider.secretLabel)}" /></label>
-        <label><span>Authorized callback URL</span><input name="redirectUri" type="url" value="${esc(provider.callbackUrl || socialOAuthSetupState.setup?.recommendedRedirectUri || "")}" readonly /></label>
-        <button class="btn btn-primary" type="submit">Save &amp; enable ${esc(provider.name)}</button>
-      </form>`).join("")}
-    </div>
-  </section>`;
+  const user = accessSession.get?.();
+  return Boolean(user?.canManageAccess || user?.isSuperAdmin);
 }
 
 export function renderSocialSettings(el, opts = {}) {
-  socialSettingsMount = el;
-  socialSettingsOpts = opts;
-  ensureHermesExtensionListener();
-  ensureSocialOAuthCompletionListener();
-  if (!socialOAuthState.loaded && !socialOAuthState.loading) void refreshSocialOAuthStatus();
-  if (canManageSocialProviderApps() && !socialOAuthSetupState.loaded && !socialOAuthSetupState.loading) void refreshSocialOAuthSetup();
-  const esc = opts.esc || ((s) => String(s));
-  const socialAccounts = loadSocialAccounts();
-  const oauthReadyCount = socialOAuthState.connectors.filter((connector) => connector.oauthConfigured).length;
-  const authorizedCount = socialOAuthState.connectors.filter((connector) => connector.configured).length;
-  el.innerHTML = `
-    <div class="settings">
-      <div class="set-section set-social-section">
-        <div class="set-sec-head">
-          <div>
-            <h3>Connect accounts</h3>
-            <p class="set-note">Choose Connect, sign in, and approve. PhantomForce handles the secure provider handoff, account protection, and connection health.</p>
-          </div>
-          <span class="set-safe-pill">${authorizedCount}/${socialAccounts.length} live · ${oauthReadyCount}/${socialAccounts.length} ready</span>
-        </div>
-        ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
-        ${socialOAuthState.error ? `<div class="set-social-notice">Connection check: ${esc(socialOAuthState.error)}</div>` : ""}
-        ${socialOAuthManagedPanel(esc)}
-        ${socialProviderSetupPanel(esc)}
-        <div class="set-social-grid">
-          ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
-        </div>
-      </div>
-    </div>`;
-  el.querySelectorAll("[data-social-provider-form]").forEach((form) => form.onsubmit = async (event) => {
-    event.preventDefault();
-    const button = form.querySelector("button[type='submit']");
-    if (button) button.disabled = true;
+  mounted?.destroy();
+  const tenantId = currentTenantId(), scope = scopeKey(), owner = canManageSocialProviderApps();
+  const requests = new Set();
+  const state = { loaded: false, loading: false, canManage: false, error: "", notice: "", connectors: [], selections: [], setup: null, setupError: "", setupOpen: "", busy: "", pending: "", handoff: null, confirmDisconnect: "" };
+  let disposed = false, poll = null, pollDeadline = 0, statusRequest = null, pendingRevision = "";
+  const active = () => !disposed && mounted === controller && el.isConnected && scope === scopeKey();
+  const controller = { refresh: refreshSocialOAuthStatus, destroy() {
+    disposed = true;
+    if (poll) clearTimeout(poll);
+    requests.forEach(request => request.abort());
+    window.removeEventListener("message", onMessage);
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener("focus", onReturn);
+    window.removeEventListener("pf:business-switch-start", controller.destroy);
+  } };
+  mounted = controller;
+
+  async function api(path, body, scoped = true) {
+    if (!active()) throw new Error("The business changed. Reopen Social accounts.");
+    const abort = new AbortController(); requests.add(abort);
+    const timeout = setTimeout(() => abort.abort(), 20000);
+    const token = accessSession.token?.(), sessionId = accessSession.get?.()?.sessionId;
     try {
-      await saveSocialOAuthSetup(form);
-      socialNotice = `${socialAccountName(new FormData(form).get("platform"))} provider app enabled. You can now connect the account.`;
-    } catch (error) {
-      socialNotice = error?.message || "Provider setup could not be saved.";
-    }
-    renderSocialSettings(el, opts);
-  });
-  const quickConnect = el.querySelector("[data-social-quick-connect]");
-  if (quickConnect) quickConnect.onclick = async () => {
-    quickConnect.disabled = true;
-    let readyAccounts = socialAccounts.filter((account) => {
-      const connector = socialConnectorFor(account.id);
-      return connector?.oauthConfigured && !connector.configured;
+      const response = await fetch(path, { method: body ? "POST" : "GET", signal: abort.signal,
+        headers: { "x-phantomforce-business": tenantId, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(sessionId ? { "x-phantomforce-session": sessionId } : {}), ...(body ? { "Content-Type": "application/json" } : {}) },
+        ...(body ? { body: JSON.stringify({ ...body, ...(scoped ? { tenant_id: tenantId } : {}) }) } : {}) });
+      const json = await response.json().catch(() => ({}));
+      if (!active()) throw new Error("The business changed. Reopen Social accounts.");
+      if (scoped && json.tenant_id && json.tenant_id !== tenantId) throw new Error("The connection response belongs to another business.");
+      if (!response.ok || json.ok === false) throw new Error(typeof json.error === "string" ? json.error : `The connection could not be updated (${response.status}).`);
+      if (scoped && json.tenant_id !== tenantId) throw new Error("The connection scope could not be verified. Refresh and try again.");
+      return json;
+    } finally { clearTimeout(timeout); requests.delete(abort); }
+  }
+
+  async function refreshSocialOAuthStatus() {
+    if (!active()) return;
+    if (statusRequest) return statusRequest;
+    state.loading = true; state.error = ""; paint();
+    statusRequest = (async () => {
+      try {
+        const json = await api(`/phantom-ai/ops/social-analytics/status?tenant_id=${encodeURIComponent(tenantId)}`);
+        if (!active()) return;
+        state.connectors = socialConnectorsFromResponse(json);
+        state.canManage = json.can_manage_accounts === true;
+        state.selections = Array.isArray(json.asset_selections) ? json.asset_selections : [];
+        state.loaded = true;
+        const connected = state.connectors.find(item => item.id === state.pending && item.configured && !item.authorizationPending && item.connectionUpdatedAt && item.connectionUpdatedAt !== pendingRevision);
+        const selection = state.selections.find(item => item.platform === state.pending);
+        if (connected || selection) {
+          state.notice = selection ? "Choose the account to use for this business." : `${connected.name} connected.`;
+          state.pending = ""; state.handoff = null;
+          if (poll) clearTimeout(poll);
+        }
+      } catch (error) {
+        if (!active()) return;
+        state.connectors = []; state.selections = []; state.loaded = false;
+        state.error = error.name === "AbortError" ? "Connection check timed out. Try again." : error.message;
+      } finally { statusRequest = null; if (active()) { state.loading = false; paint(); } }
+    })();
+    return statusRequest;
+  }
+
+  async function refreshSetup() {
+    if (!owner || !active()) return;
+    try { const json = await api("/phantom-ai/ops/social-oauth/setup", null, false); if (active()) { state.setup = json.setup; state.setupError = ""; } }
+    catch (error) { if (active()) state.setupError = error.message; }
+    if (active()) paint();
+  }
+  function schedulePoll() {
+    if (poll) clearTimeout(poll);
+    if (!active() || !state.pending) return;
+    if (Date.now() > pollDeadline) { state.notice = "Sign-in is still pending. Finish provider approval, then refresh."; paint(); return; }
+    poll = setTimeout(async () => { await refreshSocialOAuthStatus(); schedulePoll(); }, 3000);
+  }
+  async function requestSocialOAuthStart(account) {
+    if (!state.canManage) return;
+    let popup = null;
+    try { popup = window.open("about:blank", `phantomforce-social-${account.id}`, "popup,width=760,height=800"); } catch {}
+    pendingRevision = state.connectors.find(item => item.id === account.id)?.connectionUpdatedAt || "";
+    try { if (popup) { popup.document.title = `Connect ${account.name}`; popup.document.body.textContent = "Opening secure sign-in…"; } } catch {}
+    state.busy = account.id; state.error = ""; state.notice = ""; paint();
+    try {
+      const json = await api("/phantom-ai/ops/social-oauth/start", { platform: account.id });
+      if (!json?.oauth?.authorizationUrl) throw new Error("The provider did not return a sign-in link.");
+      const authorization = new URL(json.oauth.authorizationUrl);
+      if (authorization.protocol !== "https:" || !providerHosts.has(authorization.hostname)) throw new Error("The provider sign-in address could not be verified.");
+      state.pending = account.id; state.handoff = { id: account.id, url: authorization.href };
+      let opened = false;
+      try { if (popup && !popup.closed) { popup.opener = null; popup.location.href = authorization.href; opened = true; } } catch {}
+      state.notice = opened ? `Finish ${account.name} sign-in in the opened window. This page will update automatically.` : "Your browser blocked the sign-in window. Use Continue sign-in below.";
+      pollDeadline = Date.now() + 10 * 60_000; schedulePoll();
+    } catch (error) { try { popup?.close(); } catch {} if (active()) state.error = error.message; }
+    finally { if (active()) { state.busy = ""; paint(); } }
+  }
+  async function mutate(platform, path, body, notice) {
+    if (!state.canManage) return;
+    state.busy = platform; state.error = ""; paint();
+    try {
+      await api(`${API}/${path}`, { platform, ...body });
+      if (!active()) return;
+      state.notice = notice; state.confirmDisconnect = "";
+      if (path === "disconnect") {
+        state.pending = ""; state.handoff = null;
+        const accounts = loadSocialAccounts(), account = accounts.find(row => row.id === platform);
+        if (account) { account.enabled = false; account.connectMode = "manual"; delete account.analytics; delete account.insights; delete account.metrics; }
+        saveSocialAccounts(accounts);
+      }
+      await refreshSocialOAuthStatus();
+    } catch (error) { if (active()) state.error = error.message; }
+    finally { if (active()) { state.busy = ""; paint(); } }
+  }
+  function callback(payload) {
+    if (!active() || payload?.protocol !== "phantomforce.social-oauth.v1" || payload.tenant_id !== tenantId) return;
+    if (["connected", "asset_selection_required"].includes(payload.type)) void refreshSocialOAuthStatus();
+  }
+  function onMessage(event) { if (event.origin === window.location.origin) callback(event.data); }
+  function onStorage(event) { if (event.key === "pf.social.oauth.last") { try { callback(JSON.parse(event.newValue)); } catch {} } }
+  function onReturn() { if (active()) void refreshSocialOAuthStatus(); }
+  window.addEventListener("message", onMessage);
+  window.addEventListener("storage", onStorage);
+  window.addEventListener("focus", onReturn);
+  window.addEventListener("pf:business-switch-start", controller.destroy);
+
+  function providerSetup(account) {
+    if (!owner || state.setupOpen !== account.id) return "";
+    const provider = state.setup?.providers?.find(item => item.id === account.id || (account.id === "facebook" && item.id === "instagram"));
+    if (!provider) return `<p class="social-account-note">${esc(state.setupError || "Checking provider setup…")}</p>`;
+    return `<form class="social-app-form" data-social-provider-form><input type="hidden" name="platform" value="${esc(provider.id)}">
+      <p>Register the provider app once, then each business can sign in separately. Secrets stay on the server and are never returned to this page.</p>
+      <a href="${esc(provider.consoleUrl)}" target="_blank" rel="noopener noreferrer">Open ${esc(provider.name)} app setup ↗</a>
+      <label>${esc(provider.idLabel)}<input name="clientId" required autocomplete="off"></label>
+      <label>${esc(provider.secretLabel)}<input name="clientSecret" type="password" autocomplete="new-password" required></label>
+      <label>Authorized callback URL<input name="redirectUri" type="url" readonly value="${esc(provider.callbackUrl || state.setup.recommendedRedirectUri)}"></label>
+      <button class="btn btn-primary" type="submit" ${state.busy ? "disabled" : ""}>Save provider app</button></form>`;
+  }
+  function card(account) {
+    const connector = state.connectors.find(item => item.id === account.id), selection = state.selections.find(item => item.platform === account.id);
+    const connected = Boolean(connector?.configured), capability = connector?.capabilityStatus;
+    const status = selection ? "Choose account" : state.pending === account.id ? "Waiting for sign-in" : state.loading && !state.loaded ? "Checking…" : state.error && !state.loaded ? "Not verified" : connector?.connectionStatus === "REAUTH_REQUIRED" ? "Reconnect needed" : connected ? (connector.connectionStatus === "LIMITED_PERMISSIONS" ? "Limited permissions" : "Connected") : connector?.oauthConfigured ? "Ready to connect" : "Provider setup required";
+    const identity = connector?.savedConnection?.selectedAssetName || connector?.savedConnection?.accountHandle || connector?.savedConnection?.accountName || "";
+    const analytics = connected && ["FULL", "ANALYTICS_READY"].includes(capability), publishing = connected && ["FULL", "PUBLISH_READY"].includes(capability);
+    const label = connected || connector?.connectionStatus === "REAUTH_REQUIRED" ? `Reconnect ${account.name}` : `Connect ${account.name}`;
+    const hint = account.id === "instagram" ? "Use an Instagram professional account linked to a Facebook Page." : account.id === "facebook" ? "Choose a Facebook Page managed by your account." : account.id === "tiktok" ? "Connects your social profile. TikTok Shop is managed separately in Channels." : "";
+    return `<article class="social-account-card" data-social-card="${esc(account.id)}"><div class="social-account-heading"><span class="social-platform-dot" style="background:${account.color}"></span><h2>${esc(account.name)}</h2><span class="social-account-state ${connected ? "is-connected" : ""}">${esc(status)}</span></div>
+      ${identity && connected ? `<p class="social-account-identity">${esc(identity)}</p>` : ""}
+      ${connected ? `<div class="social-capabilities"><span>${analytics ? "Analytics authorized" : "Analytics permission needed"}</span><span>${publishing ? "Publishing permission granted" : "Publishing permission needed"}</span></div><p class="social-account-note">Publishing also requires a configured delivery service and approval.</p>` : `<p class="social-account-note">${esc(connector?.oauthConfigured ? "OAuth app ready. Click connect and approve once." : owner ? "Enable the provider app below to open secure sign-in." : "The platform owner must enable this provider before you can sign in.")}</p>`}
+      ${state.loaded && !state.canManage ? '<p class="social-account-note">A business administrator must manage this connection.</p>' : ""}${hint ? `<p class="social-account-note">${esc(hint)}</p>` : ""}
+      ${selection && state.canManage ? `<form class="social-selection" data-social-selection="${esc(account.id)}"><label>Account for this business<select name="pageId" required><option value="">Choose an account…</option>${selection.pages.map(page => `<option value="${esc(page.id)}">${esc(page.name)}${page.instagramUsername ? ` · @${esc(page.instagramUsername)}` : ""}</option>`).join("")}</select></label><button class="btn btn-primary" ${state.busy ? "disabled" : ""}>Use this account</button></form>` : ""}
+      <div class="social-account-actions">${connector?.oauthConfigured ? `<button class="btn btn-primary" data-social-open="${esc(account.id)}" ${state.busy || !state.loaded || !state.canManage ? "disabled" : ""}>${esc(label)}</button>` : owner ? `<button class="btn" data-social-setup="${esc(account.id)}" ${state.loading && !state.loaded ? "disabled" : ""}>${state.setupOpen === account.id ? "Close setup" : "Set up provider"}</button>` : '<span class="social-account-note">Provider not available yet</span>'}${state.canManage && (connected || selection) ? `<button class="btn btn-quiet" data-social-disconnect="${esc(account.id)}" ${state.busy ? "disabled" : ""}>Disconnect</button>` : ""}</div>
+      ${state.handoff?.id === account.id ? `<a class="social-continue" href="${esc(state.handoff.url)}" target="_blank" rel="noopener noreferrer">Continue sign-in ↗</a>` : ""}
+      ${state.confirmDisconnect === account.id ? `<div class="social-disconnect-confirm"><p>Remove this connection from this business? Your posts and other businesses stay unchanged.</p><button class="btn" data-confirm-disconnect="${esc(account.id)}">Disconnect account</button><button class="btn btn-quiet" data-cancel-disconnect>Keep connected</button></div>` : ""}
+      ${providerSetup(account)}
+      <details class="social-profile-reference"><summary>Public profile reference</summary><form data-social-confirm-form="${esc(account.id)}"><label>Editable handle or profile URL<input name="handle" placeholder="@yourbusiness or https://…" value="${esc(account.enabled || account.lastConnectAt ? account.handle || account.url || "" : "")}"></label><button class="btn" type="submit">Save handle</button></form><p>Saving a reference does not connect an account.</p></details></article>`;
+  }
+  function paint() {
+    if (!active()) return;
+    const accounts = loadSocialAccounts(), connected = state.connectors.filter(item => item.configured).length, heading = opts.standalone ? "h1" : "h3";
+    el.innerHTML = `<section class="social-accounts" aria-busy="${state.loading}"><header class="social-accounts-heading"><div><${heading}>Social accounts</${heading}><span>${state.loaded ? `${connected} connected` : state.error ? "Connection check failed" : "Checking connections"}</span></div><button class="btn" data-social-refresh ${state.loading ? "disabled" : ""}>${state.loading ? "Checking…" : "Refresh"}</button></header>${state.error ? `<p class="social-account-alert" role="alert">${esc(state.error)}</p>` : ""}${state.notice ? `<p class="social-account-notice" role="status">${esc(state.notice)}</p>` : ""}<div class="social-accounts-grid">${accounts.map(card).join("")}</div></section>`;
+    el.querySelector("[data-social-refresh]")?.addEventListener("click", () => { void refreshSocialOAuthStatus(); void refreshSetup(); });
+    el.querySelectorAll("[data-social-open]").forEach(button => button.onclick = () => { const account = accounts.find(item => item.id === button.dataset.socialOpen); if (account && active()) void requestSocialOAuthStart(account); });
+    el.querySelectorAll("[data-social-setup]").forEach(button => button.onclick = () => { state.setupOpen = state.setupOpen === button.dataset.socialSetup ? "" : button.dataset.socialSetup; paint(); void refreshSetup(); });
+    el.querySelectorAll("[data-social-selection]").forEach(form => form.onsubmit = event => { event.preventDefault(); const platform = form.dataset.socialSelection, selection = state.selections.find(item => item.platform === platform); if (selection) void mutate(platform, "select-asset", { selectionId: selection.selectionId, pageId: new FormData(form).get("pageId") }, "Account selected."); });
+    el.querySelectorAll("[data-social-disconnect]").forEach(button => button.onclick = () => { state.confirmDisconnect = button.dataset.socialDisconnect; paint(); });
+    el.querySelectorAll("[data-confirm-disconnect]").forEach(button => button.onclick = () => void mutate(button.dataset.confirmDisconnect, "disconnect", {}, "Connection removed from this business."));
+    el.querySelector("[data-cancel-disconnect]")?.addEventListener("click", () => { state.confirmDisconnect = ""; paint(); });
+    el.querySelectorAll("[data-social-provider-form]").forEach(form => form.onsubmit = async event => {
+      event.preventDefault(); if (!owner || !active()) return;
+      const data = new FormData(form), platform = String(data.get("platform"));
+      state.busy = platform; state.error = ""; form.querySelector("button[type=submit]").disabled = true;
+      try {
+        const json = await api(`${API}/setup`, Object.fromEntries(data), false);
+        if (!active()) return;
+        form.reset(); state.setup = json.setup; state.setupOpen = ""; state.notice = "Provider app saved. Connect the account to verify authorization.";
+        await refreshSocialOAuthStatus();
+      } catch (error) { if (active()) state.error = error.message; }
+      finally { if (active()) { state.busy = ""; paint(); } }
     });
-    if (!readyAccounts.length && !socialOAuthState.loading) {
-      await refreshSocialOAuthStatus({ force: true });
-      readyAccounts = socialAccounts.filter((account) => {
-        const connector = socialConnectorFor(account.id);
-        return connector?.oauthConfigured && !connector.configured;
-      });
-    }
-    if (!readyAccounts.length) {
-      const missingSetup = socialAccounts.some((account) => !socialConnectorFor(account.id)?.oauthConfigured);
-      socialNotice = missingSetup
-        ? (canManageSocialProviderApps() ? "Set up a provider app below before connecting its account." : "An owner must enable a provider app before this account can connect.")
-        : "Every listed account is already connected.";
-      renderSocialSettings(el, opts);
-      return;
-    }
-    const popups = readyAccounts.map((account) => ({ account, popup: openSocialAuthWindow(account.name) }));
-    const blocked = popups.filter((item) => !item.popup).length;
-    let opened = 0;
-    for (const item of popups) {
-      try {
-        const result = await beginSocialAccountConnection(item.account, item.popup);
-        if (result.opened) opened += 1;
-      } catch (error) {
-        item.account.connectMode = item.account.handle ? "manual-confirmed" : "manual";
-      }
-    }
-    saveSocialAccounts(socialAccounts);
-    socialNotice = opened
-      ? `Quick connect opened ${opened} secure sign-in ${opened === 1 ? "window" : "windows"}.${blocked ? ` ${blocked} popup ${blocked === 1 ? "was" : "were"} blocked by the browser.` : ""}`
-      : "No secure sign-in window opened. Allow popups and try again.";
-    renderSocialSettings(el, opts);
-  };
-
-  // social account linking stays local and never reads browser cookies/tokens.
-  // OAuth/API tokens must stay server-side; this UI only captures editable public identity.
-  el.querySelectorAll("[data-social-card]").forEach((card) => {
-    const id = card.dataset.socialCard;
-    const account = socialAccounts.find((row) => row.id === id);
-    if (!account) return;
-    const saveAndRender = () => { saveSocialAccounts(socialAccounts); renderSocialSettings(el, opts); };
-    const clear = card.querySelector("[data-social-clear]");
-    if (clear) clear.onclick = () => {
-      account.handle = ""; account.url = ""; account.loginIdentity = ""; account.enabled = false; account.connectMode = "manual"; account.lastConnectAt = "";
-      delete account.analytics;
-      delete account.insights;
-      delete account.metrics;
-      delete account.hermesProof;
-      socialNotice = `${account.name} link cleared locally. No remote account was changed.`;
-      saveAndRender();
-    };
-    const open = card.querySelector("[data-social-open]");
-    if (open) open.onclick = async () => {
-      open.disabled = true;
-      const popup = openSocialAuthWindow(account.name);
-      try {
-        await beginSocialAccountConnection(account, popup);
-      } catch (error) {
-        try { popup?.close(); } catch {}
-        account.connectMode = account.handle ? "manual-confirmed" : "manual";
-        socialNotice = error?.message || `${account.name} sign-in could not start. No connection was claimed.`;
-      }
-      saveAndRender();
-    };
-    const setup = card.querySelector("[data-social-setup]");
-    if (setup) setup.onclick = () => {
-      if (!canManageSocialProviderApps()) {
-        socialNotice = "An organization owner must enable this provider app before account authorization can start.";
-        renderSocialSettings(el, opts);
-        return;
-      }
-      el.querySelector("[data-social-provider-setup]")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    };
-    const confirmForm = card.querySelector("[data-social-confirm-form]");
-    if (confirmForm) confirmForm.onsubmit = (event) => {
-      event.preventDefault();
-      const input = confirmForm.querySelector("[data-social-confirm-input]");
-      const value = input?.value.trim();
-      if (!value) return;
-      account.handle = cleanSocialHandle(value);
-      account.url = normalizeSocialUrl(value) || socialProfileFromHandle(account.id, account.handle);
-      account.enabled = true;
-      account.connectMode = "manual-confirmed";
-      account.lastConnectAt = new Date().toISOString();
-      delete account.hermesProof;
-      if (socialBridgePollTimer) { clearInterval(socialBridgePollTimer); socialBridgePollTimer = 0; }
-      socialNotice = `${account.name} handle saved as a public reference. Choose Connect for live data and approved publishing.`;
-      saveAndRender();
-    };
-  });
-
-}
-
-function socialOAuthManagedPanel(esc) {
-  const readyCount = socialOAuthState.connectors.filter((connector) => connector.oauthConfigured).length;
-  const authorizedCount = socialOAuthState.connectors.filter((connector) => connector.configured).length;
-  const totalCount = socialOAuthState.connectors.length || PLATFORMS.length;
-  const preflight = socialOAuthState.preflight || {};
-  const nextLabel = authorizedCount ? "Sync live feed" : "Connect accounts";
-  const nextDetail = authorizedCount || preflight.nextGlobalAction === "sync_live_feed"
-    ? "Authorized accounts can now pull official metrics."
-    : readyCount || preflight.nextGlobalAction === "connect_signed_in_account"
-      ? "Use the browser account you are already signed into; PhantomForce stores the resulting token server-side."
-      : canManageSocialProviderApps()
-        ? "Enable each provider app below, then connect the signed-in account."
-        : "An organization owner must enable the provider app before account authorization can start.";
-  return `<div class="set-social-command">
-    <div>
-      <span>Account sign-in</span>
-      <b>${esc(String(authorizedCount))}/${esc(String(totalCount))} live connections</b>
-      <p>${esc(nextLabel)} · ${esc(nextDetail)}</p>
-    </div>
-    <button class="set-social-bolt" data-social-quick-connect type="button" title="Connect every unconnected account">
-      ${svgIc("spark")}
-      <span>Quick connect</span>
-    </button>
-  </div>`;
-}
-
-function socialCard(account, esc) {
-  const status = socialStatus(account);
-  const connector = socialConnectorFor(account.id);
-  const profile = socialProfileTarget(account);
-  const lastConnect = connector?.configured
-    ? `Authorized account: ${connector.savedConnection?.accountHandle || connector.savedConnection?.accountName || connector.handle || account.name}`
-    : connector?.oauthConfigured
-      ? "OAuth app ready. Click connect and approve once."
-      : status === "linked"
-    ? (profile ? `Public handle saved: ${profile}` : "Public handle saved")
-  : status === "pending"
-      ? "Sign-in page opened. Save the visible handle below."
-      : account.handle
-        ? `Public handle ready: ${account.handle}`
-        : "Choose Connect to continue";
-  const providerUnavailableCopy = canManageSocialProviderApps() ? "Provider setup required" : "Owner setup required";
-  const oauthDetail = connector
-    ? `<div class="set-social-hermes-proof">${svgIc(connector.configured ? "check" : connector.oauthConfigured ? "lock" : "spark")} ${esc(connector.configured ? "Connected" : connector.oauthConfigured ? "Ready to connect" : providerUnavailableCopy)}</div>`
-    : socialOAuthState.loading ? `<div class="set-social-hermes-proof">${svgIc("refresh")} Checking…</div>` : "";
-  const targetHint = account.id === "facebook"
-    ? `<div class="set-social-hermes-proof">${svgIc("lock")} Facebook connects to a selected Page, not your personal profile. Reconnect to choose a different Page in Meta.</div>`
-    : account.id === "instagram"
-      ? `<div class="set-social-hermes-proof">${svgIc("lock")} Instagram connects through the Meta Page's business account. Select the matching Page during Meta authorization.</div>`
-      : "";
-  const hermesProof = account.hermesProof
-    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Handle saved — not connected · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
-    : "";
-  return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
-    <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
-    <div class="set-social-top">
-      <span class="set-social-dot" style="background:${account.color}"></span>
-      <span><b>${esc(account.name)}</b><i>${esc(socialStatusLabel(account))}</i></span>
-    </div>
-    <div class="set-social-connect-state">
-      <span>Analytics status</span>
-      <b>${esc(socialPostingState(account))}</b>
-    </div>
-    ${oauthDetail}
-    ${targetHint}
-    ${hermesProof}
-    <div class="set-social-actions">
-      ${connector?.oauthConfigured
-        ? `<button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>`
-        : `<button class="set-social-open set-social-action set-social-signin" data-social-setup type="button">${esc(socialActionLabel(account))}</button>`}
-      <span>${esc(lastConnect)}</span>
-    </div>
-    <form class="set-social-confirm" data-social-confirm-form>
-      <label>Editable handle or profile URL</label>
-      <div class="set-social-confirm-row">
-        <input type="text" data-social-confirm-input placeholder="@officialchicagoshots or https://..." value="${esc(account.handle || account.url || "officialchicagoshots")}"/>
-        <button class="btn btn-primary" type="submit">Save handle</button>
-      </div>
-    </form>
-  </article>`;
-}
-
-function svgIc(k) {
-  const P = {
-    image: `<rect x="2.5" y="4" width="11" height="8" rx="1.5"/><path d="M7 6.5l3 1.5-3 1.5z"/>`,
-    film: `<rect x="2.5" y="4" width="11" height="8" rx="1"/><path d="M2.5 6.5h11M5.5 4v8M10.5 4v8"/>`,
-    spark: `<path d="M8 2.6l1.4 3.4 3.6.3-2.7 2.4.8 3.5L8 10.8 4.9 12.6l.8-3.5L3 6.7l3.6-.3z"/>`,
-    bolt: `<path d="M8.5 2L4 9h3l-.5 5L11 7H8z"/>`,
-    upload: `<path d="M8 10.5V4M5.5 6L8 3.5 10.5 6M3.5 11.5h9"/>`,
-    check: `<circle cx="8" cy="8" r="5.2"/><path d="M6 8l1.5 1.5L10.5 6.5"/>`,
-    edit: `<path d="M11 2.5l2.5 2.5L6 12.5l-3 .5.5-3z"/>`,
-    copy: `<rect x="5" y="5" width="7.5" height="7.5" rx="1.2"/><path d="M3.5 10.5H3a1.2 1.2 0 0 1-1.2-1.2V3A1.2 1.2 0 0 1 3 1.8h6.3A1.2 1.2 0 0 1 10.5 3v.5"/>`,
-    play: `<path d="M5 3.5l7 4.5-7 4.5z"/>`,
-    lock: `<rect x="3.5" y="7" width="9" height="6" rx="1.4"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>`,
-    undo: `<path d="M6 4L3 7l3 3M3 7h6a4 4 0 0 1 0 8H6"/>`,
-    redo: `<path d="M10 4l3 3-3 3M13 7H7a4 4 0 0 0 0 8h3"/>`,
-    refresh: `<path d="M13 5.2A5.3 5.3 0 0 0 4 4.3L3 5.4M3 3.2v2.2h2.2M3 10.8a5.3 5.3 0 0 0 9 1l1-1.2M13 12.8v-2.2h-2.2"/>`,
-    expand: `<path d="M3 6V3h3M13 6V3h-3M3 10v3h3M13 10v3h-3"/>`,
-    collapse: `<path d="M6 3v3H3M10 3v3h3M6 13v-3H3M10 13v-3h3"/>`,
-    hub: `<circle cx="8" cy="3.6" r="1.5"/><circle cx="3.6" cy="11.4" r="1.5"/><circle cx="12.4" cy="11.4" r="1.5"/><path d="M8 5.1v3.4M8 8.5l-3.7 2M8 8.5l3.7 2"/>`,
-    download: `<path d="M8 3v7.5M5.2 8l2.8 2.8L10.8 8M4 13.5h8"/>`,
-    target: `<circle cx="8" cy="8" r="5.3"/><circle cx="8" cy="8" r="1.7"/>`,
-    grid: `<rect x="2.4" y="2.4" width="4.6" height="4.6" rx="1"/><rect x="9" y="2.4" width="4.6" height="4.6" rx="1"/><rect x="2.4" y="9" width="4.6" height="4.6" rx="1"/><rect x="9" y="9" width="4.6" height="4.6" rx="1"/>`,
-    clock: `<circle cx="8" cy="8" r="5.3"/><path d="M8 5.2v3.1l2.1 1.2"/>`,
-    layout: `<rect x="2.4" y="2.4" width="11.2" height="11.2" rx="1.6"/><path d="M2.4 6.6h11.2M6.4 6.6v7"/>`,
-    cpu: `<rect x="5" y="5" width="6" height="6" rx="1"/><path d="M8 2.5v2M8 11.5v2M2.5 8h2M11.5 8h2M5.1 5.1L3.8 3.8M10.9 5.1l1.3-1.3M5.1 10.9l-1.3 1.3M10.9 10.9l1.3 1.3"/>`,
-    gear: `<circle cx="8" cy="8" r="2.2"/><path d="M8 2.8v1.5M8 11.7v1.5M2.8 8h1.5M11.7 8h1.5M4.5 4.5l1.1 1.1M10.4 10.4l1.1 1.1M11.5 4.5l-1.1 1.1M5.6 10.4l-1.1 1.1"/>`,
-    close: `<path d="M4 4l8 8M12 4l-8 8"/>`,
-  };
-  return `<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k] || ""}</svg>`;
+    el.querySelectorAll("[data-social-confirm-form]").forEach(form => form.onsubmit = event => {
+      event.preventDefault(); if (!active()) return;
+      const account = accounts.find(item => item.id === form.dataset.socialConfirmForm), value = String(new FormData(form).get("handle") || "").trim().slice(0, 300);
+      if (!account) return;
+      account.handle = /^https?:\/\//i.test(value) ? "" : value.replace(/^@/, ""); account.url = /^https?:\/\//i.test(value) ? value : "";
+      account.enabled = Boolean(value); account.connectMode = "manual-confirmed"; account.lastConnectAt = new Date().toISOString();
+      saveSocialAccounts(accounts); state.notice = `${account.name} handle saved as a public reference.`; paint();
+    });
+  }
+  paint(); void refreshSocialOAuthStatus(); if (owner) void refreshSetup();
+  return controller;
 }

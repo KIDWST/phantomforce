@@ -3,8 +3,8 @@
    clean printable invoice, and build the rich chat card PhantomBot shows back.
    Nothing here emails a client or charges a card; it only creates records. */
 
-import { createInvoiceOnServer } from "./financeledger.js?v=phantom-live-20261002-236";
-import { esc } from "./workspaces.js?v=phantom-live-20261002-236";
+import { createInvoiceOnServer } from "./financeledger.js?v=phantom-live-20261003-237";
+import { esc } from "./workspaces.js?v=phantom-live-20261003-237";
 
 export function fmtMoneyMinor(minor, currency = "USD") {
   const value = (Number(minor) || 0) / 100;

@@ -9,22 +9,22 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20261002-236";
-import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20261002-236";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20261002-236";
-import { approveAndSubmitContentPublication, fetchContentPublishingStatus, listContentPublications, persistContentPublication } from "./contentpublication.js?v=phantom-live-20261002-236";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20261002-236";
+} from "./imagefilters.js?v=phantom-live-20261003-237";
+import { archiveSyncedAsset, getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, restoreSyncedAsset } from "./mediabackend.js?v=phantom-live-20261003-237";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20261003-237";
+import { approveAndSubmitContentPublication, fetchContentPublishingStatus, listContentPublications, persistContentPublication } from "./contentpublication.js?v=phantom-live-20261003-237";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20261003-237";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20261002-236";
+} from "./content-editor.js?v=phantom-live-20261003-237";
 import {
   currentTenantId, currentWs, ctx, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20261002-236";
-import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20261002-236";
+} from "./store.js?v=phantom-live-20261003-237";
+import { socialConnectorsFromResponse, socialPreflightFromResponse } from "./social-connection-state.js?v=phantom-live-20261003-237";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -119,8 +119,9 @@ const PLANNER_CONNECTORS = [
 ];
 const plannerState = { weekOffset: 0, openConnector: "" };
 function defaultSocialAccounts() {
+  const studio = currentTenantId() === "client-chicagoshots" || store.state.workspaces.find(workspace => workspace.id === currentTenantId())?.businessProfileId === "client-chicagoshots";
   return PLATFORMS.map((p) => ({
-    id: p.id, name: p.name, color: p.color, handle: p.handle, url: "", loginIdentity: "",
+    id: p.id, name: p.name, color: p.color, handle: studio ? p.handle : "", url: "", loginIdentity: "",
     enabled: false, connectMode: "manual", officialConnectState: "not_configured", lastConnectAt: "",
   }));
 }
@@ -3713,7 +3714,7 @@ const analyticsOAuthSetupState = {
 };
 function analyticsAuthHeaders(extra = {}) {
   const token = typeof session?.token === "function" ? session.token() : "";
-  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  return { ...extra, "x-phantomforce-business": analyticsTenantId(), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 function analyticsTenantId() {
   try { return currentTenantId(); } catch { return currentWs(); }
@@ -3724,6 +3725,7 @@ function withAnalyticsTenant(path) {
   return `${path}${path.includes("?") ? "&" : "?"}tenant_id=${encodeURIComponent(tenant)}`;
 }
 async function analyticsApi(path, { method = "GET", body } = {}) {
+  const tenant = analyticsTenantId(), identity = session.token?.();
   const requestBody = body && typeof body === "object" && method !== "GET"
     ? { tenant_id: analyticsTenantId(), ...body }
     : body;
@@ -3733,6 +3735,8 @@ async function analyticsApi(path, { method = "GET", body } = {}) {
     body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
   });
   const json = await response.json().catch(() => ({}));
+  if (tenant !== analyticsTenantId() || identity !== session.token?.()) throw new Error("The business changed. Refresh analytics.");
+  if (json.tenant_id && json.tenant_id !== tenant) throw new Error("The analytics response belongs to another business.");
   if (!response.ok) {
     if (response.status === 401) throw new Error("Sign in to check your live social connections.");
     if (response.status === 403) throw new Error("Only a business owner or admin can manage live social connections.");
@@ -3972,77 +3976,14 @@ let analyticsNotice = "";
 let analyticsMount = null;
 let analyticsOpts = {};
 let socialOAuthListenerReady = false;
-let analyticsOAuthPollTimer = 0;
-
-async function refreshAnalyticsConnectorStatus() {
-  const response = await analyticsApi(withAnalyticsTenant("/phantom-ai/ops/social-analytics/status"));
-  analyticsConnectorState.connectors = socialConnectorsFromResponse(response);
-  analyticsConnectorState.preflight = socialPreflightFromResponse(response, analyticsConnectorState.connectors);
-  analyticsConnectorState.loaded = true;
-  syncAccountsFromConnectors();
-  return analyticsConnectorState.connectors;
-}
-
-function stopAnalyticsOAuthPolling() {
-  if (analyticsOAuthPollTimer) clearInterval(analyticsOAuthPollTimer);
-  analyticsOAuthPollTimer = 0;
-}
-
-function markAnalyticsOAuthConnected(platform, connectedAt = "") {
-  const accounts = loadSocialAccounts();
-  const account = accounts.find((row) => row.id === platform);
-  if (!account) return accounts;
-  account.enabled = true;
-  account.connectMode = "oauth-connected";
-  account.officialConnectState = "connected";
-  account.lastConnectAt = connectedAt || new Date().toISOString();
-  saveSocialAccounts(accounts);
-  return accounts;
-}
-
-function startAnalyticsOAuthPolling(platform = "") {
-  if (typeof window === "undefined" || !platform) return;
-  stopAnalyticsOAuthPolling();
-  let attempts = 0;
-  const tick = async () => {
-    attempts += 1;
-    if (!analyticsMount?.isConnected || attempts > 45) {
-      stopAnalyticsOAuthPolling();
-      return;
-    }
-    try {
-      await refreshAnalyticsConnectorStatus();
-      const connector = connectorStatus(platform);
-      if (connector?.configured) {
-        const accounts = markAnalyticsOAuthConnected(platform);
-        analyticsNotice = `${connector.name || platform} connected. Syncing live analytics…`;
-        stopAnalyticsOAuthPolling();
-        await refreshLiveAnalytics(analyticsMount, accounts, analyticsOpts, { force: true, platform });
-      } else if (attempts === 45) {
-        analyticsNotice = `${connector?.name || platform} sign-in is still pending. Finish the provider approval, then tap Sync live feed.`;
-        renderAnalytics(analyticsMount, analyticsOpts, { skipAutoRefresh: true });
-      }
-    } catch (error) {
-      if (attempts >= 4) {
-        analyticsConnectorState.error = error?.message || "Live social connection check failed.";
-        renderAnalytics(analyticsMount, analyticsOpts, { skipAutoRefresh: true });
-      }
-    }
-  };
-  setTimeout(tick, 1400);
-  analyticsOAuthPollTimer = setInterval(tick, 3500);
-}
-
-function handleSocialOAuthComplete(payload = {}) {
+async function handleSocialOAuthComplete(payload = {}) {
+  if (payload.tenant_id !== analyticsTenantId() || !analyticsMount?.isConnected) return;
   const platform = String(payload.platform || "").toLowerCase();
   if (!platform) return;
-  stopAnalyticsOAuthPolling();
-  markAnalyticsOAuthConnected(platform, payload.connectedAt);
-  analyticsNotice = `${connectorStatus(platform)?.name || platform} connected. Syncing live analytics…`;
+  // A popup is only a refresh signal. Verified server status owns connection state.
   analyticsConnectorState.loaded = false;
-  if (!analyticsMount?.isConnected) return;
   const accounts = loadSocialAccounts();
-  void refreshLiveAnalytics(analyticsMount, accounts, analyticsOpts, { force: true, platform });
+  await refreshLiveAnalytics(analyticsMount, accounts, analyticsOpts, { force: true, platform });
 }
 function parseSocialOAuthPayload(value) {
   if (!value) return null;
@@ -4053,6 +3994,7 @@ function ensureSocialOAuthListener() {
   if (socialOAuthListenerReady || typeof window === "undefined") return;
   socialOAuthListenerReady = true;
   window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin) return;
     const data = parseSocialOAuthPayload(event.data);
     if (data?.protocol === "phantomforce.social-oauth.v1" && data.type === "connected") handleSocialOAuthComplete(data);
   });
@@ -4147,7 +4089,7 @@ function analyticsReadinessCopy({ hasLiveMetrics, configuredCount, oauthReadyCou
     tone: "setup",
     title: "Social providers need one-time setup.",
     body: canManageSocialOAuthApps()
-      ? "Configure each provider app once in Connection Settings. Account sign-in will open here as soon as that setup is saved."
+      ? "Configure each provider app once in Connection Settings. Then authorize the account in Social accounts."
       : "A workspace owner must configure the provider apps before account sign-in can open.",
     action: `<button class="btn btn-primary" type="button" data-an-provider-setup>${canManageSocialOAuthApps() ? "Configure providers" : "Open connection settings"}</button>`,
   };
@@ -4172,74 +4114,11 @@ function wireAnalyticsActions(el, accounts, opts) {
     analyticsNotice = `Syncing ${button.dataset.anSync}…`;
     await refreshLiveAnalytics(el, accounts, opts, { force: true, platform: button.dataset.anSync });
   });
-  el.querySelectorAll("[data-an-provider-setup]").forEach((button) => button.onclick = () => {
-    localStorage.setItem("pf.settings.tab.v1", "media");
-    opts.openWorkspace?.("settings");
-  });
-  el.querySelectorAll("[data-an-oauth]").forEach((button) => button.onclick = async () => {
-    const platform = button.dataset.anOauth;
-    button.disabled = true;
-    analyticsNotice = `Opening ${platform} account connection…`;
-    try {
-      const response = await analyticsApi("/phantom-ai/ops/social-oauth/start", {
-        method: "POST",
-        body: { platform },
-      });
-      const authUrl = response?.oauth?.authorizationUrl || response?.oauth?.url;
-      if (authUrl) {
-        window.open(authUrl, "_blank", "noopener,noreferrer");
-        analyticsNotice = `${connectorStatus(platform)?.name || platform} sign-in opened. Approve it once; PhantomForce will refresh this page when the callback returns.`;
-        startAnalyticsOAuthPolling(platform);
-      } else {
-        analyticsNotice = "The secure account connection could not start.";
-      }
-    } catch (error) {
-      const connector = connectorStatus(platform);
-      analyticsNotice = connector?.oauthConfigured
-        ? (error?.message || "The account connection could not start.")
-        : (error?.message || `${connector?.name || platform} needs one-time provider setup before sign-in can open.`);
-    } finally {
-      renderAnalytics(el, opts);
-    }
-  });
-  el.querySelectorAll("[data-an-connect-all]").forEach((button) => button.onclick = async () => {
-    const targets = analyticsConnectorState.connectors.filter((connector) => connector.oauthConfigured && !connector.configured);
-    if (!targets.length) {
-      analyticsNotice = "No unconnected channels are waiting.";
-      renderAnalytics(el, opts, { skipAutoRefresh: true });
-      return;
-    }
-    button.disabled = true;
-    analyticsNotice = `Opening ${targets.length} social sign-in flow${targets.length === 1 ? "" : "s"}…`;
-    const placeholders = targets.map(() => {
-      try { return window.open("about:blank", "_blank"); } catch { return null; }
+  for (const selector of ["[data-an-provider-setup]", "[data-an-oauth]", "[data-an-connect-all]"]) {
+    el.querySelectorAll(selector).forEach(button => button.onclick = () => {
+      window.location.hash = "#page/business-social";
     });
-    let opened = 0;
-    for (const [index, connector] of targets.entries()) {
-      try {
-        const response = await analyticsApi("/phantom-ai/ops/social-oauth/start", {
-          method: "POST",
-          body: { platform: connector.id },
-        });
-        const authUrl = response?.oauth?.authorizationUrl || response?.oauth?.url;
-        if (authUrl) {
-          if (placeholders[index]) placeholders[index].location.href = authUrl;
-          else window.open(authUrl, "_blank", "noopener,noreferrer");
-          opened += 1;
-        } else if (placeholders[index]) {
-          placeholders[index].close();
-        }
-      } catch (error) {
-        if (placeholders[index]) placeholders[index].close();
-        analyticsConnectorState.sync[connector.id] = { state: "error", error: error?.message || "Connection could not start.", syncedAt: "" };
-      }
-    }
-    analyticsNotice = opened
-      ? `${opened} secure sign-in flow${opened === 1 ? "" : "s"} opened.`
-      : "The secure social sign-in windows could not be opened.";
-    if (opened) startAnalyticsOAuthPolling(targets[0]?.id);
-    renderAnalytics(el, opts, { skipAutoRefresh: true });
-  });
+  }
   el.querySelectorAll("[data-an-import]").forEach((input) => input.onchange = async () => {
     const account = accounts.find((row) => row.id === input.dataset.anImport);
     const file = input.files?.[0];

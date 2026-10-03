@@ -49,6 +49,7 @@
     "test:proposal-lifecycle": "npm run test:proposal-lifecycle --workspace @phantomforce/server",
     "test:finance-ledger": "node scripts/test-finance-ledger-ui.mjs && npm run test:finance-ledger --workspace @phantomforce/server",
     "test:social-connect-ui": "node scripts/test-social-connect-ui.mjs",
+    "test:social-accounts": "node scripts/test-social-accounts-flow.mjs && node scripts/test-social-connect-ui.mjs && node scripts/test-social-analytics.mjs && node scripts/test-customer-connections-ui.mjs && npm run test:social-analytics --workspace @phantomforce/server && npm run test:social-oauth-lifecycle --workspace @phantomforce/server && npm run test:customer-connections --workspace @phantomforce/server",
     "test:commerce-order-lifecycle": "npm run test:commerce-order-lifecycle --workspace @phantomforce/server",
     "test:content-asset-storage": "npm run test:content-asset-storage --workspace @phantomforce/server",
     "test:media-generation-lifecycle": "npm run test:media-generation-lifecycle --workspace @phantomforce/server",

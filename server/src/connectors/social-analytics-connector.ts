@@ -11,6 +11,14 @@ import {
   savePendingSocialOAuthState,
   saveStoredSocialConnection,
   socialConnectionStoreStatus,
+  isCurrentSocialAuthorization,
+  savePendingSocialAssetSelection,
+  listPendingSocialAssetSelections,
+  consumePendingSocialAssetSelection,
+  disconnectStoredSocialConnection,
+  socialAuthorizationPending,
+  finishSocialAuthorization,
+  type SocialAssetPage,
 } from "./social-connection-store.js";
 import { ADMIN_PUBLIC_URL } from "../access/public-hosts.js";
 import { buildCustomerSocialStatus, type InternalConnectorRow } from "./social-customer-view.js";
@@ -76,6 +84,8 @@ type SocialAnalyticsConnectorStatusRow = {
   postingRequiresApproval: boolean;
   required: string[];
   savedConnection: ReturnType<typeof redactedConnection>;
+  authorizationPending: boolean;
+  connectionUpdatedAt: string;
   reason: string;
 };
 
@@ -182,7 +192,10 @@ const stored = (platform: SocialAnalyticsPlatform, key: string, workspaceKey = D
   return typeof value === "string" ? text(value) : "";
 };
 const firstStored = (platform: SocialAnalyticsPlatform, workspaceKey: string, ...keys: string[]) => keys.map((key) => stored(platform, key, workspaceKey)).find(Boolean) || "";
-const hasStoredToken = (platform: SocialAnalyticsPlatform, workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => Boolean(stored(platform, "accessToken", workspaceKey));
+const hasStoredToken = (platform: SocialAnalyticsPlatform, workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => {
+  const connection = getStoredSocialConnection(platform, workspaceKey);
+  return Boolean(connection?.accessToken && (!connection.expiresAt || Date.parse(connection.expiresAt) > Date.now()));
+};
 
 const CONNECTORS: ConnectorDefinition[] = [
   {
@@ -231,7 +244,7 @@ const CONNECTORS: ConnectorDefinition[] = [
     oauthRequired: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TikTok read-only analytics scopes"],
     defaultHandle,
     handle: (workspaceKey = DEFAULT_SOCIAL_WORKSPACE) => cleanHandle(workspaceEnv(workspaceKey, "TIKTOK_HANDLE", "SOCIAL_TIKTOK_HANDLE") || firstStored("tiktok", workspaceKey, "accountHandle", "accountName")) || workspaceHandle(workspaceKey),
-    scopes: ["user.info.basic", "video.list", "video.upload", "video.publish"],
+    scopes: ["user.info.basic", "user.info.profile", "user.info.stats", "video.list", "video.upload", "video.publish"],
   },
   {
     id: "x",
@@ -299,6 +312,8 @@ export function getSocialAnalyticsConnectorStatus(workspaceKey = DEFAULT_SOCIAL_
     postingRequiresApproval: true,
     required: connector.required,
     savedConnection: redactedConnection(getStoredSocialConnection(connector.id, scope)),
+    authorizationPending: socialAuthorizationPending(connector.id, scope),
+    connectionUpdatedAt: getStoredSocialConnection(connector.id, scope)?.updatedAt || "",
     reason: connector.configured(scope)
       ? "Ready for official read-only analytics sync."
       : connector.oauthConfigured()
@@ -350,12 +365,14 @@ export function socialProviderRolledOut(platform: SocialAnalyticsPlatform): bool
  */
 export function getCustomerSocialConnectionStatus(workspaceKey = DEFAULT_SOCIAL_WORKSPACE) {
   const scope = safeSocialWorkspaceKey(workspaceKey);
+  const assetSelections = listPendingSocialAssetSelections(scope);
   const rows: InternalConnectorRow[] = CONNECTORS.map((connector) => {
     const connection = getStoredSocialConnection(connector.id, scope);
     const hasToken = Boolean(connection && (connection as { accessToken?: string }).accessToken);
     const scopes = (connection?.scopes || []) as string[];
-    const analyticsReady = hasToken && scopes.some((s) => /read|analytics|insights|basic|profile|list|user\.info/i.test(s));
-    const publishReady = hasToken && scopes.some((s) => /write|upload|publish|manage_posts/i.test(s));
+    const permissions = socialCapabilities(connector.id, scopes);
+    const analyticsReady = hasToken && permissions.analyticsReady;
+    const publishReady = hasToken && permissions.publishReady;
     const requiresAssetSelection = connector.id === "facebook" || connector.id === "instagram" || connector.id === "linkedin" || connector.id === "pinterest";
     const assetSelected = Boolean(connectionTargetId(connector.id, scope));
     // A typed handle that is not backed by a stored token is a public reference only.
@@ -367,6 +384,9 @@ export function getCustomerSocialConnectionStatus(workspaceKey = DEFAULT_SOCIAL_
       live: connector.configured(scope),
       handle: connector.handle(scope),
       typedHandleReference: typedHandle && typedHandle !== defaultHandle ? typedHandle : "",
+      assetSelectionPending: assetSelections.some((selection) => selection.platform === connector.id),
+      authorizationPending: socialAuthorizationPending(connector.id, scope),
+      connectionUpdatedAt: connection?.updatedAt || "",
       savedConnection: hasToken
         ? {
             connected: true,
@@ -388,7 +408,22 @@ export function getCustomerSocialConnectionStatus(workspaceKey = DEFAULT_SOCIAL_
         : null,
     };
   });
-  return buildCustomerSocialStatus(rows);
+  return { ...buildCustomerSocialStatus(rows), asset_selections: assetSelections };
+}
+
+function socialCapabilities(platform: SocialAnalyticsPlatform, scopes: string[]) {
+  const granted = new Set(scopes.map((scope) => scope.replace(/^https:\/\/www.googleapis.com\/auth\//, "")));
+  const all = (...required: string[]) => required.every((scope) => granted.has(scope));
+  const requirements = {
+    youtube: { analyticsReady: all("youtube.readonly"), publishReady: all("youtube.upload") },
+    instagram: { analyticsReady: all("instagram_basic", "instagram_manage_insights"), publishReady: all("instagram_basic", "instagram_content_publish") },
+    facebook: { analyticsReady: all("pages_read_engagement", "read_insights"), publishReady: all("pages_manage_posts") },
+    tiktok: { analyticsReady: all("user.info.basic", "user.info.stats", "video.list"), publishReady: all("video.publish") },
+    x: { analyticsReady: all("tweet.read", "users.read"), publishReady: all("tweet.write") },
+    linkedin: { analyticsReady: all("r_organization_social"), publishReady: all("w_organization_social") },
+    pinterest: { analyticsReady: all("user_accounts:read", "pins:read"), publishReady: all("pins:write") },
+  };
+  return requirements[platform];
 }
 
 /**
@@ -612,7 +647,7 @@ export function createSocialOAuthStart(platform: SocialAnalyticsPlatform, worksp
   }
   const state = oauthState(platform);
   const pkce = platform === "x" ? pkcePair() : null;
-  savePendingSocialOAuthState(state, platform, { ...(pkce ? { codeVerifier: pkce.verifier } : {}), workspaceKey: scope });
+  savePendingSocialOAuthState(state, platform, { ...(pkce ? { codeVerifier: pkce.verifier } : {}), workspaceKey: scope, redirectUri });
   const scopes = scopeValue(platform, connector.scopes);
   let authorizationUrl = "";
   if (platform === "youtube") {
@@ -702,38 +737,51 @@ async function exchangeToken(fetcher: typeof fetch, url: string, body: URLSearch
   return payload;
 }
 
-function pickWorkspacePage(pages: any[], workspaceKey: string) {
-  const configuredId = env("PHANTOMFORCE_SOCIAL_" + workspaceKey.toUpperCase().replace(/[^A-Z0-9]/g, "_") + "_META_PAGE_ID");
-  if (configuredId) return pages.find((page) => String(page?.id) === configuredId);
-  const target = cleanHandle(workspaceEnv(workspaceKey, "FACEBOOK_PAGE_HANDLE", "SOCIAL_FACEBOOK_HANDLE", "INSTAGRAM_HANDLE", "SOCIAL_INSTAGRAM_HANDLE")) || workspaceHandle(workspaceKey);
-  if (!target) {
-    if (pages.length === 1) return pages[0];
-    throw new Error("Authorize one business Page, or configure the exact Page ID for this workspace.");
-  }
-  const normalizedTarget = target.toLowerCase();
-  return pages.find((page) => {
-    const names = [
-      page?.id,
-      page?.name,
-      page?.username,
-      page?.instagram_business_account?.username,
-    ].map((value) => cleanHandle(value).toLowerCase());
-    return names.some((name) => name === normalizedTarget || name.includes(normalizedTarget));
-  }) || pages[0];
+function grantedScopes(value: unknown): string[] {
+  const scopes = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[\s,]+/) : [];
+  return [...new Set(scopes.filter((scope): scope is string => typeof scope === "string" && Boolean(scope.trim())).map((scope) => scope.trim()))];
+}
+
+function saveMetaPage(platform: "facebook" | "instagram", page: SocialAssetPage, scope: string, scopes: string[], expiresAt?: string) {
+  if (platform === "instagram" && !page.instagramId) throw new Error("Choose a Page linked to an Instagram professional account.");
+  return saveStoredSocialConnection(platform, {
+    provider: platform === "instagram" ? "Instagram Graph API" : "Facebook Graph API",
+    accessToken: page.accessToken, expiresAt, pageId: page.id, pageName: page.name,
+    accountId: platform === "instagram" ? page.instagramId : page.id,
+    businessAccountId: platform === "instagram" ? page.instagramId : undefined,
+    accountName: platform === "instagram" ? page.instagramUsername || page.name : page.name,
+    accountHandle: cleanHandle(platform === "instagram" ? page.instagramUsername : page.name), scopes,
+    metadata: { source: "meta_explicit_page_connection" },
+  }, scope);
+}
+
+export function selectSocialOAuthAsset(platform: SocialAnalyticsPlatform, selectionId: string, pageId: string, workspaceKey: string) {
+  if (platform !== "facebook" && platform !== "instagram") throw new Error("This provider does not use Page selection.");
+  const selected = consumePendingSocialAssetSelection(platform, selectionId, pageId, workspaceKey);
+  const connected = saveMetaPage(platform, selected.page, selected.workspaceKey, selected.scopes, selected.tokenExpiresAt);
+  return { platform, tenant_id: selected.workspaceKey, type: "connected" as const, connected };
+}
+
+export function disconnectSocialOAuth(platform: SocialAnalyticsPlatform, workspaceKey: string) {
+  return disconnectStoredSocialConnection(platform, workspaceKey);
 }
 
 export async function completeSocialOAuthCallback(query: Record<string, unknown>, fetcher: typeof fetch = fetch) {
   const state = text(query.state);
   const code = text(query.code);
-  const error = text(query.error || query.error_description);
-  if (error) throw new Error(`Provider rejected the account connection: ${error}`);
-  if (!state || !code) throw new Error("OAuth callback is missing its state or authorization code.");
+  if (!state) throw new Error("OAuth callback is missing its state.");
   const pending = consumePendingSocialOAuthState(state);
   if (!pending) throw new Error("OAuth callback state was not recognized or expired. Start the connection again.");
   const platform = pending.platform;
   const scope = safeSocialWorkspaceKey(pending.workspaceKey);
-  const redirectUri = requiredOAuthRedirectUri(platform);
+  try {
+  if (query.error || query.error_description) throw new Error("Provider authorization was not completed. Start the connection again.");
+  if (!code) throw new Error("OAuth callback is missing its authorization code.");
+  const redirectUri = pending.redirectUri;
   if (!redirectUri) throw new Error("OAuth redirect URI is not configured.");
+  const assertCurrent = () => {
+    if (!isCurrentSocialAuthorization(platform, scope, pending.authorizationVersion)) throw new Error("A newer connection or disconnect replaced this authorization.");
+  };
 
   if (platform === "youtube") {
     const payload = await exchangeToken(fetcher, "https://oauth2.googleapis.com/token", new URLSearchParams({
@@ -751,6 +799,8 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
     const item = channel?.items?.[0];
+    if (!text(item?.id)) throw new Error("No authorized YouTube channel was returned.");
+    assertCurrent();
     const saved = saveStoredSocialConnection("youtube", {
       provider: "YouTube Data API",
       accessToken,
@@ -758,10 +808,10 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       expiresAt: tokenExpiry(payload?.expires_in),
       accountId: text(item?.id),
       accountName: text(item?.snippet?.title),
-      accountHandle: cleanHandle(item?.snippet?.customUrl || item?.snippet?.handle || defaultHandle),
-      scopes: CONNECTORS.find((connector) => connector.id === "youtube")?.scopes,
+      accountHandle: cleanHandle(item?.snippet?.customUrl || item?.snippet?.handle),
+      scopes: grantedScopes(payload?.scope),
     }, scope);
-    return { platform, connected: saved };
+    return { platform, tenant_id: scope, type: "connected" as const, connected: saved };
   }
 
   if (platform === "instagram" || platform === "facebook") {
@@ -775,41 +825,32 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
     const tokenPayload = await requestJson(fetcher, tokenUrl);
     const userAccessToken = text(tokenPayload?.access_token);
     if (!userAccessToken) throw new Error("Meta did not return an access token.");
-    const accountsQuery = new URLSearchParams({
-      fields: "id,name,access_token,instagram_business_account{id,username}",
-      access_token: userAccessToken,
-    });
-    const accounts = await requestJson(fetcher, `https://graph.facebook.com/${version}/me/accounts?${accountsQuery}`);
-    const page = pickWorkspacePage(Array.isArray(accounts?.data) ? accounts.data : [], scope);
-    if (!page?.id || !page?.access_token) {
-      throw new Error("No Facebook Page token was returned. Select this business's Page during Meta authorization.");
+    const headers = { Authorization: `Bearer ${userAccessToken}` };
+    const permissions = await requestJson(fetcher, `https://graph.facebook.com/${version}/me/permissions`, { headers });
+    const scopes = grantedScopes((Array.isArray(permissions?.data) ? permissions.data : []).filter((entry: any) => entry?.status === "granted").map((entry: any) => entry.permission));
+    const pages: SocialAssetPage[] = [];
+    let after = "";
+    for (let batch = 0; batch < 5; batch += 1) {
+      const query = new URLSearchParams({ fields: "id,name,access_token,instagram_business_account{id,username}", limit: "100", ...(after ? { after } : {}) });
+      const accounts = await requestJson(fetcher, `https://graph.facebook.com/${version}/me/accounts?${query}`, { headers });
+      for (const page of Array.isArray(accounts?.data) ? accounts.data : []) {
+        if (!text(page?.id) || !text(page?.access_token) || (platform === "instagram" && !text(page?.instagram_business_account?.id))) continue;
+        if (!pages.some((item) => item.id === text(page.id))) pages.push({ id: text(page.id), name: text(page.name), accessToken: text(page.access_token),
+          instagramId: text(page.instagram_business_account?.id) || undefined, instagramUsername: text(page.instagram_business_account?.username) || undefined });
+      }
+      if (!accounts?.paging?.next) break;
+      after = text(accounts.paging?.cursors?.after);
+      if (!after || batch === 4) throw new Error("Too many business Pages were returned. Limit the Pages shared during authorization and try again.");
     }
-    const pageToken = text(page.access_token);
-    const facebook = saveStoredSocialConnection("facebook", {
-      provider: "Facebook Graph API",
-      accessToken: pageToken,
-      pageId: text(page.id),
-      pageName: text(page.name),
-      accountId: text(page.id),
-      accountName: text(page.name),
-      accountHandle: cleanHandle(page.name || defaultHandle),
-      scopes: CONNECTORS.find((connector) => connector.id === "facebook")?.scopes,
-      metadata: { source: "meta_page_connection" },
-    }, scope);
-    const ig = page.instagram_business_account;
-    const instagram = ig?.id ? saveStoredSocialConnection("instagram", {
-      provider: "Instagram Graph API",
-      accessToken: pageToken,
-      businessAccountId: text(ig.id),
-      accountId: text(ig.id),
-      accountName: text(ig.username || page.name),
-      accountHandle: cleanHandle(ig.username || defaultHandle),
-      pageId: text(page.id),
-      pageName: text(page.name),
-      scopes: CONNECTORS.find((connector) => connector.id === "instagram")?.scopes,
-      metadata: { source: "meta_page_instagram_business_connection" },
-    }, scope) : null;
-    return { platform, connected: platform === "instagram" ? instagram || facebook : facebook, linkedFacebookPage: facebook, linkedInstagramBusiness: instagram };
+    if (!pages.length) throw new Error(platform === "instagram" ? "No authorized Page with a linked Instagram professional account was returned." : "No authorized Facebook Page was returned.");
+    assertCurrent();
+    const expiresAt = tokenExpiry(tokenPayload?.expires_in);
+    if (pages.length > 1) {
+      const selection = savePendingSocialAssetSelection({ platform, workspaceKey: scope, authorizationVersion: pending.authorizationVersion!, pages, scopes, tokenExpiresAt: expiresAt });
+      return { platform, tenant_id: scope, type: "asset_selection_required" as const, connected: null, selection };
+    }
+    const connected = saveMetaPage(platform, pages[0], scope, scopes, expiresAt);
+    return { platform, tenant_id: scope, type: "connected" as const, connected };
   }
 
   if (platform === "tiktok") {
@@ -822,10 +863,14 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
     }));
     const accessToken = text(payload?.access_token);
     if (!accessToken) throw new Error("TikTok did not return an access token.");
-    const profile = await requestJson(fetcher, "https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name,username", {
+    const scopes = grantedScopes(payload?.scope);
+    const fields = ["open_id", "union_id", "avatar_url", "display_name", ...(scopes.includes("user.info.profile") ? ["username"] : [])];
+    const profile = await requestJson(fetcher, `https://open.tiktokapis.com/v2/user/info/?fields=${fields.join(",")}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const user = profile?.data?.user || {};
+    if (!text(user?.open_id)) throw new Error("TikTok did not verify an account identity.");
+    assertCurrent();
     const saved = saveStoredSocialConnection("tiktok", {
       provider: "TikTok Display API",
       accessToken,
@@ -833,11 +878,11 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       expiresAt: tokenExpiry(payload?.expires_in),
       accountId: text(user?.open_id || payload?.open_id),
       accountName: text(user?.display_name || user?.username),
-      accountHandle: cleanHandle(user?.username || user?.display_name || defaultHandle),
-      scopes: CONNECTORS.find((connector) => connector.id === "tiktok")?.scopes,
+      accountHandle: cleanHandle(user?.username || user?.display_name),
+      scopes,
       metadata: { source: "tiktok_oauth_login_kit" },
     }, scope);
-    return { platform, connected: saved };
+    return { platform, tenant_id: scope, type: "connected" as const, connected: saved };
   }
 
   if (platform === "x") {
@@ -862,6 +907,8 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const user = me?.data || {};
+    if (!text(user?.id)) throw new Error("X did not verify an account identity.");
+    assertCurrent();
     const saved = saveStoredSocialConnection("x", {
       provider: "X API v2",
       accessToken,
@@ -869,11 +916,11 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       expiresAt: tokenExpiry(payload?.expires_in),
       accountId: text(user?.id),
       accountName: text(user?.name || user?.username),
-      accountHandle: cleanHandle(user?.username || defaultHandle),
-      scopes: CONNECTORS.find((connector) => connector.id === "x")?.scopes,
+      accountHandle: cleanHandle(user?.username),
+      scopes: grantedScopes(payload?.scope),
       metadata: { source: "x_oauth2_pkce" },
     }, scope);
-    return { platform, connected: saved };
+    return { platform, tenant_id: scope, type: "connected" as const, connected: saved };
   }
 
   if (platform === "linkedin") {
@@ -888,7 +935,7 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
     if (!accessToken) throw new Error("LinkedIn did not return an access token.");
     const headers = {
       Authorization: `Bearer ${accessToken}`,
-      "LinkedIn-Version": env("LINKEDIN_API_VERSION") || "202506",
+      "LinkedIn-Version": env("LINKEDIN_API_VERSION") || "202609",
       "X-Restli-Protocol-Version": "2.0.0",
     };
     const profile = await requestJson(fetcher, "https://api.linkedin.com/v2/userinfo", { headers }).catch(() => null);
@@ -897,9 +944,13 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       "https://api.linkedin.com/rest/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED",
       { headers },
     ).catch(() => null);
-    const org = Array.isArray(orgs?.elements) ? orgs.elements[0] : null;
+    const availableOrgs = Array.isArray(orgs?.elements) ? orgs.elements : [];
+    if (availableOrgs.length !== 1) throw new Error("Authorize exactly one LinkedIn business organization before connecting it here.");
+    const org = availableOrgs[0];
     const organizationUrn = text(org?.organization);
     const organizationId = organizationUrn.replace(/^urn:li:organization:/, "");
+    if (!/^urn:li:organization:[0-9]+$/.test(organizationUrn)) throw new Error("LinkedIn did not verify a business organization.");
+    assertCurrent();
     const saved = saveStoredSocialConnection("linkedin", {
       provider: "LinkedIn Marketing API",
       accessToken,
@@ -907,8 +958,8 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       expiresAt: tokenExpiry(payload?.expires_in),
       accountId: organizationId || text(profile?.sub),
       accountName: text(profile?.name || profile?.localizedFirstName || "LinkedIn account"),
-      accountHandle: cleanHandle(firstEnv("LINKEDIN_HANDLE", "SOCIAL_LINKEDIN_HANDLE") || profile?.name || defaultHandle),
-      scopes: CONNECTORS.find((connector) => connector.id === "linkedin")?.scopes,
+      accountHandle: cleanHandle(profile?.name),
+      scopes: grantedScopes(payload?.scope),
       metadata: {
         source: "linkedin_oauth",
         organizationUrn: organizationUrn || null,
@@ -916,7 +967,7 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
         analyticsLevel: organizationId ? "organization" : "profile_authorized_no_organization_selected",
       },
     }, scope);
-    return { platform, connected: saved };
+    return { platform, tenant_id: scope, type: "connected" as const, connected: saved };
   }
 
   if (platform === "pinterest") {
@@ -936,6 +987,8 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
     const profile = await requestJson(fetcher, "https://api.pinterest.com/v5/user_account", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+    if (!text(profile?.id) && !text(profile?.username)) throw new Error("Pinterest did not verify an account identity.");
+    assertCurrent();
     const saved = saveStoredSocialConnection("pinterest", {
       provider: "Pinterest API",
       accessToken,
@@ -943,13 +996,17 @@ export async function completeSocialOAuthCallback(query: Record<string, unknown>
       expiresAt: tokenExpiry(payload?.expires_in),
       accountId: text(profile?.id),
       accountName: text(profile?.business_name || profile?.username),
-      accountHandle: cleanHandle(profile?.username || defaultHandle),
-      scopes: CONNECTORS.find((connector) => connector.id === "pinterest")?.scopes,
+      accountHandle: cleanHandle(profile?.username),
+      scopes: grantedScopes(payload?.scope),
     }, scope);
-    return { platform, connected: saved };
+    return { platform, tenant_id: scope, type: "connected" as const, connected: saved };
   }
 
   throw new Error(`${platform} OAuth callback storage is not implemented yet. Use Settings with an official token for this channel.`);
+  } catch {
+    finishSocialAuthorization(platform, scope, pending.authorizationVersion);
+    throw Object.assign(new Error("Account authorization could not be completed. Reconnect and choose the intended business account."), { tenant_id: scope, platform });
+  }
 }
 
 async function requestJson(
@@ -1165,7 +1222,7 @@ async function syncLinkedIn(fetcher: typeof fetch, workspaceKey = DEFAULT_SOCIAL
     : `urn:li:organization:${organizationId}`;
   const headers = {
     Authorization: `Bearer ${token}`,
-    "LinkedIn-Version": env("LINKEDIN_API_VERSION") || "202506",
+    "LinkedIn-Version": env("LINKEDIN_API_VERSION") || "202609",
     "X-Restli-Protocol-Version": "2.0.0",
   };
   const query = new URLSearchParams({

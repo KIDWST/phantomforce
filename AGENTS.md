@@ -101,6 +101,16 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Organization social accounts (2026-10-03)** — build
+  `phantom-live-20261003-237`. Every business has one Social accounts destination
+  in the existing top navigation. Analytics connection actions use that same
+  flow. Provider status, explicit Meta Page selection, reconnect revisions and
+  server-side disconnect are organization-scoped; handles do not authorize an
+  account. Provider credentials stay in the owner-only setup form/server store.
+  No live provider apps or social accounts were configured at release intake:
+  actual provider setup and user authorization remain required. Social sign-in
+  does not connect marketplace shops or enable a publishing executor. See
+  `docs/quality/SOCIAL_ACCOUNTS_20261003.md` for verification and limitations.
 - **Direct business workspace navigation (2026-10-02)** — build
   `phantom-live-20261002-236`. The owner rejected duplicate navigation,
   organization banners, slogan heroes and competing Clients/CRM destinations.

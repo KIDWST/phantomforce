@@ -160,6 +160,9 @@ try {
     if (url.includes("/oauth/access_token?")) {
       return new Response(JSON.stringify({ access_token: "meta-user-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
     }
+    if (url.includes("/me/permissions")) {
+      return new Response(JSON.stringify({ data: ["pages_show_list", "pages_read_engagement", "read_insights", "instagram_basic", "instagram_manage_insights"].map(permission => ({ permission, status: "granted" })) }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     if (url.includes("/me/accounts?")) {
       return new Response(JSON.stringify({ data: [{
         id: "page-1",
@@ -171,8 +174,11 @@ try {
     throw new Error(`Unexpected Meta URL ${url}`);
   };
   const metaConnected = await completeSocialOAuthCallback({ state: metaOauth.state, code: "meta-code" }, metaFetch as typeof fetch);
-  assert(metaConnected.linkedFacebookPage?.pageId === "page-1", "Meta callback must save the Facebook Page, not a user profile.");
-  assert(metaConnected.linkedInstagramBusiness?.businessAccountId === "ig-1", "Meta callback must save the linked Instagram business account.");
+  assert(metaConnected.connected?.pageId === "page-1", "Meta callback must save the requested Facebook Page, not a user profile.");
+  assert(!getSocialAnalyticsConnectorStatus().connectors.find(item => item.id === "instagram")?.savedConnection, "Facebook authorization cannot silently overwrite an Instagram connection.");
+  const igOauth = createSocialOAuthStart("instagram");
+  const igConnected = await completeSocialOAuthCallback({ state: igOauth.state, code: "ig-code" }, metaFetch as typeof fetch);
+  assert(igConnected.connected?.businessAccountId === "ig-1", "Instagram authorization saves its linked professional account.");
   assert(!JSON.stringify(metaConnected).includes("page-token"), "Meta callback response must not expose page tokens.");
 
   process.env.TIKTOK_CLIENT_KEY = "tiktok-client";

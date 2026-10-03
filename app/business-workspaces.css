@@ -267,6 +267,42 @@ html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console.co
   .business-agenda-row > button { grid-column: 2; justify-self: start; }
 }
 
+/* Social connections share the business shell and use provider-verified status. */
+.social-accounts { max-width: 1280px; margin: 0 auto; padding: 24px; color: #e9eeef; }
+.social-accounts-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.social-accounts-heading :is(h1,h3) { margin: 0 0 6px; font-size: 25px; line-height: 1.2; letter-spacing: -.035em; }
+.social-accounts-heading span, .social-account-note, .social-profile-reference { color: #abb7bf; font-size: 12px; line-height: 1.6; }
+.social-accounts-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; align-items: start; }
+.social-account-card { min-width: 0; padding: 22px; border: 1px solid #ffffff17; border-radius: 14px; background: #ffffff04; }
+.social-account-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.social-account-heading h2 { margin: 0; font-size: 17px; line-height: 1.4; }
+.social-platform-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.social-account-state { margin-left: auto; font-size: 11px; color: #b5c0c8; padding: 4px 8px; background: #ffffff08; border-radius: 5px; }
+.social-account-state.is-connected { color: #a9e5bf; background: #a9e5bf0c; }
+.social-account-identity { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.social-account-note { margin: 12px 0; }
+.social-account-actions, .social-capabilities { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.social-capabilities span { font-size: 11px; padding: 4px 7px; border: 1px solid #ffffff14; border-radius: 4px; }
+.social-accounts :is(form,label) { display: grid; gap: 8px; }
+.social-accounts label { font-size: 12px; color: #bcc8ce; }
+.social-accounts :is(input,select) { width: 100%; min-width: 0; box-sizing: border-box; padding: 11px; color: #e9eeef; background: #11181e; border: 1px solid #ffffff26; border-radius: 7px; }
+.social-accounts .btn { min-height: 40px; white-space: normal; }
+.social-accounts :is(a,button,input,select,summary):focus-visible { outline: 2px solid var(--business-accent,#a9e5bf); outline-offset: 3px; }
+.social-app-form, .social-selection, .social-disconnect-confirm { padding: 16px; margin-top: 14px; background: #ffffff05; border: 1px solid #ffffff1a; border-radius: 8px; font-size: 12px; line-height: 1.6; }
+.social-accounts a { color: var(--business-accent,#a9e5bf); overflow-wrap: anywhere; }
+.social-profile-reference { border-top: 1px solid #ffffff12; padding-top: 14px; margin-top: 16px; }
+.social-profile-reference summary { cursor: pointer; }
+.social-profile-reference form { margin-top: 14px; }
+.social-account-alert, .social-account-notice { padding: 12px 16px; border-radius: 8px; background: #ffffff06; font-size: 13px; overflow-wrap: anywhere; }
+.social-account-alert { color: #ffc4bc; border: 1px solid #e08c8033; }
+@media (max-width: 700px) {
+  .social-accounts { padding: 16px 10px; }
+  .social-accounts-grid { grid-template-columns: minmax(0,1fr); }
+  .social-account-card { padding: 16px; }
+  .social-accounts :is(input,select) { font-size: 16px; }
+  .social-accounts-heading :is(h1,h3) { font-size: 22px; }
+}
+
 /* Work screens start with the task; organization branding lives in the top bar. */
 .business-hub { padding-top: 24px; }
 .business-hub .business-panel-heading :is(h1, h2), .business-hub .business-page-heading h1 {

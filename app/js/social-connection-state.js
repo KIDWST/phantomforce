@@ -5,9 +5,8 @@ const CONNECTED_STATES = new Set(["CONNECTED", "LIMITED_PERMISSIONS"]);
 
 export function socialConnectorsFromResponse(payload = {}) {
   const legacy = payload?.social_analytics?.connectors;
-  if (Array.isArray(legacy)) return legacy;
   const providers = payload?.social_connections?.providers;
-  if (!Array.isArray(providers)) return [];
+  if (!Array.isArray(providers)) return Array.isArray(legacy) ? legacy : [];
 
   return providers.map((provider) => {
     const configured = CONNECTED_STATES.has(provider.connectionStatus);
@@ -22,12 +21,15 @@ export function socialConnectorsFromResponse(payload = {}) {
       connectionStatus: provider.connectionStatus,
       capabilityStatus: provider.capabilityStatus,
       action: provider.action,
+      authorizationPending: Boolean(provider.authorizationPending),
+      connectionUpdatedAt: provider.connectionUpdatedAt || "",
       savedConnection: configured ? {
         connected: true,
         accountName: provider.displayName || "",
         accountHandle: provider.username || "",
         avatarUrl: provider.avatarUrl || "",
         selectedAssetName: provider.selectedAssetName || "",
+        updatedAt: provider.connectionUpdatedAt || "",
         grantedScopes: provider.grantedCapabilities || [],
       } : null,
     };
@@ -35,7 +37,7 @@ export function socialConnectorsFromResponse(payload = {}) {
 }
 
 export function socialPreflightFromResponse(payload = {}, connectors = socialConnectorsFromResponse(payload)) {
-  if (payload?.social_analytics?.oauthPreflight) return payload.social_analytics.oauthPreflight;
+  if (!Array.isArray(payload?.social_connections?.providers) && payload?.social_analytics?.oauthPreflight) return payload.social_analytics.oauthPreflight;
   return {
     readyCount: connectors.filter((connector) => connector.oauthConfigured).length,
     authorizedCount: connectors.filter((connector) => connector.configured).length,
@@ -45,10 +47,10 @@ export function socialPreflightFromResponse(payload = {}, connectors = socialCon
       name: connector.name,
       oauthAppReady: connector.oauthConfigured,
       accountAuthorized: connector.configured,
-      canStartOAuth: !connector.configured,
+      canStartOAuth: Boolean(connector.oauthConfigured),
       canSync: connector.configured,
-      nextAction: connector.configured ? "sync_live_feed" : "connect_signed_in_account",
-      nextLabel: connector.configured ? "Sync live feed" : "Connect account",
+      nextAction: connector.configured ? "sync_live_feed" : connector.oauthConfigured ? "connect_signed_in_account" : "configure_provider_app",
+      nextLabel: connector.configured ? "Sync live feed" : connector.oauthConfigured ? "Connect account" : "Set up provider",
       nextDetail: connector.reason,
     })),
   };
