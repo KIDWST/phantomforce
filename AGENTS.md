@@ -101,6 +101,17 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Direct business workspace navigation (2026-10-02)** — build
+  `phantom-live-20261002-236`. The owner rejected duplicate navigation,
+  organization banners, slogan heroes and competing Clients/CRM destinations.
+  Keep one top navigation surface with the business selector and compact saved
+  logo (initials when no logo is configured). Business screens start with records
+  and actions; overview prioritizes overdue work and production/order deadlines.
+  ChicagoShots and PhantomForce have one CRM with lifecycle views, while
+  Occasionally Odd has one Customers destination. Legacy CRM links remain valid.
+  This correction is protected by the change-memory guard. Browser screenshot
+  verification was blocked by the app's saved-permissions check; do not describe
+  the earlier screenshots as verification of this revised layout.
 - **Organization commerce and media workspaces (2026-10-02)** — application
   commit `59386f09d7`, build `phantom-live-20260927-235`. Both public app hosts
   serve the organization selector and new workspaces; the canonical G: UI/API

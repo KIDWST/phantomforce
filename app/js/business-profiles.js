@@ -21,10 +21,10 @@ export const BUSINESS_PROFILES = freeze({
     accent: "#a9e5bf", background: "#111716", logo: "PF", supportEmail: "",
     assistantName: "PhantomBot", assistantPlaceholder: "What should we move forward in PhantomForce?",
     nouns: { customer: "Client", customers: "Clients", work: "Projects", assets: "Brand & website assets" },
-    labels: { dashboard: "Operations overview", leads: "Leads & clients", sites: "Websites & stores", automation: "Approval-gated automation", content: "Client content", media: "Creative studio", phantomai: "PhantomBot" },
+    labels: { dashboard: "Overview", leads: "CRM", sites: "Websites & stores", automation: "Approval-gated automation", content: "Client content", media: "Creative studio", phantomai: "PhantomBot" },
     primaryRoutes: ["dashboard", "business-projects", "leads", "sites", "automation", "content", "money"],
-    navigation: [nav("business-projects", "Project pipeline", "site"), nav("business-templates", "Playbooks", "spark"), nav("business-assets", "Brand assets", "media"), nav("business-channels", "Connected channels", "shield")],
-    sections: [{ id: "overview", label: "Overview" }, { id: "projects", label: "Projects" }, { id: "templates", label: "Playbooks" }, { id: "assets", label: "Assets" }, { id: "channels", label: "Channels" }],
+    navigation: [nav("business-projects", "Projects", "site"), nav("business-templates", "Templates", "spark"), nav("business-assets", "Files", "media"), nav("business-channels", "Channels", "shield")],
+    sections: [{ id: "overview", label: "Overview" }, { id: "projects", label: "Projects" }, { id: "templates", label: "Templates" }, { id: "assets", label: "Files" }, { id: "channels", label: "Channels" }],
     workflows: [
       workflow("project", "Website project", "Website projects", ["draft", "scoping", "building", "review", "complete"], "Scope, build, review, and hand off a website."),
       workflow("automation", "Automation plan", "Automation plans", ["draft", "scoping", "review", "ready"], "Map the trigger, safeguards, approval, and verification before any run."),
@@ -45,10 +45,10 @@ export const BUSINESS_PROFILES = freeze({
     accent: "#c5fb62", background: "#111c35", logo: "CS", supportEmail: "",
     assistantName: "Studio assistant", assistantPlaceholder: "Plan a shoot, organize an edit, or draft a ChicagoShots caption…",
     nouns: { customer: "Team / client", customers: "Teams & clients", work: "Productions", assets: "Footage & deliverables" },
-    labels: { dashboard: "Studio overview", leads: "Leads", bookings: "Shoot calendar", media: "Editing room", content: "Deliverables library", analytics: "Analytics", sites: "Portfolio & booking site", money: "Invoices", phantomai: "Studio assistant", automation: "Studio approvals", comms: "Client conversations" },
-    primaryRoutes: ["dashboard", "leads", "business-crm", "business-bookings", "business-calendar", "business-projects", "business-deliverables", "money", "business-gear", "chicagoshots", "analytics"],
+    labels: { dashboard: "Overview", leads: "CRM", bookings: "Shoot calendar", media: "Editing room", content: "Deliverables library", analytics: "Analytics", sites: "Portfolio & booking site", money: "Invoices", phantomai: "Studio assistant", automation: "Studio approvals", comms: "Client conversations" },
+    primaryRoutes: ["dashboard", "leads", "business-bookings", "business-calendar", "business-projects", "business-deliverables", "money", "business-gear", "chicagoshots", "analytics"],
     sharedRoutes: ["dashboard", "leads", "money", "media", "content", "sites", "analytics", "comms", "phantomai", "automation", "settings", "notifications", "memory", "phantomhunter"],
-    navigation: [nav("business-crm", "CRM", "users"), nav("business-bookings", "Bookings", "clock"), nav("business-calendar", "Calendar", "calendar"), nav("business-projects", "Projects", "site"), nav("business-deliverables", "Deliverables", "film"), nav("business-gear", "Gear", "grid"), nav("chicagoshots", "Marketing", "spark"), nav("business-templates", "Production templates", "grid"), nav("business-assets", "Footage & assets", "media"), nav("business-channels", "Social channels", "shield")],
+    navigation: [nav("business-bookings", "Bookings", "clock"), nav("business-calendar", "Calendar", "calendar"), nav("business-projects", "Projects", "site"), nav("business-deliverables", "Deliverables", "film"), nav("business-gear", "Gear", "grid"), nav("chicagoshots", "Marketing", "spark"), nav("business-templates", "Templates", "grid"), nav("business-assets", "Files", "media"), nav("business-channels", "Channels", "shield")],
     sections: [{ id: "overview", label: "Overview" }, { id: "bookings", label: "Bookings" }, { id: "calendar", label: "Calendar" }, { id: "projects", label: "Projects" }, { id: "deliverables", label: "Deliverables" }, { id: "gear", label: "Gear" }, { id: "templates", label: "Templates" }, { id: "assets", label: "Files" }, { id: "channels", label: "Channels" }],
     workflows: [
       workflow("shoot", "Shoot plan", "Shoot plans", ["draft", "briefing", "scheduled", "captured", "complete"], "Prepare a media day or game-day shoot with the team."),
@@ -75,10 +75,10 @@ export const BUSINESS_PROFILES = freeze({
     accent: "#edb78e", background: "#271e25", logo: "OO", supportEmail: "occasionallyoddsupport@gmail.com",
     assistantName: "Workroom assistant", assistantPlaceholder: "Plan a seasonal collection, custom order, or production batch…",
     nouns: { customer: "Customer", customers: "Customers & bulk buyers", work: "Orders", assets: "Product photos & designs" },
-    labels: { dashboard: "Workroom overview", leads: "Customers & bulk buyers", content: "Product photo library", media: "Product creative studio", analytics: "Shop & social performance", sites: "Storefront & listings", money: "Quotes & order costs", phantomai: "Workroom assistant", automation: "Order approvals", comms: "Customer conversations", bookings: "Order deadlines" },
+    labels: { dashboard: "Overview", leads: "Customers & bulk buyers", content: "Product photo library", media: "Product creative studio", analytics: "Shop & social performance", sites: "Storefront & listings", money: "Quotes & order costs", phantomai: "Workroom assistant", automation: "Order approvals", comms: "Customer conversations", bookings: "Order deadlines" },
     primaryRoutes: ["dashboard", "business-orders", "business-products", "business-production", "business-inventory", "business-customers", "business-channels", "business-shipping", "business-marketing", "business-finance", "business-analytics"],
     sharedRoutes: ["dashboard", "media", "content", "sites", "comms", "phantomai", "automation", "settings", "notifications", "memory", "phantomhunter"],
-    navigation: [nav("business-orders", "Orders", "users"), nav("business-products", "Products", "grid"), nav("business-production", "Production", "grid"), nav("business-inventory", "Inventory", "grid"), nav("business-customers", "Customers", "users"), nav("business-channels", "Channels", "shield"), nav("business-shipping", "Shipping", "site"), nav("business-marketing", "Marketing", "spark"), nav("business-finance", "Finance", "dollar"), nav("business-analytics", "Analytics", "chart"), nav("business-campaigns", "Campaign plans", "spark"), nav("business-licensing", "Licensing desk", "shield"), nav("business-templates", "Workroom templates", "site"), nav("business-assets", "Files & designs", "media")],
+    navigation: [nav("business-orders", "Orders", "users"), nav("business-products", "Products", "grid"), nav("business-production", "Production", "grid"), nav("business-inventory", "Inventory", "grid"), nav("business-customers", "Customers", "users"), nav("business-channels", "Channels", "shield"), nav("business-shipping", "Shipping", "site"), nav("business-marketing", "Marketing", "spark"), nav("business-finance", "Finance", "dollar"), nav("business-analytics", "Analytics", "chart"), nav("business-campaigns", "Campaign plans", "spark"), nav("business-licensing", "Licensing desk", "shield"), nav("business-templates", "Templates", "site"), nav("business-assets", "Files", "media")],
     sections: [{ id: "overview", label: "Overview" }, { id: "orders", label: "Orders" }, { id: "products", label: "Products" }, { id: "production", label: "Production" }, { id: "inventory", label: "Inventory" }, { id: "customers", label: "Customers" }, { id: "channels", label: "Channels" }, { id: "shipping", label: "Shipping" }, { id: "marketing", label: "Marketing" }, { id: "finance", label: "Finance" }, { id: "analytics", label: "Analytics" }, { id: "campaigns", label: "Campaign plans" }, { id: "licensing", label: "Licensing" }, { id: "templates", label: "Templates" }, { id: "assets", label: "Files" }],
     workflows: [
       workflow("order", "Custom / bulk order", "Orders", ["draft", "quoted", "confirmed", "production", "quality-check", "ready", "complete"], "Record requirements, quantity, deadline, and production progress."),
@@ -128,6 +128,7 @@ export function businessAssistantContext(workspaceOrId) {
 export function businessCanOpenRoute(workspaceOrId, route) {
   const profile = getBusinessProfile(workspaceOrId);
   if (route === "chicagoshots") return profile.id === "client-chicagoshots";
+  if (route === "business-crm") return profile.id === "client-chicagoshots";
   if (!String(route).startsWith("business-")) return true;
   return route === "business-overview" || profile.navigation.some((item) => item.id === route);
 }
@@ -135,7 +136,8 @@ export function businessCanOpenRoute(workspaceOrId, route) {
 /** Preserve shared capabilities and permission flags; prioritize each business's work. */
 export function businessNavigation(workspaceOrId, baseNavigation = []) {
   const profile = getBusinessProfile(workspaceOrId);
-  const supplied = [...baseNavigation.filter((item) => businessCanOpenRoute(profile.id, item.id)
+  const duplicateRelationships = new Set(baseNavigation.some((item) => item.id === "leads") ? ["clients", "followup", "business-crm"] : []);
+  const supplied = [...baseNavigation.filter((item) => !duplicateRelationships.has(item.id) && businessCanOpenRoute(profile.id, item.id)
     && (!profile.sharedRoutes || profile.sharedRoutes.includes(item.id) || profile.navigation.some((route) => route.id === item.id)))];
   for (const item of profile.navigation) if (!supplied.some((existing) => existing.id === item.id)) supplied.push({ ...item });
   return supplied.map((item) => ({ ...item, label: profile.labels[item.id] || item.label }))

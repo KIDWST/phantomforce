@@ -1,4 +1,4 @@
-import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20260927-235";
+import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20261002-236";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -124,6 +124,33 @@ function defaultConfiguration(tenantId = currentTenantId()) {
 
 export function currentCustomization() {
   return activeConfiguration;
+}
+
+export function renderBusinessBrand(profile, tenantId) {
+  document.documentElement.dataset.business = profile.id;
+  document.documentElement.style.setProperty("--business-accent", profile.accent);
+  document.documentElement.style.setProperty("--business-background", profile.background);
+  document.title = `${profile.name} — Workspace`;
+  const set = (selector, value) => document.querySelectorAll(selector).forEach((element) => { if (element.textContent !== value) element.textContent = value; });
+  set("[data-business-mark]", profile.initials);
+  set(".os-identity-name, .side-brand-text b", profile.name.toUpperCase());
+  set(".os-identity-sub, .side-brand-text i, .mobile-admin-brand i", profile.kind);
+  set(".mobile-admin-brand b", profile.name);
+  const configured = activeConfiguration?.tenantId === tenantId ? activeConfiguration.brand?.logoUrl : "";
+  const source = configured || (profile.id === "phantomforce" ? "/app/assets/brand-phantom.png" : "");
+  const logo = document.querySelector("[data-business-logo]");
+  const mark = document.querySelector(".os-business [data-business-mark]");
+  if (!logo) return;
+  const usable = Boolean(source) && logo.dataset.failedSource !== source;
+  logo.hidden = !usable;
+  if (mark) mark.hidden = usable;
+  logo.alt = `${profile.name} logo`;
+  logo.onerror = () => {
+    logo.dataset.failedSource = logo.getAttribute("src");
+    logo.hidden = true;
+    if (mark) mark.hidden = false;
+  };
+  if (usable && logo.getAttribute("src") !== source) logo.src = source;
 }
 
 function currentActorIds() {

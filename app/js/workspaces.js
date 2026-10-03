@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260927-235";
+} from "./store.js?v=phantom-live-20261002-236";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20260927-235";
+} from "./orgs.js?v=phantom-live-20261002-236";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260927-235";
+} from "./proposalpipeline.js?v=phantom-live-20261002-236";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20260927-235";
+} from "./approvalpipeline.js?v=phantom-live-20261002-236";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20260927-235";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20260927-235";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20260927-235";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20260927-235";
+} from "./financeledger.js?v=phantom-live-20261002-236";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20261002-236";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20261002-236";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20261002-236";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1589,9 +1589,9 @@ function renderRelationships(el, rerender) {
   el.innerHTML = `
     <div class="crm-app" data-crm-account="${esc(ws)}">
       <section class="crm-desk-head">
-        <div class="crm-desk-title"><p>${esc(leadWorkspaceName(ws))} / private sales workspace</p><h2>Sales desk</h2><span>${esc(prefs.pipelineName)} · ${canEdit ? "Manager access" : "Member view"}</span></div>
+        <div class="crm-desk-title"><span>${esc(prefs.pipelineName)}${canEdit ? "" : " · View only"}</span></div>
         <div class="crm-overview-actions">
-          ${canEdit ? `<button class="btn btn-primary" type="button" data-crm-add>+ Add relationship</button><label class="btn crm-import-button">Import CSV<input type="file" accept=".csv,text/csv" data-crm-import hidden /></label>` : ""}
+          ${canEdit ? `<button class="btn btn-primary" type="button" data-crm-add>+ Add contact</button><label class="btn crm-import-button">Import CSV<input type="file" accept=".csv,text/csv" data-crm-import hidden /></label>` : ""}
           <button class="btn" type="button" data-crm-export ${records.length ? "" : "disabled"}>Export</button>
           <button class="btn btn-quiet" type="button" data-crm-settings>Customize</button>
         </div>
@@ -3224,7 +3224,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260927-235")
+      import("./brain.js?v=phantom-live-20261002-236")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -5021,10 +5021,10 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
-  leads: { title: "Relationships", kicker: "Leads, active clients, and follow-ups in one CRM", render: renderRelationships },
-  followup: { title: "Relationships", kicker: "Leads, active clients, and follow-ups in one CRM", render: renderLegacyFollowUpRoute },
+  leads: { title: "CRM", kicker: "", render: renderRelationships },
+  followup: { title: "CRM", kicker: "", render: renderLegacyFollowUpRoute },
   comms: { title: "Comms", kicker: "Permission-aware drafts and send readiness", render: renderComms },
-  clients: { title: "Relationships", kicker: "Leads, active clients, and follow-ups in one CRM", render: renderLegacyClientsRoute },
+  clients: { title: "CRM", kicker: "", render: renderLegacyClientsRoute },
   proposals: { title: "Offers", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Offers to review", kicker: "Review requests and proof", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },

@@ -9,7 +9,7 @@ const organization = read("app/js/organization.js");
 const settings = read("app/js/settings.js");
 const registry = read("server/src/customization/module-registry.ts");
 
-assert.match(main, /id: "leads",\s+label: "Relationships",\s+icon: "users", ws: "leads"/u,
+assert.match(main, /id: "leads",\s+label: "CRM",\s+icon: "users", ws: "leads"/u,
   "Leads, active clients, and follow-ups must share one visible relationship destination.");
 assert.doesNotMatch(main, /\{ id: "clients",[^\n]*ws: "clients"/u,
   "The navigation must not duplicate the CRM as a separate Clients tab.");
@@ -17,10 +17,10 @@ assert.doesNotMatch(main, /\{ id: "followup",[^\n]*ws: "followup"/u,
   "The navigation must not duplicate the CRM as a separate Follow-up tab.");
 assert.doesNotMatch(main, /id: "leads"[^\n]*navHidden/u,
   "The combined relationship workspace must not be hidden with the retired Client Setup surface.");
-assert.match(main, /leads: "Leads"/u,
-  "Mobile navigation must distinguish lead intake from the ChicagoShots CRM destination.");
-assert.match(main, /"business-crm": "CRM"/u,
-  "The organization-specific CRM destination must retain a compact, distinct mobile label.");
+assert.match(main, /leads: "CRM"/u,
+  "Mobile navigation must use the same single CRM destination.");
+assert.match(main, /"business-crm": "leads"/u,
+  "Legacy organization CRM links must resolve to the combined CRM.");
 assert.match(main, /clients: "leads"/u,
   "Legacy Clients deep links must highlight the combined relationship workspace.");
 assert.match(main, /followup: "leads"/u,

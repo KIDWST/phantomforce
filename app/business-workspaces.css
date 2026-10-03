@@ -63,56 +63,6 @@ html[data-command-os="2040"]:is([data-business="client-chicagoshots"], [data-bus
   border-color: var(--business-background);
 }
 
-html[data-command-os="2040"] .phantom.command-os-enabled:not([hidden]):has(> .business-global-bar) {
-  grid-template-rows: 64px auto minmax(0, 1fr) 36px !important;
-}
-html[data-command-os="2040"] .phantom.command-os-enabled:has(> .business-global-bar) > .app-main { grid-row: 3 !important; }
-html[data-command-os="2040"] .phantom.command-os-enabled:has(> .business-global-bar) > .os-system-line { grid-row: 4 !important; }
-.business-global-bar {
-  position: relative;
-  z-index: 75;
-  grid-row: 2;
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  min-height: 76px;
-  gap: 15px;
-  padding: 11px 24px;
-  color: var(--business-ink);
-  background: var(--business-background);
-  border-bottom: 1px solid var(--business-line);
-  box-sizing: border-box;
-}
-.business-current-mark {
-  display: grid;
-  flex: 0 0 43px;
-  width: 43px;
-  height: 43px;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--business-accent) 50%, transparent);
-  border-radius: 11px;
-  color: var(--business-accent);
-  font: 800 18px/1 "Bricolage Grotesque", sans-serif;
-  letter-spacing: -.08em;
-}
-.business-global-picker { display: grid; flex: 0 1 260px; gap: 3px; min-width: 0; }
-.business-global-picker > span { color: var(--business-muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
-.business-global-picker select {
-  width: 100%; min-width: 0; min-height: 32px; padding: 2px 26px 2px 0;
-  border: 0; border-radius: 0; background-color: transparent; color: var(--business-ink);
-  font: 700 17px/1.35 "Instrument Sans", sans-serif; cursor: pointer;
-}
-.business-global-picker select option { color: var(--business-ink); background: var(--business-background); }
-.business-global-picker select:disabled { opacity: .8; cursor: default; }
-.business-global-summary { display: grid; gap: 5px; padding-left: 22px; border-left: 1px solid var(--business-line); min-width: 0; }
-.business-global-summary strong { font-size: 12px; font-weight: 600; }
-.business-global-summary span { color: var(--business-muted); font-size: 11px; }
-.business-home-action {
-  flex: 0 0 auto; min-height: 38px; margin-left: auto; padding: 8px 12px; border: 1px solid var(--business-line);
-  border-radius: 7px; color: var(--business-accent); background: transparent; font-size: 12px; cursor: pointer;
-}
-.business-home-action:hover { border-color: var(--business-accent); background: color-mix(in srgb, var(--business-accent) 7%, transparent); }
 .business-switch-curtain {
   position: fixed; inset: 0; z-index: 100000; display: grid; place-content: center; gap: 18px; padding: 28px;
   background: var(--business-background); color: var(--business-ink); text-align: center; font-size: 18px;
@@ -143,35 +93,9 @@ html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console.co
 .business-hub :where(button, input, select, textarea) { font: inherit; }
 .business-hub :where(button, select) { cursor: pointer; }
 .business-hub button:disabled { opacity: .45; cursor: not-allowed; }
-.business-hub :focus-visible, .business-global-bar :focus-visible { outline: 2px solid var(--business-accent) !important; outline-offset: 4px; }
+.business-hub :focus-visible { outline: 2px solid var(--business-accent) !important; outline-offset: 4px; }
 .business-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.business-hero { display: grid; grid-template-columns: minmax(0, 1fr) 235px; gap: 28px; align-items: center; min-height: 238px; padding: 14px 0 28px; }
-.business-hero-copy { max-width: 760px; }
-.business-hub .business-hero h1 { max-width: 730px; margin: 0 0 17px; color: var(--business-ink); font: 600 clamp(28px, 3.5vw, 48px)/1.06 "Bricolage Grotesque", sans-serif; letter-spacing: -.055em; text-transform: none; }
-.business-hero-copy > p:not(.business-eyebrow) { max-width: 650px; color: var(--business-muted); font-size: 14px; line-height: 1.65; }
-.business-hero-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 13px; margin-top: 24px; font-size: 10px; color: var(--business-muted); }
-.business-scope-label { display: inline-flex; gap: 7px; align-items: center; padding: 6px 9px; color: var(--business-accent); border: 1px solid var(--business-line); border-radius: 4px; }
-.business-scope-label i { width: 5px; height: 5px; border-radius: 50%; background: var(--business-accent); }
-.business-brand-art { position: relative; display: grid; place-items: center; height: 210px; overflow: hidden; }
-.business-brand-art b { z-index: 1; color: var(--business-accent); font: 800 90px/1 "Bricolage Grotesque", sans-serif; letter-spacing: -.09em; }
-.business-brand-orbit { position: absolute; inset: 12px 20px 20px; border: 1px solid var(--business-line); border-radius: 24px; transform: rotate(-12deg); }
-.business-brand-orbit::after { content: ""; position: absolute; inset: 11px; border: 1px solid var(--business-line); border-radius: inherit; transform: rotate(25deg); }
-.business-art-caption { position: absolute; bottom: 0; color: var(--business-muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
-.business-client-chicagoshots .business-brand-orbit { inset: 15px 4px 22px; border-radius: 50%; transform: rotate(-30deg); }
-.business-client-chicagoshots .business-brand-orbit::after { inset: 25px -30px; border-radius: 50%; transform: rotate(60deg); }
-.business-client-chicagoshots .business-brand-art b { font-style: italic; letter-spacing: -.12em; }
-.business-client-chicagoshots .business-hero h1 { font-weight: 800; }
-.business-occasionally-odd .business-hero h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; letter-spacing: -.045em; }
-.business-occasionally-odd .business-brand-orbit { border-radius: 50% 50% 10px 10px; transform: rotate(0); }
-.business-occasionally-odd .business-brand-orbit::after { transform: rotate(0); inset: 9px; }
-.business-occasionally-odd .business-brand-art b { font-family: Georgia, serif; font-weight: 400; letter-spacing: -.11em; }
-.business-occasionally-odd .business-brand-art::after { content: "✦"; position: absolute; right: 23px; top: 28px; font-size: 30px; color: var(--business-accent); }
-
-.business-section-nav { display: flex; gap: 6px; margin: 0 0 25px; padding: 0 0 12px; border-bottom: 1px solid var(--business-line); overflow-x: auto; scrollbar-width: thin; }
-.business-section-nav button { flex: 0 0 auto; padding: 9px 14px; min-height: 38px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--business-muted); font-size: 12px; font-weight: 500; }
-.business-section-nav button:hover { background: var(--business-panel); color: var(--business-ink); }
-.business-section-nav button.is-active { border-color: var(--business-line); background: var(--business-panel); color: var(--business-accent); }
 .business-alert, .business-notice { margin: 0 0 18px; padding: 12px 15px; border: 1px solid var(--business-line); border-radius: 6px; color: var(--business-accent); background: var(--business-panel); font-size: 12px; line-height: 1.5; }
 .business-alert { border-color: #995f5a; color: #ffccc6; }
 .business-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin-bottom: 25px; border: 1px solid var(--business-line); border-radius: 10px; background: var(--business-line); }
@@ -265,7 +189,6 @@ html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console.co
 .business-form-error { margin-top: 12px !important; color: #ffccc6; }
 
 @media (max-width: 1100px) {
-  .business-global-summary { display: none; }
   .business-overview-grid { grid-template-columns: minmax(0, 1fr) 245px; gap: 20px; }
   .business-panel { padding: 20px; }
   .business-work-grid { grid-template-columns: 1fr; }
@@ -291,17 +214,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console.co
     overflow-wrap: normal !important;
     word-break: normal !important;
   }
-  html[data-command-os="2040"] .phantom.command-os-enabled:not([hidden]):has(> .business-global-bar) { grid-template-rows: 0 auto minmax(0, 1fr) 0 !important; }
-  html[data-command-os="2040"] .phantom.command-os-enabled:has(> .business-global-bar) > .app-main { min-height: 0 !important; }
-  .business-global-bar { min-height: 73px; padding: 10px 16px; gap: 12px; }
-  .business-global-picker { flex-basis: 250px; }
-  .business-home-action { font-size: 11px; }
   .business-hub { padding: 20px 18px 110px; }
-  .business-hero { grid-template-columns: minmax(0, 1fr) 165px; gap: 15px; min-height: 220px; }
-  .business-brand-art { height: 170px; }
-  .business-brand-art b { font-size: 70px; }
-  .business-brand-orbit { inset: 15px 16px 22px; }
-  .business-art-caption { font-size: 7px; }
   .business-metric { padding: 18px; }
   .business-metric small { display: none; }
   .business-overview-grid { grid-template-columns: 1fr; gap: 0; }
@@ -313,20 +226,7 @@ html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console.co
   .business-template-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 @media (max-width: 600px) {
-  .business-global-bar { gap: 10px; padding: 10px 13px; }
-  .business-current-mark { flex-basis: 36px; width: 36px; height: 36px; font-size: 15px; border-radius: 9px; }
-  .business-global-picker { flex: 1; }
-  .business-global-picker > span { font-size: 8px; }
-  .business-global-picker select { font-size: 15px; }
-  .business-home-action { max-width: 84px; min-height: 36px; padding: 6px 8px; font-size: 9px; line-height: 1.45; }
   .business-hub { padding: 20px 13px 100px; }
-  .business-hero { grid-template-columns: 1fr; min-height: 0; padding-top: 6px; padding-bottom: 24px; }
-  .business-brand-art { display: none; }
-  .business-hub .business-hero h1 { font-size: 34px; line-height: 1.08; }
-  .business-hero-copy > p:not(.business-eyebrow) { font-size: 12px; }
-  .business-hero-footer { gap: 9px; margin-top: 17px; font-size: 9px; }
-  .business-section-nav { margin-bottom: 20px; gap: 2px; }
-  .business-section-nav button { padding: 8px 11px; font-size: 11px; }
   .business-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 20px; }
   .business-metric { padding: 17px; gap: 11px; }
   .business-metric > span { font-size: 10px; }
@@ -352,12 +252,10 @@ html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console.co
   .business-asset-card > button { margin-left: 38px; }
   .business-form-footer { align-items: stretch; flex-direction: column; gap: 13px; }
 }
-@media (max-width: 360px) {
-  .business-global-bar .business-home-action { display: none; }
-}
+
 
 @media (prefers-reduced-motion: reduce) {
-  .business-hub *, .business-global-bar *, .business-switch-curtain { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  .business-hub *, .business-switch-curtain { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
 .business-agenda { display: grid; margin-top: 24px; }
 .business-agenda-row { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto auto; gap: 18px; align-items: center; padding: 20px 0; border-bottom: 1px solid #ffffff12; }
@@ -367,4 +265,22 @@ html[data-command-os="2040"] .phantom.command-os-enabled .app-main > .console.co
 @media (max-width: 600px) {
   .business-agenda-row { grid-template-columns: 64px minmax(0, 1fr); gap: 12px; }
   .business-agenda-row > button { grid-column: 2; justify-self: start; }
+}
+
+/* Work screens start with the task; organization branding lives in the top bar. */
+.business-hub { padding-top: 24px; }
+.business-hub .business-panel-heading :is(h1, h2), .business-hub .business-page-heading h1 {
+  margin: 0; color: var(--business-ink); font: 600 25px/1.2 "Bricolage Grotesque", sans-serif;
+  letter-spacing: -.035em; overflow-wrap: anywhere;
+}
+.business-hub .business-page-heading { margin-bottom: 20px; }
+.business-hub .business-work-panel .business-panel-heading h2 { font-size: 20px; }
+.business-hub .business-empty { min-height: 155px; padding-block: 26px; gap: 8px; }
+.business-hub .business-empty p { max-width: 460px; }
+.business-hub .business-calendar-source { margin-top: 20px; font-size: 11px; }
+.business-hub .business-calendar-source .business-text-button { padding: 0; }
+.business-hub .business-template-card h3 { margin-top: 0; }
+@media (max-width: 600px) {
+  .business-hub { padding-top: 16px; }
+  .business-hub .business-panel-heading :is(h1, h2), .business-hub .business-page-heading h1 { font-size: 22px; }
 }

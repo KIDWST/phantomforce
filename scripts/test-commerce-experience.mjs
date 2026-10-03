@@ -143,14 +143,30 @@ try {
     assert.doesNotMatch(root.innerHTML, /OWN_PRODUCT|OWN_CUSTOMER|OWN_ORDER|OWN_SHOP/);
   }
 
-  const sectionTitles = { overview: "Good things. A little odd.", orders: "Orders", products: "The product catalog", production: "The production queue", inventory: "Materials &amp; components", customers: "Customers", channels: "Pending channel updates", shipping: "Shipment history", marketing: "Marketing, made for your shop", finance: "SKU economics", analytics: "Orders by sales channel" };
+  const sectionTitles = { overview: "Orders to fulfill", orders: "Orders", products: "Products", production: "Production", inventory: "Materials &amp; components", customers: "Customers", channels: "Pending channel updates", shipping: "Shipment history", marketing: "Marketing", finance: "SKU economics", analytics: "Orders by sales channel" };
   for (const [section, title] of Object.entries(sectionTitles)) {
     await load(section);
     assert.ok(root.innerHTML.includes(title), `The ${section} workspace has its actual view.`);
+    assert.equal(root.querySelectorAll("nav").length, 0, `The ${section} view relies on the one global workspace navigation.`);
+    assert.doesNotMatch(root.innerHTML, /Good things\. A little odd|From a spark|Make room for the wonderfully odd|cw-header|cw-nav/, `The ${section} view has no repeated brand banner or navigation.`);
   }
-  assert.deepEqual(root.querySelectorAll("[data-cw-section]").slice(0, 11).map((button) => button.dataset.cwSection), Object.keys(sectionTitles), "All eleven workroom views are available in the persistent navigation.");
+  await load("overview");
+  assert.ok(root.querySelectorAll("[data-cw-edit]").some((button) => button.dataset.cwEdit === "order-detail"), "An overview order has a direct view action.");
+  await root.querySelectorAll("[data-cw-section]").find((button) => button.dataset.cwSection === "orders").trigger("click");
+  assert.match(root.innerHTML, /Search order, customer, or SKU/, "The contextual All orders action still opens the order book without a second navbar.");
+  let destination = "";
+  handleFetch = async () => reply(snapshot());
+  mount("overview", { onSectionChange(section) { destination = section; } }); await settle();
+  await root.querySelectorAll("[data-cw-section]").find((button) => button.dataset.cwSection === "production").trigger("click");
+  assert.equal(destination, "production", "Contextual actions use the global router when provided.");
   await load("overview");
   assert.match(root.innerHTML, /aria-valuenow="50"/, "28 committed hours out of 56 scheduled hours is half capacity, not all remaining capacity.");
+  const deadlines = snapshot();
+  deadlines.state.orders.push(entity("order-earlier", { ...deadlines.state.orders[0], id: "order-earlier", externalId: "EARLIER_DEADLINE", due: "2035-10-18" }));
+  deadlines.summary.warnings = [{ message: "CAPACITY_SHORTAGE", severity: "critical" }];
+  await load("overview", deadlines);
+  assert.ok(root.innerHTML.indexOf("EARLIER_DEADLINE") < root.innerHTML.indexOf("OWN_ORDER"), "The overview puts the earliest deadline first even when its record was added later.");
+  assert.ok(root.innerHTML.indexOf("CAPACITY_SHORTAGE") < root.innerHTML.indexOf("Orders to fulfill"), "Capacity and shortage warnings precede the order queue.");
   await load("channels");
   assert.match(root.innerHTML, /Personal Marketplace listings are not connected/);
   assert.match(root.innerHTML, /Updates wait for authorized adapters; nothing is sent yet/);

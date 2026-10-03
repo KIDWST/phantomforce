@@ -30,7 +30,7 @@ const primaryJobs = [
   ["media", "Media Lab"],
   ["content", "Content Hub"],
   ["analytics", "Social Analytics"],
-  ["leads", "Relationships"],
+  ["leads", "CRM"],
   ["bookings", "Bookings"],
   ["money", "Quotes &amp; Money"],
   ["sites", "Sites &amp; Stores"],

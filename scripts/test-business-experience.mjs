@@ -77,6 +77,34 @@ class RenderRoot {
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const root = new RenderRoot();
+// Every records page goes straight to one task heading. Workspace navigation and
+// identity are owned by the global shell, never repeated inside the record view.
+for (const profile of Object.values(BUSINESS_PROFILES)) {
+  ctx.session = { role: "admin", ws: profile.id };
+  store.state.businessWorkItems = [];
+  for (const section of profile.sections) {
+    renderBusinessHub(root, { section: section.id });
+    assert.equal((root.innerHTML.match(/<h1\b/g) || []).length, 1, `${profile.id}/${section.id} has one page heading.`);
+    assert.doesNotMatch(root.innerHTML, /<nav\b|business-hero|business-brand-art|business-section-nav/, "Record screens do not duplicate the global navigation or brand hero.");
+    assert.ok(!root.innerHTML.includes(profile.tagline), "Business slogans do not occupy work screens.");
+  }
+}
+ctx.session = { role: "admin", ws: "client-chicagoshots" };
+renderBusinessHub(root, { section: "deliverables" });
+assert.match(root.innerHTML, /<h1>Deliverables<\/h1>/);
+assert.match(root.innerHTML, /No deliverables yet/);
+assert.equal((root.innerHTML.match(/data-new-business-work/g) || []).length, 1, "Empty screens keep one clear create action.");
+store.state.businessWorkItems = [
+  { id: "review", ws: "client-chicagoshots", kind: "edit", title: "Review first", status: "review", due: "2099-01-01" },
+  { id: "dated", ws: "client-chicagoshots", kind: "shoot", title: "Overdue shoot", status: "scheduled", due: "2000-01-01" },
+  { id: "done", ws: "client-chicagoshots", kind: "project", title: "Completed project", status: "complete" },
+  { id: "gear", ws: "client-chicagoshots", kind: "gear", title: "Available camera", status: "available" },
+];
+renderBusinessHub(root);
+assert.match(root.innerHTML, /<h1>Overview<\/h1>/);
+assert.match(root.innerHTML, /<span>Overdue<\/span><strong>1<\/strong>/);
+assert.ok(root.innerHTML.indexOf('data-business-record="dated"') < root.innerHTML.indexOf('data-business-record="review"'), "Overdue work appears before upcoming reviews.");
+assert.doesNotMatch(root.innerHTML, /Completed project|Available camera|business-template-grid|business-assistant/, "Overview keeps active work and removes completed items and promotional extras.");
 store.state.businessWorkItems = [
   { ...order, id: "odd-own", ws: "occasionally-odd", businessId: "occasionally-odd", title: "ODD_ONLY_RECORD" },
   { id: "pf-own", ws: "phantomforce", businessId: "phantomforce", kind: "project", title: "PHANTOM_ONLY_RECORD", status: "draft" },
