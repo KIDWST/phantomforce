@@ -1,4 +1,4 @@
-import { renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-239";
+import { renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-240";
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -22,8 +22,36 @@ export function workspaceAccessMessage({ account = {}, count, status }) {
   return "Only one workspace is available to this account. Refresh access after an invitation, or use a different account.";
 }
 
+export function workspaceOptionMarkup(choices, current, account = {}) {
+  const items = [...choices];
+  if (!items.some(item => item.id === current)) items.unshift({ id: current, name: account.memberships?.find(member => member.orgId === current)?.orgName || current || "Business" });
+  return items.map(item => `<option value="${esc(item.id)}" ${item.id === current ? "selected" : ""}>${esc(item.name)}</option>`).join("");
+}
+
 let activeDialog = null;
 export function closeWorkspaceAccess() { activeDialog?.close(); }
+
+export function createWorkspaceAccessOpener(options) {
+  let version = 0;
+  const show = async (initialTool = false, notice = "") => {
+    const request = ++version, snapshot = options.getSnapshot();
+    const button = document.querySelector("[data-workspace-access]");
+    button?.setAttribute("aria-busy", "true");
+    try {
+      await options.loadStyle("workspace-access", "/app/workspace-access.css?v=phantom-live-20261026-240");
+    } catch {
+      options.onError("Workspaces could not load. Check your connection and try the workspace button again.");
+      return false;
+    } finally { button?.removeAttribute("aria-busy"); }
+    const current = options.getSnapshot();
+    if (request !== version || snapshot.account !== current.account || snapshot.current !== current.current) return false;
+    openWorkspaceAccess({ ...options, initialTool, notice,
+      preparePrintStyles: () => options.loadStyle("print-analysis", "/app/commerce-workspace.css?v=phantom-live-20261026-240"),
+    });
+  };
+  show.invalidate = () => { version++; };
+  return show;
+}
 
 /** One native modal supplies focus trapping, Escape and focus restoration. */
 export function openWorkspaceAccess({ getSnapshot, refresh, switchWorkspace, signOut, preparePrintStyles, initialTool = false, notice = "" }) {
@@ -90,4 +118,14 @@ export function openWorkspaceAccess({ getSnapshot, refresh, switchWorkspace, sig
   }
   paint(notice); dialog.showModal(); if (initialTool) void showPrint();
   return { close: () => dialog.close() };
+}
+
+export function setDatabaseOrganizationSwitching(active) {
+  document.documentElement.dataset.orgSwitching = active ? "true" : "false";
+  const select = document.querySelector("[data-org-select]");
+  const input = document.querySelector("[data-command-input]");
+  const form = document.querySelector("[data-command-form]");
+  if (select) select.disabled = active;
+  if (input) input.disabled = active;
+  if (form) form.setAttribute("aria-busy", active ? "true" : "false");
 }

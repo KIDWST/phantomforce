@@ -4,6 +4,18 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "verified-workspace-contract-runtime",
+      "status": "active",
+      "title": "The running API must load contracts compiled from the current checkout",
+      "ownerDecision": "October 26, 2026: Continue improving PhantomForce until core workflows are reliable. A stale generated contracts package stripped CRM contact identity despite matching source commits; verify runtime dependencies as well as Git HEAD.",
+      "requiredPatterns": [
+        { "file": "ops/admin-live/Start-Hermes.ps1", "pattern": "ensure-workspace-contracts.mjs[\\s\\S]*Stop-Process -Id \\$listenerPid", "description": "Prepare contracts before replacing the running API." },
+        { "file": "scripts/ensure-workspace-contracts.mjs", "pattern": "stamp.sourceHash === sourceHash[\\s\\S]*stamp.outputHash === outputHash", "description": "Both source and generated output must match their build fingerprint." },
+        { "file": "server/src/index.ts", "pattern": "contractsSourceHash: process.env.PHANTOMFORCE_CONTRACTS_HASH", "description": "Health exposes the startup-verified contract fingerprint without secrets." },
+        { "file": "ops/admin-live/Test-LiveAdminSource.ps1", "pattern": "Hermes contracts match current verified workspace build", "description": "The source doctor verifies runtime contracts as well as the commit." }
+      ]
+    },
+    {
       "id": "workspace-access-recovery",
       "status": "active",
       "title": "Workspace selection explains access and keeps local print tools reachable",

@@ -5,6 +5,7 @@ const checks = [
   "test:workspace-access",
   "test:print-opportunity",
   "build",
+  "test:workspace-contracts",
   "typecheck",
   "test:change-memory",
   "test:admin-master-audit",

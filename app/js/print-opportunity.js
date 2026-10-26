@@ -1,4 +1,4 @@
-import { PRINT_DEFAULTS, PRINT_LIMITS, inspectPrintFile, printEconomics, validatePrintCosts } from "./print-opportunity-core.js?v=phantom-live-20261026-239";
+import { PRINT_DEFAULTS, PRINT_LIMITS, inspectPrintFile, printEconomics, validatePrintCosts } from "./print-opportunity-core.js?v=phantom-live-20261026-240";
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const money = value => value == null ? "—" : value.toLocaleString(undefined, { style: "currency", currency: "USD" });

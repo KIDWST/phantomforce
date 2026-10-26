@@ -115,6 +115,15 @@ try {
   $hermesHealth = Invoke-RestMethod -Uri "http://127.0.0.1:$HermesPort/health" -TimeoutSec 8
   $hermesCommit = [string]$hermesHealth.commit
   $states.Add((Result ($(if ($hermesCommit -eq $head) { "OK" } elseif ($hermesCommit) { "FAIL" } else { "WARN" })) "Hermes commit: $hermesCommit"))
+  try {
+    $contractsCheck = & node (Join-Path $RepoRoot "scripts\ensure-workspace-contracts.mjs") --repo-root $RepoRoot --check 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Contracts check failed." }
+    $contractsState = $contractsCheck | ConvertFrom-Json
+    $contractsMatch = [string]$hermesHealth.contractsSourceHash -eq [string]$contractsState.sourceHash
+    $states.Add((Result ($(if ($contractsMatch) { "OK" } else { "FAIL" })) "Hermes contracts match current verified workspace build: $contractsMatch"))
+  } catch {
+    $states.Add((Result "FAIL" "Workspace contracts are stale or resolve outside this checkout."))
+  }
 } catch {
   $states.Add((Result "WARN" "Hermes/backend on $HermesPort did not answer /health."))
 }

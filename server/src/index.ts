@@ -1426,6 +1426,7 @@ app.get("/health", async () => {
     /* the commit this API process is running — the sync watches this to know
        when a git pull delivered new server code and Hermes must restart */
     commit: runningCommit,
+    contractsSourceHash: process.env.PHANTOMFORCE_CONTRACTS_HASH || null,
     contracts: {
       actions: Object.keys(ACTION_SCHEMAS),
       falconJobs: Object.keys(FALCON_JOB_SCHEMAS),

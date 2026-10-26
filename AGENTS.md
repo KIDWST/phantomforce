@@ -101,6 +101,12 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Runtime contract verification and lighter workspace entry (2026-10-26)** —
+  build `phantom-live-20261026-240`. Hermes now verifies/contracts-builds the
+  current checkout before replacing its listener; health and the source doctor
+  compare the verified contract fingerprint. Workspace dialog styles load on
+  demand and its controller code lives outside the main shell. See
+  `docs/quality/WORKFLOW_RELIABILITY_20261026.md` for evidence and remaining work.
 - **Workspace access recovery (2026-10-26)** — build `phantom-live-20261026-239`.
   An enabled workspace panel explains single-customer scope, lists authorized
   businesses, refreshes access and offers account/owner entry points. The local

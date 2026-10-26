@@ -262,6 +262,12 @@ $serverEnv = Read-DotEnvFile -Path $serverEnvPath
 Ensure-LocalDatabase -ServerEnv $serverEnv
 
 $node = (Get-Command node -ErrorAction Stop).Source
+# TypeScript source imports the contracts package through its generated dist
+# entry. Verify/build that package before stopping a healthy API process.
+$contractsBuild = & $node (Join-Path $repo "scripts\ensure-workspace-contracts.mjs") --repo-root $repo
+if ($LASTEXITCODE -ne 0) { throw "Workspace contracts could not be prepared; the running API was preserved." }
+$contractsState = $contractsBuild | ConvertFrom-Json
+if ([string]$contractsState.sourceHash -notmatch '^[a-f0-9]{64}$') { throw "Contracts build did not return a verified fingerprint." }
 $stateDir = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live"
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 
@@ -300,6 +306,7 @@ $procArgs = @("--import", ([System.Uri]$tsxLoader).AbsoluteUri, "src\index.ts")
 
 $oldCommit = $env:PHANTOMFORCE_BUILD_COMMIT
 $oldPort = $env:PORT
+$oldContractsHash = $env:PHANTOMFORCE_CONTRACTS_HASH
 $oldServerEnv = @{}
 foreach ($name in $serverEnv.Keys) {
   $oldServerEnv[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
@@ -307,11 +314,13 @@ foreach ($name in $serverEnv.Keys) {
 }
 $env:PHANTOMFORCE_BUILD_COMMIT = $Commit
 $env:PORT = [string]$Port
+$env:PHANTOMFORCE_CONTRACTS_HASH = [string]$contractsState.sourceHash
 try {
   $proc = Start-Process -FilePath $file -ArgumentList $procArgs -WorkingDirectory $serverDir -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
 } finally {
   $env:PHANTOMFORCE_BUILD_COMMIT = $oldCommit
   $env:PORT = $oldPort
+  $env:PHANTOMFORCE_CONTRACTS_HASH = $oldContractsHash
   foreach ($name in $oldServerEnv.Keys) {
     [Environment]::SetEnvironmentVariable($name, $oldServerEnv[$name], "Process")
   }

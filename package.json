@@ -8,11 +8,13 @@
     "server"
   ],
   "scripts": {
+    "build:contracts": "node scripts/ensure-workspace-contracts.mjs",
+    "test:workspace-contracts": "node scripts/test-workspace-contracts.mjs",
     "test:workspace-access": "node scripts/test-workspace-access.mjs",
     "test:workspace-access:browser": "node scripts/test-workspace-access-browser.mjs",
     "test:print-opportunity": "node scripts/test-print-opportunity.mjs",
     "test:business-commerce": "node scripts/test-business-navigation.mjs && node scripts/test-commerce-experience.mjs && npm run test:business-commerce --workspace @phantomforce/server && npm run test:commerce-http --workspace @phantomforce/server && npm run test:studio-workspace-records --workspace @phantomforce/server",
-    "build": "npm run build --workspace @phantomforce/contracts && npm run build --workspace @phantomforce/server",
+    "build": "npm run build:contracts && npm run build --workspace @phantomforce/server",
     "verify": "npm run build && npm run test:phantomplay-game-identities && npm run test:phantomplay-production && npm run test:phantomplay-discovery && npm run test:phantomplay-desktop-shell",
     "dev:server": "npm run dev --workspace @phantomforce/server",
     "test:intent": "node scripts/test-phantom-intent-router.mjs",
