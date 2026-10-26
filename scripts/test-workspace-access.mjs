@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { workspaceChoices, workspaceAccessMessage } from '../app/js/workspace-access.js';
+const organizations = [{ id: 'phantomforce', name: 'PhantomForce' }, { id: 'occasionally-odd', name: 'Occasionally Odd' }];
+const options = (account, catalog = null) => workspaceChoices({ account, catalog, workspaces: organizations, current: account.orgId || 'phantomforce' });
+assert.equal(options({ role: 'admin' }).length, 2);
+assert.deepEqual(options({ role: 'employee' }).map(x => x.id), ['phantomforce']);
+const customer = { role: 'admin', localCustomer: true, orgId: 'customer-1', memberships: [{ orgId: 'customer-1', orgName: 'Customer 1 Workspace', role: 'owner' }] };
+assert.deepEqual(options(customer).map(x => x.id), ['customer-1']);
+assert.deepEqual(options(customer, [{ tenantId: 'occasionally-odd' }, { tenantId: 'customer-1' }]).map(x => x.id), ['customer-1']);
+assert.deepEqual(options({ database: true, memberships: [{ orgId: 'permitted', orgName: 'My business' }] }).map(x => x.id), ['permitted']);
+assert.deepEqual(options({ database: true, memberships: [{ orgId: 'stale' }] }, [{ tenantId: 'fresh', name: 'Confirmed business' }]).map(x => x.id), ['fresh']);
+assert.deepEqual(options({ role: 'admin' }, []), []);
+assert.deepEqual(options({ role: 'admin' }, [{ tenantId: 'x' }, { tenantId: 'x' }, { name: 'broken' }]).map(x => x.id), ['x']);
+assert.match(workspaceAccessMessage({ account: customer, count: 1, status: 'ready' }), /customer account has one workspace/);
+assert.match(workspaceAccessMessage({ count: 2, status: 'error' }), /could not be refreshed/);
+assert.match(workspaceAccessMessage({ count: 2, status: 'loading' }), /Checking/);
+console.log('Workspace access: 11 checks passed (server authority, single customer scope, stale membership, deduplication, loading and error explanations).');

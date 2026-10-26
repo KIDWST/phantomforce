@@ -101,6 +101,12 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Workspace access recovery (2026-10-26)** — build `phantom-live-20261026-239`.
+  An enabled workspace panel explains single-customer scope, lists authorized
+  businesses, refreshes access and offers account/owner entry points. The local
+  print tool is accessible without switching. Catalogs are cleared at signout;
+  customer profiles never grant operator access. See
+  `docs/quality/WORKSPACE_ACCESS_20261026.md` for browser evidence and limitations.
 - **Print opportunities (2026-10-26)** — build `phantom-live-20261026-238`.
   Occasionally Odd Production and Finance now include local 3MF plate analysis,
   duplicate detection and editable cost/revenue thresholds. No uploads, printer

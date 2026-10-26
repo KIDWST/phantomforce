@@ -8,6 +8,8 @@
     "server"
   ],
   "scripts": {
+    "test:workspace-access": "node scripts/test-workspace-access.mjs",
+    "test:workspace-access:browser": "node scripts/test-workspace-access-browser.mjs",
     "test:print-opportunity": "node scripts/test-print-opportunity.mjs",
     "test:business-commerce": "node scripts/test-business-navigation.mjs && node scripts/test-commerce-experience.mjs && npm run test:business-commerce --workspace @phantomforce/server && npm run test:commerce-http --workspace @phantomforce/server && npm run test:studio-workspace-records --workspace @phantomforce/server",
     "build": "npm run build --workspace @phantomforce/contracts && npm run build --workspace @phantomforce/server",

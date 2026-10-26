@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20261026-238";
+import { ctx, session } from "./store.js?v=phantom-live-20261026-239";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -20,12 +20,13 @@ function authHeaders(extra = {}) {
   return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
-async function api(path, { method = "GET", body } = {}) {
+async function api(path, { method = "GET", body, signal } = {}) {
   const headers = authHeaders(body !== undefined ? { "Content-Type": "application/json" } : {});
   const response = await fetch(path, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal,
   });
   const json = await response.json().catch(() => ({}));
   return { status: response.status, ok: response.ok, json };
@@ -231,7 +232,15 @@ export async function switchCustomerPlan(planKey) {
 }
 
 export async function switchOrg(orgId) {
-  const { ok, json } = await api("/auth/switch-org", { method: "POST", body: { orgId } });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  let result;
+  try {
+    result = await api("/auth/switch-org", { method: "POST", body: { orgId }, signal: controller.signal });
+  } catch {
+    return { ok: false, error: "switch_unconfirmed" };
+  } finally { clearTimeout(timeout); }
+  const { ok, json } = result;
   if (!ok || !json?.session) return { ok: false, error: json?.error || "switch_failed" };
   /* refresh the local session mirror with the new active org */
   const current = ctx.session || {};

@@ -4,6 +4,19 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "workspace-access-recovery",
+      "status": "active",
+      "title": "Workspace selection explains access and keeps local print tools reachable",
+      "ownerDecision": "October 26, 2026: User could not switch workspaces from Customer 1. Replace the unexplained dead end with accessible account/access recovery and expose local print analysis without needing another business's access.",
+      "requiredPatterns": [
+        { "file": "app/index.html", "pattern": "data-workspace-access[^>]*aria-haspopup=\"dialog\"", "description": "An enabled workspace/account panel is always available beside the business selector." },
+        { "file": "app/js/workspace-access.js", "pattern": "This customer account has one workspace", "description": "Single-customer access has a plain explanation." },
+        { "file": "app/js/workspace-access.js", "pattern": "if \\(account.localCustomer\\) choices = choices.filter", "description": "Local customer profiles never grant cross-business access." },
+        { "file": "app/js/workspace-access.js", "pattern": "data-access-print", "description": "Local file analysis is reachable without a workspace switch." },
+        { "file": "app/js/main.js", "pattern": "businessCatalogRevision\\+\\+;[\\s\\S]*businessCatalog = null", "description": "Signing out invalidates pending catalogs and clears prior account access." }
+      ]
+    },
+    {
       "id": "print-opportunity-local-analysis",
       "status": "active",
       "title": "Local 3MF print opportunities live in organization production and finance",
