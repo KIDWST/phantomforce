@@ -147,7 +147,7 @@ try {
           await waitFor(cdp, `document.querySelector('[data-business-hub="occasionally-odd"]')`, "Scoped campaign planner did not open");
         }
         if (business.id === "phantomforce") {
-          await evaluate(cdp, `document.querySelector('[data-business-home]').click()`);
+          await evaluate(cdp, `document.querySelector('[data-nav-id="business-projects"]').click()`);
           await waitFor(cdp, `document.querySelector('[data-business-hub="phantomforce"]')`, "PhantomForce project hub did not open");
         }
         await evaluate(cdp, `document.querySelector('[data-new-business-work]').click()`);

@@ -1,4 +1,4 @@
-import { ctx, currentTenantId, session } from "./store.js?v=phantom-live-20261026-240";
+import { ctx, currentTenantId, session } from "./store.js?v=phantom-live-20261026-241";
 
 // One request boundary covers legacy integrations as well as new modules.
 // The header is a selection, never authority: the server checks membership.
@@ -19,6 +19,7 @@ export function installBusinessRequestBoundary(host = window) {
   host.fetch = async (input, options = {}) => {
     const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url, host.location.href);
     const api = url.origin === host.location.origin
+      && url.pathname !== "/api/business-workspaces" // Account catalog must work before a business is selected.
       && !/^\/(?:auth(?:\/|$)|session(?:s)?(?:\/|$)|app(?:\/|$)|assets(?:\/|$)|health(?:\/|$))/.test(url.pathname)
       && !/\.(?:html|js|mjs|css|png|jpe?g|webp|svg|ico|woff2?|mp4|webm|json)$/i.test(url.pathname);
     if (!api || !ctx.session) return originalFetch(input, options);

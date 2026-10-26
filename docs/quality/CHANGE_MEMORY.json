@@ -4,6 +4,25 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "canonical-app-and-automatic-print-brief",
+      "status": "active",
+      "title": "One verified app entry and a print brief that does not require manual cost setup",
+      "ownerDecision": "October 26, 2026: The owner now uses app.phantomforce.online and explicitly requests the owner/admin experience there, reliable workspace switching, and smart automatic print analysis instead of a mandatory manual form. The existing database, actual organization IDs, memberships, 2FA and server capabilities remain authoritative; no account is promoted by hostname or label.",
+      "requiredPatterns": [
+        {"file": "server/src/access/public-hosts.ts", "pattern": "if \\(scope === \"client\"\\) return true", "description": "Authenticated owner and customer sessions may use the canonical app; existing capability checks still authorize each API."},
+        { "file": "server/src/index.ts", "pattern": "databaseBusinessWorkspaces\\(session, await listOrganizationsForSession\\(dbSession\\)\\)", "description": "Database workspace choices come from real organization rows." },
+        {"file": "app/js/business-boundary.js", "pattern": "url.pathname !== \"/api/business-workspaces\"", "description": "Account-level workspace discovery works before selecting a business."},
+        { "file": "app/js/main.js", "pattern": "workspaceContinuity.defer\\(\\)", "description": "Background redraws defer while transient work is active." },
+        { "file": "app/js/workspace-continuity.js", "pattern": "root.dataset.workspaceTenant !== getTenant\\(\\)", "description": "Preserved work is never carried into a different business." },
+        { "file": "app/js/print-opportunity.js", "pattern": "data-po-folder[\\s\\S]*data-po-cost-details", "description": "File/folder analysis precedes the optional cost details." },
+        { "file": "app/js/print-opportunity-intelligence.js", "pattern": "context\\?\\.tenantId === businessId", "description": "Recorded costs must belong to the active business." },
+        { "file": "scripts/test-release-critical.mjs", "pattern": "test:unified-app[\\s\\S]*test:smart-print:browser", "description": "Release checks exercise canonical accounts and no-form print analysis." }
+      ],
+      "forbiddenPatterns": [
+        { "file": "app/js/main.js", "pattern": "Platform admin accounts must use admin.phantomforce.online", "description": "A successful verified owner login must not be logged out merely for using the canonical app." }
+      ]
+    },
+    {
       "id": "verified-workspace-contract-runtime",
       "status": "active",
       "title": "The running API must load contracts compiled from the current checkout",
@@ -25,7 +44,8 @@
         { "file": "app/js/workspace-access.js", "pattern": "This customer account has one workspace", "description": "Single-customer access has a plain explanation." },
         { "file": "app/js/workspace-access.js", "pattern": "if \\(account.localCustomer\\) choices = choices.filter", "description": "Local customer profiles never grant cross-business access." },
         { "file": "app/js/workspace-access.js", "pattern": "data-access-print", "description": "Local file analysis is reachable without a workspace switch." },
-        { "file": "app/js/main.js", "pattern": "businessCatalogRevision\\+\\+;[\\s\\S]*businessCatalog = null", "description": "Signing out invalidates pending catalogs and clears prior account access." }
+        { "file": "app/js/main.js", "pattern": "businessCatalog.clear\\(\\)", "description": "Signing out invalidates pending catalogs and clears prior account access." },
+        { "file": "app/js/workspace-access.js", "pattern": "clear\\(\\) \\{ revision\\+\\+; pending\\?\\.abort\\(\\);[\\s\\S]*items = null", "description": "Catalog clear cancels pending requests and removes old account items." }
       ]
     },
     {
@@ -525,7 +545,7 @@
       "id": "phantomstore-ai-products-served-integration",
       "status": "active",
       "title": "The ten AI products live inside the served PhantomStore",
-      "ownerDecision": "PHANTOM ORACLE, CHRONICLE, FOUNDRY, TWIN, DEALROOM, BLUEPRINT, TERRAIN, PROOF, LOOM, and CAUSAL must appear in the actual PhantomStore catalog as paid products that unlock for verified customer purchases on app.phantomforce.online. The authenticated platform administrator on admin.phantomforce.online has unrestricted internal access to every PhantomForce product without purchasing it. Admin authority must be represented explicitly and never stored as a fake purchase. Each workspace must persist source artifacts, run its distinct deterministic core loop, and record human review through the served application.",
+      "ownerDecision": "PHANTOM ORACLE, CHRONICLE, FOUNDRY, TWIN, DEALROOM, BLUEPRINT, TERRAIN, PROOF, LOOM, and CAUSAL must appear in the actual PhantomStore catalog as paid products that unlock for verified customer purchases on app.phantomforce.online. The authenticated platform administrator on app.phantomforce.online (or the legacy admin alias) has unrestricted internal access to every PhantomForce product without purchasing it. Admin authority must be represented explicitly and never stored as a fake purchase. Each workspace must persist source artifacts, run its distinct deterministic core loop, and record human review through the served application.",
       "requiredPatterns": [
         {
           "file": "server/src/phantom-ai/phantomstore.ts",
@@ -1799,7 +1819,7 @@
       "id": "database-auth-reboot-recovery",
       "status": "active",
       "title": "Live admin and customer auth depend on a self-recovering database",
-      "ownerDecision": "admin.phantomforce.online uses the database-backed platform super-admin account, while app.phantomforce.online uses tenant-scoped customer accounts. Hermes must revive the approved local PostgreSQL container before booting so a Windows restart cannot silently fall back to incompatible customer-only auth. Docker engine probes must be time-bounded, a stale Desktop engine must self-restart, and Hermes must not report success until it actually binds.",
+      "ownerDecision": "October 26, 2026 supersedes the old host split: app.phantomforce.online accepts the database-backed platform owner and tenant-scoped customer accounts; roles and memberships determine access. The legacy admin alias remains owner-restricted. Hermes must revive the approved local PostgreSQL container before booting so a Windows restart cannot silently fall back to incompatible customer-only auth. Docker engine probes must be time-bounded, a stale Desktop engine must self-restart, and Hermes must not report success until it actually binds.",
       "requiredPatterns": [
         {
           "file": "ops/admin-live/Start-Hermes.ps1",

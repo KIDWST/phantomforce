@@ -331,6 +331,20 @@ test("request boundary sends business selection and invalidates stale requests d
   assert.equal((await fresh).ok, true);
 });
 
+test("account catalog is available before selecting a business without weakening record scope", async () => {
+  const { installBusinessRequestBoundary } = await import("../app/js/business-boundary.js");
+  const calls = [];
+  const host = { location, addEventListener() {}, fetch: async (url, options) => { calls.push({ url, options }); return { ok: true }; } };
+  installBusinessRequestBoundary(host);
+  ctx.session = { role: "admin", database: true, orgId: null, isSuperAdmin: true, memberships: [] };
+  await host.fetch("/api/business-workspaces", { headers: { Authorization: "Bearer fixture-token" } });
+  assert.equal(new Headers(calls[0].options.headers).get("x-phantomforce-business"), null);
+  assert.equal(new Headers(calls[0].options.headers).get("Authorization"), "Bearer fixture-token");
+  ctx.session.orgId = "phantomforce-internal";
+  await host.fetch("/api/business-workspaces/records");
+  assert.equal(calls[1].options.headers.get("x-phantomforce-business"), "phantomforce-internal");
+});
+
 let failed = 0;
 for (const { name, run } of tests) {
   storage.clear(); temporary.clear();

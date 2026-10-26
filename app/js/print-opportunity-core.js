@@ -95,8 +95,28 @@ export function parsePrintSlice(text, Parser = globalThis.DOMParser) {
   if (doc.querySelector("parsererror") || doc.documentElement?.tagName !== "config") throw new Error("Slice metadata is not valid Bambu XML.");
   return [...doc.querySelectorAll("config > plate")].map((plate, index) => {
     const values = Object.fromEntries([...plate.querySelectorAll(":scope > metadata")].map(e => [e.getAttribute("key"), e.getAttribute("value")]));
-    return { index: values.index || String(index + 1), grams: nonnegative(values.weight), seconds: nonnegative(values.prediction), warnings: [...plate.querySelectorAll(":scope > warning")].map(e => e.getAttribute("msg") || "Slicer warning"), objectCount: plate.querySelectorAll(':scope > object:not([skipped="true"])').length };
+    return {
+      index: values.index || String(index + 1), grams: nonnegative(values.weight), seconds: nonnegative(values.prediction),
+      warnings: [...plate.querySelectorAll(":scope > warning")].map(e => e.getAttribute("msg") || "Slicer warning"),
+      objectCount: plate.querySelectorAll(':scope > object:not([skipped="true"])').length,
+      nozzle: String(values.nozzle_diameters || "").slice(0, 120), printerModelId: String(values.printer_model_id || "").slice(0, 120),
+      supportUsed: values.support_used === "true" ? true : values.support_used === "false" ? false : null,
+      outsidePlate: values.outside === "true",
+      filaments: [...plate.querySelectorAll(":scope > filament")].map(element => ({
+        id: String(element.getAttribute("id") || "").slice(0, 80), type: String(element.getAttribute("type") || "").slice(0, 120),
+        color: String(element.getAttribute("color") || "").slice(0, 80), grams: nonnegative(element.getAttribute("used_g")), meters: nonnegative(element.getAttribute("used_m")),
+      })),
+    };
   });
+}
+
+export function printProjectProfiles(config = {}) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return [];
+  const list = key => Array.isArray(config[key]) ? config[key].slice(0, 128) : [];
+  const types = list("filament_type"), colors = list("filament_colour"), names = list("filament_settings_id"), vendors = list("filament_vendor");
+  const length = Math.max(types.length, colors.length, names.length, vendors.length);
+  const value = item => String(item ?? "").slice(0, 240);
+  return Array.from({ length }, (_, index) => ({ id: String(index + 1), type: value(types[index]), color: value(colors[index]), profile: value(names[index]), vendor: value(vendors[index]) }));
 }
 
 export async function inspectPrintFile(file, options = {}) {
@@ -105,7 +125,15 @@ export async function inspectPrintFile(file, options = {}) {
   const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", buffer))].map(b => b.toString(16).padStart(2, "0")).join("");
   const slice = await readPrintZipEntry(buffer, "Metadata/slice_info.config", options);
   const configText = await readPrintZipEntry(buffer, "Metadata/project_settings.config", options);
-  const config = configText ? JSON.parse(configText) : {};
+  const issues = [];
+  let config = {};
+  try { const parsed = configText ? JSON.parse(configText) : {}; if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) config = parsed; else issues.push("Project settings are not a readable settings object."); }
+  catch { issues.push("Project settings could not be read; saved slice estimates are still shown."); }
   const plates = parsePrintSlice(slice, options.Parser);
-  return { name: file.name, sha256, printer: String(config.printer_model || "Not recorded"), presetCosts: Array.isArray(config.filament_cost) ? config.filament_cost.map(String) : [], plates, issue: plates.length ? "" : "No saved slice estimates. Re-slice for your current printer and save the project." };
+  const filamentProfiles = printProjectProfiles(config);
+  for (const plate of plates) plate.filaments = plate.filaments.map(filament => {
+    const profile = filamentProfiles.find(item => item.id === filament.id) || {};
+    return { ...profile, ...filament, type: filament.type || profile.type || "", color: filament.color || profile.color || "" };
+  });
+  return { name: file.name, sha256, printer: String(config.printer_model || "Not recorded").slice(0, 240), printerProfile: String(config.printer_settings_id || "").slice(0, 240), nozzle: Array.isArray(config.nozzle_diameter) ? config.nozzle_diameter.map(String).slice(0, 8).join(", ") : "", sliceProfile: String(config.print_settings_id || "").slice(0, 240), filamentProfiles, presetCosts: Array.isArray(config.filament_cost) ? config.filament_cost.slice(0, 128).map(value => String(value).slice(0, 80)) : [], plates, issues, issue: plates.length ? "" : "No saved slice estimates. Re-slice for your current printer and save the project." };
 }

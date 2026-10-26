@@ -15,9 +15,12 @@ const hermesLauncher = read("../ops/admin-live/Start-Hermes.ps1");
 assert.match(store, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u, "The customer app host must be explicit in the browser session layer.");
 assert.match(store, /export const isClientPublicHost = \(\) => location\.hostname === CLIENT_PUBLIC_HOST/u, "The browser must detect the customer app host.");
 assert.match(store, /export const isLocalDevHost = \(\) => LOCAL_DEV_HOSTS\.has\(location\.hostname\)/u, "Demo session shortcuts must be local-dev only.");
+assert.match(store, /function liveAdminUrl\(\)[\s\S]*new URL\(`https:\/\/\$\{CLIENT_PUBLIC_HOST\}\/app\/index\.html`\)/u, "Legacy owner-entry helpers must send users to the canonical app, not depend on the admin alias.");
 assert.match(store, /const allowLocalSessionShortcut = isLocalDevHost\(\)/u, "Session query shortcuts must be guarded by local-dev host detection.");
 assert.match(store, /if \(saved\?\.database && !token\) \{\s*session\.clear\(\);\s*return null;\s*\}/u, "Saved database sessions must not restore after the token is gone.");
-assert.match(store, /isClientPublicHost\(\) && \(\(!saved\.database && !saved\.localCustomer\) \|\| saved\.canManageAccess \|\| saved\.isSuperAdmin\)/u, "The customer app must reject local/admin/super-admin session mirrors (database or local-customer accounts are the only accepted kinds).");
+assert.match(store, /isClientPublicHost\(\) && \(!token \|\| \(!saved\.database && !saved\.localCustomer && !signedOwnerMirror\)\)/u, "The canonical app must require a tab token and a supported account mirror; arbitrary local/demo mirrors stay rejected.");
+assert.match(store, /if \(!isLiveAdminHost\(\) && !isClientPublicHost\(\)\) return resolveSession\(\)/u, "Both public hosts must verify restored accounts through the server.");
+assert.match(store, /isLiveAdminHost\(\) && !payload\.session\.canManageAccess/u, "The legacy admin alias must retain its platform-owner restriction.");
 assert.match(store, /const liveAdminDatabaseLane = isLiveAdminHost\(\) && auth\?\.ownerProductionAuthEnabled !== true;[\s\S]*if \(\(auth\?\.databaseAuthEnabled \|\| liveAdminDatabaseLane\) && !auth\?\.ownerProductionAuthEnabled\) \{\s*return databaseOwnerLogin\(ownerKeyOrEmail, password\);\s*\}/u, "The admin owner fallback must use database login on the live admin host.");
 assert.match(store, /fetch\("\/auth\/login", \{[\s\S]*body: JSON\.stringify\(\{ email, password \}\)[\s\S]*if \(!s\.canManageAccess\) \{\s*session\.clear\(\);/u, "Database-backed admin login must use the server-owned login route and refuse accounts without admin access.");
 assert.match(store, /if \(payload\?\.requires2fa\) \{\s*return \{\s*requires2fa: true,\s*challengeToken: payload\.challengeToken/u, "Owner login must return the live 2FA challenge instead of hiding it behind an error.");
@@ -41,8 +44,10 @@ assert.match(main, /Sign-in is temporarily unavailable\. Try again in a moment\.
 assert.doesNotMatch(main, /The account system is not reachable\. Start the backend/u, "Customer auth must not expose backend-start instructions.");
 assert.doesNotMatch(main.match(/if \(isLiveAdminHost\(\)\) \{([\s\S]*?)\n  \}\n\n  if \(isClientPublicHost\(\)/u)?.[1] || "", /customerApp: true|data-auth-mode="signup"|Forgot password|Create account|data-owner-login/u, "Admin login must not mount customer create-account/password-reset controls or the legacy owner form.");
 assert.match(main, /if \(isLocalDevHost\(\)\) \{\s*try \{/u, "Demo login must remain local-development only.");
-assert.match(main, /function renderCustomerAuthBlocked\(card, message = "Customer account login is not enabled on this backend\."\)/u, "Customer app must block when database auth is disabled.");
-assert.match(main, /Platform admin accounts must use admin\.phantomforce\.online/u, "Customer app must direct platform admin accounts away from app.phantomforce.online.");
+assert.match(main, /function renderCustomerAuthBlocked\(card, message = "Account sign-in is temporarily unavailable\."\)/u, "The canonical app must show a blocked state while account verification is unavailable.");
+assert.doesNotMatch(main, /Platform admin accounts must use admin\.phantomforce\.online/u, "The canonical app must not log out verified platform owners or force a different host.");
+assert.match(main, /surface\?\.internalOnly[\s\S]*ctx\.session\?\.canManageAccess/u, "Internal UI capabilities may be offered to a server-confirmed platform owner on the canonical app.");
+assert.match(main, /const publicHost = isLiveAdminHost\(\) \|\| isClientPublicHost\(\);[\s\S]*const restored = publicHost \? await verifyLiveSession\(\) : resolveSession\(\);[\s\S]*if \(publicHost\) return restored;/u, "Public boot must use server verification and must not restore privileged offline mirrors after a failed verifier.");
 assert.match(main, /try \{\s*if \(databaseSession\) await databaseLogout\(\);\s*\} finally \{\s*session\.clear\(\);/u, "Logout must always clear local access even if database revocation fails.");
 assert.match(main, /url\.searchParams\.delete\("session"\)/u, "Logout must remove local session shortcuts from the URL.");
 
@@ -50,16 +55,16 @@ assert.match(orgs, /const managesOrg = s\.isSuperAdmin \|\| \["owner", "admin"\]
 assert.doesNotMatch(orgs, /\["owner", "admin", "member"\]\.includes\(s\.orgRole/u, "Plain org members must not map to Business Manager.");
 assert.match(orgs, /export async function databaseAcceptInvitation\(token, payload = \{\}\)[\s\S]*\/auth\/invitations\/accept/u, "The browser must accept workspace invitations through the server-owned route.");
 
-assert.doesNotMatch(index, /Business owner or workspace admin/u, "The public gate must not blur full admin access with customer workspace admins.");
+assert.doesNotMatch(index, /Business owner or workspace admin/u, "The public gate must not confuse business-admin authority with platform-owner authority.");
 assert.match(index, /Full Force owner\/admin access/u, "Business Manager copy must make admin full-Force access explicit.");
-assert.match(index, /Admin is never a client workspace selector/u, "The static gate must state that admin always opens full Force.");
+assert.match(index, /All accounts use app\.phantomforce\.online\. Your verified role controls business and platform access\./u, "The static gate must identify the canonical shared app without granting a role from its hostname.");
 assert.match(main, /Admin opens full Force with platform access/u, "Live admin login must clarify that admin is full Force, not workspace-scoped.");
 assert.match(index, /pf_build_probe/u, "The live page must poll for a new build.");
 assert.match(index, /location\.replace\(nextUrl\.href\)/u, "The live page must replace stale tabs after deploys.");
 
 assert.match(publicHosts, /export const CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u, "The server public-host boundary must know the customer app host.");
 assert.match(publicHosts, /if \(scope === "admin"\) return session\.canManageAccess/u, "The admin host must only allow platform/admin access sessions.");
-assert.match(publicHosts, /if \(scope === "client"\) return !session\.canManageAccess/u, "The customer host must reject platform/admin access sessions.");
+assert.match(publicHosts, /if \(scope === "client"\) return true/u, "The canonical app accepts authenticated owners and customers; host selection never grants a role.");
 assert.match(server, /const publicHost = requestPublicHost\(request\);\s*if \(!canUseSessionOnPublicHost\(publicHost, session\)\) \{\s*await revokeDatabaseSession\(session\.authSessionId\);/u, "Database login must enforce the public-host boundary and revoke refused sessions.");
 assert.match(server, /const scope = publicHostScope\(publicHost\);[\s\S]*const customerAccountActionsEnabled = scope !== "admin" && \(databaseLoginUsable \|\| localCustomerEnabled\);[\s\S]*customerLoginEndpoint: scope !== "admin" && \(databaseLoginUsable \|\| localCustomerEnabled\) \? "\/auth\/login" : undefined/u, "/sessions must not advertise customer login/register/reset endpoints to admin.phantomforce.online.");
 assert.match(server, /app\.post\("\/auth\/signup"[\s\S]*customerAuthForbiddenOnHost\(request\)[\s\S]*Customer accounts cannot be created on admin\.phantomforce\.online/u, "Database signup must be blocked on admin.phantomforce.online.");

@@ -1,6 +1,6 @@
 param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
-  [string]$AdminUrl = "https://admin.phantomforce.online/app/index.html",
+  [string]$AdminUrl = "https://app.phantomforce.online/app/index.html",
   [int]$AdminPort = 5177,
   [int]$HermesPort = 5190,
   [switch]$Strict

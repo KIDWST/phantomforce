@@ -1,6 +1,8 @@
 import type { AccessSession } from "./session.js";
 
 export const ADMIN_PUBLIC_HOST = "admin.phantomforce.online";
+// Historical export name; this is the canonical application for every
+// authenticated account. A hostname does not grant a platform or business role.
 export const CLIENT_PUBLIC_HOST = "app.phantomforce.online";
 
 export const ADMIN_PUBLIC_URL = `https://${ADMIN_PUBLIC_HOST}`;
@@ -62,7 +64,7 @@ export function canUseSessionOnPublicHost(host: string | undefined, session: Acc
   const scope = publicHostScope(host);
 
   if (scope === "admin") return session.canManageAccess;
-  if (scope === "client") return !session.canManageAccess;
+  if (scope === "client") return true;
   return true;
 }
 

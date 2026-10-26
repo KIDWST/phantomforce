@@ -1,6 +1,38 @@
-import { renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-240";
+import { renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-241";
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+export function createWorkspaceCatalog({ getAccount, getToken, getTenant, onAccepted, fetcher = (...args) => globalThis.fetch(...args) }) {
+  let items = null, status = "idle", revision = 0, owner = null, pending = null;
+  return {
+    get items() { return owner === getAccount() ? items : null; },
+    get status() { return owner === getAccount() ? status : "idle"; },
+    clear() { revision++; pending?.abort(); pending = null; items = null; status = "idle"; owner = null; },
+    async load() {
+      const account = getAccount(), tenant = getTenant(), token = getToken();
+      if (owner !== account) { items = null; owner = account; }
+      if (!token) { revision++; pending?.abort(); pending = null; items = null; status = "error"; return false; }
+      const started = ++revision;
+      pending?.abort();
+      const controller = new AbortController(); pending = controller;
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+      status = "loading";
+      try {
+        const response = await fetcher("/api/business-workspaces", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal });
+        const payload = await response.json();
+        if (started !== revision || account !== getAccount()) return false;
+        if (tenant !== getTenant() || token !== getToken()) { status = "idle"; return false; }
+        if (!response.ok || !Array.isArray(payload.workspaces)) throw new Error("Workspace access is unavailable.");
+        items = payload.workspaces.filter(item => typeof item.tenantId === "string"); status = "ready";
+        onAccepted(items);
+        return true;
+      } catch {
+        if (started === revision && account === getAccount()) status = "error";
+        return false;
+      } finally { clearTimeout(timeout); if (pending === controller) pending = null; }
+    },
+  };
+}
 
 /** Use the server catalog when available. A profile name never grants access. */
 export function workspaceChoices({ account = {}, catalog = null, workspaces = [], current = "" }) {
@@ -25,7 +57,7 @@ export function workspaceAccessMessage({ account = {}, count, status }) {
 export function workspaceOptionMarkup(choices, current, account = {}) {
   const items = [...choices];
   if (!items.some(item => item.id === current)) items.unshift({ id: current, name: account.memberships?.find(member => member.orgId === current)?.orgName || current || "Business" });
-  return items.map(item => `<option value="${esc(item.id)}" ${item.id === current ? "selected" : ""}>${esc(item.name)}</option>`).join("");
+  return items.map(item => `<option value="${esc(item.id)}" ${item.id === current ? "selected" : ""}>${esc(item.name)}</option>`).join("") + '<option value="__workspace_access__">Workspaces &amp; accounts…</option>';
 }
 
 let activeDialog = null;
@@ -38,7 +70,7 @@ export function createWorkspaceAccessOpener(options) {
     const button = document.querySelector("[data-workspace-access]");
     button?.setAttribute("aria-busy", "true");
     try {
-      await options.loadStyle("workspace-access", "/app/workspace-access.css?v=phantom-live-20261026-240");
+      await options.loadStyle("workspace-access", "/app/workspace-access.css?v=phantom-live-20261026-241");
     } catch {
       options.onError("Workspaces could not load. Check your connection and try the workspace button again.");
       return false;
@@ -46,7 +78,7 @@ export function createWorkspaceAccessOpener(options) {
     const current = options.getSnapshot();
     if (request !== version || snapshot.account !== current.account || snapshot.current !== current.current) return false;
     openWorkspaceAccess({ ...options, initialTool, notice,
-      preparePrintStyles: () => options.loadStyle("print-analysis", "/app/commerce-workspace.css?v=phantom-live-20261026-240"),
+      preparePrintStyles: () => options.loadStyle("print-analysis", "/app/commerce-workspace.css?v=phantom-live-20261026-241"),
     });
   };
   show.invalidate = () => { version++; };
@@ -54,7 +86,7 @@ export function createWorkspaceAccessOpener(options) {
 }
 
 /** One native modal supplies focus trapping, Escape and focus restoration. */
-export function openWorkspaceAccess({ getSnapshot, refresh, switchWorkspace, signOut, preparePrintStyles, initialTool = false, notice = "" }) {
+export function openWorkspaceAccess({ getSnapshot, getToken = () => "", refresh, switchWorkspace, signOut, preparePrintStyles, initialTool = false, notice = "" }) {
   closeWorkspaceAccess();
   const opener = document.activeElement;
   const dialog = document.createElement("dialog");
@@ -81,8 +113,8 @@ export function openWorkspaceAccess({ getSnapshot, refresh, switchWorkspace, sig
       ${choices.length <= 1 && (status === "error" || refreshing || notice) ? `<p class="wa-account">${esc(workspaceAccessMessage({ account, count: choices.length, status: "ready" }))}</p>` : ""}
       <div class="wa-list">${choices.map(item => `<button class="wa-workspace ${item.id === current ? "is-current" : ""}" type="button" data-access-workspace="${esc(item.id)}" ${item.id === current ? 'aria-current="true"' : ""} ${refreshing ? "disabled" : ""}><span class="wa-avatar">${esc(item.name.slice(0, 2).toUpperCase())}</span><span><strong>${esc(item.name)}</strong><small>${esc(item.role)}${item.id === current ? " · Current workspace" : " · Open workspace"}</small></span><span aria-hidden="true">${item.id === current ? "✓" : "→"}</span></button>`).join("") || '<p>No workspace access was returned. Refresh access or sign in again.</p>'}</div>
       <section class="wa-tool"><div><p class="wa-eyebrow">Available here · no workspace switch</p><h3>Print opportunity analysis</h3><p>Compare your 3MF projects, quoting thresholds and contribution per printer-hour. Files stay on this device.</p></div><button class="wa-primary" type="button" data-access-print>Open print analysis →</button></section>
-      <footer class="wa-actions"><button type="button" data-access-refresh ${refreshing ? "disabled" : ""}>${refreshing ? "Refreshing…" : "Refresh workspace access"}</button><button type="button" data-access-account ${refreshing ? "disabled" : ""}>Sign in with a different account</button><a href="https://admin.phantomforce.online/app/index.html" target="_blank" rel="noopener">Open owner workspace ↗</a></footer>
-      <p class="wa-account wa-local-owner">Using the PC where PhantomForce is installed? <a href="http://127.0.0.1:5177/app/index.html" target="_blank" rel="noopener">Open the installed owner app ↗</a>. Your owner sign-in is still required.</p>`;
+      <footer class="wa-actions"><button type="button" data-access-refresh ${refreshing ? "disabled" : ""}>${refreshing ? "Refreshing…" : "Refresh workspace access"}</button><button type="button" data-access-account ${refreshing ? "disabled" : ""}>Sign in with a different account</button><a href="https://app.phantomforce.online/app/index.html" target="_blank" rel="noopener">Open PhantomForce app ↗</a></footer>
+      <p class="wa-account wa-local-owner">Using the PC where PhantomForce is installed? <a href="http://127.0.0.1:5177/app/index.html" target="_blank" rel="noopener">Open the installed app ↗</a>. Use your account’s normal sign-in.</p>`;
     dialog.querySelectorAll("[data-access-workspace]").forEach(button => button.onclick = async () => {
       if (button.dataset.accessWorkspace === getSnapshot().current) { dialog.close(); return; }
       dialog.close(); await switchWorkspace(button.dataset.accessWorkspace);
@@ -112,12 +144,28 @@ export function openWorkspaceAccess({ getSnapshot, refresh, switchWorkspace, sig
       if (closed || started !== revision || businessId !== getSnapshot().current) return;
       const mount = dialog.querySelector("[data-access-print-mount]"); mount.removeAttribute("role");
       printMount = renderPrintOpportunities(mount, { businessId, isActive: () => !closed && started === revision && businessId === getSnapshot().current });
+      const account = getSnapshot().account, token = getToken();
+      if (token) void readPrintBusinessContext(businessId, token).then(context => {
+        if (context && !closed && started === revision && account === getSnapshot().account && token === getToken() && businessId === getSnapshot().current) printMount?.updateBusinessContext?.(context);
+      });
     } catch {
       if (!closed && started === revision) dialog.querySelector("[data-access-print-mount]").textContent = "Print analysis could not load. Go back and try again.";
     }
   }
   paint(notice); dialog.showModal(); if (initialTool) void showPrint();
   return { close: () => dialog.close() };
+}
+
+async function readPrintBusinessContext(businessId, token) {
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const response = await fetch("/api/business-workspaces/commerce", { headers: { Authorization: `Bearer ${token}`, "x-phantomforce-business": businessId }, cache: "no-store", signal: controller.signal });
+    const payload = await response.json();
+    if (!response.ok || payload.tenant_id !== businessId || payload.state?.tenantId !== businessId) return null;
+    for (const key of ["materials", "products", "printers"]) if (!Array.isArray(payload.state[key]) || payload.state[key].some(item => item.tenantId !== businessId)) return null;
+    return payload.state;
+  } catch { return null; }
+  finally { clearTimeout(timeout); }
 }
 
 export function setDatabaseOrganizationSwitching(active) {

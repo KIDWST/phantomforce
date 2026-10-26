@@ -23,6 +23,7 @@ import { deliverAccountMessage, resetPasswordUrl } from "./auth-delivery.js";
 import { assignOrgPlan, getOrgEntitlements, syncPlanCatalog } from "./entitlements.js";
 import { prisma } from "./prisma-runtime.js";
 import type { AccessSession } from "./session.js";
+import { databaseOrganizationSwitchError } from "../business-workspaces/business-scope.js";
 import { defaultOrganizationConfiguration } from "../customization/customization-service.js";
 import { persistConfiguration } from "../customization/customization-store.js";
 import {
@@ -491,14 +492,12 @@ export async function revokeAllSessionsForUser(userId: string) {
 
 export async function switchActiveOrg(session: DatabaseSessionDetails, orgId: string) {
   const db = requirePrisma();
-  const isMember = session.memberships.some((m) => m.orgId === orgId);
-  if (!isMember && !session.isSuperAdmin) {
+  if (databaseOrganizationSwitchError(session, orgId, true) === "not_a_member") {
     return { ok: false as const, error: "not_a_member" };
   }
-  if (session.isSuperAdmin && !isMember) {
-    const org = await db.org.findUnique({ where: { id: orgId }, select: { id: true } });
-    if (!org) return { ok: false as const, error: "org_not_found" };
-  }
+  const org = await db.org.findUnique({ where: { id: orgId }, select: { id: true } });
+  const error = databaseOrganizationSwitchError(session, orgId, Boolean(org));
+  if (error) return { ok: false as const, error };
   await db.authSession.update({ where: { id: session.authSessionId }, data: { activeOrgId: orgId } });
   await db.user.update({ where: { id: session.userId }, data: { activeOrgId: orgId } });
   sessionCache.delete(session.authSessionId);

@@ -4,32 +4,32 @@
    of widgets without changing the shell. */
 
 import {
-  store, uid, visible, isAdmin, isOwnerOperator, currentWs, wsName, pushActivity, resolveApproval,
+  store, uid, visible, isAdmin, isOwnerOperator, isLocalDevHost, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, FINANCE_CONNECTORS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20261026-240";
+} from "./store.js?v=phantom-live-20261026-241";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20261026-240";
+} from "./orgs.js?v=phantom-live-20261026-241";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20261026-240";
+} from "./proposalpipeline.js?v=phantom-live-20261026-241";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20261026-240";
+} from "./approvalpipeline.js?v=phantom-live-20261026-241";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20261026-240";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20261026-240";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20261026-240";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20261026-240";
+} from "./financeledger.js?v=phantom-live-20261026-241";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20261026-241";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20261026-241";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20261026-241";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -3224,7 +3224,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20261026-240")
+      import("./brain.js?v=phantom-live-20261026-241")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -3867,7 +3867,7 @@ function workerMeshGroup(worker) {
 }
 
 function privateAdminRouteReached() {
-  return /(^|\.)admin\.phantomforce\.online$/i.test(location.hostname);
+  return isOwnerOperator() || (isLocalDevHost() && isAdmin());
 }
 
 function baselineWorkerCount(runtime) {
@@ -4212,7 +4212,7 @@ function renderBaselineWorkers(runtime) {
   if (!runtime || workerRuntime.state === "error") {
     const services = [
       ...LOCAL_CORE_WORKERS,
-      ...(privateAdminRouteReached() ? [{ name: "Private Route", note: "This session reached the protected Business Manager host" }] : []),
+      ...(privateAdminRouteReached() ? [{ name: "Owner access", note: "This session has verified platform operator access" }] : []),
     ];
     return `
       <section class="worker-baseline worker-baseline-local">
@@ -4239,7 +4239,7 @@ function renderBaselineWorkers(runtime) {
   const services = [
     ...online.slice(0, 9).map((worker) => ({ name: worker.name, note: worker.role, live: true })),
     ...(privateHostReached && !online.some((worker) => worker.id === "gatekeeper")
-      ? [{ name: "Private Route", note: "This session reached the protected Business Manager host", live: true }]
+      ? [{ name: "Owner access", note: "This session has verified platform operator access", live: true }]
       : []),
   ];
 
@@ -4989,7 +4989,7 @@ function renderAdmin(el, rerender) {
     <h3 class="ws-subhead">Access</h3>
     <div class="stack">
       <article class="record record-wide">
-        ${kv("Business Manager host", "<code>admin.phantomforce.online</code> — full PhantomForce operator view")}
+        ${kv("Business Manager host", "<code>app.phantomforce.online</code> — verified platform owner tools")}
         ${kv("Team Workspace host", "<code>app.phantomforce.online</code> — focused workspace view, permission-scoped")}
         ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
       </article>

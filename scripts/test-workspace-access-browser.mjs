@@ -143,7 +143,8 @@ try {
   await evaluate(cdp, `(async()=>{const c=await ${coreExpression};c.session.set({role:'admin',name:'Customer fixture',localCustomer:true,orgId:'customer-fixture',orgRole:'owner',memberships:[{orgId:'customer-fixture',orgName:'Customer fixture workspace',role:'owner'}]});return true})()`);
   await cdp.send('Page.reload', { ignoreCache: true });
   await waitFor(cdp, `document.querySelector('[data-business-select]')?.value==='customer-fixture'`, 'Customer fixture missing');
-  await evaluate(cdp, `document.querySelector('[data-workspace-access]').focus();document.querySelector('[data-workspace-access]').click()`);
+  assert.equal(await evaluate(cdp, `document.querySelector('[data-business-select]').disabled`),false,'Single-workspace accounts need a usable account picker');
+  await evaluate(cdp, `const select=document.querySelector('[data-business-select]');select.value='__workspace_access__';select.dispatchEvent(new Event('change',{bubbles:true}));`);
   await waitFor(cdp, `document.querySelector('[data-access-account]')`, 'Customer recovery actions missing');
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-access-workspace]').length`), 1);
   assert.ok(await evaluate(cdp, `document.querySelector('.workspace-access-dialog').innerText.includes('This customer account has one workspace')`));

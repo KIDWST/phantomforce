@@ -101,6 +101,13 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Unified app and automatic print brief (2026-10-26)** — build
+  `phantom-live-20261026-241`. Verified owners and customers use
+  `app.phantomforce.online`; existing server roles and actual organization rows
+  govern access and switching. Print file/folder selection produces a sourced
+  brief without cost-form setup. Background updates and duplicate routing no
+  longer erase active drafts or selected analysis. See
+  `docs/quality/UNIFIED_APP_SMART_PRINT_20261026.md` for evidence and boundaries.
 - **Runtime contract verification and lighter workspace entry (2026-10-26)** —
   build `phantom-live-20261026-240`. Hermes now verifies/contracts-builds the
   current checkout before replacing its listener; health and the source doctor

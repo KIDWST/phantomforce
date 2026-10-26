@@ -92,6 +92,25 @@ export function authorizedBusinessWorkspaces(session: AccessSession) {
   });
 }
 
+/** Shared by the database picker and actual organization-switch target check. */
+export function databaseOrganizationSwitchError(session: Pick<AccessSession, "isSuperAdmin" | "memberships">, orgId: string, exists: boolean) {
+  if (!session.isSuperAdmin && !session.memberships?.some(member => member.orgId === orgId)) return "not_a_member" as const;
+  return exists ? null : "org_not_found" as const;
+}
+
+/** Database sessions choose real Org rows, never inferred legacy namespaces. */
+export function databaseBusinessWorkspaces(session: AccessSession, organizations: Array<{ id: string; name: string }>) {
+  const seen = new Set<string>();
+  return organizations.filter(org => validBusinessTenant(org.id) && !seen.has(org.id) && !databaseOrganizationSwitchError(session, org.id, true) && seen.add(org.id))
+    .map(org => {
+      const profile = businessProfile(org.id);
+      return { tenantId: org.id, businessId: profile?.id || null, name: org.name || profile?.name || org.id,
+        legacy: false, contactEmail: profile?.contactEmail || null,
+        canManage: businessCanManage(session, org.id),
+        role: session.memberships?.find(member => member.orgId === org.id)?.role || (session.isSuperAdmin ? "owner" : "member") };
+    });
+}
+
 const scopeKeys = ["tenant_id", "tenantId", "business_id", "businessId", "workspaceKey", "ownerScope", "orgId", "clientId"];
 
 /** Header is a selector, never authorization. Called after authentication, before every route/paywall. */

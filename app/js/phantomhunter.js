@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20261026-240";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20261026-241";
 
 const states = new WeakMap();
 const terminal = new Set(["completed", "partial", "failed", "cancelled"]);

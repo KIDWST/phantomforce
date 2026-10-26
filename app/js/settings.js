@@ -1,12 +1,12 @@
 /* PhantomForce admin settings. Payment credential entry always stays in the
    Stripe-hosted Checkout/Portal; this app only requests a server-created URL. */
 
-import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20261026-240";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20261026-240";
-import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20261026-240";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20261026-240";
-import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20261026-240";
-import { currentTenantId, ctx, isLiveAdminHost, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20261026-240";
+import { renderConnectionCenter } from "./connection-center.js?v=phantom-live-20261026-241";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20261026-241";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20261026-241";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20261026-241";
+import { canManageActiveOrg, createStripeBillingPortal, createStripeCheckout, fetchCustomerPlanPreview, fetchEntitlementsSummary, fetchStripeBillingSummary, switchCustomerPlan } from "./orgs.js?v=phantom-live-20261026-241";
+import { currentTenantId, ctx, isOwnerOperator, isLocalDevHost, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20261026-241";
 import {
   AI_BACKEND_TO_PUBLIC,
   getAiRuntimeState,
@@ -22,7 +22,7 @@ import {
   refreshAiRuntimeProviders,
   saveAiProviderCredential,
   settingsFromAiRuntimeConfig,
-} from "./ai-runtime.js?v=phantom-live-20261026-240";
+} from "./ai-runtime.js?v=phantom-live-20261026-241";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -1932,7 +1932,7 @@ async function renderWorkspaceModulesTab(el, opts = {}) {
       activityEnabled: false,
       challengesEnabled: false,
     };
-    const internalAdminSurface = isLiveAdminHost() || (isLocalDevHost() && ctx.session?.role === "admin");
+    const internalAdminSurface = isOwnerOperator() || (isLocalDevHost() && ctx.session?.role === "admin");
     const canManage = payload.can_manage === true;
     const enabled = internalAdminSurface ? true : module.enabled === true;
     el.innerHTML = `
@@ -1941,7 +1941,7 @@ async function renderWorkspaceModulesTab(el, opts = {}) {
           <div>
             <p class="set-eyebrow">Workspace Modules</p>
             <h3>${internalAdminSurface ? "Internal modules are always available here." : "Optional modules stay out of the way until enabled."}</h3>
-            <p class="set-note">${internalAdminSurface ? "This is the PhantomForce builder layer. PhantomPlay and internal admin tools cannot be hidden from the admin host." : "Core business tools remain prioritized. Optional modules can be enabled per organization without changing PhantomForce operations."}</p>
+            <p class="set-note">${internalAdminSurface ? "This verified platform owner account has the PhantomForce builder tools. Organization preferences cannot hide its operator modules." : "Core business tools remain prioritized. Optional modules can be enabled per organization without changing PhantomForce operations."}</p>
           </div>
           <span class="set-status-pill ${enabled ? "is-on" : ""}">${enabled ? "Enabled" : "Disabled"}</span>
         </div>

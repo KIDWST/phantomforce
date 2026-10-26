@@ -14,7 +14,7 @@ import {
 } from "@phantomforce/contracts";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
-import { authorizedBusinessWorkspaces, bindBusinessRequest, businessAssistantContext, businessCanManage, businessError, businessHermesEnvironment, businessProfile, selectedBusinessTenant } from "./business-workspaces/business-scope.js";
+import { authorizedBusinessWorkspaces, databaseBusinessWorkspaces, bindBusinessRequest, businessAssistantContext, businessCanManage, businessError, businessHermesEnvironment, businessProfile, selectedBusinessTenant } from "./business-workspaces/business-scope.js";
 import { createBusinessRecord, listBusinessRecords, updateBusinessRecord } from "./business-workspaces/business-records.js";
 import { registerCommerceRoutes } from "./business-workspaces/commerce-routes.js";
 import { WorkspaceProfileSchema } from "./customization/schemas.js";
@@ -1065,11 +1065,12 @@ registerCommerceRoutes(app);
 app.get("/api/business-workspaces", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const workspaces = authorizedBusinessWorkspaces(session);
+  const dbSession = asDatabaseSession(session);
+  const workspaces = dbSession ? databaseBusinessWorkspaces(session, await listOrganizationsForSession(dbSession)) : authorizedBusinessWorkspaces(session);
   const preferred = session.businessTenantId || session.orgId || session.clientId;
   return { ok: true, workspaces,
     activeTenantId: workspaces.some((workspace) => workspace.tenantId === preferred) ? preferred : null,
-    defaultTenantId: workspaces.find((workspace) => workspace.tenantId === "phantomforce")?.tenantId || workspaces[0]?.tenantId || null };
+    defaultTenantId: workspaces.find((workspace) => workspace.tenantId === preferred)?.tenantId || workspaces.find((workspace) => workspace.businessId === "phantomforce")?.tenantId || workspaces[0]?.tenantId || null };
 });
 
 app.get("/api/business-workspaces/records", async (request, reply) => {

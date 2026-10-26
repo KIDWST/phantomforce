@@ -1,4 +1,4 @@
-import { currentTenantId, isLiveAdminHost, isLocalDevHost, session } from "./store.js?v=phantom-live-20261026-240";
+import { currentTenantId, ctx, isOwnerOperator, isLocalDevHost, session } from "./store.js?v=phantom-live-20261026-241";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -52,8 +52,7 @@ const PLATFORM_MODULES = [
 const STRUCTURAL_NAV_MODULES = new Set(["memory", "settings", "developer", "vacation"]);
 const DEFAULT_ENTITLEMENTS = { coBranded: false, whiteLabel: false, internalPhantomForce: true, localFallback: true };
 const internalAdminSurface = () => {
-  const active = session.get?.() || {};
-  return isLiveAdminHost() || (isLocalDevHost() && active.role === "admin");
+  return isOwnerOperator() || (isLocalDevHost() && ctx.session?.role === "admin");
 };
 const authHeaders = (json = false) => {
   const token = session.token();

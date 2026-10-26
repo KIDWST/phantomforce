@@ -1,6 +1,6 @@
-import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261026-240";
+import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261026-241";
 
-import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-240";
+import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-241";
 
 const mounts = new WeakMap();
 const API = "/api/business-workspaces/commerce";
@@ -289,7 +289,7 @@ export function renderCommerceWorkspace(root, options = {}) {
     root.innerHTML = `<div class="commerce-workspace" data-commerce-workspace="${esc(businessId)}" aria-busy="${state.loading}"><div class="cw-page-tools">${button("↻ Refresh", "data-cw-refresh", false, !remote || state.loading || state.busy)}</div>${!remote ? '<div class="cw-access-note">You’re viewing an empty workroom preview. Sign in to an authorized Occasionally Odd account to save products, orders, and inventory.</div>' : state.loaded && !state.canManage ? '<div class="cw-access-note">You have view-only access. An organization administrator can update this workroom.</div>' : ""}${state.error ? `<div class="cw-error" role="alert">${esc(state.error)}${button("Try again", "data-cw-refresh")}</div>` : ""}${state.notice ? `<div class="cw-notice" role="status">${esc(state.notice)}</div>` : ""}${state.loading ? '<div class="cw-loading" role="status"><span></span>Loading this business’s workroom…</div>' : state.loaded ? `${editorView()}${views[state.section]()}` : `<section class="cw-panel">${empty("The workroom couldn’t load", "Refresh to try again. No cached records from another business will be shown.", button("Refresh workroom", "data-cw-refresh", true))}</section>`}</div>`;
     bind();
     const printRoot = root.querySelector("[data-print-opportunities]");
-    if (printRoot) printMount = renderPrintOpportunities(printRoot, { businessId, isActive: active, state: printState });
+    if (printRoot) printMount = renderPrintOpportunities(printRoot, { businessId, isActive: active, state: printState, businessContext: state.data });
   }
 
   function openEditor(kind, id = "") {

@@ -1,4 +1,4 @@
-import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20261026-240";
+import { operationStatusMeta } from "./product-grammar.js?v=phantom-live-20261026-241";
 
 /* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
@@ -713,7 +713,9 @@ export const isStaticPublicHost = () => PUBLIC_PAGES_HOSTS.has(location.hostname
 export const isLocalDevHost = () => LOCAL_DEV_HOSTS.has(location.hostname);
 
 export function liveAdminUrl() {
-  const url = new URL(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
+  // Retain the legacy helper name for existing landing-page callers, but
+  // owner and customer sign-in now share the canonical application origin.
+  const url = new URL(`https://${CLIENT_PUBLIC_HOST}/app/index.html`);
   url.searchParams.set("from", "phantomforce-online");
   return url.toString();
 }
@@ -785,7 +787,8 @@ export function resolveSession() {
     session.clear();
     return null;
   }
-  if (saved && isClientPublicHost() && ((!saved.database && !saved.localCustomer) || saved.canManageAccess || saved.isSuperAdmin)) {
+  const signedOwnerMirror = saved?.role === "admin" && (saved.canManageAccess === true || saved.isSuperAdmin === true) && Boolean(token);
+  if (saved && isClientPublicHost() && (!token || (!saved.database && !saved.localCustomer && !signedOwnerMirror))) {
     session.clear();
     return null;
   }
@@ -834,6 +837,8 @@ export function databaseSessionFromLogin(payload) {
     username: incoming.username || "",
     orgId: incoming.orgId || null,
     orgRole: incoming.orgRole || null,
+    workspaceProfile: incoming.workspaceProfile || null,
+    businessProfile: incoming.businessProfile || null,
     memberships: incoming.memberships || [],
     isSuperAdmin: !!incoming.isSuperAdmin,
     token: payload?.token,
@@ -941,29 +946,38 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
 }
 
 export async function verifyLiveSession() {
-  if (!isLiveAdminHost()) return resolveSession();
+  if (!isLiveAdminHost() && !isClientPublicHost()) return resolveSession();
   const token = session.token();
-  if (!token) return null;
-  const response = await fetch("/session", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) {
-    session.clear();
+  if (!token) { session.clear(); return null; }
+  let response;
+  try {
+    response = await fetch("/session", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(10_000) });
+  } catch {
+    // A public shell may retry a temporarily unavailable verifier, but it
+    // must not open privileged cached UI without a server-confirmed session.
     return null;
   }
-  const payload = await response.json().catch(() => ({}));
-  if (!payload?.session?.canManageAccess) {
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) session.clear();
+    return null;
+  }
+  let payload;
+  try { payload = await response.json(); } catch { return null; }
+  if (!payload?.session || (isLiveAdminHost() && !payload.session.canManageAccess)) {
     session.clear();
     return null;
   }
   const sessionId = payload.session.id || OWNER_SESSION_ID;
   const isOwnerSession = sessionId === OWNER_SESSION_ID;
   const previous = session.get();
-  if (payload.session.orgId && Array.isArray(payload.session.memberships)) {
+  if (Array.isArray(payload.session.memberships)) {
     const validated = databaseSessionFromLogin({ ...payload, token });
     session.set(validated);
     return validated;
   }
+  // Only a server-confirmed platform owner can use the legacy owner mirror.
+  // Modern customer and database accounts must carry their organization scope.
+  if (!payload.session.canManageAccess) { session.clear(); return null; }
   const s = {
     role: "admin",
     name: payload.session.name || (isOwnerSession ? "Jordan" : payload.session.label || "Operator"),
@@ -983,9 +997,8 @@ export const isAdmin = () => ctx.session?.role === "admin";
 export const isOwnerOperator = () => {
   const s = ctx.session || {};
   if (s.role !== "admin") return false;
-  const identity = `${s.sessionId || ""} ${s.name || ""} ${s.label || ""}`.toLowerCase();
-  return s.sessionId === OWNER_SESSION_ID
-    || (s.canManageAccess === true && /\b(jordan|phantomforce owner)\b/.test(identity));
+  return s.canManageAccess === true || s.isSuperAdmin === true
+    || (isLocalDevHost() && s.sessionId === OWNER_SESSION_ID);
 };
 export const currentWs = () => {
   const activeSession = ctx.session || {};
