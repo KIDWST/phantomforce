@@ -101,6 +101,11 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Print opportunities (2026-10-26)** — build `phantom-live-20261026-238`.
+  Occasionally Odd Production and Finance now include local 3MF plate analysis,
+  duplicate detection and editable cost/revenue thresholds. No uploads, printer
+  actions or commerce writes. See `docs/quality/PRINT_OPPORTUNITY_20261026.md`
+  for verification, the reproduced baseline CRM release-test failure and rollback.
 - **Organization social accounts (2026-10-03)** — build
   `phantom-live-20261003-237`. Every business has one Social accounts destination
   in the existing top navigation. Analytics connection actions use that same

@@ -1,8 +1,36 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-10-03",
+  "lastUpdated": "2026-10-26",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
+    {
+      "id": "print-opportunity-local-analysis",
+      "status": "active",
+      "title": "Local 3MF print opportunities live in organization production and finance",
+      "ownerDecision": "October 26, 2026: Add the REA-derived print opportunity scanner to PhantomForce, not the standalone PhantomBot app. Preserve organization scope and distinguish scenario contribution from actual profit.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/commerce-workspace.js",
+          "pattern": "data-print-opportunities",
+          "description": "Production/finance expose the local scanner."
+        },
+        {
+          "file": "app/js/print-opportunity.js",
+          "pattern": "state.businessId !== businessId",
+          "description": "Scanner state cannot mount under another business."
+        },
+        {
+          "file": "app/js/print-opportunity-core.js",
+          "pattern": "crc32\\(raw\\) !== m.crc",
+          "description": "Selected metadata must pass ZIP integrity checks."
+        },
+        {
+          "file": "app/js/print-opportunity.js",
+          "pattern": "Contribution is not net business profit",
+          "description": "Costs remain explicitly scoped planning estimates."
+        }
+      ]
+    },
     {
       "id": "organization-social-account-authorization",
       "status": "active",
