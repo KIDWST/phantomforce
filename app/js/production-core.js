@@ -1,7 +1,18 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20261026-243";
+import { ctx, currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20261026-244";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
-const state = { loading: false, graph: null, truth: null, error: "", diagnosis: null };
+const panels = new WeakMap();
+const rootCurrent = (root, state) => panels.get(root) === state && root.isConnected !== false;
+const scopeCurrent = (root, state) => rootCurrent(root, state) && state.tenantId === currentTenantId() && state.token === session.token() && state.account === ctx.session;
+function panelState(root) {
+  const previous = panels.get(root), tenantId = currentTenantId(), token = session.token(), account = ctx.session;
+  if (previous?.tenantId === tenantId && previous.token === token && previous.account === account) return previous;
+  if (previous) { previous.revision++; previous.controller?.abort(); previous.diagnosisController?.abort(); }
+  const state = { tenantId, token, account, revision: 0, diagnosisRevision: 0, loading: false, graph: null, truth: null, error: "", diagnosis: null, correlation: "", traceError: "", diagnosing: false };
+  panels.set(root, state);
+  return state;
+}
+const scopedRequest = (state, controller) => ({ signal: controller.signal, headers: { Authorization: `Bearer ${state.token}`, "x-phantomforce-business": state.tenantId } });
 
 function authHeaders(json = false) {
   const token = session.token();
@@ -11,12 +22,12 @@ function authHeaders(json = false) {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { ...authHeaders(Boolean(options.body)), ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(friendlyBackendError(response.status, payload?.error, { authMessage: "Sign in as an owner to inspect Production Core." }));
+  if (!response.ok) throw new Error(friendlyBackendError(response.status, typeof payload?.error === "string" ? payload.error : payload?.error?.code, { authMessage: "Sign in as an owner to inspect Production Core." }));
   return payload;
 }
 
-function tenantQuery(extra = {}) {
-  return new URLSearchParams({ tenant_id: currentTenantId(), ...extra }).toString();
+function tenantQuery(extra = {}, tenantId = currentTenantId()) {
+  return new URLSearchParams({ tenant_id: tenantId, ...extra }).toString();
 }
 
 export async function productionCoreCommand(action, payload, options = {}) {
@@ -37,18 +48,48 @@ export async function productionCoreCommand(action, payload, options = {}) {
   });
 }
 
-async function refresh() {
+async function refresh(root, state) {
+  const revision = ++state.revision;
+  state.controller?.abort(); state.diagnosisController?.abort(); state.diagnosisRevision++;
+  const controller = new AbortController(); state.controller = controller;
+  const timeout = setTimeout(() => controller.abort(), 15_000);
   state.loading = true;
-  state.error = "";
+  state.error = ""; state.graph = null; state.truth = null; state.diagnosis = null; state.traceError = ""; state.diagnosing = false;
+  render(root, state);
   try {
-    [state.graph, state.truth] = await Promise.all([
-      api(`/api/production-core/graph?${tenantQuery()}`),
-      api(`/api/production-core/truth?${tenantQuery()}`),
+    const [graph, truth] = await Promise.all([
+      api(`/api/production-core/graph?${tenantQuery({}, state.tenantId)}`, scopedRequest(state, controller)),
+      api(`/api/production-core/truth?${tenantQuery({}, state.tenantId)}`, scopedRequest(state, controller)),
     ]);
+    if (!scopeCurrent(root, state) || state.revision !== revision) return;
+    if (graph?.ok !== true || truth?.ok !== true || graph.tenantId !== state.tenantId || truth.tenant_id !== state.tenantId) throw new Error("Production Core returned an incomplete or different business scope. Refresh to try again.");
+    state.graph = graph; state.truth = truth;
   } catch (error) {
-    state.error = error?.message || "Production Core is unavailable.";
+    if (scopeCurrent(root, state) && state.revision === revision) state.error = error?.message || "Production Core is unavailable.";
   } finally {
-    state.loading = false;
+    clearTimeout(timeout);
+    if (state.revision === revision) { state.loading = false; render(root, state); }
+  }
+}
+
+async function diagnose(root, state, correlationId) {
+  if (!scopeCurrent(root, state)) { render(root, state); return; }
+  const revision = state.revision, diagnosisRevision = ++state.diagnosisRevision;
+  state.diagnosisController?.abort();
+  const controller = new AbortController(); state.diagnosisController = controller;
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const current = () => scopeCurrent(root, state) && state.revision === revision && state.diagnosisRevision === diagnosisRevision;
+  state.diagnosis = null; state.correlation = correlationId; state.traceError = ""; state.diagnosing = true; render(root, state);
+  try {
+    const result = await api(`/api/production-core/admin/diagnose?${tenantQuery({ correlation_id: correlationId }, state.tenantId)}`, scopedRequest(state, controller));
+    if (!current()) return;
+    if (result?.ok !== true || result.tenantId !== state.tenantId || result.correlationId !== correlationId) throw new Error("The trace did not match this business and correlation ID. Refresh and try again.");
+    state.diagnosis = result;
+  } catch (error) {
+    if (current()) state.traceError = error?.message || "That transaction could not be traced.";
+  } finally {
+    clearTimeout(timeout);
+    if (state.diagnosisRevision === diagnosisRevision && state.revision === revision) { state.diagnosing = false; render(root, state); }
   }
 }
 
@@ -57,8 +98,12 @@ function truthPill(value) {
   return `<span class="chip chip-${stateName === "real" ? "approved" : stateName === "sandbox" ? "pending" : "rejected"}">${esc(stateName)}</span>`;
 }
 
-function render(root) {
-  if (!root) return;
+function render(root, state) {
+  if (!rootCurrent(root, state)) return;
+  if (!scopeCurrent(root, state)) {
+    state.graph = null; state.truth = null; state.diagnosis = null; state.loading = false;
+    state.error = "Account or workspace changed. Refresh Production Core to inspect the current business.";
+  }
   if (state.loading) {
     root.innerHTML = `<article class="record record-wide" aria-busy="true"><h4>Production Core</h4><p class="record-sub">Reading persisted state and verifying provider truth…</p></article>`;
     return;
@@ -89,10 +134,11 @@ function render(root) {
       </div>
       <form class="record-actions" data-production-core-diagnose>
         <label class="sr-only" for="production-core-correlation">Correlation ID</label>
-        <input id="production-core-correlation" name="correlation" placeholder="cor_… or cor-gp…" autocomplete="off" />
-        <button class="btn btn-quiet" type="submit">Trace transaction</button>
+        <input id="production-core-correlation" name="correlation" value="${esc(state.correlation)}" maxlength="180" placeholder="cor_… or cor-gp…" autocomplete="off" />
+        <button class="btn btn-quiet" type="submit" ${state.diagnosing ? "disabled" : ""}>${state.diagnosing ? "Tracing…" : "Trace transaction"}</button>
         <button class="btn btn-quiet" type="button" data-production-core-refresh>Refresh</button>
       </form>
+      ${state.traceError ? `<p class="record-sub" role="alert">${esc(state.traceError)}</p>` : ""}
       ${diagnosis ? `<div class="stack" aria-live="polite"><div class="kv"><span>Trace</span><b>${esc(diagnosis.correlationId)}</b></div><div class="kv"><span>Timeline</span><b>${Number(diagnosis.timeline?.length || 0)} correlated entries</b></div><div class="kv"><span>Actionable failures</span><b>${diagnosis.actionableFailures?.length ? esc(diagnosis.actionableFailures.map((item) => `${item.errorCode}: ${item.remediation}`).join(" · ")) : "None"}</b></div></div>` : ""}
     </section>`;
   root.querySelector("[data-production-core-refresh]")?.addEventListener("click", () => mountProductionCorePanel(root, { force: true }));
@@ -100,27 +146,23 @@ function render(root) {
     event.preventDefault();
     const correlationId = String(new FormData(event.currentTarget).get("correlation") || "").trim();
     if (!correlationId) return;
-    try {
-      state.diagnosis = await api(`/api/production-core/admin/diagnose?${tenantQuery({ correlation_id: correlationId })}`);
-      state.error = "";
-    } catch (error) {
-      state.diagnosis = null;
-      state.error = error?.message || "That transaction could not be traced.";
-    }
-    render(root);
+    return diagnose(root, state, correlationId);
   });
 }
 
 export async function mountProductionCorePanel(root, { force = false } = {}) {
   if (!root) return;
-  if (!session.token()) {
+  const state = panelState(root);
+  if (!state.token) {
+    state.graph = null; state.truth = null; state.diagnosis = null;
     state.error = "Production Core requires an authenticated owner session.";
-    render(root);
+    render(root, state);
     return;
   }
-  if (force || !state.graph || state.graph.tenantId !== currentTenantId()) {
-    render(root);
-    await refresh();
+  if (force || !state.graph || !state.truth) {
+    if (!force && state.pending) return state.pending;
+    const pending = refresh(root, state); state.pending = pending;
+    try { await pending; } finally { if (state.pending === pending) state.pending = null; }
   }
-  render(root);
+  render(root, state);
 }

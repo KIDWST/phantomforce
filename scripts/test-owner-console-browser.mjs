@@ -105,8 +105,8 @@ try {
   await evaluate(cdp, `(async()=>{const c=await ${coreExpression};c.store.state.agents=${JSON.stringify(privateAgents)};c.store.state.security=${JSON.stringify(privateSecurity)};c.store.save({notify:false});return true})()`);
   await cdp.send('Page.reload', { ignoreCache: true });
   await waitFor(cdp, `document.querySelector('[data-business-select]')?.options.length>=3 && document.querySelector('[data-console]')?.dataset.consoleView==='dashboard'`, 'Ready owner catalog did not render');
-  const required = ['dashboard', 'adminos', 'developer', 'runtime', 'workers', 'audit', 'planner', 'vacation', 'phantomplay', 'phantomstore', 'business-overview', 'business-templates', 'business-assets', 'business-channels'];
-  const routes = [{ menu: 'adminos', route: 'adminos' }, { menu: 'developer', route: 'developer' }, { menu: 'runtime', route: 'runtime' }, { menu: 'phantomplay', route: 'phantomplay' }, { menu: 'phantomstore', route: 'phantomstore' }, { menu: 'workers', route: 'workforce' }];
+  const required = ['dashboard', 'adminos', 'developer', 'runtime', 'workers', 'audit', 'planner', 'vacation', 'phantomplay', 'phantomstore', 'promptlibrary', 'business-overview', 'business-templates', 'business-assets', 'business-channels'];
+  const routes = [{ menu: 'adminos', route: 'adminos' }, { menu: 'developer', route: 'developer' }, { menu: 'runtime', route: 'runtime' }, { menu: 'phantomplay', route: 'phantomplay' }, { menu: 'phantomstore', route: 'phantomstore' }, { menu: 'workers', route: 'workforce' }, { menu: 'promptlibrary', route: 'promptlibrary' }];
   for (const width of [1440, 390]) {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width, height: width === 390 ? 844 : 1000, deviceScaleFactor: 1, mobile: width === 390 });
     for (const business of businesses) {
@@ -151,6 +151,10 @@ try {
         await evaluate(cdp, `document.querySelector('[data-os-menu-nav="${item.menu}"]').click()`);
         await waitFor(cdp, `document.querySelector('[data-workspace-page="${item.route}"]') && !document.querySelector('[data-workspace-transition]')`, `${business.name}: ${item.menu} menu item did not open real workspace`);
         assert.ok(await evaluate(cdp, `document.querySelector('[data-workspace-page-body]').textContent.trim().length>20`), `${business.name}: ${item.menu} rendered an empty workspace`);
+        if (item.route === 'developer') {
+          await waitFor(cdp, `document.querySelector('[data-production-core-panel]')?.textContent.includes('Production Core') && document.querySelector('[data-production-core-panel]')?.textContent.includes('unavailable')`, `${business.name}: Production Core diagnostics are orphaned or do not finish their unavailable state`);
+          assert.ok(await evaluate(cdp, `document.querySelector('[data-production-core-panel]').textContent.includes('unavailable')`), 'An unavailable fixture API must not be presented as live Production Core');
+        }
         assert.equal(await evaluate(cdp, `(async()=>{const c=await ${coreExpression};return c.currentTenantId()})()`), business.id, 'Opening owner tools must not silently switch business');
       }
       await evaluate(cdp, `document.querySelector('[data-os-menu-btn]').click();document.querySelector('[data-os-menu-nav="business-overview"]').scrollIntoView({block:'center',behavior:'instant'});document.querySelector('[data-os-menu-nav="business-overview"]').click()`);
@@ -160,7 +164,7 @@ try {
       await waitFor(cdp, `document.querySelector('[data-console]')?.dataset.consoleView==='dashboard'`, 'Command center menu did not restore original dashboard');
       assert.ok(await evaluate(cdp, `document.documentElement.scrollWidth<=innerWidth+2`), `${business.name}: ${width}px dashboard overflow`);
       results.push({ business: business.id, width, tools: routes.map(r => r.menu), menu: menu.map(n => n.id), scopedAgents: 2, scopedSecurity: scopedDashboard.status.trim(), screenshot });
-      console.log(`PASS ${business.name} ${width}px: original owner dashboard, full menu, six real tool workspaces and business extras`);
+      console.log(`PASS ${business.name} ${width}px: original owner dashboard, full menu, seven real tool workspaces, Production Core and business extras`);
     }
   }
 

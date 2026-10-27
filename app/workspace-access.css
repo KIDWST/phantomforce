@@ -25,4 +25,12 @@
 .wa-actions a { color: #b7e9ca; }
 .wa-local-owner { margin-top: 18px; font-size: 12px; } .wa-local-owner a { color: #b7e9ca; }
 .wa-back { margin: 0 0 18px; }
+.wa-directory { margin: 22px 0; padding: 16px; border: 1px solid #3a5145; border-radius: 12px; background: #101a17; }
+.wa-directory summary { cursor: pointer; color: #d3e9dc; font-weight: 700; }
+.wa-directory summary span { color: #a4bdae; font-weight: 400; }
+.wa-directory > p, .wa-directory-count, .wa-directory-empty { color: #b8cbbe; font-size: 13px; }
+.wa-directory summary:focus-visible, .wa-search input:focus-visible { outline: 2px solid #8eebba; outline-offset: 3px; }
+.wa-search { display: grid; gap: 7px; margin: 16px 0 0; color: #d3e9dc; font-size: 13px; }
+.wa-search input { box-sizing: border-box; min-width: 0; width: 100%; padding: 11px 12px; border: 1px solid #4e6657; border-radius: 8px; background: #0d1512; color: #f0fff5; font: inherit; }
+.wa-directory-count { margin: 10px 0; }
 @media (max-width: 540px) { .workspace-access-dialog { padding: 18px; border-radius: 14px; } .wa-tool { padding: 16px; } .wa-actions { align-items: stretch; flex-direction: column; } .wa-actions button { text-align: left; } }

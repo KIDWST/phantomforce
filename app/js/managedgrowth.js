@@ -1,4 +1,4 @@
-import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20261026-243";
+import { currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20261026-244";
 
 function esc(value = "") {
   return String(value)

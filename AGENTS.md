@@ -101,6 +101,13 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Focused business picker and feature restoration (2026-10-26)** — build
+  `phantom-live-20261026-244`. The owner's everyday picker prioritizes the real
+  businesses; other authorized organizations remain searchable in management.
+  Production Core diagnostics are reachable in Developer, Prompt Library is in
+  the tools menu, and malformed auth responses no longer show boolean errors
+  or create partial sessions. Existing business scopes and customer access are
+  preserved. See `docs/quality/WORKSPACE_DIRECTORY_FEATURES_20261026.md`.
 - **Customer and admin sign-in on the same app (2026-10-26)** — build
   `phantom-live-20261026-243`. The canonical app visibly offers Customer sign-in
   and Admin sign-in. Workspaces and accounts provides the same admin entry from

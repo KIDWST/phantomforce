@@ -38,6 +38,7 @@ const loopback = `http://127.0.0.1:${staticPort}`, base = `http://app.localhost:
 const requests = [], outcomes = [], tokens = new Map(), challenges = new Map();
 let sequence = 0, legacyOnly = false, signupCount = 0, holdLogout = false, authUnavailableOnce = false;
 const pendingLogoutReplies = [];
+const scriptedLoginResponses = [];
 const businesses = [{ id: 'phantomforce-internal', businessId: 'phantomforce', name: 'PhantomForce' }, { id: 'occasionally-odd', businessId: 'occasionally-odd', name: 'Occasionally Odd' }];
 const ownerSession = () => ({ id: 'access-owner-fixture', label: 'Owner fixture', orgId: 'phantomforce-internal', orgRole: 'owner', workspaceProfile: 'business', isSuperAdmin: true, canManageAccess: true, memberships: businesses.map(b => ({ orgId: b.id, orgName: b.name, role: 'owner' })) });
 const customerSession = () => ({ id: 'access-customer-fixture', label: 'Customer fixture', orgId: 'occasionally-odd', orgRole: 'member', workspaceProfile: 'business', isSuperAdmin: false, canManageAccess: false, memberships: [{ orgId: 'occasionally-odd', orgName: 'Occasionally Odd', role: 'member' }] });
@@ -58,6 +59,7 @@ const server = createServer(async (request, response) => {
     if (request.method === 'GET' && pathname === '/sessions') { if (authUnavailableOnce) { authUnavailableOnce = false; return json(200, { auth: { databaseAuthEnabled: false, databaseReachable: false, customerAuthEnabled: false, ownerProductionAuthEnabled: false }, sessions: [] }); } return json(200, { auth: { databaseAuthEnabled: !legacyOnly, customerAuthEnabled: !legacyOnly, ownerProductionAuthEnabled: legacyOnly, productionReady: true, ownerLoginKeyConfigured: true }, sessions: [] }); }
     if (request.method === 'GET' && pathname === '/session') return current ? json(200, { ok: true, session: current }) : json(401, { ok: false });
     if (request.method === 'POST' && pathname === '/auth/login') {
+      if (scriptedLoginResponses.length) { const next = scriptedLoginResponses.shift(); return json(next.status, next.body); }
       if (legacyOnly) return json(503, { error: 'fixture_database_disabled' });
       if (body.password !== 'fixture-password') return json(401, { error: 'invalid_credentials' });
       const kind = String(body.email).startsWith('owner') ? 'owner' : 'customer';
@@ -114,6 +116,27 @@ try {
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   assert.ok(await evaluate(cdp, `document.documentElement.scrollWidth<=innerWidth+2`), 'The combined sign-in page must fit a phone');
   await capture('admin-signin-390.png');
+  // A transient gateway/protocol response must remain a useful sign-in error,
+  // never literal booleans, internal diagnostics, or a fabricated local account.
+  const privateDiagnostic = 'INTERNAL_AUTH_DIAGNOSTIC_PRIVATE_STACK';
+  for (const scenario of [
+    { status: 500, body: { error: true, message: privateDiagnostic }, label: 'server failure' },
+    { status: 503, body: { error: true, message: privateDiagnostic }, label: 'service unavailable' },
+    { status: 400, body: { error: true, message: 'Check the sign-in details and try again.' }, label: 'boolean client error' },
+    { status: 200, body: { ok: true, error: true, message: privateDiagnostic }, label: 'incomplete success response' },
+  ]) {
+    scriptedLoginResponses.push(scenario);
+    await credentials('owner-fixture');
+    await waitFor(cdp, `!document.querySelector('[data-db-error]').hidden && !document.querySelector('[data-auth-form]')?.hasAttribute('aria-busy')`, `${scenario.label} must recover the sign-in form`);
+    const error = await evaluate(cdp, `document.querySelector('[data-db-error]').textContent.trim()`);
+    assert.ok(error.length > 12, `${scenario.label} needs a readable error`);
+    assert.doesNotMatch(error, /^(?:true|false|\[object Object\])$/i, `${scenario.label} cannot stringify a protocol flag`);
+    assert.ok(!error.includes(privateDiagnostic), `${scenario.label} cannot expose private server diagnostics`);
+    assert.deepEqual(await identity(), { owner: false, tokenPresent: false, sessionPresent: false, tenant: 'phantomforce' }, `${scenario.label} cannot establish local access`);
+    assert.equal(await evaluate(cdp, `document.querySelector('[data-phantom]').hidden`), true);
+    assert.equal(await evaluate(cdp, `document.querySelector('[data-auth-form="signin"] [type="submit"]').disabled`), false, `${scenario.label} must permit a normal retry`);
+    outcomes.push(`${scenario.label} remains a readable, closed sign-in failure without diagnostic leakage`);
+  }
   await credentials('owner-fixture', 'incorrect-fixture-password');
   await waitFor(cdp, `!document.querySelector('[data-db-error]').hidden`, 'Rejected credentials must show a useful error');
   assert.equal((await identity()).tokenPresent, false);

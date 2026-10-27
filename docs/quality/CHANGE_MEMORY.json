@@ -4,6 +4,23 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "focused-business-picker-and-reachable-features",
+      "status": "active",
+      "title": "The owner business picker stays focused and accepted tools remain reachable",
+      "ownerDecision": "October 26, 2026: The owner rejected the organization picker filled with demo, QA, development and repeated Customer 1 organizations, and requested all previously accepted features remain available. Show the real businesses in the everyday picker; preserve other authorized organizations in searchable management without deleting, merging or renaming their data. Current scope and customer memberships remain exact. Restore orphaned Production Core diagnostics in Developer and Prompt Library in the tools menu.",
+      "requiredPatterns": [
+        { "file": "app/js/workspace-access.js", "pattern": "workspaceDirectory\\(\\{ choices, current, account \\}\\)", "description": "Picker presentation is distinct from the complete authoritative catalog." },
+        { "file": "app/js/workspace-access.js", "pattern": "data-access-directory[\\s\\S]*data-access-search", "description": "Other workspaces remain searchable in explicit management." },
+        { "file": "app/js/workspace-directory.js", "pattern": "\"phantomforce-internal\", \"phantomforce\"", "description": "The actual preserved internal business is preferred over a legacy alias." },
+        { "file": "app/js/workspace-directory.js", "pattern": "if \\(!owner\\) return \\{ owner, all, primary: all", "description": "Ordinary customer and organization-admin memberships are never hidden by the platform-owner presentation." },
+        { "file": "app/js/main.js", "pattern": "id: \"promptlibrary\", label: \"Prompt library\"", "description": "Saved prompts have a real tools-menu destination without the retired chat row." },
+        { "file": "app/js/main.js", "pattern": "data-production-core-panel", "description": "The actual Developer implementation mounts the accepted diagnostics instead of relying on an overridden dead admin renderer." },
+        { "file": "app/js/orgs.js", "pattern": "accountSignInResult\\(json", "description": "Malformed successful responses cannot create partial accounts." },
+        { "file": "scripts/test-release-critical.mjs", "pattern": "test:workspace-directory:browser", "description": "Release proof covers a cluttered sixteen-organization catalog and intact customer access." },
+        { "file": "scripts/test-owner-console-browser.mjs", "pattern": "Production Core diagnostics are orphaned", "description": "Actual owner routes verify the diagnostics are reachable." }
+      ]
+    },
+    {
       "id": "customer-and-admin-sign-in-on-one-app",
       "status": "active",
       "title": "The canonical app visibly supports customer and administrator sign-in",

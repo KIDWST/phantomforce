@@ -3,6 +3,10 @@ import { spawnSync } from "node:child_process";
 const npmCommand = process.platform === "win32" ? (process.env.ComSpec || "cmd.exe") : "npm";
 const checks = [
   "test:workspace-access",
+  "test:workspace-directory",
+  "test:workspace-directory:browser",
+  "test:account-errors",
+  "test:production-core-panel",
   "test:unified-app",
   "test:owner-console:browser",
   "test:account-access:browser",

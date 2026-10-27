@@ -6,7 +6,8 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20261026-243";
+import { ctx, session } from "./store.js?v=phantom-live-20261026-244";
+import { accountErrorMessage, accountSignInResult } from "./account-errors.js?v=phantom-live-20261026-244";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -30,6 +31,11 @@ async function api(path, { method = "GET", body, signal } = {}) {
   });
   const json = await response.json().catch(() => ({}));
   return { status: response.status, ok: response.ok, json };
+}
+
+async function accountApi(path, options, action) {
+  try { return await api(path, options); }
+  catch { throw new Error(accountErrorMessage(0, null, action)); }
 }
 
 export async function proposeWorkGraphAction(action, { idempotencyKey, correlationId } = {}) {
@@ -101,23 +107,20 @@ function localSessionFromServer(payload) {
 }
 
 export async function databaseLogin(email, password) {
-  const { ok, status, json } = await api("/auth/login", { method: "POST", body: { email, password } });
-  if (!ok) {
-    throw new Error(status === 401 ? "Invalid email or password." : String(json?.error || `Login failed (${status}).`));
-  }
-  if (json?.requires2fa) {
-    return { requires2fa: true, challengeToken: json.challengeToken, expiresAt: json.expiresAt, user: json.user };
-  }
-  const local = localSessionFromServer(json);
+  const { ok, status, json } = await accountApi("/auth/login", { method: "POST", body: { email, password } }, "login");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "login"));
+  const result = accountSignInResult(json);
+  if (result.requires2fa) return result;
+  const local = localSessionFromServer(result);
   session.set(local);
   ctx.session = { ...local, token: undefined };
   return ctx.session;
 }
 
 export async function databaseVerify2fa(challengeToken, code) {
-  const { ok, status, json } = await api("/auth/2fa/verify", { method: "POST", body: { challengeToken, code } });
-  if (!ok) throw new Error(status === 401 ? "Invalid or expired 2FA code." : String(json?.error || `2FA failed (${status}).`));
-  const local = localSessionFromServer(json);
+  const { ok, status, json } = await accountApi("/auth/2fa/verify", { method: "POST", body: { challengeToken, code } }, "twoFactor");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "twoFactor"));
+  const local = localSessionFromServer(accountSignInResult(json, { allowChallenge: false }));
   session.set(local);
   ctx.session = { ...local, token: undefined };
   return ctx.session;
@@ -130,14 +133,14 @@ export async function databaseSignup(payload) {
   const body = localCustomer
     ? { email: payload.email, password: payload.password, name: payload.name, businessName: payload.organizationName, workspaceProfile: payload.workspaceProfile }
     : payload;
-  const { ok, status, json } = await api(endpoint, { method: "POST", body });
-  if (!ok) throw new Error(String(json?.error || `Signup failed (${status}).`));
+  const { ok, status, json } = await accountApi(endpoint, { method: "POST", body }, "signup");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "signup"));
   return json;
 }
 
 export async function databaseForgotUsername(email) {
-  const { ok, status, json } = await api("/auth/forgot-username", { method: "POST", body: { email } });
-  if (!ok) throw new Error(String(json?.error || `Username recovery failed (${status}).`));
+  const { ok, status, json } = await accountApi("/auth/forgot-username", { method: "POST", body: { email } }, "username");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "username"));
   return json;
 }
 
@@ -146,8 +149,8 @@ export async function databaseForgotPassword(identifier) {
   const localCustomer = !config?.databaseAuthEnabled && config?.customerPasswordResetRequestEndpoint;
   const endpoint = localCustomer || "/auth/forgot-password";
   const body = localCustomer ? { email: identifier } : { identifier };
-  const { ok, status, json } = await api(endpoint, { method: "POST", body });
-  if (!ok) throw new Error(String(json?.error || `Password reset request failed (${status}).`));
+  const { ok, status, json } = await accountApi(endpoint, { method: "POST", body }, "passwordRequest");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "passwordRequest"));
   if (localCustomer && json?.resetToken) return { ...json, preview: { resetToken: json.resetToken } };
   return json;
 }
@@ -156,50 +159,45 @@ export async function databaseResetPassword(token, password) {
   const config = await fetchAuthConfig();
   const localCustomer = !config?.databaseAuthEnabled && config?.customerPasswordResetCompleteEndpoint;
   const endpoint = localCustomer || "/auth/reset-password";
-  const { ok, status, json } = await api(endpoint, { method: "POST", body: { token, password } });
-  if (!ok) throw new Error(String(json?.error || `Password reset failed (${status}).`));
+  const { ok, status, json } = await accountApi(endpoint, { method: "POST", body: { token, password } }, "passwordReset");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "passwordReset"));
   return json;
 }
 
 export async function databaseAcceptInvitation(token, payload = {}) {
-  const { ok, status, json } = await api("/auth/invitations/accept", {
+  const { ok, status, json } = await accountApi("/auth/invitations/accept", {
     method: "POST",
     body: {
       token,
       name: String(payload.name || "").trim() || undefined,
       password: String(payload.password || "") || undefined,
     },
-  });
-  if (!ok) {
-    const message = status === 400 && /expired|invalid|accepted/i.test(String(json?.error || ""))
-      ? "This invitation link is invalid, expired, or already used. Ask the workspace owner for a new invitation."
-      : String(json?.error || `Invitation acceptance failed (${status}).`);
-    throw new Error(message);
-  }
+  }, "invitation");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "invitation"));
   return json;
 }
 
 export async function databaseStart2faSetup() {
-  const { ok, status, json } = await api("/auth/2fa/setup", { method: "POST", body: {} });
-  if (!ok) throw new Error(String(json?.error || `2FA setup failed (${status}).`));
+  const { ok, status, json } = await accountApi("/auth/2fa/setup", { method: "POST", body: {} }, "security");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "security"));
   return json;
 }
 
 export async function databaseConfirm2fa(code) {
-  const { ok, status, json } = await api("/auth/2fa/confirm", { method: "POST", body: { code } });
-  if (!ok) throw new Error(String(json?.error || `2FA confirmation failed (${status}).`));
+  const { ok, status, json } = await accountApi("/auth/2fa/confirm", { method: "POST", body: { code } }, "twoFactor");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "twoFactor"));
   return json;
 }
 
 export async function databaseRegenerate2faBackupCodes(code) {
-  const { ok, status, json } = await api("/auth/2fa/recovery-codes", { method: "POST", body: { code } });
-  if (!ok) throw new Error(String(json?.error || `Recovery code regeneration failed (${status}).`));
+  const { ok, status, json } = await accountApi("/auth/2fa/recovery-codes", { method: "POST", body: { code } }, "twoFactor");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "twoFactor"));
   return json;
 }
 
 export async function databaseDisable2fa(code) {
-  const { ok, status, json } = await api("/auth/2fa/disable", { method: "POST", body: { code } });
-  if (!ok) throw new Error(String(json?.error || `2FA disable failed (${status}).`));
+  const { ok, status, json } = await accountApi("/auth/2fa/disable", { method: "POST", body: { code } }, "twoFactor");
+  if (!ok) throw new Error(accountErrorMessage(status, json, "twoFactor"));
   return json;
 }
 
