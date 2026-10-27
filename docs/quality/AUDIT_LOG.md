@@ -2420,3 +2420,9 @@ Cycle 31.
 - Kept public-research records in Leads with their research due dates, without presenting them as 700 human follow-ups.
 - Aligned the permission-ready total with each account's saved outreach mode while continuing to exclude guessed, denied, suppressed, and unsubscribed addresses.
 - Added server and UI release guards so research volume cannot inflate seller work again.
+
+## 2026-10-27 — REA-assisted production decisions (manual owner request)
+
+Built Print lab in the existing Occasionally Odd Production/Finance feed. Actual local REA6.5 inspected three verified ZIP aliases (27/33/33 members, all member hashes verified) and two isolated parser sources (zero parse failures), without uploads or target execution. Identical model source in two archives did not erase their different printed composition and machine profiles. Details and undo: `REA_PRINT_LAB_20261027.md`.
+
+Core regression60 checks and focused browser20 checks passed. Inspected desktop/mobile screenshots and the actual full feed mount;390px containment, keyboard toggle, escaped names, no network/storage writes, scoped responses and collapse/draft preservation passed. All73 release-critical checks passed. Final clarifying tradeoff copy was then verified by both focused browser suites. Change memory586 checks passed. Actual three-file analysis reproduced +12.8g/-206s/+$0.149753 production cost, emitted comparison warnings and left capture/workflow journal hashes unchanged. No physical completion, revenue or product recipe was fabricated. Deployment proof is recorded in the owner's process vault.

@@ -20,6 +20,8 @@ const checks = [
   "test:bambu-collector",
   "test:bambu-print-feed",
   "test:bambu-print-feed:browser",
+  "test:print-decision-lab",
+  "test:print-decision-lab:browser",
   "test:print-quotes",
   "test:print-quotes:browser",
   "test:bambu-monitor",

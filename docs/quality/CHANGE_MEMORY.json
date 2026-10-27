@@ -4,6 +4,46 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "rea-print-decision-lab",
+      "status": "active",
+      "title": "REA-assisted decisions preserve output uncertainty and scarce hands-on time",
+      "ownerDecision": "The owner requested a creative useful local REA improvement. Extend Occasionally Odd without mandatory cost forms or new services; title matches and unchanged model sources cannot prove equivalent printed output or interchangeable printer instructions.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/bambu-print-feed.js",
+          "pattern": "printDecisionLabView\\(snapshot",
+          "description": "Production and Finance retain the automatic decision lab in their existing Bambu feed."
+        },
+        {
+          "file": "app/js/print-decision-lab-core.js",
+          "pattern": "Same title is only a possible relation[\\s\\S]*Printer models differ",
+          "description": "Candidate relatedness preserves composition and physical printer uncertainty."
+        },
+        {
+          "file": "app/js/print-decision-lab-core.js",
+          "pattern": "equivalent && !warnings\\.length",
+          "description": "Recipe linking never erases observed comparison warnings."
+        },
+        {
+          "file": "app/js/print-decision-lab-core.js",
+          "pattern": "extraGramsPerFinishingMinute[\\s\\S]*finishingMinutesPerPrinterHour",
+          "description": "The advice values finishing time separately from machine capacity."
+        },
+        {
+          "file": "app/js/print-decision-lab.js",
+          "pattern": "snapshot\\?\\.tenant_id !== \"occasionally-odd\"",
+          "description": "The derived decision surface preserves the business boundary."
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "file": "app/js/print-decision-lab-core.js",
+          "pattern": "fetch\\s*\\(|localStorage\\.|sessionStorage\\.",
+          "description": "Read-only derived decisions do not create a network or persistence agent."
+        }
+      ]
+    },
+    {
       "id": "print-to-quote-frozen-recipes-and-measured-outcomes",
       "status": "active",
       "title": "Print quotes preserve their evidence and actual outcomes stay measured",

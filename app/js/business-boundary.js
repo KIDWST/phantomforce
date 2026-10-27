@@ -1,4 +1,4 @@
-import { ctx, currentTenantId, session } from "./store.js?v=phantom-live-20261027-246";
+import { ctx, currentTenantId, session } from "./store.js?v=phantom-live-20261027-247";
 
 // One request boundary covers legacy integrations as well as new modules.
 // The header is a selection, never authority: the server checks membership.

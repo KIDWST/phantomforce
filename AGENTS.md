@@ -101,6 +101,13 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **REA-assisted production decisions (2026-10-27)** — build
+  `phantom-live-20261027-247`. Print lab extends the existing Occasionally Odd
+  feed with automatic slice-change comparisons, output/compatibility warnings,
+  material-versus-time tradeoffs and recipe resource ceilings. Title matches
+  never establish equivalent products or justify automatic ranking. Local REA
+  evidence informed the design; no new provider or service was added. See
+  `docs/quality/REA_PRINT_LAB_20261027.md` for evidence, limits and undo.
 - **Print-to-quote and measured outcomes (2026-10-27)** — build
   `phantom-live-20261027-246`. Occasionally Odd adds reusable recipes, frozen
   quantity quotes, named printer capacity, finishing timers, measured actuals

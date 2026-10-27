@@ -1,4 +1,4 @@
-import { ctx, currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20261027-246";
+import { ctx, currentTenantId, friendlyBackendError, session } from "./store.js?v=phantom-live-20261027-247";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 const panels = new WeakMap();

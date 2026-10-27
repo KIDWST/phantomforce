@@ -73,6 +73,15 @@ try {
   const first = await evaluate(cdp, "document.querySelector('.bpf-feed').innerText");
   assert.match(first, /Watching Bambu Studio/); assert.match(first, /Custom modular display/); assert.match(first, /8 saved printer hours/); assert.match(first, /cleanup/); assert.match(first, /Illustrative cost scenario/); assert.match(first, /printer completion.*not connected/i);
   assert.match(first, /Bambu print feed/);
+  assert.match(first, /Print lab/, "Production mount lost the automatic decision lab");
+  assert.equal(await evaluate(cdp, "document.querySelectorAll('.pdl-lab').length"), 1, "Decision lab must have one home in the existing feed");
+  await evaluate(cdp, "document.querySelector('.pdl-lab').open=false");
+  await sleep(100);
+  const readsBeforeLabRefresh = feedReads;
+  await evaluate(cdp, "document.querySelector('[data-bpf-refresh]').click()");
+  await waitFor(cdp, "document.querySelector('[data-bpf-refresh]')?.disabled===false", "Refresh did not finish");
+  assert.ok(feedReads > readsBeforeLabRefresh, "Lab state check did not exercise a fresh snapshot");
+  assert.equal(await evaluate(cdp, "document.querySelector('.pdl-lab').open"), false, "Automatic decisions reopened after the user collapsed them");
   assert.ok(!first.includes("45 saleable"), "Part count became product count");
   assert.equal(await evaluate(cdp, "new URL(document.querySelector('[data-bambu-feed-css]').href).searchParams.get('v')"), commerceVersion, "Lazy stylesheet lost the build cache key");
   let screenshot = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }); writeFileSync(path.join(runDir, "bambu-production-desktop.png"), Buffer.from(screenshot.data, "base64"));
@@ -81,6 +90,7 @@ try {
   await evaluate(cdp, "document.querySelector('[data-bpf-toggle]').click()"); await waitFor(cdp, "document.querySelector('.bpf-status')?.innerText==='Watching Bambu Studio'", "Resume did not persist");
   await evaluate(cdp, "document.querySelector('[data-bpf-detail=shop]').open=true;var form=document.querySelector('[data-bpf-costs]');form.elements.filament.value='32';form.elements.confirmed.checked=true;form.requestSubmit()");
   await waitFor(cdp, "document.querySelector('.bpf-basis')?.innerText.includes('Saved cost assumptions')", "Shop assumptions were not saved");
+  assert.match(await evaluate(cdp, "document.querySelector('.pdl-lab').textContent"), /Saved planning assumptions/, "Decision advice did not refresh from the saved rates");
   assert.equal(fixture.settings.costs.filament, 32); assert.equal(fixture.settings.costs.fee, 0, "Local/custom defaults must not invent marketplace fees");
   await evaluate(cdp, `document.querySelector('[data-bpf-detail="model-${fileHash}"]').open=true;var form=document.querySelector('[data-bpf-model]');form.elements.name.value='Custom display';form.elements.saleableUnits.value='4';form.elements.extraCostPerBatch.value='12';form.elements.completeProduct.checked=true;form.elements.rightsStatus.value='original';form.requestSubmit()`);
   await waitFor(cdp, "document.querySelector('.bpf-unit')?.innerText.includes('4 confirmed saleable units')", "Saved model mapping did not unlock unit economics");

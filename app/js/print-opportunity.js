@@ -1,5 +1,5 @@
-import { PRINT_DEFAULTS, PRINT_LIMITS, inspectPrintFile, printEconomics, validatePrintCosts } from "./print-opportunity-core.js?v=phantom-live-20261027-246";
-import { analyzePrintOpportunities, selectPrintFiles } from "./print-opportunity-intelligence.js?v=phantom-live-20261027-246";
+import { PRINT_DEFAULTS, PRINT_LIMITS, inspectPrintFile, printEconomics, validatePrintCosts } from "./print-opportunity-core.js?v=phantom-live-20261027-247";
+import { analyzePrintOpportunities, selectPrintFiles } from "./print-opportunity-intelligence.js?v=phantom-live-20261027-247";
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const money = value => value == null ? "—" : value.toLocaleString(undefined, { style: "currency", currency: "USD" });

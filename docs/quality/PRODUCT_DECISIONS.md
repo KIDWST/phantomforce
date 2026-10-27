@@ -4,6 +4,13 @@ Last updated: 2026-07-19
 
 ## Active Principles
 
+- October27,2026: Use local REA evidence to inform automatic production
+  tradeoffs. Compare captured slice revisions inside the existing feed;
+  never turn shared titles or matching model source into proof of equal
+  output. Keep finishing capacity separate from printer capacity, and label
+  resource ceilings and target-return scenarios as planning assumptions.
+  See `REA_PRINT_LAB_20261027.md` for the bounded implementation and undo.
+
 - October27,2026: Complete Occasionally Odd's print-to-quote workflow with
   reusable recipes, immutable estimates and separately sourced actual outcomes.
   Plan P2S/P1S at24 printing hours/day and2 hands-on hours/day. Keep unknown

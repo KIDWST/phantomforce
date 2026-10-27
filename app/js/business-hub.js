@@ -1,5 +1,5 @@
-import { store, ctx, session, currentWs, uid, pushActivity } from "./store.js?v=phantom-live-20261027-246";
-import { getBusinessProfile } from "./business-profiles.js?v=phantom-live-20261027-246";
+import { store, ctx, session, currentWs, uid, pushActivity } from "./store.js?v=phantom-live-20261027-247";
+import { getBusinessProfile } from "./business-profiles.js?v=phantom-live-20261027-247";
 
 const mounted = new WeakMap();
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);

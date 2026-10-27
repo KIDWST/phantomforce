@@ -1,4 +1,4 @@
-import { session } from "./store.js?v=phantom-live-20261027-246";
+import { session } from "./store.js?v=phantom-live-20261027-247";
 
 const TENANT_ID = "client-chicagoshots";
 const MAX_INLINE_FILE_BYTES = 12 * 1024 * 1024;
