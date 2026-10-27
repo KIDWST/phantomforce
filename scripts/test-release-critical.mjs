@@ -4,6 +4,7 @@ const npmCommand = process.platform === "win32" ? (process.env.ComSpec || "cmd.e
 const checks = [
   "test:workspace-access",
   "test:unified-app",
+  "test:owner-console:browser",
   "test:print-intelligence",
   "test:smart-print:browser",
   "test:workspace-continuity",

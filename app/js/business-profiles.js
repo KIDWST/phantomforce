@@ -99,7 +99,7 @@ export const BUSINESS_PROFILES = freeze({
   },
 });
 
-const aliases = Object.freeze({ chicagoshots: "client-chicagoshots", occasionallyodd: "occasionally-odd" });
+const aliases = Object.freeze({ chicagoshots: "client-chicagoshots", occasionallyodd: "occasionally-odd", "phantomforce-internal": "phantomforce", "phantomforce-owner": "phantomforce" });
 export const BUSINESS_IDS = Object.freeze(Object.keys(BUSINESS_PROFILES));
 
 /** Unknown companies receive their own neutral identity, never another company's content. */
@@ -133,14 +133,17 @@ export function businessCanOpenRoute(workspaceOrId, route) {
   return route === "business-overview" || profile.navigation.some((item) => item.id === route);
 }
 
-/** Preserve shared capabilities and permission flags; prioritize each business's work. */
-export function businessNavigation(workspaceOrId, baseNavigation = []) {
+/** Preserve permission flags; verified platform operators keep their shared tools.
+    This changes discovery only. Record access still follows the active business. */
+export function businessNavigation(workspaceOrId, baseNavigation = [], { operator = false } = {}) {
   const profile = getBusinessProfile(workspaceOrId);
   const duplicateRelationships = new Set(baseNavigation.some((item) => item.id === "leads") ? ["clients", "followup", "business-crm"] : []);
+  if (profile.navigation.some(item => item.id === "business-customers")) duplicateRelationships.add("leads");
   const supplied = [...baseNavigation.filter((item) => !duplicateRelationships.has(item.id) && businessCanOpenRoute(profile.id, item.id)
-    && (!profile.sharedRoutes || profile.sharedRoutes.includes(item.id) || profile.navigation.some((route) => route.id === item.id)))];
+    && (operator || !profile.sharedRoutes || profile.sharedRoutes.includes(item.id) || profile.navigation.some((route) => route.id === item.id)))];
   for (const item of profile.navigation) if (!supplied.some((existing) => existing.id === item.id)) supplied.push({ ...item });
-  return supplied.map((item) => ({ ...item, label: profile.labels[item.id] || item.label }))
+  if (operator && !supplied.some(item => item.id === "business-overview")) supplied.push(nav("business-overview", "Business overview"));
+  return supplied.map((item) => ({ ...item, label: operator && item.id === "dashboard" ? "Command center" : profile.labels[item.id] || item.label }))
     .sort((a, b) => {
       const rank = (item) => { const index = profile.primaryRoutes.indexOf(item.id); return index < 0 ? profile.primaryRoutes.length : index; };
       return rank(a) - rank(b);

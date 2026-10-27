@@ -101,6 +101,13 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Complete owner console on the app domain (2026-10-26)** — build
+  `phantom-live-20261026-242`. Restores the original owner command-center home
+  and all permitted admin extras across business selections. The Menu includes
+  Workforce and all business routes; focused business overviews and automatic
+  print analysis remain available. Customer roles and tenant boundaries remain
+  authoritative. Existing alternate API launch paths verify contracts. See
+  `docs/quality/OWNER_CONSOLE_RESTORE_20261026.md` for evidence and undo.
 - **Unified app and automatic print brief (2026-10-26)** — build
   `phantom-live-20261026-241`. Verified owners and customers use
   `app.phantomforce.online`; existing server roles and actual organization rows

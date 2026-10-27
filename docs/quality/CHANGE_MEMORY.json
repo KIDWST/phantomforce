@@ -4,6 +4,26 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "complete-owner-console-on-canonical-app",
+      "status": "active",
+      "title": "The canonical app keeps the original owner command center and all permitted extras",
+      "ownerDecision": "October 26, 2026: The owner rejected the narrowed business-only app and requested the remembered admin site with all extras on app.phantomforce.online. Verified platform owners retain the original command-center home and full tool menu in every business. Business overviews, commerce, studio and automatic print analysis remain available. Customer navigation, actual organization selection and server capabilities stay authoritative.",
+      "requiredPatterns": [
+        { "file": "app/js/main.js", "pattern": "if \\(!isOwnerOperator\\(\\) && activeBusinessProfile\\(\\).id !== \"phantomforce\"\\)", "description": "The original full dashboard is the verified owner's home across business profiles." },
+        { "file": "app/js/main.js", "pattern": "businessNavigation\\(activeBusinessProfile\\(\\), NAV, \\{ operator: isOwnerOperator\\(\\) \\}\\)", "description": "Verified owner capability controls full tool discovery." },
+        { "file": "app/js/main.js", "pattern": "orderedNavItems\\(\\{ includeDashboardWidgets: true \\}\\)", "description": "The main menu includes Workforce and every allowed registered destination." },
+        { "file": "app/js/business-profiles.js", "pattern": "\"phantomforce-internal\": \"phantomforce\"", "description": "The preserved internal organization uses the original profile before catalog completion." },
+        { "file": "app/js/business-profiles.js", "pattern": "operator \\|\\| !profile.sharedRoutes", "description": "Business profile presentation must not hide platform-owner tools." },
+        { "file": "app/js/business-profiles.js", "pattern": "nav\\(\"business-overview\", \"Business overview\"\\)", "description": "The focused business experience remains reachable alongside the command center." },
+        { "file": "app/js/main.js", "pattern": "const agents = visible\\(store.state.agents \\|\\| \\[\\]\\)", "description": "Restored dashboard agent details remain scoped to the active business." },
+        { "file": "app/js/main.js", "pattern": "const agentCount = visible\\(store.state.agents \\|\\| \\[\\]\\).length", "description": "The Workforce widget cannot count another business's agents." },
+        { "file": "scripts/test-release-critical.mjs", "pattern": "test:owner-console:browser", "description": "Release verification exercises original owner home, all-business tools, and customer restrictions." }
+      ],
+      "forbiddenPatterns": [
+        { "file": "app/js/main.js", "pattern": "\\.filter\\(\\(item\\) => primaryIds.includes\\(item.id\\)\\)", "description": "A hardcoded menu subset must not silently hide registered extras." }
+      ]
+    },
+    {
       "id": "canonical-app-and-automatic-print-brief",
       "status": "active",
       "title": "One verified app entry and a print brief that does not require manual cost setup",
@@ -31,7 +51,8 @@
         { "file": "ops/admin-live/Start-Hermes.ps1", "pattern": "ensure-workspace-contracts.mjs[\\s\\S]*Stop-Process -Id \\$listenerPid", "description": "Prepare contracts before replacing the running API." },
         { "file": "scripts/ensure-workspace-contracts.mjs", "pattern": "stamp.sourceHash === sourceHash[\\s\\S]*stamp.outputHash === outputHash", "description": "Both source and generated output must match their build fingerprint." },
         { "file": "server/src/index.ts", "pattern": "contractsSourceHash: process.env.PHANTOMFORCE_CONTRACTS_HASH", "description": "Health exposes the startup-verified contract fingerprint without secrets." },
-        { "file": "ops/admin-live/Test-LiveAdminSource.ps1", "pattern": "Hermes contracts match current verified workspace build", "description": "The source doctor verifies runtime contracts as well as the commit." }
+        { "file": "ops/admin-live/Test-LiveAdminSource.ps1", "pattern": "Hermes contracts match current verified workspace build", "description": "The source doctor verifies runtime contracts as well as the commit." },
+        { "file": "ops/admin-live/Sync-AdminMain.ps1", "pattern": "Test-HermesRuntimeAligned -Health \\$hermesHealth -Commit \\$local -ContractsSourceHash", "description": "A same-commit API without the verified contracts fingerprint is repaired by sync." }
       ]
     },
     {

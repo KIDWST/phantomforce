@@ -140,15 +140,17 @@ try {
       console.log(`PASS ${business.name} ${width}px: switch, branding, customer/asset isolation, draft, layout`);
       if (width === 1440) {
         if (business.id === "occasionally-odd") {
-          assert.ok(audit.text.includes("empty workroom preview"), "Offline commerce must explicitly identify read-only preview");
+          await evaluate(cdp, `document.querySelector('[data-os-menu-btn]').click();document.querySelector('[data-os-menu-nav="business-overview"]').click()`);
+          await waitFor(cdp, `document.querySelector('[data-commerce-workspace="occasionally-odd"]') || document.body.innerText.includes('empty workroom preview')`, "Focused commerce overview did not open");
+          assert.ok(await evaluate(cdp, `document.body.innerText.includes('empty workroom preview')`), "Offline commerce must explicitly identify read-only preview");
           const disabled = await evaluate(cdp, `[...document.querySelectorAll('[data-cw-edit]')].every(button=>button.disabled)`);
           assert.ok(disabled, "Offline commerce cannot fabricate persisted inventory or orders");
           await evaluate(cdp, `location.hash='#page/business-campaigns'`);
           await waitFor(cdp, `document.querySelector('[data-business-hub="occasionally-odd"]')`, "Scoped campaign planner did not open");
         }
-        if (business.id === "phantomforce") {
+        if (business.id !== "occasionally-odd") {
           await evaluate(cdp, `document.querySelector('[data-nav-id="business-projects"]').click()`);
-          await waitFor(cdp, `document.querySelector('[data-business-hub="phantomforce"]')`, "PhantomForce project hub did not open");
+          await waitFor(cdp, `document.querySelector('[data-business-hub="${business.id}"]')`, `${business.name} project hub did not open`);
         }
         await evaluate(cdp, `document.querySelector('[data-new-business-work]').click()`);
         await waitFor(cdp, `document.querySelector('[data-business-editor]')`, `${business.name} editor did not open`);

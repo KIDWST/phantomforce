@@ -185,4 +185,42 @@ assert.equal(opportunityContext.renderOpportunity().value, "2 tracked leads", "A
 opportunityContext.pulse.managedGrowth.proposalPipeline = 1;
 assert.equal(opportunityContext.renderOpportunity().value, "1 in proposal", "Server-backed proposal evidence retains priority.");
 assert.match(opportunityContext.renderOpportunity().detail, /not confirmed bookings/u, "Proposal count cannot imply a booking or buyer intent.");
-console.log("Compact command surface and scoped opportunity behavior checks passed.");
+
+// Exercise the actual restored dashboard renderers with colliding agent IDs,
+// foreign missions, unassigned legacy rows, and different security postures.
+const dashboardNodes = new Map(['[data-queue]', '[data-queue-count]'].map(selector => [selector, { innerHTML: '', textContent: '' }]));
+const dashboardContext = {
+  tenant: 'A',
+  store: { state: {
+    agents: [
+      { id: 'same-agent', ws: 'A', name: 'A private worker', mission: 'A private mission', status: 'active' },
+      { id: 'same-agent', ws: 'B', name: 'B private worker', mission: 'B private mission', status: 'blocked' },
+      { id: 'unassigned', name: 'Legacy private worker', mission: 'Legacy private mission' },
+    ],
+    approvals: [{ ws: 'A', status: 'pending' }, { ws: 'B', status: 'pending' }],
+    security: [{ ws: 'A', posture: 'clean' }, { ws: 'B', posture: 'blocked' }, { posture: 'blocked' }],
+  } },
+  $: selector => dashboardNodes.get(selector),
+  esc: value => String(value || ''),
+  svg: () => '',
+  AGENT_STATE: { active: { label: 'READY', cls: 'run' }, blocked: { label: 'BLOCKED', cls: 'block' }, idle: { label: 'QUEUED', cls: 'queue' } },
+};
+dashboardContext.visible = rows => rows.filter(row => row.ws === dashboardContext.tenant);
+const dashboardFunctions = ['renderQueue', 'dashWidgetItems', 'accountStatusMeta'].map(name => {
+  const source = main.match(new RegExp(`function ${name}\\(\\) \\{[\\s\\S]*?\\n\\}`))?.[0];
+  assert.ok(source, `Missing dashboard renderer: ${name}`);
+  return source;
+}).join('\n');
+runInNewContext(`${dashboardFunctions}; this.queue = renderQueue; this.widgets = dashWidgetItems; this.status = accountStatusMeta;`, dashboardContext);
+for (const tenant of ['A', 'B', 'empty-business']) {
+  dashboardContext.tenant = tenant;
+  dashboardContext.queue();
+  const count = tenant === 'empty-business' ? 0 : 1;
+  assert.equal(dashboardNodes.get('[data-queue-count]').textContent, count, 'Dashboard work-in-motion count belongs to the selected business.');
+  const html = dashboardNodes.get('[data-queue]').innerHTML;
+  for (const other of ['A', 'B', 'Legacy'].filter(value => value !== tenant)) assert.doesNotMatch(html, new RegExp(`${other} private (worker|mission)`), 'Foreign and unassigned worker details cannot appear in the command center.');
+  if (count) assert.match(html, new RegExp(`${tenant} private worker[\\s\\S]*${tenant} private mission`));
+  assert.equal(dashboardContext.widgets().find(item => item.id === 'workers').val, count || '', 'Workforce quick-widget count uses the same business scope.');
+  assert.equal(dashboardContext.status().tone, tenant === 'B' ? 'error' : 'online', 'Another business security posture cannot change the active business status.');
+}
+console.log("Compact command surface, scoped opportunity and dashboard tenant behavior checks passed.");

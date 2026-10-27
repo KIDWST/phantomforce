@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "hermes-runtime-state.ps1")
 
 # Retired watchers can retain their original -RepoRoot for days. They must not
 # reclaim production ports from an editing checkout after a successful release.
@@ -199,10 +200,13 @@ try {
       } elseif (-not $needHermesRestart) {
         try {
           $hermesHealth = Invoke-RestMethod -Uri "http://127.0.0.1:$HermesPort/health" -TimeoutSec 6
-          $runningCommit = [string]$hermesHealth.commit
-          # restart only when the running commit is a real, older value than
-          # what we just synced — never churn Hermes when it is already current
-          if ([string]::IsNullOrWhiteSpace($runningCommit) -or $runningCommit -eq "unknown" -or $runningCommit -ne $local) {
+          $contractsCheck = & node (Join-Path $repoRoot "scripts\ensure-workspace-contracts.mjs") --repo-root $RepoRoot --check
+          if ($LASTEXITCODE -ne 0) { throw "Workspace contracts need preparation." }
+          $contractsState = $contractsCheck | ConvertFrom-Json
+          # Other existing launchers can start this same commit without verifying
+          # its generated packages. Repair that runtime too; Start-Hermes prepares
+          # contracts before replacing the existing listener.
+          if (-not (Test-HermesRuntimeAligned -Health $hermesHealth -Commit $local -ContractsSourceHash ([string]$contractsState.sourceHash))) {
             $needHermesRestart = $true
           }
         } catch {
