@@ -1,7 +1,8 @@
-import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261026-245";
+import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261027-246";
 
-import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-245";
-import { createBambuFeedState, renderBambuPrintFeed } from "./bambu-print-feed.js?v=phantom-live-20261026-245";
+import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261027-246";
+import { createBambuFeedState, renderBambuPrintFeed } from "./bambu-print-feed.js?v=phantom-live-20261027-246";
+import { renderBambuPrinterSetup } from "./bambu-printer-setup.js?v=phantom-live-20261027-246";
 
 const mounts = new WeakMap();
 const API = "/api/business-workspaces/commerce";
@@ -38,10 +39,11 @@ export function renderCommerceWorkspace(root, options = {}) {
   let printMount = null;
   const bambuState = createBambuFeedState();
   let bambuMount = null;
+  let printerSetupMount = null;
   const requests = new Set();
   const active = () => !state.disposed && mounts.get(root) === controller && String(options.getActiveBusinessId?.() || currentWs()) === businessId;
   const canEdit = () => active() && state.loaded && state.canManage && !state.loading && !state.busy;
-  const controller = { refresh, destroy() { printMount?.destroy(); bambuMount?.destroy(); printState.files = []; state.disposed = true; requests.forEach((request) => request.abort()); requests.clear(); }, dispose() { this.destroy(); } };
+  const controller = { refresh, destroy() { printMount?.destroy(); bambuMount?.destroy(); printerSetupMount?.destroy(); printState.files = []; state.disposed = true; requests.forEach((request) => request.abort()); requests.clear(); }, dispose() { this.destroy(); } };
   mounts.set(root, controller);
 
   function validateResponse(response) {
@@ -289,11 +291,19 @@ export function renderCommerceWorkspace(root, options = {}) {
     if (!active()) return;
     printMount?.destroy(); printMount = null;
     bambuMount?.destroy(); bambuMount = null;
+    printerSetupMount?.destroy(); printerSetupMount = null;
     const views = { overview, orders: ordersView, products: productsView, production: productionView, inventory: inventoryView, customers: customersView, channels: channelsView, shipping: shippingView, marketing: marketingView, finance: financeView, analytics: analyticsView };
     root.innerHTML = `<div class="commerce-workspace" data-commerce-workspace="${esc(businessId)}" aria-busy="${state.loading}"><div class="cw-page-tools">${button("↻ Refresh", "data-cw-refresh", false, !remote || state.loading || state.busy)}</div>${!remote ? '<div class="cw-access-note">You’re viewing an empty workroom preview. Sign in to an authorized Occasionally Odd account to save products, orders, and inventory.</div>' : state.loaded && !state.canManage ? '<div class="cw-access-note">You have view-only access. An organization administrator can update this workroom.</div>' : ""}${state.error ? `<div class="cw-error" role="alert">${esc(state.error)}${button("Try again", "data-cw-refresh")}</div>` : ""}${state.notice ? `<div class="cw-notice" role="status">${esc(state.notice)}</div>` : ""}${state.loading ? '<div class="cw-loading" role="status"><span></span>Loading this business’s workroom…</div>' : state.loaded ? `${editorView()}${views[state.section]()}` : `<section class="cw-panel">${empty("The workroom couldn’t load", "Refresh to try again. No cached records from another business will be shown.", button("Refresh workroom", "data-cw-refresh", true))}</section>`}</div>`;
     bind();
     const bambuRoot = root.querySelector("[data-bambu-print-feed]");
     if (bambuRoot) bambuMount = renderBambuPrintFeed(bambuRoot, { businessId, isActive: active, state: bambuState, remote, getSessionIdentity: () => JSON.stringify([session.token?.() || "", ctx.session?.sessionId || ""]), getHeaders: () => { const token = session.token?.(); return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(ctx.session?.sessionId ? { "x-phantomforce-session": ctx.session.sessionId } : {}) }; } });
+    if (bambuRoot && remote && state.canManage) {
+      const pairingRoot = document.createElement("div"); pairingRoot.dataset.bambuPrinterSetup = ""; bambuRoot.after(pairingRoot);
+      printerSetupMount = renderBambuPrinterSetup(pairingRoot, { businessId, isActive: active,
+        getSessionIdentity: () => JSON.stringify([session.token?.() || "", ctx.session?.sessionId || ""]),
+        getHeaders: () => { const token = session.token?.(); return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(ctx.session?.sessionId ? { "x-phantomforce-session": ctx.session.sessionId } : {}) }; },
+        onChange: () => bambuMount?.refresh?.(true) });
+    }
     const printRoot = root.querySelector("[data-print-opportunities]");
     if (printRoot) printMount = renderPrintOpportunities(printRoot, { businessId, isActive: active, state: printState, businessContext: state.data });
   }

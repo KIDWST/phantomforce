@@ -4,6 +4,28 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "print-to-quote-frozen-recipes-and-measured-outcomes",
+      "status": "active",
+      "title": "Print quotes preserve their evidence and actual outcomes stay measured",
+      "ownerDecision": "October27,2026: Finish Occasionally Odd's print-to-quote workflow with reusable recipes, finishing/hardware costs, capacity and delivery planning, actual completion and a ten-completed-job accuracy sample. Owner confirmed one P2S and one P1S at24 printing hours/day and2 hands-on hours/day. Unknown inputs and missing printer pairing must remain explicit.",
+      "requiredPatterns": [
+        { "file": "app/js/bambu-print-feed.js", "pattern": "printQuoteWorkflowView", "description": "The actual feed exposes the saved quote workflow." },
+        { "file": "app/js/commerce-workspace.js", "pattern": "renderBambuPrinterSetup", "description": "Printer pairing is reachable outside destructive feed refreshes." },
+        { "file": "server/src/business-workspaces/print-quote-workflow.ts", "pattern": "recipeSnapshot[\\s\\S]*ratesSnapshot", "description": "Saved quote revisions preserve the original recipe and rates." },
+        { "file": "server/src/business-workspaces/print-quote-workflow.ts", "pattern": "actualHistory", "description": "Corrections preserve prior full actual records." },
+        { "file": "server/src/business-workspaces/print-quote-workflow.ts", "pattern": "quote\\.batches !== 1", "description": "One print receipt is not compared with a whole multi-batch quote." },
+        { "file": "server/src/business-workspaces/bambu-monitor.ts", "pattern": "rejectUnauthorized: true", "description": "Printer pairing retains certificate verification." },
+        { "file": ".gitattributes", "pattern": "server/resources/bambu-printer-ca\\.pem text eol=lf", "description": "The verified public CA retains its exact bytes on Windows checkout." },
+        { "file": "server/src/business-workspaces/bambu-monitor.ts", "pattern": "bindingId", "description": "Physical printer identity survives slot-label ambiguity." },
+        { "file": "server/src/business-workspaces/bambu-connections.ts", "pattern": "aes-256-gcm", "description": "Newly supplied printer credentials are encrypted at rest." },
+        { "file": "server/src/index.ts", "pattern": "startBambuRuntime", "description": "Read-only configured monitoring uses the real server lifecycle." },
+        { "file": "scripts/test-release-critical.mjs", "pattern": "test:print-quotes:browser[\\s\\S]*test:bambu-printer-setup:browser", "description": "Release proof includes the quote workflow and secure pairing UI." }
+      ],
+      "forbiddenPatterns": [
+        { "file": "server/src/business-workspaces/bambu-monitor.ts", "pattern": "\\.publish\\(", "description": "Monitoring never publishes printer commands." }
+      ]
+    },
+    {
       "id": "occasionally-odd-automatic-bambu-print-feed",
       "status": "active",
       "title": "Bambu capture retains files and gives honest reusable print economics",

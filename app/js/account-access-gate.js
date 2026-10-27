@@ -1,11 +1,11 @@
 /* Shared account access on the canonical app. Choosing Admin changes the
    sign-in destination, never the account's server-verified authority. */
-import { ctx, session, ownerLogin } from "./store.js?v=phantom-live-20261026-245";
+import { ctx, session, ownerLogin } from "./store.js?v=phantom-live-20261027-246";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup,
   databaseForgotUsername, databaseForgotPassword, databaseResetPassword,
   databaseAcceptInvitation, databaseVerify2fa,
-} from "./orgs.js?v=phantom-live-20261026-245";
+} from "./orgs.js?v=phantom-live-20261027-246";
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 export const hasPlatformAdminAccess = account => account?.role === "admin"

@@ -101,6 +101,12 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Print-to-quote and measured outcomes (2026-10-27)** — build
+  `phantom-live-20261027-246`. Occasionally Odd adds reusable recipes, frozen
+  quantity quotes, named printer capacity, finishing timers, measured actuals
+  and a ten-job scorecard. The owner confirmed P2S/P1S at24h/day and finishing
+  at2h/day. Read-only encrypted LAN pairing requires normal printer credentials;
+  never infer completion from a prepared file. See `docs/quality/PRINT_TO_QUOTE_20261027.md`.
 - **Bambu Studio print intelligence (2026-10-26)** — build
   `phantom-live-20261026-245`. Occasionally Odd Production/Finance retain sliced
   Bambu send packages automatically, preserve distinct observations and reuse

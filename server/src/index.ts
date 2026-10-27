@@ -19,6 +19,8 @@ import { createBusinessRecord, listBusinessRecords, updateBusinessRecord } from 
 import { registerCommerceRoutes } from "./business-workspaces/commerce-routes.js";
 import { registerPrintRunRoutes } from "./business-workspaces/print-run-routes.js";
 import { startBambuCollector } from "./business-workspaces/bambu-collector.js";
+import { registerBambuConnectionRoutes } from "./business-workspaces/bambu-connection-routes.js";
+import { startBambuRuntime } from "./business-workspaces/bambu-runtime.js";
 import { WorkspaceProfileSchema } from "./customization/schemas.js";
 import { generateLocalMediaThumbnail, localMediaFallbackSvg, type LocalThumbnailKind } from "./assets/local-media-thumbnail.js";
 
@@ -1064,6 +1066,7 @@ app.addHook("preHandler", async (request, reply) => {
 app.addHook("preHandler", paywallPreHandler);
 registerCommerceRoutes(app);
 registerPrintRunRoutes(app);
+registerBambuConnectionRoutes(app);
 
 app.get("/api/business-workspaces", async (request, reply) => {
   const session = requireAccessSession(request, reply);
@@ -14882,8 +14885,11 @@ let stopAutomationEngine: (() => void) | null = null;
 let stopVacationModeEngine: (() => boolean) | null = null;
 let stopAdminProviderMonitor: (() => void) | null = null;
 let bambuCollector: Awaited<ReturnType<typeof startBambuCollector>> | null = null;
+let bambuRuntime: Awaited<ReturnType<typeof startBambuRuntime>> | null = null;
 
 app.addHook("onClose", async () => {
+  await bambuRuntime?.stop();
+  bambuRuntime = null;
   await bambuCollector?.stop();
   bambuCollector = null;
   stopAutonomousSecurityScanner?.();
@@ -14904,6 +14910,8 @@ if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
     stopVacationModeEngine = startVacationModeEngine(app.log);
     stopAdminProviderMonitor = startAdminProviderHealthMonitor(app.log);
     bambuCollector = await startBambuCollector({ log: app.log });
+    try { bambuRuntime = await startBambuRuntime(); }
+    catch { app.log.warn("Printer status monitoring is unavailable. Print capture and quoting remain available."); }
     app.log.info(`PhantomForce server listening on http://${host}:${port}`);
   } catch (error) {
     app.log.error(error);

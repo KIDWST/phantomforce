@@ -126,7 +126,12 @@
     "test:bambu-print-feed": "node scripts/test-bambu-print-feed.mjs",
     "test:bambu-print-feed:browser": "node scripts/test-bambu-print-feed-browser.mjs",
     "test:bambu-collector": "tsx server/scripts/test-bambu-collector.ts",
-    "test:print-runs": "tsx server/scripts/test-print-runs.ts"
+    "test:print-runs": "tsx server/scripts/test-print-runs.ts",
+    "test:print-quotes": "node --import tsx server/scripts/test-print-quotes.ts",
+    "test:print-quotes:browser": "node scripts/test-print-quotes-browser.mjs",
+    "test:bambu-monitor": "node --import tsx server/scripts/test-bambu-monitor.ts",
+    "test:bambu-connections": "node --import tsx server/scripts/test-bambu-connections.ts",
+    "test:bambu-printer-setup:browser": "node scripts/test-bambu-printer-setup-browser.mjs"
   },
   "engines": {
     "node": ">=22"

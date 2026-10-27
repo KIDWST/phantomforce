@@ -4,6 +4,12 @@ Last updated: 2026-07-19
 
 ## Active Principles
 
+- October27,2026: Complete Occasionally Odd's print-to-quote workflow with
+  reusable recipes, immutable estimates and separately sourced actual outcomes.
+  Plan P2S/P1S at24 printing hours/day and2 hands-on hours/day. Keep unknown
+  backlog, measured costs, printer completion and ten-job results truthful.
+  See `PRINT_TO_QUOTE_20261027.md` for the accepted scope and undo.
+
 - October 26, 2026: Occasionally Odd's Bambu feed automatically retains prepared
   send packages and reuses shop/product assumptions. Captured artifacts, actual
   printer outcomes and sourced market evidence remain separate. The chosen

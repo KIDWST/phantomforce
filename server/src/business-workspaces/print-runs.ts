@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { businessError } from "./business-scope.js";
 import { getCommerceState } from "./commerce-store.js";
-import { inspectPrintBuffer, printCore, type PrintFilament, type PrintMetadata } from "./print-parser.js";
+import { inspectPrintBuffer, printCore, type PrintMetadata } from "./print-parser.js";
+import { savedPrintMaterialCost } from "./print-material-cost.js";
+import { executePrintWorkflow, getPrintWorkflow, getWorkflowTelemetryBindings, recordWorkflowTelemetry } from "./print-quote-workflow.js";
 
 export const PRINT_TENANT = "occasionally-odd";
 export const PRINT_RUN_LIMITS = Object.freeze({ fileBytes: 128 * 1024 * 1024, journalBytes: 32 * 1024 * 1024, runs: 20000, files: 5000, responseRuns: 200 });
@@ -134,19 +136,6 @@ export async function updatePrintModel(tenantId: string, sha256: string, input: 
     if (index >= 0) document.models[index] = value; else document.models.push(value); return value; });
 }
 const positive = (value: number | null | undefined): value is number => typeof value === "number" && value > 0;
-const normalized = (value: string | undefined) => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
-function materialCost(plate: PrintMetadata["plates"][number], materials: Array<{ id: string; name: string; unit: string; unitCost: number }>) {
-  if (!positive(plate.grams) || !plate.filaments.length || plate.filaments.some(filament => !positive(filament.grams))) return null;
-  const used = plate.filaments.reduce((sum, filament) => sum + (filament.grams || 0), 0);
-  if (Math.abs(used - plate.grams) > Math.max(.05, plate.grams * .001)) return null;
-  const matches = plate.filaments.map((filament: PrintFilament) => {
-    const keys = [filament.profile]; if (filament.type && filament.color) keys.push([filament.vendor, filament.type, filament.color].filter(Boolean).join(" "));
-    if (!filament.profile && !filament.vendor && !filament.color && filament.type) keys.push(filament.type);
-    const names = new Set(keys.map(normalized).filter(Boolean)), rows = materials.filter(material => names.has(normalized(material.name)));
-    return rows.length === 1 && ["g", "kg"].includes(rows[0].unit) && positive(rows[0].unitCost) ? { materialId: rows[0].id, name: rows[0].name, grams: filament.grams!, amount: filament.grams! * rows[0].unitCost / (rows[0].unit === "kg" ? 1000 : 1) } : null;
-  });
-  return matches.some(match => !match) ? null : { amount: matches.reduce((sum, match) => sum + match!.amount, 0), currency: "USD", source: "saved-business-materials", materials: matches };
-}
 
 export async function getPrintRuns(tenantId = PRINT_TENANT, root?: string) {
   assertPrintTenant(tenantId); const document = await readDocument(root), core = await printCore();
@@ -158,7 +147,7 @@ export async function getPrintRuns(tenantId = PRINT_TENANT, root?: string) {
   const files = document.files.filter(file => included.has(file.sha256)).map(file => {
     const mapping = document.models.find(model => model.sha256 === file.sha256)?.value || null;
     const plates = file.metadata.plates.map(plate => {
-      const recorded = document.settings.currency === "USD" ? materialCost(plate, materials) : null;
+      const recorded = document.settings.currency === "USD" ? savedPrintMaterialCost(plate, materials) : null;
       const ready = positive(plate.grams) && positive(plate.seconds);
       const costs = { ...document.settings.costs, ...(recorded && positive(plate.grams) ? { filament: recorded.amount / plate.grams * 1000 } : {}) };
       return { index: plate.index, ready, materialCost: recorded, estimate: ready ? core.printEconomics(plate.grams!, plate.seconds!, costs) : null,
@@ -191,13 +180,17 @@ export async function getPrintRuns(tenantId = PRINT_TENANT, root?: string) {
       market: comps.length ? { status: "sourced-comparables", count: comps.length, asking, sold, includesShipping: true, freshnessDays: 30, comparables: comps, caveat: "Asking offers and observed sales are separate, limited samples; neither proves future demand. Evidence older than 30 days, future dates and repeated URLs are excluded." } : { status: "unavailable", count: 0, asking: null, sold: null, caveat: "Connect a legitimate market source or record comparable offers before calling a target price competitive." },
       caveats: ["Slice mass and duration are estimates, not measured consumption.", "Prepared artifacts do not prove submission or completion.", "Objects are parts; saleable yield is never inferred.", "Contribution scenarios exclude unspecified overhead and are not net profit.", ...(document.settings.costsConfirmed ? [] : ["Example costs are illustrative until confirmed once in shop settings."]), ...(materialWarning ? [materialWarning] : [])] } };
   });
-  const observed = document.runs.filter(run => ["completed", "failed"].includes(run.evidence)), failed = observed.filter(run => run.evidence === "failed").length;
-  return { ok: true, tenant_id: PRINT_TENANT, revision: document.revision, collector: { ...collector, ...(document.settings.paused ? { state: "paused" as const } : {}) }, runs, files, settings: document.settings,
+  const workflow = await getPrintWorkflow(document, root);
+  const observed = document.runs.map(run => ({ id: run.id, outcome: workflow.actuals.find(actual => actual.runId === run.id)?.outcome || run.evidence })).filter(run => ["completed", "failed"].includes(run.outcome)), failed = observed.filter(run => run.outcome === "failed").length;
+  return { ok: true, tenant_id: PRINT_TENANT, revision: document.revision, collector: { ...collector, ...(document.settings.paused ? { state: "paused" as const } : {}) }, runs, files, settings: document.settings, workflow,
     summary: { receipts: document.runs.length, uniqueFiles: document.files.length, prepared: document.runs.filter(run => run.evidence === "prepared").length,
       submitted: document.runs.filter(run => run.evidence === "submitted").length, printing: document.runs.filter(run => run.evidence === "printing").length,
       completed: observed.length - failed, failed, knownOutcomeFailureRate: observed.length ? failed / observed.length : null, returnedRuns: runs.length,
       marketSource: "not-connected", materialWarning } };
 }
+export async function executePrintWorkflowCommand(tenantId: string, input: unknown, actor = "business-operator", root?: string) { assertPrintTenant(tenantId); return executePrintWorkflow(await readDocument(root), input, actor, root); }
+export async function getPrintTelemetryBindings(root?: string) { return getWorkflowTelemetryBindings(root); }
+export async function recordTelemetryObservation(input: Parameters<typeof recordWorkflowTelemetry>[1], root?: string) { return recordWorkflowTelemetry(await readDocument(root), input, root); }
 export async function getPrintRunArchive(tenantId: string, runId: string, root?: string) {
   assertPrintTenant(tenantId); if (!hash.safeParse(runId).success) fail("PRINT_RUN_NOT_FOUND", "Print receipt not found.", 404);
   const document = await readDocument(root), run = document.runs.find(item => item.id === runId);

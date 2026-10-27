@@ -1,10 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { requireAccessSession } from "../access/session.js";
 import { businessCanManage, selectedBusinessTenant } from "./business-scope.js";
-import { assertPrintTenant, getPrintRunArchive, getPrintRuns, updatePrintModel, updatePrintSettings } from "./print-runs.js";
+import { assertPrintTenant, executePrintWorkflowCommand, getPrintRunArchive, getPrintRuns, updatePrintModel, updatePrintSettings } from "./print-runs.js";
 
 /** Authentication/business hooks must run first. The fixed tenant guard is enforced here too. */
 export function registerPrintRunRoutes(app: FastifyInstance) {
+  app.post("/api/business-workspaces/print-runs/workflow/commands", async (request, reply) => {
+    const session = requireAccessSession(request, reply); if (!session) return reply;
+    const { tenant_id, ...input } = (request.body ?? {}) as Record<string, unknown>, tenantId = selectedBusinessTenant(session, tenant_id); assertPrintTenant(tenantId);
+    if (!businessCanManage(session, tenantId)) return reply.code(403).send({ ok: false, error: "Business owner or administrator access is required." });
+    return { ok: true, tenant_id: tenantId, canManage: true, ...await executePrintWorkflowCommand(tenantId, input, session.userId || session.id) };
+  });
   app.get("/api/business-workspaces/print-runs", async (request, reply) => {
     const session = requireAccessSession(request, reply); if (!session) return reply;
     const tenantId = selectedBusinessTenant(session, (request.query as { tenant_id?: unknown })?.tenant_id); assertPrintTenant(tenantId);

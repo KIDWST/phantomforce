@@ -1,8 +1,8 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20261026-245";
-import { loadClientSetupDocument } from "./clientsetup.js?v=phantom-live-20261026-245";
-import { loadCrmLeads } from "./crmpipeline.js?v=phantom-live-20261026-245";
-import { loadProposals } from "./proposalpipeline.js?v=phantom-live-20261026-245";
-import { loadWorkspaceApprovals } from "./approvalpipeline.js?v=phantom-live-20261026-245";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20261027-246";
+import { loadClientSetupDocument } from "./clientsetup.js?v=phantom-live-20261027-246";
+import { loadCrmLeads } from "./crmpipeline.js?v=phantom-live-20261027-246";
+import { loadProposals } from "./proposalpipeline.js?v=phantom-live-20261027-246";
+import { loadWorkspaceApprovals } from "./approvalpipeline.js?v=phantom-live-20261027-246";
 
 const RECORD_TTL_MS = 45_000;
 

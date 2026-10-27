@@ -1,0 +1,75 @@
+import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import type { PeerCertificate } from "node:tls";
+import { setTimeout as delay } from "node:timers/promises";
+import { bambuObservation, normalizeBambuStatus, BAMBU_STATUS_MAX_BYTES } from "../src/business-workspaces/bambu-status.js";
+import { checkBambuServerIdentity, isPrivateBambuHost, startBambuMonitor, type BambuConnection } from "../src/business-workspaces/bambu-monitor.js";
+let checks = 0;
+function check(fn: () => unknown) { fn(); checks++; }
+const now = "2026-10-27T13:00:00Z";
+const running = normalizeBambuStatus(JSON.stringify({ print: { gcode_state: "RUNNING", task_id: "101", subtask_id: "202", subtask_name: "Sign", mc_percent: 70, mc_remaining_time: 54, access_code: "DO_NOT_RETAIN", hardware_mass: 100 } }), null, now)!;
+check(() => assert.equal(running.state, "printing")); check(() => assert.equal(running.taskId, "101")); check(() => assert.equal(running.progress, 70));
+check(() => assert.equal(JSON.stringify(running).includes("DO_NOT_RETAIN"), false));
+const nearlyDone = normalizeBambuStatus('{"print":{"mc_percent":100,"mc_remaining_time":0}}', running, now)!;
+check(() => assert.equal(nearlyDone.state, "printing", "Percentage/remaining time cannot establish completion"));
+const changed = normalizeBambuStatus('{"print":{"task_id":"103"}}', running, now)!;
+check(() => assert.equal(changed.subtaskId, null)); check(() => assert.equal(changed.state, "unknown")); check(() => assert.equal(changed.name, null));
+check(() => assert.equal(bambuObservation("p2s", changed), null));
+const finished = normalizeBambuStatus('{"print":{"gcode_state":"FINISH"}}', running, now)!;
+check(() => assert.equal(finished.state, "completed"));
+const event = bambuObservation("p2s", finished)!;
+check(() => assert.equal(event.taskId, "101")); check(() => assert.equal(event.subtaskId, "202")); check(() => assert.equal("printerSeconds" in event, false));
+check(() => assert.equal(bambuObservation("p1s", finished)!.eventId === event.eventId, false));
+check(() => assert.equal(bambuObservation("p2s", { ...finished, observedAt: "2026-10-27T13:01:00Z" })!.eventId, event.eventId));
+check(() => assert.equal(bambuObservation("p2s", normalizeBambuStatus('{"print":{"gcode_state":"FINISH","task_id":"0"}}', null, now)!), null));
+check(() => assert.equal(normalizeBambuStatus('{"info":{"module":[]}}', null, now), null));
+check(() => assert.throws(() => normalizeBambuStatus("bad", null), /JSON/));
+check(() => assert.throws(() => normalizeBambuStatus("x".repeat(BAMBU_STATUS_MAX_BYTES + 1), null), /size/));
+for (const host of ["10.0.0.5", "172.16.0.4", "172.31.1.4", "192.168.1.5"]) check(() => assert.equal(isPrivateBambuHost(host), true));
+for (const host of ["127.0.0.1", "0.0.0.0", "169.254.1.1", "8.8.8.8", "172.32.0.1", "example.com", "printer.local", "::1", "192.168.1.1:80"]) check(() => assert.equal(isPrivateBambuHost(host), false));
+for (const commonName of ["01P123456789", "01P123456789.bambulab.com"]) check(() => assert.equal(checkBambuServerIdentity("01P123456789", { subject: { CN: commonName } } as PeerCertificate), undefined));
+for (const commonName of ["01POTHER123", "*.bambulab.com", "192.168.1.5", ""]) check(() => assert.ok(checkBambuServerIdentity("01P123456789", { subject: { CN: commonName } } as PeerCertificate)));
+class FakeClient extends EventEmitter {
+  subscriptions: string[] = []; closed = false;
+  subscribe(topic: string, _options: unknown, callback: (error?: Error) => void) { this.subscriptions.push(topic); callback(); }
+  end(_force?: boolean, _options?: unknown, callback?: () => void) { this.closed = true; callback?.(); }
+}
+const clients: FakeClient[] = [], connectOptions: Record<string, unknown>[] = [], urls: string[] = [], events: any[] = [];
+let connections: BambuConnection[] = [{ id: "p2s", label: "P2S", model: "P2S", host: "192.168.1.5", serial: "01P123456789", accessCode: "ABCDEFGH" }, { id: "p1s", label: "P1S", model: "P1S", host: "192.168.1.6", serial: "01S123456789", accessCode: "12345678" }];
+let accept = false;
+const monitor = await startBambuMonitor({ getConnections: async () => connections, onObservation: async value => { events.push(value); return { matched: accept }; }, now: () => new Date(now),
+  connect: (url, options) => { const client = new FakeClient(); clients.push(client); urls.push(url); connectOptions.push(options); return client; }, pollMs: 100000 });
+check(() => assert.equal(clients.length, 2)); check(() => assert.equal(urls[0], "mqtts://192.168.1.5:8883"));
+check(() => assert.equal(connectOptions[0].rejectUnauthorized, true)); check(() => assert.equal(connectOptions[0].minVersion, "TLSv1.2"));
+check(() => assert.equal(connectOptions[0].username, "bblp")); check(() => assert.match(String(connectOptions[0].ca), /BEGIN CERTIFICATE/));
+check(() => assert.equal("will" in connectOptions[0], false));
+clients[0].emit("connect"); clients[1].emit("connect");
+check(() => assert.deepEqual(clients[0].subscriptions, ["device/01P123456789/report"]));
+check(() => assert.equal(monitor.status().printers[0].state, "waiting-status"));
+clients[0].emit("message", "device/WRONG/report", Buffer.from('{"print":{"gcode_state":"FINISH","task_id":"999"}}'));
+check(() => assert.equal(events.length, 0));
+const topic = "device/01P123456789/report", packet = Buffer.from(JSON.stringify({ print: { gcode_state: "RUNNING", task_id: "101", subtask_id: "202", subtask_name: "Sign" } }));
+clients[0].emit("message", topic, packet); await delay(0);
+check(() => assert.equal(events.length, 1)); check(() => assert.equal(monitor.status().printers[0].job?.taskId, "101"));
+clients[0].emit("message", topic, packet); await delay(0);
+check(() => assert.equal(events.length, 2, "An unmatched observation must remain available after explicit task binding"));
+accept = true; clients[0].emit("message", topic, packet); await delay(0); clients[0].emit("message", topic, packet); await delay(0);
+check(() => assert.equal(events.length, 3, "Persisted event is deduplicated"));
+clients[0].emit("message", topic, Buffer.from('{"print":{"gcode_state":"FINISH"}}')); await delay(0);
+check(() => assert.equal(events.at(-1).state, "completed")); check(() => assert.equal(events.at(-1).taskId, "101"));
+const safe = JSON.stringify(monitor.status());
+for (const secret of ["ABCDEFGH", "12345678", "192.168.1.5", "01P123456789"]) check(() => assert.equal(safe.includes(secret), false));
+clients[1].emit("error", new Error("secret ABCDEFGH 192.168.1.6"));
+check(() => assert.equal(monitor.status().printers[1].lastError?.includes("ABCDEFGH"), false));
+const physicalIdentity = monitor.status().printers[0].bindingId;
+check(() => assert.equal(events[0].printerId, physicalIdentity));
+connections = [{ ...connections[0], serial: "01POTHER1234" }]; await monitor.reload(); check(() => assert.equal(clients[1].closed, true));
+check(() => assert.equal(clients[0].closed, true)); check(() => assert.notEqual(monitor.status().printers[0].bindingId, physicalIdentity));
+clients[2].emit("connect"); clients[2].emit("message", "device/01POTHER1234/report", packet); await delay(0);
+check(() => assert.notEqual(events.at(-1).printerId, physicalIdentity, "A replacement printer in the same slot must not inherit the previous physical task binding"));
+await monitor.stop(); check(() => assert.equal(clients[0].closed, true));
+check(() => assert.equal(clients[2].closed, true));
+const count = events.length; clients[0].emit("message", topic, packet); await delay(0); check(() => assert.equal(events.length, count));
+const unconfigured = await startBambuMonitor({ getConnections: async () => [], onObservation() {} });
+check(() => assert.equal(unconfigured.status().state, "pairing-required")); await unconfigured.stop();
+console.log(`Bambu status monitor: ${checks} checks passed (whitelisted deltas, exact identities, honest completion, CA/TLS policy, report-only dual-printer subscription, retry, lifecycle and privacy).`);
