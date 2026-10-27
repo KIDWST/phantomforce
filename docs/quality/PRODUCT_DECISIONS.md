@@ -4,6 +4,11 @@ Last updated: 2026-07-19
 
 ## Active Principles
 
+- October 26, 2026: Occasionally Odd's Bambu feed automatically retains prepared
+  send packages and reuses shop/product assumptions. Captured artifacts, actual
+  printer outcomes and sourced market evidence remain separate. The chosen
+  initial market is US/USD local/custom orders. See `BAMBU_PRINT_FEED_20261026.md`.
+
 - PhantomForce is the command center/control plane.
 - PhantomPlay is a focused separate experience that PhantomForce can configure,
   publish to, and launch.

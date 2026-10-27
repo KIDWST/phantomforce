@@ -17,6 +17,8 @@ import { z } from "zod";
 import { authorizedBusinessWorkspaces, databaseBusinessWorkspaces, bindBusinessRequest, businessAssistantContext, businessCanManage, businessError, businessHermesEnvironment, businessProfile, selectedBusinessTenant } from "./business-workspaces/business-scope.js";
 import { createBusinessRecord, listBusinessRecords, updateBusinessRecord } from "./business-workspaces/business-records.js";
 import { registerCommerceRoutes } from "./business-workspaces/commerce-routes.js";
+import { registerPrintRunRoutes } from "./business-workspaces/print-run-routes.js";
+import { startBambuCollector } from "./business-workspaces/bambu-collector.js";
 import { WorkspaceProfileSchema } from "./customization/schemas.js";
 import { generateLocalMediaThumbnail, localMediaFallbackSvg, type LocalThumbnailKind } from "./assets/local-media-thumbnail.js";
 
@@ -1061,6 +1063,7 @@ app.addHook("preHandler", async (request, reply) => {
 // Un-bypassable paywall: free/anonymous sessions may view but not mutate.
 app.addHook("preHandler", paywallPreHandler);
 registerCommerceRoutes(app);
+registerPrintRunRoutes(app);
 
 app.get("/api/business-workspaces", async (request, reply) => {
   const session = requireAccessSession(request, reply);
@@ -14878,8 +14881,11 @@ let stopAutonomousSecurityScanner: (() => void) | null = null;
 let stopAutomationEngine: (() => void) | null = null;
 let stopVacationModeEngine: (() => boolean) | null = null;
 let stopAdminProviderMonitor: (() => void) | null = null;
+let bambuCollector: Awaited<ReturnType<typeof startBambuCollector>> | null = null;
 
 app.addHook("onClose", async () => {
+  await bambuCollector?.stop();
+  bambuCollector = null;
   stopAutonomousSecurityScanner?.();
   stopAutonomousSecurityScanner = null;
   stopAutomationEngine?.();
@@ -14897,6 +14903,7 @@ if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
     stopAutomationEngine = startAutomationEngine(app.log);
     stopVacationModeEngine = startVacationModeEngine(app.log);
     stopAdminProviderMonitor = startAdminProviderHealthMonitor(app.log);
+    bambuCollector = await startBambuCollector({ log: app.log });
     app.log.info(`PhantomForce server listening on http://${host}:${port}`);
   } catch (error) {
     app.log.error(error);

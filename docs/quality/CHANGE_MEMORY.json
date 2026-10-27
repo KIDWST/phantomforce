@@ -4,6 +4,22 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "occasionally-odd-automatic-bambu-print-feed",
+      "status": "active",
+      "title": "Bambu capture retains files and gives honest reusable print economics",
+      "ownerDecision": "October 26, 2026: Connect Bambu Studio automatically to Occasionally Odd for 3MF retention, cost analysis and useful local/custom US USD pricing. Keep prepared evidence distinct from actual completed prints, archive dedup distinct from repeat observations, and cost targets distinct from verified market evidence. No repeated manual import or mandatory cost form is required.",
+      "requiredPatterns": [
+        { "file": "server/src/index.ts", "pattern": "registerPrintRunRoutes\\(app\\)", "description": "Print history routes are mounted in the real application." },
+        { "file": "server/src/index.ts", "pattern": "bambuCollector = await startBambuCollector", "description": "Enabled capture starts with the existing API lifecycle." },
+        { "file": "server/src/business-workspaces/bambu-collector.ts", "pattern": "evidence: \"prepared\"", "description": "Temporary packages do not fabricate printer completion." },
+        { "file": "server/src/business-workspaces/print-runs.ts", "pattern": "sourceEventHash", "description": "Observed sends remain separate from file archive hashes." },
+        { "file": "server/src/business-workspaces/print-runs.ts", "pattern": "assertPrintTenant", "description": "The import journal is fixed to Occasionally Odd." },
+        { "file": "app/js/commerce-workspace.js", "pattern": "renderBambuPrintFeed", "description": "Production and Finance expose the durable feed." },
+        { "file": "app/js/bambu-print-feed.js", "pattern": "illustrative", "description": "Unconfirmed rates stay visibly hypothetical." },
+        { "file": "scripts/test-release-critical.mjs", "pattern": "test:bambu-collector[\\s\\S]*test:bambu-print-feed:browser", "description": "Release checks verify collection and actual commerce UI." }
+      ]
+    },
+    {
       "id": "focused-business-picker-and-reachable-features",
       "status": "active",
       "title": "The owner business picker stays focused and accepted tools remain reachable",

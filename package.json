@@ -122,7 +122,11 @@
     "typecheck": "npm run build --workspace @phantomforce/contracts && npm run typecheck --workspace @phantomforce/server",
     "prisma:generate": "npm run prisma:generate --workspace @phantomforce/server",
     "test:business-workspaces": "node scripts/test-business-workspaces.mjs && node scripts/test-business-experience.mjs && node scripts/test-business-media-boundary.mjs && npm run test:business-workspaces --workspace @phantomforce/server",
-    "test:business-workspaces:browser": "node scripts/test-business-workspaces-browser.mjs"
+    "test:business-workspaces:browser": "node scripts/test-business-workspaces-browser.mjs",
+    "test:bambu-print-feed": "node scripts/test-bambu-print-feed.mjs",
+    "test:bambu-print-feed:browser": "node scripts/test-bambu-print-feed-browser.mjs",
+    "test:bambu-collector": "tsx server/scripts/test-bambu-collector.ts",
+    "test:print-runs": "tsx server/scripts/test-print-runs.ts"
   },
   "engines": {
     "node": ">=22"

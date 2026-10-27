@@ -92,17 +92,19 @@ export function parsePrintSlice(text, Parser = globalThis.DOMParser) {
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error("XML entity declarations are not supported.");
   if (!Parser) throw new Error("XML parsing is unavailable.");
   const doc = new Parser().parseFromString(text, "application/xml");
-  if (doc.querySelector("parsererror") || doc.documentElement?.tagName !== "config") throw new Error("Slice metadata is not valid Bambu XML.");
-  return [...doc.querySelectorAll("config > plate")].map((plate, index) => {
-    const values = Object.fromEntries([...plate.querySelectorAll(":scope > metadata")].map(e => [e.getAttribute("key"), e.getAttribute("value")]));
+  if (doc.getElementsByTagName("parsererror").length || doc.documentElement?.tagName !== "config") throw new Error("Slice metadata is not valid Bambu XML.");
+  // DOM tree traversal works in both the browser and the bounded Node importer.
+  const children = (element, tag) => Array.from(element.childNodes || []).filter(node => node.nodeType === 1 && node.tagName === tag);
+  return children(doc.documentElement, "plate").map((plate, index) => {
+    const values = Object.fromEntries(children(plate, "metadata").map(e => [e.getAttribute("key"), e.getAttribute("value")]));
     return {
       index: values.index || String(index + 1), grams: nonnegative(values.weight), seconds: nonnegative(values.prediction),
-      warnings: [...plate.querySelectorAll(":scope > warning")].map(e => e.getAttribute("msg") || "Slicer warning"),
-      objectCount: plate.querySelectorAll(':scope > object:not([skipped="true"])').length,
+      warnings: children(plate, "warning").map(e => String(e.getAttribute("msg") || "Slicer warning").slice(0, 500)),
+      objectCount: children(plate, "object").filter(e => e.getAttribute("skipped") !== "true").length,
       nozzle: String(values.nozzle_diameters || "").slice(0, 120), printerModelId: String(values.printer_model_id || "").slice(0, 120),
       supportUsed: values.support_used === "true" ? true : values.support_used === "false" ? false : null,
       outsidePlate: values.outside === "true",
-      filaments: [...plate.querySelectorAll(":scope > filament")].map(element => ({
+      filaments: children(plate, "filament").map(element => ({
         id: String(element.getAttribute("id") || "").slice(0, 80), type: String(element.getAttribute("type") || "").slice(0, 120),
         color: String(element.getAttribute("color") || "").slice(0, 80), grams: nonnegative(element.getAttribute("used_g")), meters: nonnegative(element.getAttribute("used_m")),
       })),

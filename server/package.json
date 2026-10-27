@@ -112,6 +112,7 @@
     "@phantomforce/contracts": "file:../packages/contracts",
     "@phantomforce/phantomstore-ai-products": "file:../packages/phantomstore-ai-products",
     "@prisma/client": "^6.1.0",
+    "@xmldom/xmldom": "0.9.10",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "fastify-raw-body": "^5.0.0",

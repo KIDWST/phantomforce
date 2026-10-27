@@ -1,6 +1,7 @@
-import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261026-244";
+import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261026-245";
 
-import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-244";
+import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-245";
+import { createBambuFeedState, renderBambuPrintFeed } from "./bambu-print-feed.js?v=phantom-live-20261026-245";
 
 const mounts = new WeakMap();
 const API = "/api/business-workspaces/commerce";
@@ -35,10 +36,12 @@ export function renderCommerceWorkspace(root, options = {}) {
   const state = { data: emptyData(businessId), summary: {}, section: SECTIONS.includes(selected) ? selected : "overview", loading: remote, loaded: !remote, canManage: false, busy: false, error: "", notice: "", editor: null, search: "", filter: "all", disposed: false };
   const printState = createPrintOpportunityState(businessId);
   let printMount = null;
+  const bambuState = createBambuFeedState();
+  let bambuMount = null;
   const requests = new Set();
   const active = () => !state.disposed && mounts.get(root) === controller && String(options.getActiveBusinessId?.() || currentWs()) === businessId;
   const canEdit = () => active() && state.loaded && state.canManage && !state.loading && !state.busy;
-  const controller = { refresh, destroy() { printMount?.destroy(); printState.files = []; state.disposed = true; requests.forEach((request) => request.abort()); requests.clear(); }, dispose() { this.destroy(); } };
+  const controller = { refresh, destroy() { printMount?.destroy(); bambuMount?.destroy(); printState.files = []; state.disposed = true; requests.forEach((request) => request.abort()); requests.clear(); }, dispose() { this.destroy(); } };
   mounts.set(root, controller);
 
   function validateResponse(response) {
@@ -181,7 +184,7 @@ export function renderCommerceWorkspace(root, options = {}) {
 
   function productionView() {
     const live = state.data.jobs.filter((job) => !["shipped", "cancelled"].includes(job.status));
-    return `${warningView()}<section class="cw-panel">${heading("Production", "", editButton("+ Create order", "order"))}${flowView()}</section><div data-print-opportunities></div>${live.length ? `<section class="cw-board" aria-label="Production board">${[["queued", "To make"], ["printing", "Printing"], ["quality-check", "Quality check"], ["packing", "Packing"], ["ready", "Ready"]].map(([status, title]) => { const jobs = live.filter((job) => job.status === status); return `<div class="cw-lane"><h3>${title}<span>${jobs.length}</span></h3>${jobs.length ? jobs.map(jobCard).join("") : '<p class="cw-lane-empty">Nothing at this stage</p>'}</div>`; }).join("")}</section>` : `<section class="cw-panel">${empty("No production jobs", "Create an order to reserve stock and queue the units that need printing.", editButton("+ Create an order", "order", "", true), "▥")}</section>`}<div class="cw-overview-grid">${printersView()}${capacityView()}</div>`;
+    return `${warningView()}<section class="cw-panel">${heading("Production", "", editButton("+ Create order", "order"))}${flowView()}</section>${businessId === "occasionally-odd" ? "<div data-bambu-print-feed></div>" : ""}<div data-print-opportunities></div>${live.length ? `<section class="cw-board" aria-label="Production board">${[["queued", "To make"], ["printing", "Printing"], ["quality-check", "Quality check"], ["packing", "Packing"], ["ready", "Ready"]].map(([status, title]) => { const jobs = live.filter((job) => job.status === status); return `<div class="cw-lane"><h3>${title}<span>${jobs.length}</span></h3>${jobs.length ? jobs.map(jobCard).join("") : '<p class="cw-lane-empty">Nothing at this stage</p>'}</div>`; }).join("")}</section>` : `<section class="cw-panel">${empty("No production jobs", "Create an order to reserve stock and queue the units that need printing.", editButton("+ Create an order", "order", "", true), "▥")}</section>`}<div class="cw-overview-grid">${printersView()}${capacityView()}</div>`;
   }
 
   function inventoryView() {
@@ -214,7 +217,7 @@ export function renderCommerceWorkspace(root, options = {}) {
   function financeView() {
     const live = state.data.orders.filter((order) => order.status !== "cancelled");
     const shipped = live.filter((order) => order.status === "shipped");
-    return `<div data-print-opportunities></div><div class="cw-metrics cw-metrics-three">${metric("Recorded order value", money(live.reduce((sum, order) => sum + orderTotal(order), 0)), "Excludes cancelled orders")}${metric("Shipped order value", money(shipped.reduce((sum, order) => sum + orderTotal(order), 0)), "Fulfillment value · not settled cash")}${metric("Products with costs", state.data.products.length, "Review each SKU’s inputs below")}</div>${economicsView()}<div class="cw-inline-note">Marketplace payouts and accounting balances are not connected. These figures are planning estimates from your recorded orders and product costs.</div>`;
+    return `${businessId === "occasionally-odd" ? "<div data-bambu-print-feed></div>" : ""}<div data-print-opportunities></div><div class="cw-metrics cw-metrics-three">${metric("Recorded order value", money(live.reduce((sum, order) => sum + orderTotal(order), 0)), "Excludes cancelled orders")}${metric("Shipped order value", money(shipped.reduce((sum, order) => sum + orderTotal(order), 0)), "Fulfillment value · not settled cash")}${metric("Products with costs", state.data.products.length, "Review each SKU’s inputs below")}</div>${economicsView()}<div class="cw-inline-note">Marketplace payouts and accounting balances are not connected. These figures are planning estimates from your recorded orders and product costs.</div>`;
   }
 
   function analyticsView() {
@@ -285,9 +288,12 @@ export function renderCommerceWorkspace(root, options = {}) {
   function paint() {
     if (!active()) return;
     printMount?.destroy(); printMount = null;
+    bambuMount?.destroy(); bambuMount = null;
     const views = { overview, orders: ordersView, products: productsView, production: productionView, inventory: inventoryView, customers: customersView, channels: channelsView, shipping: shippingView, marketing: marketingView, finance: financeView, analytics: analyticsView };
     root.innerHTML = `<div class="commerce-workspace" data-commerce-workspace="${esc(businessId)}" aria-busy="${state.loading}"><div class="cw-page-tools">${button("↻ Refresh", "data-cw-refresh", false, !remote || state.loading || state.busy)}</div>${!remote ? '<div class="cw-access-note">You’re viewing an empty workroom preview. Sign in to an authorized Occasionally Odd account to save products, orders, and inventory.</div>' : state.loaded && !state.canManage ? '<div class="cw-access-note">You have view-only access. An organization administrator can update this workroom.</div>' : ""}${state.error ? `<div class="cw-error" role="alert">${esc(state.error)}${button("Try again", "data-cw-refresh")}</div>` : ""}${state.notice ? `<div class="cw-notice" role="status">${esc(state.notice)}</div>` : ""}${state.loading ? '<div class="cw-loading" role="status"><span></span>Loading this business’s workroom…</div>' : state.loaded ? `${editorView()}${views[state.section]()}` : `<section class="cw-panel">${empty("The workroom couldn’t load", "Refresh to try again. No cached records from another business will be shown.", button("Refresh workroom", "data-cw-refresh", true))}</section>`}</div>`;
     bind();
+    const bambuRoot = root.querySelector("[data-bambu-print-feed]");
+    if (bambuRoot) bambuMount = renderBambuPrintFeed(bambuRoot, { businessId, isActive: active, state: bambuState, remote, getSessionIdentity: () => JSON.stringify([session.token?.() || "", ctx.session?.sessionId || ""]), getHeaders: () => { const token = session.token?.(); return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(ctx.session?.sessionId ? { "x-phantomforce-session": ctx.session.sessionId } : {}) }; } });
     const printRoot = root.querySelector("[data-print-opportunities]");
     if (printRoot) printMount = renderPrintOpportunities(printRoot, { businessId, isActive: active, state: printState, businessContext: state.data });
   }

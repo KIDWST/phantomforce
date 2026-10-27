@@ -101,6 +101,12 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Bambu Studio print intelligence (2026-10-26)** — build
+  `phantom-live-20261026-245`. Occasionally Odd Production/Finance retain sliced
+  Bambu send packages automatically, preserve distinct observations and reuse
+  shop rates/product mappings for cost and local/custom pricing scenarios.
+  Prepared files never imply completed prints or market demand. See
+  `docs/quality/BAMBU_PRINT_FEED_20261026.md` for coverage, tests and undo.
 - **Focused business picker and feature restoration (2026-10-26)** — build
   `phantom-live-20261026-244`. The owner's everyday picker prioritizes the real
   businesses; other authorized organizations remain searchable in management.
