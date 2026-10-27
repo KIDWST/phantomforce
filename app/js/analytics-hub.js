@@ -4,10 +4,10 @@
 import {
   store, isAdmin, isOwnerOperator, session, currentTenantId, moneyView, fmtMoney,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20261026-242";
-import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20261026-242";
-import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20261026-242";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20261026-242";
+} from "./store.js?v=phantom-live-20261026-243";
+import { renderAnalytics as renderSocialAnalytics, productAnalyticsRows, kpi, K } from "./contenthub.js?v=phantom-live-20261026-243";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20261026-243";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20261026-243";
 
 // V2 intentionally resets the old operations-first selection once so this
 // release opens on social media. After that, an explicit user choice sticks.

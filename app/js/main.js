@@ -7,61 +7,60 @@ import {
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
   workspaceStorageGetItem, databaseSessionFromLogin,
-} from "./store.js?v=phantom-live-20261026-242";
+} from "./store.js?v=phantom-live-20261026-243";
 import {
   loadOrganizationPulse, loadBrainContract, pulseAttentionItems, brainContractAttentionItems, cachedOrganizationPulse,
-} from "./organizationpulse.js?v=phantom-live-20261026-242";
-import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20261026-242";
-import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20261026-242";
-import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20261026-242";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20261026-242";
-import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20261026-242";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20261026-242";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20261026-242";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20261026-242";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20261026-242";
-import { activatePhantomAiTab, mountPhantomAI, queuePhantomAiPrompt } from "./phantomai.js?v=phantom-live-20261026-242";
-import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20261026-242";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel, selectAutomationSection } from "./brandops.js?v=phantom-live-20261026-242";
-import { renderPlanner } from "./planner.js?v=phantom-live-20261026-242";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20261026-242";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20261026-242";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20261026-242";
-import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20261026-242";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20261026-242";
-import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20261026-242";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20261026-242";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20261026-242";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20261026-242";
-import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20261026-242";
-import { renderChicagoShotsStudio } from "./chicagoshots-studio.js?v=phantom-live-20261026-242";
+} from "./organizationpulse.js?v=phantom-live-20261026-243";
+import { handleCommand, handleSmartCommand } from "./command.js?v=phantom-live-20261026-243";
+import { WORKSPACE_DEFS, missionWidgets, esc, selectAccountingTab } from "./workspaces.js?v=phantom-live-20261026-243";
+import { renderOrganizationPanel } from "./organization.js?v=phantom-live-20261026-243";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20261026-243";
+import { renderUnifiedAnalytics } from "./analytics-hub.js?v=phantom-live-20261026-243";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20261026-243";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20261026-243";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20261026-243";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20261026-243";
+import { activatePhantomAiTab, mountPhantomAI, queuePhantomAiPrompt } from "./phantomai.js?v=phantom-live-20261026-243";
+import { renderPhantomHunter } from "./phantomhunter.js?v=phantom-live-20261026-243";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel, selectAutomationSection } from "./brandops.js?v=phantom-live-20261026-243";
+import { renderPlanner } from "./planner.js?v=phantom-live-20261026-243";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20261026-243";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20261026-243";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20261026-243";
+import { setCompanionState, setCompanionMode, companionMode, refreshCompanionCore } from "./companion.js?v=phantom-live-20261026-243";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20261026-243";
+import { getOperatorInfrastructureStatus, getOperatorSettings, hydrateOperatorRuntimeSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20261026-243";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20261026-243";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20261026-243";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20261026-243";
+import { registerContentAsset, renderContentHub } from "./contenthub.js?v=phantom-live-20261026-243";
+import { renderChicagoShotsStudio } from "./chicagoshots-studio.js?v=phantom-live-20261026-243";
 import {
-  fetchAuthConfig, databaseLogin, databaseLogout, databaseSignup, databaseForgotUsername, databaseForgotPassword,
-  databaseResetPassword, databaseAcceptInvitation, databaseVerify2fa, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
+  databaseLogout, databaseStart2faSetup, databaseConfirm2fa, databaseRegenerate2faBackupCodes, databaseDisable2fa,
   switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20261026-242";
-import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20261026-242";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20261026-242";
+} from "./orgs.js?v=phantom-live-20261026-243";
+import { renderPhantomStore } from "./phantomstore.js?v=phantom-live-20261026-243";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20261026-243";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20261026-242";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20261026-243";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
 import {
   customizeNavigation,
   loadOrganizationCustomization,
   renderBusinessBrand,
-} from "./customization.js?v=phantom-live-20261026-242";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20261026-242";
-import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20261026-242";
-import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20261026-242";
-import { BUSINESS_PROFILES, getBusinessProfile, businessNavigation, businessCanOpenRoute } from "./business-profiles.js?v=phantom-live-20261026-242";
-import { renderBusinessHub } from "./business-hub.js?v=phantom-live-20261026-242";
-import { renderCommerceWorkspace } from "./commerce-workspace.js?v=phantom-live-20261026-242";
-import { installBusinessRequestBoundary } from "./business-boundary.js?v=phantom-live-20261026-242";
-import { workspaceChoices, createWorkspaceCatalog, workspaceOptionMarkup, createWorkspaceAccessOpener, closeWorkspaceAccess, setDatabaseOrganizationSwitching } from "./workspace-access.js?v=phantom-live-20261026-242";
+} from "./customization.js?v=phantom-live-20261026-243";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20261026-243";
+import { initCommandOS, applyCommandExecutionMode } from "./command-os.js?v=phantom-live-20261026-243";
+import { createRouteRegistry } from "./product-grammar.js?v=phantom-live-20261026-243";
+import { BUSINESS_PROFILES, getBusinessProfile, businessNavigation, businessCanOpenRoute } from "./business-profiles.js?v=phantom-live-20261026-243";
+import { renderBusinessHub } from "./business-hub.js?v=phantom-live-20261026-243";
+import { renderCommerceWorkspace } from "./commerce-workspace.js?v=phantom-live-20261026-243";
+import { installBusinessRequestBoundary } from "./business-boundary.js?v=phantom-live-20261026-243";
+import { workspaceChoices, createWorkspaceCatalog, workspaceOptionMarkup, createWorkspaceAccessOpener, closeWorkspaceAccess, setDatabaseOrganizationSwitching } from "./workspace-access.js?v=phantom-live-20261026-243";
 
-import { bindWorkspaceRoutes, createWorkspaceContinuity } from "./workspace-continuity.js?v=phantom-live-20261026-242";
+import { bindWorkspaceRoutes, createWorkspaceContinuity } from "./workspace-continuity.js?v=phantom-live-20261026-243";
 
 installBusinessRequestBoundary();
 const workspaceContinuity = createWorkspaceContinuity({ getRoot: () => document.querySelector("[data-console]"), getTenant: currentTenantId,
@@ -82,6 +81,12 @@ function availableWorkspaces() {
 const showWorkspaceAccess = createWorkspaceAccessOpener({
   getSnapshot: () => ({ account: ctx.session || {}, current: currentTenantId(), choices: availableWorkspaces(), status: businessCatalog.status }),
   refresh: loadBusinessCatalog, switchWorkspace, signOut, loadStyle: loadWorkspaceStyle, getToken: () => session.token(),
+  openAdminAccess: async () => {
+    if (isOwnerOperator()) { routeWorkspace("dashboard"); return; }
+    const url = new URL(location.href); url.searchParams.set("access", "admin"); url.hash = "";
+    history.replaceState(null, "", `${url.pathname}${url.search}`);
+    await signOut();
+  },
   onError: message => speak(message, "", "alert"),
 });
 const activeBusinessProfile = () => {
@@ -97,23 +102,23 @@ const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").match
 const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 const WORKSPACE_STYLE_BUNDLES = Object.freeze({
-  intelligence: ["/app/competitor-intelligence.css?v=phantom-live-20261026-242"],
+  intelligence: ["/app/competitor-intelligence.css?v=phantom-live-20261026-243"],
   phantomplay: [
-    "/app/phantomplay.css?v=phantom-live-20261026-242",
-    "/app/phantomplay-v2.css?v=phantom-live-20261026-242",
+    "/app/phantomplay.css?v=phantom-live-20261026-243",
+    "/app/phantomplay-v2.css?v=phantom-live-20261026-243",
   ],
-  phantomstore: ["/app/phantomstore.css?v=phantom-live-20261026-242"],
+  phantomstore: ["/app/phantomstore.css?v=phantom-live-20261026-243"],
   phantomai: [
-    "/app/creator-studio.css?v=phantom-live-20261026-242",
-    "/app/automation-next.css?v=phantom-live-20261026-242",
+    "/app/creator-studio.css?v=phantom-live-20261026-243",
+    "/app/automation-next.css?v=phantom-live-20261026-243",
   ],
   phantomhunter: [
-    "/app/phantomhunter.css?v=phantom-live-20261026-242",
-    "/app/phantomhunter-connect.css?v=phantom-live-20261026-242",
+    "/app/phantomhunter.css?v=phantom-live-20261026-243",
+    "/app/phantomhunter-connect.css?v=phantom-live-20261026-243",
   ],
-  media: ["/app/creator-studio.css?v=phantom-live-20261026-242"],
-  content: ["/app/creator-studio.css?v=phantom-live-20261026-242"],
-  chicagoshots: ["/app/chicagoshots-studio.css?v=phantom-live-20261026-242"],
+  media: ["/app/creator-studio.css?v=phantom-live-20261026-243"],
+  content: ["/app/creator-studio.css?v=phantom-live-20261026-243"],
+  chicagoshots: ["/app/chicagoshots-studio.css?v=phantom-live-20261026-243"],
 });
 
 const workspaceStylePromises = new Map();
@@ -200,7 +205,7 @@ function showWorkspaceTransition(transition, phase = "loading") {
   transition.node.setAttribute("role", phase === "error" ? "alert" : "status");
   transition.node.setAttribute("aria-live", phase === "error" ? "assertive" : "polite");
   transition.node.innerHTML = `<div class="workspace-transition-card">
-    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20261026-242" alt=""><i></i><i></i></div>
+    <div class="workspace-transition-mark" aria-hidden="true"><img src="/app/assets/brand-phantom.png?v=phantom-live-20261026-243" alt=""><i></i><i></i></div>
     <p>${phase === "error" ? "PHANTOM RECOVERY" : "PHANTOM ROUTING"}</p>
     <h2>${phase === "error" ? "This workspace needs another moment." : `Preparing ${esc(transition.title)}`}</h2>
     <span>${phase === "error" ? "Nothing unfinished was shown. Try the transition again." : "Assembling your workspace."}</span>
@@ -513,7 +518,7 @@ function showGate() {
 function renderCustomerAuthLoading(card) {
   card.innerHTML = `
     <p class="gate-kicker">PHANTOMFORCE · ACCOUNT ACCESS</p>
-    <h1>Sign in to your workspace.</h1>
+    <h1>Sign in to PhantomForce.</h1>
     <div class="owner-login">
       <p class="gate-note">Checking the account system...</p>
     </div>
@@ -541,226 +546,9 @@ function renderCustomerAuthBlocked(card, message = "Account sign-in is temporari
 }
 
 function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
-  const { customerApp = false, internalAdmin = false, required = false, attempt = 0 } = options;
-  const retryAuthUpgrade = (message) => {
-    if (!required || gate.hidden) return false;
-    if (internalAdmin) {
-      renderInternalAdminAuthLoading(card, message);
-    } else {
-      renderCustomerAuthBlocked(card, message);
-    }
-    if (attempt >= 20) return true;
-    window.setTimeout(() => maybeUpgradeGateToDatabaseLogin(card, { ...options, attempt: attempt + 1 }), 3000);
-    return true;
-  };
-  fetchAuthConfig().then((auth) => {
-    if (gate.hidden) return;
-    if (!auth?.customerAuthEnabled && !auth?.databaseAuthEnabled) {
-      if (required) {
-        retryAuthUpgrade(attempt >= 20
-          ? "Sign-in is temporarily unavailable. Try again in a moment."
-          : "Account sign-in is starting. Retrying automatically...");
-      }
-      return;
-    }
-    const linkTokens = (() => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        return {
-          reset: params.get("reset_token") || "",
-          invite: params.get("invite_token") || params.get("invitation_token") || "",
-        };
-      } catch { return { reset: "", invite: "" }; }
-    })();
-    const initialMode = linkTokens.invite ? "invite" : linkTokens.reset ? "reset-pass" : "signin";
-    const state = {
-      mode: initialMode,
-      challenge: null,
-      busy: false,
-      message: linkTokens.invite
-        ? "Invitation found. Set your name and password to join the workspace."
-        : linkTokens.reset
-          ? "Reset link found. Choose a new password."
-          : "",
-      resetToken: linkTokens.reset,
-      inviteToken: linkTokens.invite,
-    };
-    const helper = customerApp
-      ? "Your verified account controls your businesses, tools and team permissions."
-      : internalAdmin
-      ? "Internal PhantomForce operator access only."
-      : "Your account, businesses, roles, recovery, and 2FA are managed securely by PhantomForce.";
-    const note = customerApp
-      ? "Use the email or username tied to your business workspace."
-      : internalAdmin
-      ? "Admin is not a public signup or customer account surface. Customer accounts, signup, and recovery live on app.phantomforce.online."
-      : "Create a business, accept an invite, recover access, or sign in with 2FA.";
-    const setError = (msg) => {
-      const error = card.querySelector("[data-db-error]");
-      if (!error) return;
-      error.textContent = msg || "";
-      error.hidden = !msg;
-    };
-    const doEnter = async (nextSession) => {
-      ctx.session = nextSession;
-      enterPhantom();
-    };
-    const render = () => {
-      const tab = (id, label) => `<button type="button" class="auth-tab ${state.mode === id ? "is-active" : ""}" data-auth-mode="${id}">${label}</button>`;
-      const msg = state.message ? `<p class="gate-note">${esc(state.message)}</p>` : "";
-      if (internalAdmin && !["signin", "2fa"].includes(state.mode)) state.mode = "signin";
-      const body = state.mode === "invite" && !internalAdmin ? `
-        <form class="owner-login" data-auth-form="invite">
-          <label><span>Your name</span><input name="name" autocomplete="name" placeholder="Your name" /></label>
-          <label><span>Create a password</span><input type="password" name="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" /></label>
-          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">+</span><b>Join workspace</b><i>This invitation can only be accepted once.</i></button>
-        </form>` : state.mode === "signup" && !internalAdmin ? `
-        <form class="owner-login" data-auth-form="signup">
-          <fieldset class="workspace-choice-field">
-            <legend>What workspace do you want?</legend>
-            <div class="workspace-choice-grid">${workspaceProfileChoices("business")}</div>
-          </fieldset>
-          <label><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@business.com" required /></label>
-          <label><span>Username</span><input name="username" autocomplete="username" placeholder="yourname" minlength="3" maxlength="32" /></label>
-          <label><span>Name</span><input name="name" autocomplete="name" placeholder="Your name" /></label>
-          <label><span>Workspace name</span><input name="organizationName" placeholder="Optional" /></label>
-          <label><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
-          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">＋</span><b>Create account</b><i>Starts your workspace on Basic.</i></button>
-        </form>` : state.mode === "forgot-user" && !internalAdmin ? `
-        <form class="owner-login" data-auth-form="forgot-user">
-          <label><span>Account email</span><input type="email" name="email" autocomplete="email" required /></label>
-          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">?</span><b>Recover username</b><i>We’ll send the username tied to this email.</i></button>
-        </form>` : state.mode === "forgot-pass" && !internalAdmin ? `
-        <form class="owner-login" data-auth-form="forgot-pass">
-          <label><span>Email or username</span><input name="identifier" autocomplete="username" required /></label>
-          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">↺</span><b>Send password reset</b><i>Creates a short-lived reset token.</i></button>
-        </form>` : state.mode === "reset-pass" && !internalAdmin ? `
-        <form class="owner-login" data-auth-form="reset-pass">
-          <label><span>Reset token</span><input name="token" autocomplete="one-time-code" value="${esc(state.resetToken || "")}" required /></label>
-          <label><span>New password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required /></label>
-          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">✓</span><b>Reset password</b><i>Revokes old sessions and saves the new password.</i></button>
-        </form>` : state.mode === "2fa" ? `
-        <form class="owner-login" data-auth-form="2fa">
-          <label><span>2FA code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" required autofocus /></label>
-          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">⌁</span><b>Verify 2FA</b><i>Use your authenticator app code.</i></button>
-        </form>` : `
-        <form class="owner-login" data-auth-form="signin">
-          <label><span>Email or username</span><input name="identifier" autocomplete="username" placeholder="you@business.com or username" autofocus required /></label>
-          <label><span>Password</span><input type="password" name="password" autocomplete="current-password" placeholder="Password" required /></label>
-          <button class="gate-opt gate-submit" type="submit"><span class="gate-opt-icon">⌘</span><b>${customerApp ? "Open Workspace" : "Open Business Manager"}</b><i>${helper}</i></button>
-        </form>`;
-      card.innerHTML = `
-        <p class="gate-kicker">PHANTOMFORCE · ${internalAdmin ? "INTERNAL ACCESS" : "ACCOUNT ACCESS"}</p>
-        <h1>${state.mode === "invite" ? "Join your workspace." : state.mode === "signup" ? "Create your Phantom account." : state.mode === "2fa" ? "Enter your 2FA code." : state.mode === "forgot-user" ? "Recover your username." : state.mode === "forgot-pass" ? "Reset your password." : state.mode === "reset-pass" ? "Choose a new password." : customerApp ? "Sign in to your workspace." : internalAdmin ? "Internal admin sign-in." : "Sign in to Phantom."}</h1>
-        ${internalAdmin || state.mode === "invite" ? "" : `<div class="auth-tabs auth-tabs-primary">${tab("signin", "Sign in")}${tab("signup", "Create account")}</div>`}
-        ${body}
-        <p class="gate-error" data-db-error hidden></p>
-        ${msg}
-        ${state.mode === "signin" && !internalAdmin ? `<div class="auth-links"><button type="button" data-auth-mode="forgot-user">Forgot username?</button><button type="button" data-auth-mode="forgot-pass">Forgot password?</button></div>` : ""}
-        ${!["signin", "signup"].includes(state.mode) ? `<div class="auth-links"><button type="button" data-auth-mode="signin">${state.mode === "2fa" ? "Use another account" : "Back to sign in"}</button></div>` : ""}
-        <p class="gate-note">${note}</p>`;
-      card.querySelectorAll("[data-auth-mode]").forEach((btn) => {
-        btn.onclick = () => { state.mode = btn.dataset.authMode; state.message = ""; render(); };
-      });
-      card.querySelectorAll('input[name="workspaceProfile"]').forEach((input) => {
-        input.onchange = () => {
-          card.querySelectorAll(".workspace-choice").forEach((choice) => {
-            choice.classList.toggle("is-selected", choice.contains(input));
-          });
-        };
-      });
-      const form = card.querySelector("[data-auth-form]");
-      if (!form) return;
-      form.onsubmit = async (event) => {
-      event.preventDefault();
-      if (state.busy) return;
-      state.busy = true;
-      setError("");
-      const data = new FormData(form);
-      form.classList.add("is-loading");
-      form.setAttribute("aria-busy", "true");
-      form.querySelectorAll("button, input").forEach((control) => { control.disabled = true; });
-      try {
-        if (state.mode === "signin") {
-          const nextSession = await databaseLogin(String(data.get("identifier") || "").trim(), String(data.get("password") || ""));
-          if (nextSession?.requires2fa) {
-            state.challenge = nextSession.challengeToken;
-            state.mode = "2fa";
-            state.message = "Password accepted. Enter your authenticator code to finish signing in.";
-            render();
-            return;
-          }
-          await doEnter(nextSession);
-        } else if (state.mode === "2fa") {
-          await doEnter(await databaseVerify2fa(state.challenge, String(data.get("code") || "")));
-        } else if (state.mode === "signup") {
-          const workspaceProfile = normalizeWorkspaceProfile(String(data.get("workspaceProfile") || "business"));
-          const signup = await databaseSignup({
-            email: String(data.get("email") || "").trim(),
-            username: String(data.get("username") || "").trim() || undefined,
-            name: String(data.get("name") || "").trim() || undefined,
-            organizationName: String(data.get("organizationName") || "").trim() || undefined,
-            password: String(data.get("password") || ""),
-            workspaceProfile,
-          });
-          saveWorkspaceProfile(signup?.workspaceProfile || workspaceProfile);
-          state.mode = "signin"; state.message = "Account created. Sign in with your new credentials."; render();
-        } else if (state.mode === "forgot-user") {
-          const result = await databaseForgotUsername(String(data.get("email") || "").trim());
-          state.message = result?.preview?.username ? `Recovery queued. Dev preview username: ${result.preview.username}` : "If that email exists, username recovery has been queued.";
-          render();
-        } else if (state.mode === "forgot-pass") {
-          const result = await databaseForgotPassword(String(data.get("identifier") || "").trim());
-          if (result?.preview?.resetToken) {
-            state.mode = "reset-pass";
-            state.resetToken = result.preview.resetToken;
-            state.message = "Reset ready in this test environment. Choose a new password.";
-          } else {
-            state.message = "If that account exists, a reset link is on its way. You can close this page and use the link in the email.";
-          }
-          render();
-        } else if (state.mode === "reset-pass") {
-          await databaseResetPassword(String(data.get("token") || "").trim(), String(data.get("password") || ""));
-          try {
-            const url = new URL(location.href);
-            url.searchParams.delete("reset_token");
-            history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-          } catch {}
-          state.mode = "signin"; state.resetToken = ""; state.message = "Password reset. Sign in with the new password."; render();
-        } else if (state.mode === "invite") {
-          await databaseAcceptInvitation(state.inviteToken, {
-            name: String(data.get("name") || "").trim(),
-            password: String(data.get("password") || ""),
-          });
-          try {
-            const url = new URL(location.href);
-            url.searchParams.delete("invite_token");
-            url.searchParams.delete("invitation_token");
-            history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-          } catch {}
-          state.mode = "signin";
-          state.inviteToken = "";
-          state.message = "Invitation accepted. Sign in to open the workspace.";
-          render();
-        }
-      } catch (err) {
-        session.clear();
-        ctx.session = null;
-        setError(err?.message || "Account action failed.");
-      } finally {
-        state.busy = false;
-        form.classList.remove("is-loading");
-        form.removeAttribute("aria-busy");
-        form.querySelectorAll("button, input").forEach((control) => { control.disabled = false; });
-      }
-    };
-    };
-    render();
-  }).catch(() => {
-    retryAuthUpgrade(attempt >= 20
-      ? "Sign-in is temporarily unavailable. Try again in a moment."
-      : "Account sign-in is starting. Retrying automatically...");
-  });
+  void import("./account-access-gate.js?v=phantom-live-20261026-243").then(({ mountAccountAccessGate }) => {
+    if (!gate.hidden) mountAccountAccessGate({ card, gate, onEnter: enterPhantom, workspaceProfileChoices, normalizeWorkspaceProfile, saveWorkspaceProfile, ...options });
+  }).catch(() => renderCustomerAuthBlocked(card, "Sign-in could not load. Refresh this page to retry."));
 }
 
 /* ============================ sidebar nav ============================ */
@@ -1478,17 +1266,21 @@ async function signOut() {
   closeWorkspaceAccess();
   businessCatalog.clear();
   showWorkspaceAccess.invalidate();
+  cancelWorkspaceTransition();
+  phantom.hidden = true; gate.hidden = false;
+  gate.querySelector(".gate-card").textContent = "Signing out…";
   try {
     if (databaseSession) await databaseLogout();
   } finally {
     session.clear();
     ctx.session = null;
+    activePageId = null; activeNav = "dashboard";
     try {
       const url = new URL(location.href);
       url.searchParams.delete("session");
-      history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    } catch {}
-    showGate();
+      url.searchParams.delete("view"); url.hash = "";
+      location.replace(`${url.pathname}${url.search}`);
+    } catch { showGate(); }
   }
 }
 
@@ -1908,7 +1700,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20261026-242";
+const POSE_VERSION = "phantom-live-20261026-243";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -4408,7 +4200,7 @@ const COMMERCE_SECTIONS = new Set(["overview", "orders", "products", "production
 function renderActiveBusinessWorkspace(body, section) {
   const options = { businessId: currentTenantId(), workspace: { id: currentTenantId() }, profile: activeBusinessProfile(), section, initialSection: section, getActiveBusinessId: currentTenantId, navigate: routeWorkspace, onSectionChange: (nextSection) => routeWorkspace(`business-${nextSection}`), onAsk: (prompt) => { queuePhantomAiPrompt(prompt); routeWorkspace("phantomai"); } };
   if (options.profile.id === "occasionally-odd" && COMMERCE_SECTIONS.has(section)) return renderCommerceWorkspace(body, options);
-  if (section === "social") return import("./social-settings.js?v=phantom-live-20261026-242").then(({ renderSocialSettings }) => {
+  if (section === "social") return import("./social-settings.js?v=phantom-live-20261026-243").then(({ renderSocialSettings }) => {
     if (body.isConnected && currentTenantId() === options.businessId) renderSocialSettings(body, { standalone: true });
   }).catch(() => { if (body.isConnected) body.textContent = "Social accounts could not load. Refresh to try again."; });
   return renderBusinessHub(body, options);

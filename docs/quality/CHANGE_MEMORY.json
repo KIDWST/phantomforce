@@ -4,6 +4,21 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "customer-and-admin-sign-in-on-one-app",
+      "status": "active",
+      "title": "The canonical app visibly supports customer and administrator sign-in",
+      "ownerDecision": "October 26, 2026: The owner clarified that app.phantomforce.online originally presented only customer login and must also offer admin access. Provide an explicit Admin sign-in alongside Customer sign-in on this same site, including an account-switch path from the workspace panel. Use existing authenticated password and 2FA endpoints; choosing Admin or an access query never grants authority. Customer signup and recovery remain available without creating platform administrators.",
+      "requiredPatterns": [
+        { "file": "app/js/account-access-gate.js", "pattern": "data-auth-access=\"customer\"[\\s\\S]*data-auth-access=\"admin\"", "description": "Both access choices are visible on the shared app sign-in page." },
+        { "file": "app/js/account-access-gate.js", "pattern": "!hasPlatformAdminAccess\\(nextSession\\)", "description": "Admin sign-in requires the verified account's platform capability." },
+        { "file": "app/js/account-access-gate.js", "pattern": "databaseVerify2fa\\(state.challenge", "description": "Admin sign-in completes the server-owned second-factor challenge." },
+        { "file": "app/js/workspace-access.js", "pattern": "data-access-admin", "description": "A signed-in customer can find Admin sign-in from workspaces and accounts." },
+        { "file": "app/js/main.js", "pattern": "openAdminAccess:[\\s\\S]*url.searchParams.set\\(\"access\", \"admin\"\\)[\\s\\S]*await signOut\\(\\)", "description": "Switching into admin sign-in clears the previous account instead of changing its role." },
+        { "file": "app/js/main.js", "pattern": "url.searchParams.delete\\(\"view\"\\); url.hash = \"\";[\\s\\S]*location.replace\\(`\\$\\{url.pathname\\}\\$\\{url.search\\}`\\)", "description": "Signing out destroys the previous account's page and stale route before another login." },
+        { "file": "scripts/test-release-critical.mjs", "pattern": "test:account-access:browser", "description": "Release tests submit real login forms through password, second factor, customer refusal and owner entry." }
+      ]
+    },
+    {
       "id": "complete-owner-console-on-canonical-app",
       "status": "active",
       "title": "The canonical app keeps the original owner command center and all permitted extras",
@@ -1600,12 +1615,12 @@
           "description": "A dashboard restored after workspace navigation binds its primary chat form before optional widgets can fail."
         },
         {
-          "file": "app/js/main.js",
+          "file": "app/js/account-access-gate.js",
           "pattern": "auth-tabs auth-tabs-primary[\\s\\S]*Forgot username[?][\\s\\S]*Forgot password[?]",
           "description": "The account gate keeps sign-in/create primary and recovery secondary."
         },
         {
-          "file": "app/js/main.js",
+          "file": "app/js/account-access-gate.js",
           "pattern": "Use another account[\\s\\S]*if [(]state.busy[)] return[\\s\\S]*aria-busy",
           "description": "2FA can restart and account forms cannot double-submit."
         },

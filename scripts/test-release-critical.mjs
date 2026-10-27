@@ -5,6 +5,7 @@ const checks = [
   "test:workspace-access",
   "test:unified-app",
   "test:owner-console:browser",
+  "test:account-access:browser",
   "test:print-intelligence",
   "test:smart-print:browser",
   "test:workspace-continuity",

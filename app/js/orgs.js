@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20261026-242";
+import { ctx, session } from "./store.js?v=phantom-live-20261026-243";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);
@@ -62,8 +62,8 @@ export async function fetchWorkGraphActions({ type = "", status = "", limit = 10
 }
 
 let cachedAuthConfig = null;
-export async function fetchAuthConfig() {
-  if (cachedAuthConfig) return cachedAuthConfig;
+export async function fetchAuthConfig({ refresh = false } = {}) {
+  if (cachedAuthConfig && !refresh) return cachedAuthConfig;
   try {
     const { json } = await api("/sessions");
     cachedAuthConfig = json?.auth || null;
@@ -205,7 +205,7 @@ export async function databaseDisable2fa(code) {
 
 export async function databaseLogout() {
   try {
-    await api("/auth/logout", { method: "POST", body: {} });
+    await api("/auth/logout", { method: "POST", body: {}, signal: AbortSignal.timeout(10_000) });
   } catch { /* revocation is best-effort from the client; the server owns truth */ }
 }
 

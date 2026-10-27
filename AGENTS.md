@@ -101,6 +101,12 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Customer and admin sign-in on the same app (2026-10-26)** — build
+  `phantom-live-20261026-243`. The canonical app visibly offers Customer sign-in
+  and Admin sign-in. Workspaces and accounts provides the same admin entry from
+  a customer session; verified owners can open the admin console directly.
+  Existing password, 2FA and server capabilities remain authoritative. See
+  `docs/quality/DUAL_ACCOUNT_ACCESS_20261026.md` for verification and undo.
 - **Complete owner console on the app domain (2026-10-26)** — build
   `phantom-live-20261026-242`. Restores the original owner command-center home
   and all permitted admin extras across business selections. The Menu includes

@@ -1,4 +1,4 @@
-import { renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-242";
+import { renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-243";
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -70,7 +70,7 @@ export function createWorkspaceAccessOpener(options) {
     const button = document.querySelector("[data-workspace-access]");
     button?.setAttribute("aria-busy", "true");
     try {
-      await options.loadStyle("workspace-access", "/app/workspace-access.css?v=phantom-live-20261026-242");
+      await options.loadStyle("workspace-access", "/app/workspace-access.css?v=phantom-live-20261026-243");
     } catch {
       options.onError("Workspaces could not load. Check your connection and try the workspace button again.");
       return false;
@@ -78,7 +78,7 @@ export function createWorkspaceAccessOpener(options) {
     const current = options.getSnapshot();
     if (request !== version || snapshot.account !== current.account || snapshot.current !== current.current) return false;
     openWorkspaceAccess({ ...options, initialTool, notice,
-      preparePrintStyles: () => options.loadStyle("print-analysis", "/app/commerce-workspace.css?v=phantom-live-20261026-242"),
+      preparePrintStyles: () => options.loadStyle("print-analysis", "/app/commerce-workspace.css?v=phantom-live-20261026-243"),
     });
   };
   show.invalidate = () => { version++; };
@@ -86,7 +86,7 @@ export function createWorkspaceAccessOpener(options) {
 }
 
 /** One native modal supplies focus trapping, Escape and focus restoration. */
-export function openWorkspaceAccess({ getSnapshot, getToken = () => "", refresh, switchWorkspace, signOut, preparePrintStyles, initialTool = false, notice = "" }) {
+export function openWorkspaceAccess({ getSnapshot, getToken = () => "", refresh, switchWorkspace, signOut, openAdminAccess = signOut, preparePrintStyles, initialTool = false, notice = "" }) {
   closeWorkspaceAccess();
   const opener = document.activeElement;
   const dialog = document.createElement("dialog");
@@ -106,14 +106,15 @@ export function openWorkspaceAccess({ getSnapshot, getToken = () => "", refresh,
   function paint(notice = "") {
     if (closed) return;
     const snapshot = getSnapshot(), { account, current, choices, status } = snapshot;
+    const owner = account.role === "admin" && (account.canManageAccess === true || account.isSuperAdmin === true);
     dialog.classList.remove("is-print-tool");
     dialog.innerHTML = `<header class="wa-heading"><div><p class="wa-eyebrow">Your workspaces</p><h2 id="workspace-access-title">Where do you want to work?</h2></div><button type="button" class="wa-close" data-access-close aria-label="Close workspaces">×</button></header>
-      <p class="wa-account">Signed in as <strong>${esc(account.name || "Operator")}</strong> · ${account.localCustomer ? "Customer account" : account.database ? "Organization account" : "Operator account"}</p>
+      <p class="wa-account">Signed in as <strong>${esc(account.name || "Operator")}</strong> · ${owner ? "Platform administrator" : account.localCustomer ? "Customer account" : account.database ? "Organization account" : "Operator account"}</p>
       <p class="wa-message" role="status">${esc(notice || workspaceAccessMessage({ account, count: choices.length, status: refreshing ? "loading" : status }))}</p>
       ${choices.length <= 1 && (status === "error" || refreshing || notice) ? `<p class="wa-account">${esc(workspaceAccessMessage({ account, count: choices.length, status: "ready" }))}</p>` : ""}
       <div class="wa-list">${choices.map(item => `<button class="wa-workspace ${item.id === current ? "is-current" : ""}" type="button" data-access-workspace="${esc(item.id)}" ${item.id === current ? 'aria-current="true"' : ""} ${refreshing ? "disabled" : ""}><span class="wa-avatar">${esc(item.name.slice(0, 2).toUpperCase())}</span><span><strong>${esc(item.name)}</strong><small>${esc(item.role)}${item.id === current ? " · Current workspace" : " · Open workspace"}</small></span><span aria-hidden="true">${item.id === current ? "✓" : "→"}</span></button>`).join("") || '<p>No workspace access was returned. Refresh access or sign in again.</p>'}</div>
       <section class="wa-tool"><div><p class="wa-eyebrow">Available here · no workspace switch</p><h3>Print opportunity analysis</h3><p>Compare your 3MF projects, quoting thresholds and contribution per printer-hour. Files stay on this device.</p></div><button class="wa-primary" type="button" data-access-print>Open print analysis →</button></section>
-      <footer class="wa-actions"><button type="button" data-access-refresh ${refreshing ? "disabled" : ""}>${refreshing ? "Refreshing…" : "Refresh workspace access"}</button><button type="button" data-access-account ${refreshing ? "disabled" : ""}>Sign in with a different account</button><a href="https://app.phantomforce.online/app/index.html" target="_blank" rel="noopener">Open PhantomForce app ↗</a></footer>
+      <footer class="wa-actions"><button type="button" data-access-refresh ${refreshing ? "disabled" : ""}>${refreshing ? "Refreshing…" : "Refresh workspace access"}</button><button type="button" data-access-admin ${refreshing ? "disabled" : ""}>${owner ? "Open admin console" : "Admin sign-in"}</button><button type="button" data-access-account ${refreshing ? "disabled" : ""}>Sign in with a different account</button><a href="https://app.phantomforce.online/app/index.html" target="_blank" rel="noopener">Open PhantomForce app ↗</a></footer>
       <p class="wa-account wa-local-owner">Using the PC where PhantomForce is installed? <a href="http://127.0.0.1:5177/app/index.html" target="_blank" rel="noopener">Open the installed app ↗</a>. Use your account’s normal sign-in.</p>`;
     dialog.querySelectorAll("[data-access-workspace]").forEach(button => button.onclick = async () => {
       if (button.dataset.accessWorkspace === getSnapshot().current) { dialog.close(); return; }
@@ -127,6 +128,7 @@ export function openWorkspaceAccess({ getSnapshot, getToken = () => "", refresh,
       dialog.querySelector("[data-access-refresh]")?.focus();
     };
     dialog.querySelector("[data-access-account]").onclick = () => { dialog.close(); void signOut(); };
+    dialog.querySelector("[data-access-admin]").onclick = () => { dialog.close(); void openAdminAccess(); };
     dialog.querySelector("[data-access-print]").onclick = () => { void showPrint(); };
     dialog.scrollTop = 0;
   }

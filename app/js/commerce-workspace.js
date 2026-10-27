@@ -1,6 +1,6 @@
-import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261026-242";
+import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261026-243";
 
-import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-242";
+import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261026-243";
 
 const mounts = new WeakMap();
 const API = "/api/business-workspaces/commerce";

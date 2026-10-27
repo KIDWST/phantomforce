@@ -13,6 +13,7 @@
     "test:workspace-access": "node scripts/test-workspace-access.mjs",
     "test:workspace-access:browser": "node scripts/test-workspace-access-browser.mjs",
     "test:owner-console:browser": "node scripts/test-owner-console-browser.mjs",
+    "test:account-access:browser": "node scripts/test-account-access-browser.mjs",
     "test:workspace-continuity": "node scripts/test-workspace-routes.mjs && node scripts/test-workspace-catalog.mjs",
     "test:workspace-continuity:browser": "node scripts/test-draft-continuity-browser.mjs",
     "test:unified-app": "node scripts/test-app-host-session.mjs && tsx server/scripts/test-public-host-boundaries.ts && tsx server/scripts/test-database-business-catalog.ts",
