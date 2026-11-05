@@ -1,5 +1,6 @@
-import { store, ctx, session, currentWs, uid, pushActivity } from "./store.js?v=phantom-live-20261027-247";
-import { getBusinessProfile } from "./business-profiles.js?v=phantom-live-20261027-247";
+import { store, ctx, session, currentWs, uid, pushActivity } from "./store.js?v=phantom-live-20261105-248";
+import { getBusinessProfile } from "./business-profiles.js?v=phantom-live-20261105-248";
+import { workPriority, compareWorkPriority } from "./business-priorities.js?v=phantom-live-20261105-248";
 
 const mounted = new WeakMap();
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -73,7 +74,7 @@ export function renderBusinessHub(root, options = {}) {
   const state = {
     businessId, disposed: false, section: String(options.section || "overview").replace(/^business-/, ""),
     status: remote ? "loading" : "ready", records: remote ? [] : scoped(store.state.businessWorkItems, businessId),
-    canManage: !remote && canManageLocalBusiness(ctx.session), search: "", filter: "all", error: "", notice: "", busy: false, editor: null,
+    canManage: !remote && canManageLocalBusiness(ctx.session), search: "", filter: "all", focus: "all", error: "", notice: "", busy: false, editor: null,
   };
   mounted.set(root, state);
   const active = () => !state.disposed && mounted.get(root) === state && currentWs() === businessId;
@@ -133,37 +134,43 @@ export function renderBusinessHub(root, options = {}) {
     root.querySelector("[data-business-editor] input[name=title]")?.focus();
   }
 
+  function matchesFocus(record) {
+    if (state.focus === "all") return true;
+    if (["project", "automation", "shoot", "order"].includes(state.focus)) return workPriority(record).open && record.kind === state.focus;
+    if (state.focus === "editing") return record.status === "editing";
+    if (state.focus === "production") return ["production", "quality-check"].includes(record.status);
+    return workPriority(record)[state.focus];
+  }
   function visibleRecords() {
     const kinds = sectionKinds(state.section, profile);
     return state.records.filter((record) => recordScope(record) === businessId && kinds.includes(record.kind))
       .filter((record) => state.section !== "overview" || (!['complete', 'retired'].includes(record.status) && record.kind !== 'gear'))
       .filter((record) => state.filter === "all" || (state.filter === "open" ? !["complete", "ready"].includes(record.status) : record.status === state.filter))
+      .filter((record) => state.section !== "overview" || matchesFocus(record))
       .filter((record) => `${record.title} ${record.customer || ""} ${record.notes || ""}`.toLowerCase().includes(state.search.toLowerCase()))
       .sort((a, b) => {
         if (state.section !== "overview") return 0;
-        const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
-        const priority = (record) => record.due && new Date(`${String(record.due).slice(0, 10)}T12:00:00`) < startOfToday ? 0 : ["review", "quality-check", "ready"].includes(record.status) ? 1 : 2;
-        return priority(a) - priority(b) || String(a.due || "9999").localeCompare(String(b.due || "9999"));
+        return compareWorkPriority(a, b);
       });
   }
 
-  function metric(label, value, detail) {
-    return `<div class="business-metric"><span>${esc(label)}</span><strong>${state.status === "ready" ? esc(value) : "—"}</strong><small>${esc(detail)}</small></div>`;
+  function metric(label, value, detail, focus) {
+    return `<button type="button" class="business-metric" data-business-focus="${focus}" aria-pressed="${state.focus === focus}" ${state.status !== "ready" ? "disabled" : ""}><span>${esc(label)}</span><strong>${state.status === "ready" ? esc(value) : "—"}</strong><small>${esc(detail)} →</small></button>`;
   }
 
   function metrics() {
     const records = state.records.filter((record) => record.kind !== "gear");
-    const open = records.filter((record) => record.status !== "complete");
-    const review = records.filter((record) => ["review", "quality-check"].includes(record.status));
+    const open = records.filter((record) => workPriority(record).open);
+    const review = open.filter((record) => workPriority(record).review);
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const overdue = open.filter((record) => record.due && String(record.due).slice(0, 10) < today);
+    const overdue = open.filter((record) => workPriority(record, today).overdue);
     const metrics = profile.id === "occasionally-odd"
       ? [["Open orders", open.filter((record) => record.kind === "order").length, "Not completed"], ["In production", records.filter((record) => ["production", "quality-check"].includes(record.status)).length, "Production and quality checks"], ["Needs review", review.length, "Waiting for review"], ["Overdue", overdue.length, "Past their target date"]]
       : profile.id === "client-chicagoshots"
         ? [["Open bookings", open.filter((record) => record.kind === "shoot").length, "Shoot plans not completed"], ["In editing", records.filter((record) => record.status === "editing").length, "Edits and projects"], ["Needs review", review.length, "Waiting for feedback"], ["Overdue", overdue.length, "Past their target date"]]
         : [["Active projects", open.filter((record) => record.kind === "project").length, "Not completed"], ["Automation plans", open.filter((record) => record.kind === "automation").length, "Saved plans"], ["Needs review", review.length, "Waiting for review"], ["Overdue", overdue.length, "Past their target date"]];
-    return `<div class="business-metrics">${metrics.map((values) => metric(...values)).join("")}</div>`;
+    return `<div class="business-metrics">${metrics.map((values, index) => metric(...values, index === 2 ? "review" : index === 3 ? "overdue" : profile.id === "client-chicagoshots" ? index === 0 ? "shoot" : "editing" : profile.id === "occasionally-odd" ? index === 0 ? "order" : "production" : index === 0 ? "project" : "automation")).join("")}</div>`;
   }
 
   function workCard(record) {
@@ -176,7 +183,7 @@ export function renderBusinessHub(root, options = {}) {
       <h3>${esc(record.title)}</h3><p>${esc(record.kind === "gear" ? record.metadata?.assetTag || "No asset tag recorded" : record.customer || `No ${profile.nouns.customer.toLowerCase()} assigned`)}</p>
       ${record.kind === "gear" ? `<p>${esc(record.metadata?.location || "Location not recorded")} · ${esc(record.metadata?.checkoutTo || "Unassigned")}</p>` : ""}
       ${record.notes ? `<p class="business-note-preview">${esc(record.notes)}</p>` : ""}
-      <div class="business-card-details"><span>${esc(dateLabel(record.due))}</span>${record.metadata?.quantity ? `<span>Qty ${esc(record.metadata.quantity)}</span>` : ""}${record.metadata?.rightsStatus === "pending" ? '<span class="business-rights-pending">Permission pending</span>' : ""}</div>
+      <div class="business-card-details"><span class="${workPriority(record).overdue ? "business-deadline-late" : ""}">${workPriority(record).overdue ? "Overdue · " : workPriority(record).today ? "Today · " : ""}${esc(dateLabel(record.due))}</span>${record.metadata?.quantity ? `<span>Qty ${esc(record.metadata.quantity)}</span>` : ""}${record.metadata?.rightsStatus === "pending" ? '<span class="business-rights-pending">Permission pending</span>' : ""}</div>
       <div class="business-card-actions"><button type="button" class="business-button business-button-subtle" data-edit-record="${esc(record.id)}" ${!state.canManage ? "disabled" : ""}>Edit details</button>${next ? `<button type="button" class="business-button business-button-small" data-advance-record="${esc(record.id)}" title="${esc(blocked || `Move to ${titleCase(next)}`)}" ${state.busy || !state.canManage || blocked ? "disabled" : ""}>${esc(titleCase(next))} <span aria-hidden="true">→</span></button>` : '<span class="business-finished">Stage complete</span>'}</div>
       ${blocked ? `<small class="business-card-blocker">${esc(blocked)}</small>` : ""}
     </article>`;
@@ -189,12 +196,18 @@ export function renderBusinessHub(root, options = {}) {
     const section = profile.sections.find((item) => item.id === state.section);
     const title = state.section === "overview" ? "Next up" : section?.label || titleCase(state.section);
     const heading = state.section === "overview" ? "h2" : "h1";
-    const emptyTitle = state.section === "overview" ? "No open work" : `No ${title.toLowerCase()} yet`;
+    const emptyTitle = state.section === "overview" ? state.focus === "all" ? "No open work" : "Nothing in this focus" : `No ${title.toLowerCase()} yet`;
     return `<section class="business-panel business-work-panel" aria-label="${esc(title)}"><div class="business-panel-heading"><${heading}>${esc(title)}</${heading}>${workflows.length ? `<button type="button" class="business-button business-button-primary" data-new-business-work ${!state.canManage || state.status !== "ready" ? "disabled" : ""}>+ ${esc(workflows[0].label)}</button>` : ""}</div>
       <div class="business-work-filters"><label class="business-search"><span class="business-sr-only">Search this business's work</span><input type="search" placeholder="Search ${esc(profile.nouns.work.toLowerCase())}…" value="${esc(state.search)}" data-business-search></label><label><span class="business-sr-only">Filter stage</span><select data-business-filter><option value="all" ${state.filter === "all" ? "selected" : ""}>All stages</option><option value="open" ${state.filter === "open" ? "selected" : ""}>In progress</option><option value="review" ${state.filter === "review" ? "selected" : ""}>In review</option><option value="ready" ${state.filter === "ready" ? "selected" : ""}>Ready</option><option value="complete" ${state.filter === "complete" ? "selected" : ""}>Completed</option></select></label></div>
-      ${state.status === "loading" ? '<div class="business-empty" role="status"><h3>Loading records…</h3></div>' : state.status === "error" ? '<div class="business-empty"><h3>Records are unavailable</h3><p>Reconnect to load saved work.</p><button type="button" class="business-button" data-business-retry>Try again</button></div>' : records.length ? `<div class="business-work-grid">${records.slice(0, state.section === "overview" ? 6 : 200).map(workCard).join("")}</div>` : `<div class="business-empty"><h3>${state.search || state.filter !== "all" ? "No matching work" : esc(emptyTitle)}</h3><p>${state.search || state.filter !== "all" ? "Try another search or stage." : state.section === "overview" ? "Open work appears here, ordered by overdue dates and review status." : workflows[0]?.detail || "Saved records will appear here."}</p></div>`}
+      ${state.status === "loading" ? '<div class="business-empty" role="status"><h3>Loading records…</h3></div>' : state.status === "error" ? '<div class="business-empty"><h3>Records are unavailable</h3><p>Reconnect to load saved work.</p><button type="button" class="business-button" data-business-retry>Try again</button></div>' : records.length ? `<div class="business-work-grid">${records.slice(0, state.section === "overview" ? 6 : 200).map(workCard).join("")}</div>` : `<div class="business-empty"><h3>${state.search || state.filter !== "all" ? "No matching work" : esc(emptyTitle)}</h3><p>${state.search || state.filter !== "all" ? "Try another search or stage." : state.section === "overview" ? "Open work is ordered by overdue dates, today’s deadlines, and reviews. Choose All open to return to the full queue." : workflows[0]?.detail || "Saved records will appear here."}</p></div>`}
       ${state.section === "overview" && records.length > 6 ? '<p class="business-muted">Showing 6 open items. Use the top menu to open a full list.</p>' : ""}
     </section>`;
+  }
+
+  function focusView() {
+    const records = state.records.filter((record) => recordScope(record) === businessId && record.kind !== "gear" && workPriority(record).open);
+    const choices = [["all", "All open"], ["overdue", "Overdue"], ["today", "Due today"], ["review", "Needs review"], ["unscheduled", "Needs a date"]];
+    return `<div class="business-focus" role="group" aria-label="Focus your work">${choices.map(([key, label]) => `<button type="button" class="business-button" data-business-focus="${key}" aria-pressed="${state.focus === key}" ${state.status !== "ready" ? "disabled" : ""}>${label}<span>${state.status !== "ready" ? "—" : key === "all" ? records.length : records.filter((record) => workPriority(record)[key]).length}</span></button>`).join("")}</div>`;
   }
 
   function templatesView() {
@@ -241,12 +254,17 @@ export function renderBusinessHub(root, options = {}) {
       ${state.error ? `<div class="business-alert" role="alert">${esc(state.error)}</div>` : ""}${state.notice ? `<div class="business-notice" role="status">${esc(state.notice)}</div>` : ""}
       ${state.status === "ready" && !state.canManage ? '<div class="business-notice">View-only access. Your business administrator manages records.</div>' : ""}
       ${editorView()}
-      ${state.section === "overview" ? `<div class="business-page-heading"><h1>Overview</h1></div>${metrics()}${workList()}` : state.section === "calendar" ? calendarView() : state.section === "templates" ? templatesView() : state.section === "assets" ? assetsView() : state.section === "channels" ? channelsView() : workList()}
+      ${state.section === "overview" ? `<div class="business-page-heading"><h1>${profile.id === "client-chicagoshots" ? "Studio desk" : profile.id === "occasionally-odd" ? "Workroom" : "Project desk"}</h1><p class="business-muted">${profile.id === "client-chicagoshots" ? "Shoots, edits, and client handoffs — in priority order." : "Deadlines, reviews, and the next steps for your saved work."}</p></div>${metrics()}${focusView()}${workList()}` : state.section === "calendar" ? calendarView() : state.section === "templates" ? templatesView() : state.section === "assets" ? assetsView() : state.section === "channels" ? channelsView() : workList()}
     </div>`;
     bind();
   }
 
   function bind() {
+    root.querySelectorAll("[data-business-focus]").forEach((button) => button.addEventListener("click", () => {
+      if (!active()) return;
+      state.focus = button.dataset.businessFocus; state.search = ""; state.filter = "all"; paint();
+      root.querySelector(`${button.classList.contains("business-metric") ? ".business-metric" : ".business-focus button"}[data-business-focus="${state.focus}"]`)?.focus();
+    }));
     root.querySelectorAll("[data-business-section]").forEach((button) => button.addEventListener("click", () => {
       if (!active()) return;
       if (options.onSectionChange) return options.onSectionChange(button.dataset.businessSection);

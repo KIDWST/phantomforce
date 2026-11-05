@@ -101,6 +101,12 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Business desks and daily priorities (2026-11-05)** — build
+  `phantom-live-20261105-248`. The existing owner command center opens the
+  selected company’s project desk, studio desk or workroom. Count-backed focus
+  controls prioritize overdue work, today, reviews and missing dates; fulfillment
+  includes ready shipments. Existing owner tools and business scopes remain.
+  See `docs/quality/BUSINESS_DESKS_20261105.md` for checks and rollback.
 - **REA-assisted production decisions (2026-10-27)** — build
   `phantom-live-20261027-247`. Print lab extends the existing Occasionally Odd
   feed with automatic slice-change comparisons, output/compatibility warnings,

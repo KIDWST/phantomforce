@@ -64,7 +64,12 @@ class RenderRoot {
       return attribute ? Object.hasOwn(node.attributes, attribute[1]) && (attribute[2] === undefined || decode(node.attributes[attribute[1]]) === attribute[2]) : node.tagName === selector;
     });
   }
-  querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+  querySelector(selector) {
+    // Nested print tools own their DOM and have dedicated renderer/browser suites.
+    // This fixture exercises the commerce surface without mounting those children.
+    if (["[data-bambu-print-feed]", "[data-print-opportunities]", "[data-bambu-printer-setup]"].includes(selector)) return null;
+    return this.querySelectorAll(selector)[0] || null;
+  }
 }
 const originalFormData = globalThis.FormData;
 globalThis.FormData = class FixtureFormData {
@@ -142,6 +147,22 @@ try {
     assert.match(root.innerHTML, /different business|could not be verified/);
     assert.doesNotMatch(root.innerHTML, /OWN_PRODUCT|OWN_CUSTOMER|OWN_ORDER|OWN_SHOP/);
   }
+
+  const focusFixture = snapshot();
+  focusFixture.state.orders.push(entity("late-order", { externalId: "LATE_ORDER", due: "2000-01-01", status: "open", lines: [] }), entity("ready-order", { externalId: "READY_ORDER", status: "ready", lines: [] }), entity("done-order", { externalId: "DONE_ORDER", due: "2000-01-01", status: "shipped", lines: [] }));
+  await load("overview", focusFixture);
+  await root.querySelector('[data-cw-focus="overdue"]').trigger("click");
+  assert.match(root.innerHTML, /LATE_ORDER/);
+  assert.doesNotMatch(root.innerHTML, /OWN_ORDER|READY_ORDER|DONE_ORDER/);
+  await root.querySelector('[data-cw-focus="ready"]').trigger("click");
+  assert.match(root.innerHTML, /READY_ORDER/);
+  assert.doesNotMatch(root.innerHTML, /LATE_ORDER|OWN_ORDER|DONE_ORDER/);
+  await root.querySelector('[data-cw-focus="today"]').trigger("click");
+  assert.match(root.innerHTML, /No orders in this focus/);
+  assert.doesNotMatch(root.innerHTML, /Every recorded order is shipped/);
+  await root.querySelector('[data-cw-focus="all"]').trigger("click");
+  assert.match(root.innerHTML, /LATE_ORDER/);
+  assert.match(root.innerHTML, /READY_ORDER/);
 
   const sectionTitles = { overview: "Orders to fulfill", orders: "Orders", products: "Products", production: "Production", inventory: "Materials &amp; components", customers: "Customers", channels: "Pending channel updates", shipping: "Shipment history", marketing: "Marketing", finance: "SKU economics", analytics: "Orders by sales channel" };
   for (const [section, title] of Object.entries(sectionTitles)) {

@@ -1,8 +1,36 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-10-26",
+  "lastUpdated": "2026-11-05",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
+    {
+      "id": "business-desks-priority-focus",
+      "status": "active",
+      "title": "Three businesses have direct operational desks and actionable priorities",
+      "ownerDecision": "Improve the actual three-business control experience. Preserve the owner command center and all existing tools while making each business desk easy to reach and daily priorities actionable.",
+      "requiredPatterns": [
+        {
+          "file": "app/js/main.js",
+          "pattern": "data-business-desk-entry[\\s\\S]*Open workroom[\\s\\S]*Open studio desk[\\s\\S]*Open project desk",
+          "description": "The existing command center provides the selected business desk entry."
+        },
+        {
+          "file": "app/js/business-hub.js",
+          "pattern": "data-business-focus[\\s\\S]*Studio desk[\\s\\S]*Project desk",
+          "description": "Business desks retain count-backed focus controls and distinct operational headings."
+        },
+        {
+          "file": "app/js/commerce-workspace.js",
+          "pattern": "Ship today[\\s\\S]*Ready to ship[\\s\\S]*data-cw-focus",
+          "description": "Fulfillment retains deadline and shipment focus controls."
+        },
+        {
+          "file": "app/js/business-priorities.js",
+          "pattern": "cancelled[\\s\\S]*overdue:[\\s\\S]*unscheduled:",
+          "description": "Closed records and calendar-date semantics remain explicit."
+        }
+      ]
+    },
     {
       "id": "rea-print-decision-lab",
       "status": "active",
@@ -49,20 +77,68 @@
       "title": "Print quotes preserve their evidence and actual outcomes stay measured",
       "ownerDecision": "October27,2026: Finish Occasionally Odd's print-to-quote workflow with reusable recipes, finishing/hardware costs, capacity and delivery planning, actual completion and a ten-completed-job accuracy sample. Owner confirmed one P2S and one P1S at24 printing hours/day and2 hands-on hours/day. Unknown inputs and missing printer pairing must remain explicit.",
       "requiredPatterns": [
-        { "file": "app/js/bambu-print-feed.js", "pattern": "printQuoteWorkflowView", "description": "The actual feed exposes the saved quote workflow." },
-        { "file": "app/js/commerce-workspace.js", "pattern": "renderBambuPrinterSetup", "description": "Printer pairing is reachable outside destructive feed refreshes." },
-        { "file": "server/src/business-workspaces/print-quote-workflow.ts", "pattern": "recipeSnapshot[\\s\\S]*ratesSnapshot", "description": "Saved quote revisions preserve the original recipe and rates." },
-        { "file": "server/src/business-workspaces/print-quote-workflow.ts", "pattern": "actualHistory", "description": "Corrections preserve prior full actual records." },
-        { "file": "server/src/business-workspaces/print-quote-workflow.ts", "pattern": "quote\\.batches !== 1", "description": "One print receipt is not compared with a whole multi-batch quote." },
-        { "file": "server/src/business-workspaces/bambu-monitor.ts", "pattern": "rejectUnauthorized: true", "description": "Printer pairing retains certificate verification." },
-        { "file": ".gitattributes", "pattern": "server/resources/bambu-printer-ca\\.pem text eol=lf", "description": "The verified public CA retains its exact bytes on Windows checkout." },
-        { "file": "server/src/business-workspaces/bambu-monitor.ts", "pattern": "bindingId", "description": "Physical printer identity survives slot-label ambiguity." },
-        { "file": "server/src/business-workspaces/bambu-connections.ts", "pattern": "aes-256-gcm", "description": "Newly supplied printer credentials are encrypted at rest." },
-        { "file": "server/src/index.ts", "pattern": "startBambuRuntime", "description": "Read-only configured monitoring uses the real server lifecycle." },
-        { "file": "scripts/test-release-critical.mjs", "pattern": "test:print-quotes:browser[\\s\\S]*test:bambu-printer-setup:browser", "description": "Release proof includes the quote workflow and secure pairing UI." }
+        {
+          "file": "app/js/bambu-print-feed.js",
+          "pattern": "printQuoteWorkflowView",
+          "description": "The actual feed exposes the saved quote workflow."
+        },
+        {
+          "file": "app/js/commerce-workspace.js",
+          "pattern": "renderBambuPrinterSetup",
+          "description": "Printer pairing is reachable outside destructive feed refreshes."
+        },
+        {
+          "file": "server/src/business-workspaces/print-quote-workflow.ts",
+          "pattern": "recipeSnapshot[\\s\\S]*ratesSnapshot",
+          "description": "Saved quote revisions preserve the original recipe and rates."
+        },
+        {
+          "file": "server/src/business-workspaces/print-quote-workflow.ts",
+          "pattern": "actualHistory",
+          "description": "Corrections preserve prior full actual records."
+        },
+        {
+          "file": "server/src/business-workspaces/print-quote-workflow.ts",
+          "pattern": "quote\\.batches !== 1",
+          "description": "One print receipt is not compared with a whole multi-batch quote."
+        },
+        {
+          "file": "server/src/business-workspaces/bambu-monitor.ts",
+          "pattern": "rejectUnauthorized: true",
+          "description": "Printer pairing retains certificate verification."
+        },
+        {
+          "file": ".gitattributes",
+          "pattern": "server/resources/bambu-printer-ca\\.pem text eol=lf",
+          "description": "The verified public CA retains its exact bytes on Windows checkout."
+        },
+        {
+          "file": "server/src/business-workspaces/bambu-monitor.ts",
+          "pattern": "bindingId",
+          "description": "Physical printer identity survives slot-label ambiguity."
+        },
+        {
+          "file": "server/src/business-workspaces/bambu-connections.ts",
+          "pattern": "aes-256-gcm",
+          "description": "Newly supplied printer credentials are encrypted at rest."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "startBambuRuntime",
+          "description": "Read-only configured monitoring uses the real server lifecycle."
+        },
+        {
+          "file": "scripts/test-release-critical.mjs",
+          "pattern": "test:print-quotes:browser[\\s\\S]*test:bambu-printer-setup:browser",
+          "description": "Release proof includes the quote workflow and secure pairing UI."
+        }
       ],
       "forbiddenPatterns": [
-        { "file": "server/src/business-workspaces/bambu-monitor.ts", "pattern": "\\.publish\\(", "description": "Monitoring never publishes printer commands." }
+        {
+          "file": "server/src/business-workspaces/bambu-monitor.ts",
+          "pattern": "\\.publish\\(",
+          "description": "Monitoring never publishes printer commands."
+        }
       ]
     },
     {
@@ -71,14 +147,46 @@
       "title": "Bambu capture retains files and gives honest reusable print economics",
       "ownerDecision": "October 26, 2026: Connect Bambu Studio automatically to Occasionally Odd for 3MF retention, cost analysis and useful local/custom US USD pricing. Keep prepared evidence distinct from actual completed prints, archive dedup distinct from repeat observations, and cost targets distinct from verified market evidence. No repeated manual import or mandatory cost form is required.",
       "requiredPatterns": [
-        { "file": "server/src/index.ts", "pattern": "registerPrintRunRoutes\\(app\\)", "description": "Print history routes are mounted in the real application." },
-        { "file": "server/src/index.ts", "pattern": "bambuCollector = await startBambuCollector", "description": "Enabled capture starts with the existing API lifecycle." },
-        { "file": "server/src/business-workspaces/bambu-collector.ts", "pattern": "evidence: \"prepared\"", "description": "Temporary packages do not fabricate printer completion." },
-        { "file": "server/src/business-workspaces/print-runs.ts", "pattern": "sourceEventHash", "description": "Observed sends remain separate from file archive hashes." },
-        { "file": "server/src/business-workspaces/print-runs.ts", "pattern": "assertPrintTenant", "description": "The import journal is fixed to Occasionally Odd." },
-        { "file": "app/js/commerce-workspace.js", "pattern": "renderBambuPrintFeed", "description": "Production and Finance expose the durable feed." },
-        { "file": "app/js/bambu-print-feed.js", "pattern": "illustrative", "description": "Unconfirmed rates stay visibly hypothetical." },
-        { "file": "scripts/test-release-critical.mjs", "pattern": "test:bambu-collector[\\s\\S]*test:bambu-print-feed:browser", "description": "Release checks verify collection and actual commerce UI." }
+        {
+          "file": "server/src/index.ts",
+          "pattern": "registerPrintRunRoutes\\(app\\)",
+          "description": "Print history routes are mounted in the real application."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "bambuCollector = await startBambuCollector",
+          "description": "Enabled capture starts with the existing API lifecycle."
+        },
+        {
+          "file": "server/src/business-workspaces/bambu-collector.ts",
+          "pattern": "evidence: \"prepared\"",
+          "description": "Temporary packages do not fabricate printer completion."
+        },
+        {
+          "file": "server/src/business-workspaces/print-runs.ts",
+          "pattern": "sourceEventHash",
+          "description": "Observed sends remain separate from file archive hashes."
+        },
+        {
+          "file": "server/src/business-workspaces/print-runs.ts",
+          "pattern": "assertPrintTenant",
+          "description": "The import journal is fixed to Occasionally Odd."
+        },
+        {
+          "file": "app/js/commerce-workspace.js",
+          "pattern": "renderBambuPrintFeed",
+          "description": "Production and Finance expose the durable feed."
+        },
+        {
+          "file": "app/js/bambu-print-feed.js",
+          "pattern": "illustrative",
+          "description": "Unconfirmed rates stay visibly hypothetical."
+        },
+        {
+          "file": "scripts/test-release-critical.mjs",
+          "pattern": "test:bambu-collector[\\s\\S]*test:bambu-print-feed:browser",
+          "description": "Release checks verify collection and actual commerce UI."
+        }
       ]
     },
     {
@@ -87,15 +195,51 @@
       "title": "The owner business picker stays focused and accepted tools remain reachable",
       "ownerDecision": "October 26, 2026: The owner rejected the organization picker filled with demo, QA, development and repeated Customer 1 organizations, and requested all previously accepted features remain available. Show the real businesses in the everyday picker; preserve other authorized organizations in searchable management without deleting, merging or renaming their data. Current scope and customer memberships remain exact. Restore orphaned Production Core diagnostics in Developer and Prompt Library in the tools menu.",
       "requiredPatterns": [
-        { "file": "app/js/workspace-access.js", "pattern": "workspaceDirectory\\(\\{ choices, current, account \\}\\)", "description": "Picker presentation is distinct from the complete authoritative catalog." },
-        { "file": "app/js/workspace-access.js", "pattern": "data-access-directory[\\s\\S]*data-access-search", "description": "Other workspaces remain searchable in explicit management." },
-        { "file": "app/js/workspace-directory.js", "pattern": "\"phantomforce-internal\", \"phantomforce\"", "description": "The actual preserved internal business is preferred over a legacy alias." },
-        { "file": "app/js/workspace-directory.js", "pattern": "if \\(!owner\\) return \\{ owner, all, primary: all", "description": "Ordinary customer and organization-admin memberships are never hidden by the platform-owner presentation." },
-        { "file": "app/js/main.js", "pattern": "id: \"promptlibrary\", label: \"Prompt library\"", "description": "Saved prompts have a real tools-menu destination without the retired chat row." },
-        { "file": "app/js/main.js", "pattern": "data-production-core-panel", "description": "The actual Developer implementation mounts the accepted diagnostics instead of relying on an overridden dead admin renderer." },
-        { "file": "app/js/orgs.js", "pattern": "accountSignInResult\\(json", "description": "Malformed successful responses cannot create partial accounts." },
-        { "file": "scripts/test-release-critical.mjs", "pattern": "test:workspace-directory:browser", "description": "Release proof covers a cluttered sixteen-organization catalog and intact customer access." },
-        { "file": "scripts/test-owner-console-browser.mjs", "pattern": "Production Core diagnostics are orphaned", "description": "Actual owner routes verify the diagnostics are reachable." }
+        {
+          "file": "app/js/workspace-access.js",
+          "pattern": "workspaceDirectory\\(\\{ choices, current, account \\}\\)",
+          "description": "Picker presentation is distinct from the complete authoritative catalog."
+        },
+        {
+          "file": "app/js/workspace-access.js",
+          "pattern": "data-access-directory[\\s\\S]*data-access-search",
+          "description": "Other workspaces remain searchable in explicit management."
+        },
+        {
+          "file": "app/js/workspace-directory.js",
+          "pattern": "\"phantomforce-internal\", \"phantomforce\"",
+          "description": "The actual preserved internal business is preferred over a legacy alias."
+        },
+        {
+          "file": "app/js/workspace-directory.js",
+          "pattern": "if \\(!owner\\) return \\{ owner, all, primary: all",
+          "description": "Ordinary customer and organization-admin memberships are never hidden by the platform-owner presentation."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "id: \"promptlibrary\", label: \"Prompt library\"",
+          "description": "Saved prompts have a real tools-menu destination without the retired chat row."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "data-production-core-panel",
+          "description": "The actual Developer implementation mounts the accepted diagnostics instead of relying on an overridden dead admin renderer."
+        },
+        {
+          "file": "app/js/orgs.js",
+          "pattern": "accountSignInResult\\(json",
+          "description": "Malformed successful responses cannot create partial accounts."
+        },
+        {
+          "file": "scripts/test-release-critical.mjs",
+          "pattern": "test:workspace-directory:browser",
+          "description": "Release proof covers a cluttered sixteen-organization catalog and intact customer access."
+        },
+        {
+          "file": "scripts/test-owner-console-browser.mjs",
+          "pattern": "Production Core diagnostics are orphaned",
+          "description": "Actual owner routes verify the diagnostics are reachable."
+        }
       ]
     },
     {
@@ -104,13 +248,41 @@
       "title": "The canonical app visibly supports customer and administrator sign-in",
       "ownerDecision": "October 26, 2026: The owner clarified that app.phantomforce.online originally presented only customer login and must also offer admin access. Provide an explicit Admin sign-in alongside Customer sign-in on this same site, including an account-switch path from the workspace panel. Use existing authenticated password and 2FA endpoints; choosing Admin or an access query never grants authority. Customer signup and recovery remain available without creating platform administrators.",
       "requiredPatterns": [
-        { "file": "app/js/account-access-gate.js", "pattern": "data-auth-access=\"customer\"[\\s\\S]*data-auth-access=\"admin\"", "description": "Both access choices are visible on the shared app sign-in page." },
-        { "file": "app/js/account-access-gate.js", "pattern": "!hasPlatformAdminAccess\\(nextSession\\)", "description": "Admin sign-in requires the verified account's platform capability." },
-        { "file": "app/js/account-access-gate.js", "pattern": "databaseVerify2fa\\(state.challenge", "description": "Admin sign-in completes the server-owned second-factor challenge." },
-        { "file": "app/js/workspace-access.js", "pattern": "data-access-admin", "description": "A signed-in customer can find Admin sign-in from workspaces and accounts." },
-        { "file": "app/js/main.js", "pattern": "openAdminAccess:[\\s\\S]*url.searchParams.set\\(\"access\", \"admin\"\\)[\\s\\S]*await signOut\\(\\)", "description": "Switching into admin sign-in clears the previous account instead of changing its role." },
-        { "file": "app/js/main.js", "pattern": "url.searchParams.delete\\(\"view\"\\); url.hash = \"\";[\\s\\S]*location.replace\\(`\\$\\{url.pathname\\}\\$\\{url.search\\}`\\)", "description": "Signing out destroys the previous account's page and stale route before another login." },
-        { "file": "scripts/test-release-critical.mjs", "pattern": "test:account-access:browser", "description": "Release tests submit real login forms through password, second factor, customer refusal and owner entry." }
+        {
+          "file": "app/js/account-access-gate.js",
+          "pattern": "data-auth-access=\"customer\"[\\s\\S]*data-auth-access=\"admin\"",
+          "description": "Both access choices are visible on the shared app sign-in page."
+        },
+        {
+          "file": "app/js/account-access-gate.js",
+          "pattern": "!hasPlatformAdminAccess\\(nextSession\\)",
+          "description": "Admin sign-in requires the verified account's platform capability."
+        },
+        {
+          "file": "app/js/account-access-gate.js",
+          "pattern": "databaseVerify2fa\\(state.challenge",
+          "description": "Admin sign-in completes the server-owned second-factor challenge."
+        },
+        {
+          "file": "app/js/workspace-access.js",
+          "pattern": "data-access-admin",
+          "description": "A signed-in customer can find Admin sign-in from workspaces and accounts."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "openAdminAccess:[\\s\\S]*url.searchParams.set\\(\"access\", \"admin\"\\)[\\s\\S]*await signOut\\(\\)",
+          "description": "Switching into admin sign-in clears the previous account instead of changing its role."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "url.searchParams.delete\\(\"view\"\\); url.hash = \"\";[\\s\\S]*location.replace\\(`\\$\\{url.pathname\\}\\$\\{url.search\\}`\\)",
+          "description": "Signing out destroys the previous account's page and stale route before another login."
+        },
+        {
+          "file": "scripts/test-release-critical.mjs",
+          "pattern": "test:account-access:browser",
+          "description": "Release tests submit real login forms through password, second factor, customer refusal and owner entry."
+        }
       ]
     },
     {
@@ -119,18 +291,58 @@
       "title": "The canonical app keeps the original owner command center and all permitted extras",
       "ownerDecision": "October 26, 2026: The owner rejected the narrowed business-only app and requested the remembered admin site with all extras on app.phantomforce.online. Verified platform owners retain the original command-center home and full tool menu in every business. Business overviews, commerce, studio and automatic print analysis remain available. Customer navigation, actual organization selection and server capabilities stay authoritative.",
       "requiredPatterns": [
-        { "file": "app/js/main.js", "pattern": "if \\(!isOwnerOperator\\(\\) && activeBusinessProfile\\(\\).id !== \"phantomforce\"\\)", "description": "The original full dashboard is the verified owner's home across business profiles." },
-        { "file": "app/js/main.js", "pattern": "businessNavigation\\(activeBusinessProfile\\(\\), NAV, \\{ operator: isOwnerOperator\\(\\) \\}\\)", "description": "Verified owner capability controls full tool discovery." },
-        { "file": "app/js/main.js", "pattern": "orderedNavItems\\(\\{ includeDashboardWidgets: true \\}\\)", "description": "The main menu includes Workforce and every allowed registered destination." },
-        { "file": "app/js/business-profiles.js", "pattern": "\"phantomforce-internal\": \"phantomforce\"", "description": "The preserved internal organization uses the original profile before catalog completion." },
-        { "file": "app/js/business-profiles.js", "pattern": "operator \\|\\| !profile.sharedRoutes", "description": "Business profile presentation must not hide platform-owner tools." },
-        { "file": "app/js/business-profiles.js", "pattern": "nav\\(\"business-overview\", \"Business overview\"\\)", "description": "The focused business experience remains reachable alongside the command center." },
-        { "file": "app/js/main.js", "pattern": "const agents = visible\\(store.state.agents \\|\\| \\[\\]\\)", "description": "Restored dashboard agent details remain scoped to the active business." },
-        { "file": "app/js/main.js", "pattern": "const agentCount = visible\\(store.state.agents \\|\\| \\[\\]\\).length", "description": "The Workforce widget cannot count another business's agents." },
-        { "file": "scripts/test-release-critical.mjs", "pattern": "test:owner-console:browser", "description": "Release verification exercises original owner home, all-business tools, and customer restrictions." }
+        {
+          "file": "app/js/main.js",
+          "pattern": "if \\(!isOwnerOperator\\(\\) && activeBusinessProfile\\(\\).id !== \"phantomforce\"\\)",
+          "description": "The original full dashboard is the verified owner's home across business profiles."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "businessNavigation\\(activeBusinessProfile\\(\\), NAV, \\{ operator: isOwnerOperator\\(\\) \\}\\)",
+          "description": "Verified owner capability controls full tool discovery."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "orderedNavItems\\(\\{ includeDashboardWidgets: true \\}\\)",
+          "description": "The main menu includes Workforce and every allowed registered destination."
+        },
+        {
+          "file": "app/js/business-profiles.js",
+          "pattern": "\"phantomforce-internal\": \"phantomforce\"",
+          "description": "The preserved internal organization uses the original profile before catalog completion."
+        },
+        {
+          "file": "app/js/business-profiles.js",
+          "pattern": "operator \\|\\| !profile.sharedRoutes",
+          "description": "Business profile presentation must not hide platform-owner tools."
+        },
+        {
+          "file": "app/js/business-profiles.js",
+          "pattern": "nav\\(\"business-overview\", \"Business overview\"\\)",
+          "description": "The focused business experience remains reachable alongside the command center."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "const agents = visible\\(store.state.agents \\|\\| \\[\\]\\)",
+          "description": "Restored dashboard agent details remain scoped to the active business."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "const agentCount = visible\\(store.state.agents \\|\\| \\[\\]\\).length",
+          "description": "The Workforce widget cannot count another business's agents."
+        },
+        {
+          "file": "scripts/test-release-critical.mjs",
+          "pattern": "test:owner-console:browser",
+          "description": "Release verification exercises original owner home, all-business tools, and customer restrictions."
+        }
       ],
       "forbiddenPatterns": [
-        { "file": "app/js/main.js", "pattern": "\\.filter\\(\\(item\\) => primaryIds.includes\\(item.id\\)\\)", "description": "A hardcoded menu subset must not silently hide registered extras." }
+        {
+          "file": "app/js/main.js",
+          "pattern": "\\.filter\\(\\(item\\) => primaryIds.includes\\(item.id\\)\\)",
+          "description": "A hardcoded menu subset must not silently hide registered extras."
+        }
       ]
     },
     {
@@ -139,17 +351,53 @@
       "title": "One verified app entry and a print brief that does not require manual cost setup",
       "ownerDecision": "October 26, 2026: The owner now uses app.phantomforce.online and explicitly requests the owner/admin experience there, reliable workspace switching, and smart automatic print analysis instead of a mandatory manual form. The existing database, actual organization IDs, memberships, 2FA and server capabilities remain authoritative; no account is promoted by hostname or label.",
       "requiredPatterns": [
-        {"file": "server/src/access/public-hosts.ts", "pattern": "if \\(scope === \"client\"\\) return true", "description": "Authenticated owner and customer sessions may use the canonical app; existing capability checks still authorize each API."},
-        { "file": "server/src/index.ts", "pattern": "databaseBusinessWorkspaces\\(session, await listOrganizationsForSession\\(dbSession\\)\\)", "description": "Database workspace choices come from real organization rows." },
-        {"file": "app/js/business-boundary.js", "pattern": "url.pathname !== \"/api/business-workspaces\"", "description": "Account-level workspace discovery works before selecting a business."},
-        { "file": "app/js/main.js", "pattern": "workspaceContinuity.defer\\(\\)", "description": "Background redraws defer while transient work is active." },
-        { "file": "app/js/workspace-continuity.js", "pattern": "root.dataset.workspaceTenant !== getTenant\\(\\)", "description": "Preserved work is never carried into a different business." },
-        { "file": "app/js/print-opportunity.js", "pattern": "data-po-folder[\\s\\S]*data-po-cost-details", "description": "File/folder analysis precedes the optional cost details." },
-        { "file": "app/js/print-opportunity-intelligence.js", "pattern": "context\\?\\.tenantId === businessId", "description": "Recorded costs must belong to the active business." },
-        { "file": "scripts/test-release-critical.mjs", "pattern": "test:unified-app[\\s\\S]*test:smart-print:browser", "description": "Release checks exercise canonical accounts and no-form print analysis." }
+        {
+          "file": "server/src/access/public-hosts.ts",
+          "pattern": "if \\(scope === \"client\"\\) return true",
+          "description": "Authenticated owner and customer sessions may use the canonical app; existing capability checks still authorize each API."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "databaseBusinessWorkspaces\\(session, await listOrganizationsForSession\\(dbSession\\)\\)",
+          "description": "Database workspace choices come from real organization rows."
+        },
+        {
+          "file": "app/js/business-boundary.js",
+          "pattern": "url.pathname !== \"/api/business-workspaces\"",
+          "description": "Account-level workspace discovery works before selecting a business."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "workspaceContinuity.defer\\(\\)",
+          "description": "Background redraws defer while transient work is active."
+        },
+        {
+          "file": "app/js/workspace-continuity.js",
+          "pattern": "root.dataset.workspaceTenant !== getTenant\\(\\)",
+          "description": "Preserved work is never carried into a different business."
+        },
+        {
+          "file": "app/js/print-opportunity.js",
+          "pattern": "data-po-folder[\\s\\S]*data-po-cost-details",
+          "description": "File/folder analysis precedes the optional cost details."
+        },
+        {
+          "file": "app/js/print-opportunity-intelligence.js",
+          "pattern": "context\\?\\.tenantId === businessId",
+          "description": "Recorded costs must belong to the active business."
+        },
+        {
+          "file": "scripts/test-release-critical.mjs",
+          "pattern": "test:unified-app[\\s\\S]*test:smart-print:browser",
+          "description": "Release checks exercise canonical accounts and no-form print analysis."
+        }
       ],
       "forbiddenPatterns": [
-        { "file": "app/js/main.js", "pattern": "Platform admin accounts must use admin.phantomforce.online", "description": "A successful verified owner login must not be logged out merely for using the canonical app." }
+        {
+          "file": "app/js/main.js",
+          "pattern": "Platform admin accounts must use admin.phantomforce.online",
+          "description": "A successful verified owner login must not be logged out merely for using the canonical app."
+        }
       ]
     },
     {
@@ -158,11 +406,31 @@
       "title": "The running API must load contracts compiled from the current checkout",
       "ownerDecision": "October 26, 2026: Continue improving PhantomForce until core workflows are reliable. A stale generated contracts package stripped CRM contact identity despite matching source commits; verify runtime dependencies as well as Git HEAD.",
       "requiredPatterns": [
-        { "file": "ops/admin-live/Start-Hermes.ps1", "pattern": "ensure-workspace-contracts.mjs[\\s\\S]*Stop-Process -Id \\$listenerPid", "description": "Prepare contracts before replacing the running API." },
-        { "file": "scripts/ensure-workspace-contracts.mjs", "pattern": "stamp.sourceHash === sourceHash[\\s\\S]*stamp.outputHash === outputHash", "description": "Both source and generated output must match their build fingerprint." },
-        { "file": "server/src/index.ts", "pattern": "contractsSourceHash: process.env.PHANTOMFORCE_CONTRACTS_HASH", "description": "Health exposes the startup-verified contract fingerprint without secrets." },
-        { "file": "ops/admin-live/Test-LiveAdminSource.ps1", "pattern": "Hermes contracts match current verified workspace build", "description": "The source doctor verifies runtime contracts as well as the commit." },
-        { "file": "ops/admin-live/Sync-AdminMain.ps1", "pattern": "Test-HermesRuntimeAligned -Health \\$hermesHealth -Commit \\$local -ContractsSourceHash", "description": "A same-commit API without the verified contracts fingerprint is repaired by sync." }
+        {
+          "file": "ops/admin-live/Start-Hermes.ps1",
+          "pattern": "ensure-workspace-contracts.mjs[\\s\\S]*Stop-Process -Id \\$listenerPid",
+          "description": "Prepare contracts before replacing the running API."
+        },
+        {
+          "file": "scripts/ensure-workspace-contracts.mjs",
+          "pattern": "stamp.sourceHash === sourceHash[\\s\\S]*stamp.outputHash === outputHash",
+          "description": "Both source and generated output must match their build fingerprint."
+        },
+        {
+          "file": "server/src/index.ts",
+          "pattern": "contractsSourceHash: process.env.PHANTOMFORCE_CONTRACTS_HASH",
+          "description": "Health exposes the startup-verified contract fingerprint without secrets."
+        },
+        {
+          "file": "ops/admin-live/Test-LiveAdminSource.ps1",
+          "pattern": "Hermes contracts match current verified workspace build",
+          "description": "The source doctor verifies runtime contracts as well as the commit."
+        },
+        {
+          "file": "ops/admin-live/Sync-AdminMain.ps1",
+          "pattern": "Test-HermesRuntimeAligned -Health \\$hermesHealth -Commit \\$local -ContractsSourceHash",
+          "description": "A same-commit API without the verified contracts fingerprint is repaired by sync."
+        }
       ]
     },
     {
@@ -171,12 +439,36 @@
       "title": "Workspace selection explains access and keeps local print tools reachable",
       "ownerDecision": "October 26, 2026: User could not switch workspaces from Customer 1. Replace the unexplained dead end with accessible account/access recovery and expose local print analysis without needing another business's access.",
       "requiredPatterns": [
-        { "file": "app/index.html", "pattern": "data-workspace-access[^>]*aria-haspopup=\"dialog\"", "description": "An enabled workspace/account panel is always available beside the business selector." },
-        { "file": "app/js/workspace-access.js", "pattern": "This customer account has one workspace", "description": "Single-customer access has a plain explanation." },
-        { "file": "app/js/workspace-access.js", "pattern": "if \\(account.localCustomer\\) choices = choices.filter", "description": "Local customer profiles never grant cross-business access." },
-        { "file": "app/js/workspace-access.js", "pattern": "data-access-print", "description": "Local file analysis is reachable without a workspace switch." },
-        { "file": "app/js/main.js", "pattern": "businessCatalog.clear\\(\\)", "description": "Signing out invalidates pending catalogs and clears prior account access." },
-        { "file": "app/js/workspace-access.js", "pattern": "clear\\(\\) \\{ revision\\+\\+; pending\\?\\.abort\\(\\);[\\s\\S]*items = null", "description": "Catalog clear cancels pending requests and removes old account items." }
+        {
+          "file": "app/index.html",
+          "pattern": "data-workspace-access[^>]*aria-haspopup=\"dialog\"",
+          "description": "An enabled workspace/account panel is always available beside the business selector."
+        },
+        {
+          "file": "app/js/workspace-access.js",
+          "pattern": "This customer account has one workspace",
+          "description": "Single-customer access has a plain explanation."
+        },
+        {
+          "file": "app/js/workspace-access.js",
+          "pattern": "if \\(account.localCustomer\\) choices = choices.filter",
+          "description": "Local customer profiles never grant cross-business access."
+        },
+        {
+          "file": "app/js/workspace-access.js",
+          "pattern": "data-access-print",
+          "description": "Local file analysis is reachable without a workspace switch."
+        },
+        {
+          "file": "app/js/main.js",
+          "pattern": "businessCatalog.clear\\(\\)",
+          "description": "Signing out invalidates pending catalogs and clears prior account access."
+        },
+        {
+          "file": "app/js/workspace-access.js",
+          "pattern": "clear\\(\\) \\{ revision\\+\\+; pending\\?\\.abort\\(\\);[\\s\\S]*items = null",
+          "description": "Catalog clear cancels pending requests and removes old account items."
+        }
       ]
     },
     {

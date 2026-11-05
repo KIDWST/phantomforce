@@ -1,6 +1,6 @@
-import { PRINT_DEFAULTS, validatePrintCosts } from "./print-opportunity-core.js?v=phantom-live-20261027-247";
-import { createPrintQuoteUiState, printQuoteWorkflowView, bindPrintQuoteWorkflow } from "./print-quote-ui.js?v=phantom-live-20261027-247";
-import { printDecisionLabView } from "./print-decision-lab.js?v=phantom-live-20261027-247";
+import { PRINT_DEFAULTS, validatePrintCosts } from "./print-opportunity-core.js?v=phantom-live-20261105-248";
+import { createPrintQuoteUiState, printQuoteWorkflowView, bindPrintQuoteWorkflow } from "./print-quote-ui.js?v=phantom-live-20261105-248";
+import { printDecisionLabView } from "./print-decision-lab.js?v=phantom-live-20261105-248";
 
 export const BAMBU_BUSINESS = "occasionally-odd";
 const API = "/api/business-workspaces/print-runs";

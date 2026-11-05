@@ -1,8 +1,9 @@
-import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261027-247";
+import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261105-248";
+import { workPriority, compareWorkPriority } from "./business-priorities.js?v=phantom-live-20261105-248";
 
-import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261027-247";
-import { createBambuFeedState, renderBambuPrintFeed } from "./bambu-print-feed.js?v=phantom-live-20261027-247";
-import { renderBambuPrinterSetup } from "./bambu-printer-setup.js?v=phantom-live-20261027-247";
+import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261105-248";
+import { createBambuFeedState, renderBambuPrintFeed } from "./bambu-print-feed.js?v=phantom-live-20261105-248";
+import { renderBambuPrinterSetup } from "./bambu-printer-setup.js?v=phantom-live-20261105-248";
 
 const mounts = new WeakMap();
 const API = "/api/business-workspaces/commerce";
@@ -129,6 +130,10 @@ export function renderCommerceWorkspace(root, options = {}) {
     return `<section class="cw-panel cw-capacity">${heading("Printer capacity")}<p class="cw-capacity-number">${count(queued)}<span>printer hours committed</span></p><div class="cw-progress" role="progressbar" aria-label="Committed printer hours against the next seven days" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(ratio)}"><span style="width:${ratio}%"></span></div><div class="cw-capacity-detail"><span>${count(available)} h available / 7 days</span><span>${count(capacity.hoursPerDay)} h / day</span></div><p class="cw-muted">${esc(capacityCopy)}</p>${sectionButton("Manage printers →", "production")}</section>`;
   }
 
+  let orderFocus = "all";
+  function orderFocusView(orders) {
+    return `<div class="business-focus cw-order-focus" role="group" aria-label="Focus orders to fulfill">${[["all", "All open"], ["overdue", "Overdue"], ["today", "Ship today"], ["ready", "Ready to ship"], ["unscheduled", "Needs a date"]].map(([key, title]) => `<button type="button" class="cw-button" data-cw-focus="${key}" aria-pressed="${orderFocus === key}" ${!state.loaded || state.loading ? "disabled" : ""}>${title}<span>${!state.loaded || state.loading ? "—" : key === "all" ? orders.length : orders.filter((order) => workPriority(order)[key]).length}</span></button>`).join("")}</div>`;
+  }
   function overview() {
     const metrics = state.summary.metrics || {};
     const steps = [
@@ -138,8 +143,8 @@ export function renderCommerceWorkspace(root, options = {}) {
       { done: state.data.orders.length > 0, title: "Create an order", text: "Reserve stock and create its production work.", kind: "order", action: "Create order" },
     ];
     const complete = steps.filter((step) => step.done).length;
-    const openOrders = state.data.orders.filter((order) => !["shipped", "cancelled"].includes(order.status)).sort((a, b) => String(a.due || "9999").localeCompare(String(b.due || "9999")));
-    return `${warningView()}<div class="cw-metrics">${metric("Open orders", count(metrics.openOrders, 0), "Awaiting shipment")}${metric("Open order value", money(metrics.orderValue), "Unshipped · not settled cash")}${metric("Available finished units", count(metrics.availableUnits, 0), "On hand minus reservations")}${metric("Print hours queued", `${count(metrics.queuedHours)} h`, "Remaining production work")}</div><div class="cw-overview-grid"><section class="cw-panel">${heading("Orders to fulfill", "Earliest ship-by dates first.", sectionButton("All orders →", "orders"))}${flowView()}${ordersTable(openOrders.slice(0, 5), true)}</section>${capacityView()}</div>${complete < 4 ? `<section class="cw-panel cw-setup">${heading("Finish setup", "Add the missing details to calculate stock and production capacity.", `<span class="cw-setup-count">${complete} / 4 complete</span>`)}<div class="cw-setup-grid">${steps.filter((step) => !step.done).map((step) => `<article class="cw-setup-step"><h3>${step.title}</h3><p>${step.text}</p>${editButton(step.action + " →", step.kind)}</article>`).join("")}</div></section>` : ""}`;
+    const openOrders = state.data.orders.filter((order) => workPriority(order).open).sort(compareWorkPriority);
+    return `${warningView()}<div class="cw-metrics">${metric("Open orders", count(metrics.openOrders, 0), "Awaiting shipment")}${metric("Open order value", money(metrics.orderValue), "Unshipped · not settled cash")}${metric("Available finished units", count(metrics.availableUnits, 0), "On hand minus reservations")}${metric("Print hours queued", `${count(metrics.queuedHours)} h`, "Remaining production work")}</div><div class="cw-overview-grid"><section class="cw-panel">${heading("Orders to fulfill", "Overdue orders, today’s deadlines, then ready shipments.", editButton("+ Create order", "order", "", true))}${orderFocusView(openOrders)}${ordersTable(openOrders.filter((order) => orderFocus === "all" || workPriority(order)[orderFocus]).slice(0, 5), true)}${sectionButton("All orders →", "orders")}</section>${capacityView()}</div>${complete < 4 ? `<section class="cw-panel cw-setup">${heading("Finish setup", "Add the missing details to calculate stock and production capacity.", `<span class="cw-setup-count">${complete} / 4 complete</span>`)}<div class="cw-setup-grid">${steps.filter((step) => !step.done).map((step) => `<article class="cw-setup-step"><h3>${step.title}</h3><p>${step.text}</p>${editButton(step.action + " →", step.kind)}</article>`).join("")}</div></section>` : ""}`;
   }
 
   function flowView() {
@@ -149,9 +154,9 @@ export function renderCommerceWorkspace(root, options = {}) {
 
   function ordersTable(orders, compact = false) {
     const hasHistory = state.data.orders.length > 0;
-    const emptyTitle = hasHistory ? compact ? "No open orders" : "No matching orders" : "No orders yet";
+    const emptyTitle = hasHistory ? compact ? orderFocus === "all" ? "No open orders" : "No orders in this focus" : "No matching orders" : "No orders yet";
     const emptyCopy = hasHistory
-      ? compact ? "Every recorded order is shipped or canceled. Your order history is still available." : "Try another search or choose All stages to see your recorded orders."
+      ? compact ? orderFocus === "all" ? "Every recorded order is shipped or canceled. Your order history is still available." : "Choose All open to return to the full fulfillment queue." : "Try another search or choose All stages to see your recorded orders."
       : "Create an order to reserve finished goods, allocate materials, and build its production queue.";
     const emptyAction = hasHistory && compact ? sectionButton("View order history →", "orders") : editButton("+ Create an order", "order", "", true);
     return table(compact ? ["Order / customer", "Ship by", "Stage", ""] : ["Order / customer", "Items", "Channel", "Ship by", "Value", "Stage", ""], orders.map((order) => `<tr><td><strong>${esc(order.externalId || order.number || order.id.slice(0, 12))}</strong><small>${esc(customer(order)?.name || order.customer?.name || "Customer")}</small></td>${!compact ? `<td>${(order.lines || []).map((line) => `<span class="cw-line-item">${esc(line.quantity)} × ${esc(line.sku)}</span>`).join("")}</td><td>${esc(channelName(order.channel))}</td>` : ""}<td>${esc(date(order.due))}</td>${!compact ? `<td>${money(orderTotal(order))}</td>` : ""}<td>${badge(order.status || "queued")}</td><td>${editButton("View order →", "order-detail", order.id)}</td></tr>`), emptyTitle, emptyCopy, emptyAction, "Orders");
@@ -325,6 +330,11 @@ export function renderCommerceWorkspace(root, options = {}) {
   }
 
   function bind() {
+    root.querySelectorAll("[data-cw-focus]").forEach((element) => element.addEventListener("click", () => {
+      if (!active() || state.busy) return;
+      orderFocus = element.dataset.cwFocus; paint();
+      root.querySelector(`[data-cw-focus="${orderFocus}"]`)?.focus();
+    }));
     root.querySelectorAll("[data-cw-section]").forEach((element) => element.addEventListener("click", () => {
       if (!active() || state.busy) return;
       if (options.onSectionChange) { options.onSectionChange(element.dataset.cwSection); return; }

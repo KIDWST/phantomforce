@@ -121,7 +121,7 @@
     "test:sites": "npm run test:workspace-site-builder && npm run test:site-store-render --workspace @phantomforce/server",
     "typecheck": "npm run build --workspace @phantomforce/contracts && npm run typecheck --workspace @phantomforce/server",
     "prisma:generate": "npm run prisma:generate --workspace @phantomforce/server",
-    "test:business-workspaces": "node scripts/test-business-workspaces.mjs && node scripts/test-business-experience.mjs && node scripts/test-business-media-boundary.mjs && npm run test:business-workspaces --workspace @phantomforce/server",
+    "test:business-workspaces": "node scripts/test-business-priorities.mjs && node scripts/test-business-workspaces.mjs && node scripts/test-business-experience.mjs && node scripts/test-business-media-boundary.mjs && npm run test:business-workspaces --workspace @phantomforce/server",
     "test:business-workspaces:browser": "node scripts/test-business-workspaces-browser.mjs",
     "test:bambu-print-feed": "node scripts/test-bambu-print-feed.mjs",
     "test:bambu-print-feed:browser": "node scripts/test-bambu-print-feed-browser.mjs",

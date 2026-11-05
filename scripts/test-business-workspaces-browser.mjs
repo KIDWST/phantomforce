@@ -132,6 +132,16 @@ try {
       assert.ok(audit.scrollWidth <= width + 2, `${business.name} ${width}px overflow: ${audit.scrollWidth}`);
       assert.ok(audit.text.includes(business.name), `${business.name} brand missing`);
       for (const other of businesses.filter((item) => item.id !== business.id)) assert.ok(!audit.text.includes(`PRIVATE-${other.id}`), "Other company customer appeared on screen");
+      await evaluate(cdp, `document.querySelector('[data-business-desk-entry]').click()`);
+      await waitFor(cdp, `document.querySelector('[data-business-focus]') || document.querySelector('[data-cw-focus]')`, "Business desk entry did not open its focused workspace");
+      const focusAttribute = business.id === "occasionally-odd" ? "data-cw-focus" : "data-business-focus";
+      await evaluate(cdp, `document.querySelector('.business-focus [${focusAttribute}="overdue"]').click()`);
+      assert.equal(await evaluate(cdp, `document.querySelector('.business-focus [${focusAttribute}="overdue"]').getAttribute('aria-pressed')`), "true");
+      if (business.id !== "occasionally-odd") assert.equal(await evaluate(cdp, `document.activeElement === document.querySelector('.business-focus [${focusAttribute}="overdue"]')`), true, "Focus survives filter repaint");
+      await evaluate(cdp, `document.querySelector('.business-focus [${focusAttribute}="all"]').click()`);
+      assert.ok(await evaluate(cdp, `document.documentElement.scrollWidth <= innerWidth + 2`), "Focused business desk must fit the viewport");
+      await sleep(700); // Let the shell's workspace entrance transition finish before capture.
+      assert.ok(await evaluate(cdp, `(()=>{const root=document.querySelector('[data-business-hub], [data-commerce-workspace]');const r=root.getBoundingClientRect();return r.width>0 && r.height>0 && Number(getComputedStyle(root).opacity)>0;})()`), "The business desk must be visible after navigation");
       const screenshot = path.join(runDir, `${business.id}-${width}.png`);
       const capture = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
       writeFileSync(screenshot, Buffer.from(capture.data, "base64"));
@@ -178,6 +188,33 @@ try {
       await waitFor(cdp, `performance.timeOrigin !== ${priorDocument} && document.querySelector('[data-business-select]')?.value === ${JSON.stringify(business.id)}`, `${business.name} selection lost on reload`);
       const savedWork = await evaluate(cdp, `(async()=>{const c=await ${coreExpression};return c.visible(c.store.state.businessWorkItems).map(item=>item.title);})()`);
       assert.deepEqual(savedWork, [`PRIVATE-WORK-${business.id}`], `${business.name} work was lost or mixed after reload`);
+      if (business.id !== "occasionally-odd") {
+        const focused = await evaluate(cdp, `(async()=>{
+          const c=await ${coreExpression}; const {renderBusinessHub}=await import('/app/js/business-hub.js?v='+window.PHANTOM_BUILD);
+          const previous=c.store.state.businessWorkItems; const ws=c.currentWs();
+          const qa=document.createElement('section');document.body.append(qa); let mount;
+          try {
+            c.store.state.businessWorkItems=[
+              {id:'focus-late',ws,kind:'project',title:'FOCUS_LATE',status:'draft',due:'2000-01-01'},
+              {id:'focus-review',ws,kind:'project',title:'FOCUS_REVIEW',status:'review',due:'2099-01-01'},
+              {id:'focus-complete',ws,kind:'project',title:'FOCUS_COMPLETE',status:'complete',due:'2000-01-01'},
+              {id:'focus-foreign',ws:'foreign-business',kind:'project',title:'FOCUS_FOREIGN',status:'draft',due:'2000-01-01'}
+            ];
+            mount=renderBusinessHub(qa,{businessId:ws});
+            qa.querySelector('.business-focus [data-business-focus="overdue"]').click();
+            const late=[...qa.querySelectorAll('[data-business-record]')].map(x=>x.dataset.businessRecord);
+            qa.querySelector('.business-focus [data-business-focus="review"]').click();
+            const review=[...qa.querySelectorAll('[data-business-record]')].map(x=>x.dataset.businessRecord);
+            qa.querySelector('.business-focus [data-business-focus="today"]').click();
+            const empty=qa.textContent.includes('Nothing in this focus');
+            qa.querySelector('.business-focus [data-business-focus="all"]').click();
+            const all=[...qa.querySelectorAll('[data-business-record]')].map(x=>x.dataset.businessRecord);
+            return {late,review,empty,all};
+          } finally {mount?.dispose();qa.remove();c.store.state.businessWorkItems=previous;}
+        })()`);
+        assert.deepEqual(focused, {late:["focus-late"],review:["focus-review"],empty:true,all:["focus-late","focus-review"]}, "Focus shows matching active work, excludes closed and foreign records, and recovers from an empty result");
+      }
+
     }
   }
   assert.deepEqual(cdp.errors, [], "Uncaught browser errors");

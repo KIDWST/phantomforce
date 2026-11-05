@@ -101,7 +101,7 @@ store.state.businessWorkItems = [
   { id: "gear", ws: "client-chicagoshots", kind: "gear", title: "Available camera", status: "available" },
 ];
 renderBusinessHub(root);
-assert.match(root.innerHTML, /<h1>Overview<\/h1>/);
+assert.match(root.innerHTML, /<h1>Studio desk<\/h1>/);
 assert.match(root.innerHTML, /<span>Overdue<\/span><strong>1<\/strong>/);
 assert.ok(root.innerHTML.indexOf('data-business-record="dated"') < root.innerHTML.indexOf('data-business-record="review"'), "Overdue work appears before upcoming reviews.");
 assert.doesNotMatch(root.innerHTML, /Completed project|Available camera|business-template-grid|business-assistant/, "Overview keeps active work and removes completed items and promotional extras.");

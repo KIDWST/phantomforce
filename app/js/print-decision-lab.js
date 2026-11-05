@@ -1,4 +1,4 @@
-import { buildPrintDecisionLab } from "./print-decision-lab-core.js?v=phantom-live-20261027-247";
+import { buildPrintDecisionLab } from "./print-decision-lab-core.js?v=phantom-live-20261105-248";
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 const finite = value => typeof value === "number" && Number.isFinite(value);
