@@ -1,8 +1,36 @@
 {
   "schemaVersion": 1,
-  "lastUpdated": "2026-11-05",
+  "lastUpdated": "2026-11-06",
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
+    {
+      "id": "phantom-empires-3d-standalone",
+      "status": "active",
+      "title": "Phantom Empires uses an original 3D RTS battlefield and preserves its simulation",
+      "ownerDecision": "The owner requested REA work toward Age of Empires IV and selected a standalone RTS in PhantomPlay, not a mod. Ship original content and retain honest engine and analysis boundaries.",
+      "requiredPatterns": [
+        {
+          "file": "app/games/phantom-empires/index.html",
+          "pattern": "type=\"module\" src=\"boot.js\\?v=2\\.0\\.0\"",
+          "description": "The launched game boots the 3D scene before the shared simulation."
+        },
+        {
+          "file": "app/games/phantom-empires/battlefield3d.js",
+          "pattern": "WebGLRenderer[\\s\\S]*InstancedMesh[\\s\\S]*pickEntity",
+          "description": "The real WebGL scene preserves batched scenery and mesh-based selection."
+        },
+        {
+          "file": "app/games/phantom-empires/game.js",
+          "pattern": "battlefield\\.render[\\s\\S]*data-renderer-toggle",
+          "description": "Simulation-driven rendering and explicit compatibility controls remain available."
+        },
+        {
+          "file": "scripts/test-phantom-empires-3d-browser.mjs",
+          "pattern": "Actual combat destroying the rival citadel ends the match[\\s\\S]*Defeat must also finish the match",
+          "description": "The actual game proves victory and defeat, not just menu rendering."
+        }
+      ]
+    },
     {
       "id": "business-desks-priority-focus",
       "status": "active",
@@ -3365,12 +3393,12 @@
         },
         {
           "file": "app/js/phantomplay.js",
-          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=1.0.0\"[\\s\\S]*PhantomPlay Strategy Engine 1.0",
+          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=2.0.0\"[\\s\\S]*PhantomPlay Strategy Engine 2.0",
           "description": "The shared PhantomPlay client catalog retains the playable Phantom Empires release and truthful engine label."
         },
         {
           "file": "server/src/phantom-ai/phantomplay-flagship.ts",
-          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=1.0.0\"[\\s\\S]*PhantomPlay Strategy Engine 1.0",
+          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=2.0.0\"[\\s\\S]*PhantomPlay Strategy Engine 2.0",
           "description": "The server-owned catalog retains the same game route used by web and desktop."
         },
         {

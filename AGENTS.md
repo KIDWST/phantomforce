@@ -101,6 +101,12 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Phantom Empires 3D (2026-11-06)** — game 2.0.0, app build
+  `phantom-live-20261106-249`. Original WebGL medieval battlefield extends the
+  existing standalone RTS simulation with batched scenery, animated units,
+  mesh picking and compatibility rendering. Do not confuse it with fixed-lane
+  Phantom Ages or claim recovered AoE IV engine code. See
+  `docs/quality/PHANTOM_EMPIRES_3D_20261106.md` for REA evidence and scope.
 - **Business desks and daily priorities (2026-11-05)** — build
   `phantom-live-20261105-248`. The existing owner command center opens the
   selected company’s project desk, studio desk or workroom. Count-backed focus

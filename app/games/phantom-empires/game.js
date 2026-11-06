@@ -1,7 +1,6 @@
-/* Phantom Empires: Sovereign — a complete browser-native RTS for PhantomPlay.
- * The supplied Unreal concept sheet is the creative brief. This build uses the
- * shared PhantomPlay strategy runtime so the same game is playable in web and
- * desktop today; it never claims a native engine it is not running.
+/* Phantom Empires: Sovereign — original standalone RTS simulation shared by
+ * the WebGL 3D battlefield and the explicit Canvas2D compatibility renderer.
+ * Simulation data, saves and PhantomPlay host events remain engine-independent.
  */
 (function () {
   "use strict";
@@ -9,7 +8,8 @@
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const canvas = $("#empire");
-  const ctx = canvas.getContext("2d", { alpha: false });
+  const ctx = canvas.getContext("2d", { alpha: true });
+  const battlefield = window.PhantomEmpires3D;
   const minimap = $("#minimap");
   const mctx = minimap.getContext("2d");
   const embedded = window.parent !== window;
@@ -133,9 +133,11 @@
   }
 
   function worldToScreen(x, y) {
+    if (battlefield?.enabled) { battlefield.syncCamera(camera,W,H); return battlefield.worldToScreen(x,y); }
     return { x: (x - camera.x) * camera.zoom + W / 2, y: (y - camera.y) * camera.zoom + H / 2 };
   }
   function screenToWorld(x, y) {
+    if (battlefield?.enabled) { battlefield.syncCamera(camera,W,H); return battlefield.screenToWorld(x,y); }
     return { x: (x - W / 2) / camera.zoom + camera.x, y: (y - H / 2) / camera.zoom + camera.y };
   }
   function visiblePoint(x, y, margin = 100) {
@@ -192,7 +194,7 @@
     addBuilding("citadel", "player", 510, 1110);
     addBuilding("house", "player", 670, 1000);
     addBuilding("barracks", "player", 690, 1190);
-    addUnit("worker", "player", 555, 1020); addUnit("worker", "player", 590, 1060); addUnit("worker", "player", 560, 1160); addUnit("sword", "player", 750, 1110); addUnit("archer", "player", 780, 1160);
+    addUnit("worker", "player", 820, 1000); addUnit("worker", "player", 860, 1050); addUnit("worker", "player", 820, 1110); addUnit("sword", "player", 750, 1110); addUnit("archer", "player", 780, 1160);
     addBuilding("citadel", "enemy", 2710, 990);
     addBuilding("house", "enemy", 2530, 890); addBuilding("barracks", "enemy", 2520, 1070); addBuilding("tower", "enemy", 2350, 860); addBuilding("tower", "enemy", 2370, 1210);
     addUnit("sword", "enemy", 2430, 1010); addUnit("sword", "enemy", 2460, 1060); addUnit("archer", "enemy", 2480, 950);
@@ -215,7 +217,7 @@
     $("[data-title-screen]").hidden = true; $("[data-pause-screen]").hidden = true; $("[data-result-screen]").hidden = true;
     $("[data-hud]").hidden = false; $("[data-mission]").hidden = false; $("[data-command-deck]").hidden = false;
     $("[data-touch-bar]").hidden = !matchMedia("(pointer: coarse)").matches;
-    updateUI(true); host("ready", { version: "1.0.0", mode });
+    updateUI(true); host("ready", { version: "2.0.0", mode });
   }
   function startGame(nextMode, tutorial = true) {
     createAudio(); resetWorld(nextMode); showGame();
@@ -271,6 +273,8 @@
   }
   function placeBuilding(type, point) {
     const def = BUILDING[type];
+    if (!def || age < def.age || !canAfford(def.cost)) return addFeed("That structure is not available yet.","danger");
+    if (!selectedUnits().some(unit=>unit.type==="worker")) return addFeed("Select a Villager before placing a structure.","danger");
     const inWater = point.x > WORLD.riverLeft - 35 && point.x < WORLD.riverRight + 35;
     if (def.water ? !inWater : inWater && !onBridge(point.y)) return addFeed(def.water ? "War Docks must touch the river." : "That ground is water.", "danger");
     if (buildings.some((building) => distance(building, point) < BUILDING[building.type].size + def.size + 18)) return addFeed("Another structure blocks that ground.", "danger");
@@ -604,6 +608,12 @@
   }
 
   function draw() {
+    if (battlefield?.enabled) {
+      ctx.clearRect(0,0,W,H);
+      battlefield.render({camera,width:W,height:H,units,buildings,nodes,selected,elapsed,age,definitions:BUILDING});
+      for (const entity of [...buildings,...units]) if(visiblePoint(entity.x,entity.y)) drawHealth(entity,worldToScreen(entity.x,entity.y),entity.id.startsWith("building")?70:25,entity.id.startsWith("building")?100:48);
+      drawProjectiles();drawParticles();drawSelectionMarquee();drawWeather();renderMinimap();return;
+    }
     const shakeX = camera.shake ? rand(-camera.shake, camera.shake) : 0; const shakeY = camera.shake ? rand(-camera.shake, camera.shake) : 0;
     ctx.save(); ctx.translate(shakeX, shakeY);
     drawTerrain(); drawDecals(); drawNodes();
@@ -715,6 +725,10 @@
     const tl = screenToWorld(0, 0), br = screenToWorld(W, H); mctx.strokeStyle = "#fff1a8"; mctx.lineWidth = 1; mctx.strokeRect(tl.x * sx, tl.y * sy, (br.x - tl.x) * sx, (br.y - tl.y) * sy);
   }
 
+  function pointerTarget(x,y){
+    if(battlefield?.enabled){const picked=battlefield.pickEntity(x,y);if(picked)return entityById(picked);}
+    return targetAt(screenToWorld(x,y));
+  }
   function targetAt(point) {
     let best = null; let bestDistance = 38 / camera.zoom;
     for (const entity of [...units, ...buildings, ...nodes]) { if (entity.hp !== undefined && entity.hp <= 0) continue; const d = distance(entity, point); const size = entity.id.startsWith("building") ? BUILDING[entity.type].size : entity.r || 14; if (d < Math.max(bestDistance, size)) { best = entity; bestDistance = d; } }
@@ -728,19 +742,28 @@
   });
   canvas.addEventListener("pointermove", (event) => {
     if (!drag) return; drag.cx = event.clientX; drag.cy = event.clientY;
-    if (drag.type === "pan") { camera.x = drag.cameraX - (event.clientX - drag.x) / camera.zoom; camera.y = drag.cameraY - (event.clientY - drag.y) / camera.zoom; }
+    if (drag.type === "pan") {
+      camera.x=drag.cameraX;camera.y=drag.cameraY;
+      const from=screenToWorld(drag.x,drag.y),to=screenToWorld(event.clientX,event.clientY);
+      camera.x=drag.cameraX+from.x-to.x;camera.y=drag.cameraY+from.y-to.y;
+    }
   });
   canvas.addEventListener("pointerup", (event) => {
     if (!drag || drag.type !== "select") { drag = null; return; }
     const moved = Math.hypot(drag.cx - drag.x, drag.cy - drag.y);
-    if (moved < 8) { const target = targetAt(screenToWorld(event.clientX, event.clientY)); if (target?.team === "player") selectEntities([target], drag.shift); else if (!drag.shift) selectEntities([]); }
+    if (moved < 8) {
+      const target = pointerTarget(event.clientX,event.clientY);
+      if(event.pointerType==="touch" && selectedUnits().length && (attackMove || target?.team!=="player")) commandSelected(screenToWorld(event.clientX,event.clientY),target);
+      else if (target?.team === "player") selectEntities([target], drag.shift);
+      else if (!drag.shift) selectEntities([]);
+    }
     else {
       const x1 = Math.min(drag.x, drag.cx), x2 = Math.max(drag.x, drag.cx), y1 = Math.min(drag.y, drag.cy), y2 = Math.max(drag.y, drag.cy);
       selectEntities(units.filter((unit) => { const p = worldToScreen(unit.x, unit.y); return unit.team === "player" && p.x >= x1 && p.x <= x2 && p.y >= y1 && p.y <= y2; }), drag.shift);
     }
     drag = null;
   });
-  canvas.addEventListener("contextmenu", (event) => { event.preventDefault(); if (phase !== "playing") return; const point = screenToWorld(event.clientX, event.clientY); commandSelected(point, targetAt(point)); });
+  canvas.addEventListener("contextmenu", (event) => { event.preventDefault(); if (phase !== "playing") return; const point = screenToWorld(event.clientX, event.clientY); commandSelected(point, pointerTarget(event.clientX,event.clientY)); });
   canvas.addEventListener("wheel", (event) => { event.preventDefault(); const before = screenToWorld(event.clientX, event.clientY); camera.zoom = clamp(camera.zoom * (event.deltaY > 0 ? .9 : 1.1), .38, 1.45); const after = screenToWorld(event.clientX, event.clientY); camera.x += before.x - after.x; camera.y += before.y - after.y; }, { passive: false });
   minimap.addEventListener("pointerdown", (event) => { const rect = minimap.getBoundingClientRect(); camera.x = (event.clientX - rect.left) / rect.width * WORLD.w; camera.y = (event.clientY - rect.top) / rect.height * WORLD.h; });
 
@@ -770,7 +793,13 @@
     if (phase !== "title" && phase !== "result") saveGame(false);
     phase = "title"; $("[data-title-screen]").hidden = false; $("[data-pause-screen]").hidden = true; $("[data-result-screen]").hidden = true; $("[data-tutorial]").hidden = true;
     $("[data-hud]").hidden = true; $("[data-mission]").hidden = true; $("[data-command-deck]").hidden = true; $("[data-touch-bar]").hidden = true;
-    $("[data-continue]").hidden = !loadLocal(); host("exit", { reason: "menu" });
+    function rendererLabel() {
+    const button=$("[data-renderer-toggle]");
+    if(button) {button.textContent=battlefield?.enabled?"3D battlefield · switch to 2D":"2D compatibility · try 3D";button.disabled=!battlefield?.available;if(!battlefield?.available)button.textContent="2D compatibility · 3D unavailable";}
+  }
+  $("[data-renderer-toggle]")?.addEventListener("click",()=>{if(battlefield){battlefield.enabled=!battlefield.enabled;rendererLabel();}});
+  document.addEventListener("battlefield-context-lost",rendererLabel);rendererLabel();
+  $("[data-continue]").hidden = !loadLocal(); host("exit", { reason: "menu" });
   }
 
   $$('[data-start]').forEach((button) => button.onclick = () => startGame(button.dataset.start));
@@ -807,10 +836,18 @@
       controls: ["Drag: select", "Right-click: command", "WASD: pan", "Wheel: zoom", "Space: attack-move", "Ctrl+1-6: group"],
     });
   }
+  function rendererLabel() {
+    const button=$("[data-renderer-toggle]");
+    if(button) {button.textContent=battlefield?.enabled?"3D battlefield · switch to 2D":"2D compatibility · try 3D";button.disabled=!battlefield?.available;if(!battlefield?.available)button.textContent="2D compatibility · 3D unavailable";}
+  }
+  $("[data-renderer-toggle]")?.addEventListener("click",()=>{if(battlefield){battlefield.enabled=!battlefield.enabled;rendererLabel();}});
+  document.addEventListener("battlefield-context-lost",rendererLabel);rendererLabel();
   $("[data-continue]").hidden = !loadLocal();
   window.__PhantomEmpiresTest = {
-    version: "1.0.0",
+    version: "2.0.0",
     start: (nextMode = "campaign") => startGame(nextMode, false),
+    renderer: () => battlefield?.enabled ? battlefield.diagnostics() : {engine:"Canvas2D compatibility"},
+    project: (x,y) => worldToScreen(x,y), unproject: (x,y) => screenToWorld(x,y),
     snapshot: () => ({ phase, ...progressSnapshot(), resources: { ...resources }, units: units.length, buildings: buildings.length, training: training.length }),
     advance: (seconds = 1) => { for (let i = 0; i < seconds * 20; i++) update(.05); return window.__PhantomEmpiresTest.snapshot(); },
     selectArmy: () => realmCommand("army"),
@@ -818,6 +855,6 @@
     buildAt: (type, x, y) => placeBuilding(type, { x, y }),
     save: () => serialize(), restore: restoreGame,
   };
-  host("ready", { version: "1.0.0", engine: "PhantomPlay Strategy Engine" });
+  host("ready", { version: "2.0.0", engine: "PhantomPlay Strategy Engine" });
   requestAnimationFrame(frame);
 })();

@@ -42,9 +42,9 @@ const serverStart = serverCatalog.indexOf('    id: "phantom-empires"');
 const serverRecord = serverCatalog.slice(serverCatalog.lastIndexOf("  {", serverStart), serverCatalog.indexOf("\n  },", serverStart) + 5);
 for (const [label, record] of [["client fallback", clientRecord], ["server", serverRecord]]) {
   assert.ok(record, `${label} catalog must include Phantom Empires.`);
-  assert.match(record, /launchUrl:\s*"\/app\/games\/phantom-empires\/index\.html\?v=1\.0\.0"/u, `${label} catalog must launch the real 1.0.0 build.`);
+  assert.match(record, /launchUrl:\s*"\/app\/games\/phantom-empires\/index\.html\?v=2\.0\.0"/u, `${label} catalog must launch the real 2.0.0 build.`);
   assert.match(record, /thumbnail:[^\n]*phantom-empires/u, `${label} catalog must use the custom cover.`);
   assert.doesNotMatch(record, /Unreal Engine/u, `${label} catalog must not falsely label the browser strategy runtime as Unreal.`);
 }
 
-console.log(JSON.stringify({ ok: true, game: "phantom-empires", version: "1.0.0", modes: 3, unitTypes: 6, buildings: 10, ages: 4, desktopWebParity: true }));
+console.log(JSON.stringify({ ok: true, game: "phantom-empires", version: "2.0.0", modes: 3, unitTypes: 6, buildings: 10, ages: 4, desktopWebParity: true }));

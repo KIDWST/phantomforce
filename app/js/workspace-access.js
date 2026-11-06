@@ -1,5 +1,5 @@
-import { renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261105-248";
-import { workspaceDirectory, filterWorkspaceDirectory } from "./workspace-directory.js?v=phantom-live-20261105-248";
+import { renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261106-249";
+import { workspaceDirectory, filterWorkspaceDirectory } from "./workspace-directory.js?v=phantom-live-20261106-249";
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -71,7 +71,7 @@ export function createWorkspaceAccessOpener(options) {
     const button = document.querySelector("[data-workspace-access]");
     button?.setAttribute("aria-busy", "true");
     try {
-      await options.loadStyle("workspace-access", "/app/workspace-access.css?v=phantom-live-20261105-248");
+      await options.loadStyle("workspace-access", "/app/workspace-access.css?v=phantom-live-20261106-249");
     } catch {
       options.onError("Workspaces could not load. Check your connection and try the workspace button again.");
       return false;
@@ -79,7 +79,7 @@ export function createWorkspaceAccessOpener(options) {
     const current = options.getSnapshot();
     if (request !== version || snapshot.account !== current.account || snapshot.current !== current.current) return false;
     openWorkspaceAccess({ ...options, initialTool, notice,
-      preparePrintStyles: () => options.loadStyle("print-analysis", "/app/commerce-workspace.css?v=phantom-live-20261105-248"),
+      preparePrintStyles: () => options.loadStyle("print-analysis", "/app/commerce-workspace.css?v=phantom-live-20261106-249"),
     });
   };
   show.invalidate = () => { version++; };

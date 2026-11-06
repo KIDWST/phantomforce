@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
   <title>Phantom Empires: Sovereign</title>
-  <link rel="stylesheet" href="style.css?v=1.0.0">
+  <link rel="stylesheet" href="style.css?v=2.0.0">
   <link rel="stylesheet" href="../shared/phantomGameKernel.css?v=2.0.0">
 </head>
 <body>
@@ -53,7 +53,7 @@
   <section class="screen title-screen" data-title-screen>
     <div class="title-vista" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="title-card">
-      <p>PHANTOMPLAY STRATEGY ENGINE · SOVEREIGN BUILD</p>
+      <p>ORIGINAL MEDIEVAL RTS · SOVEREIGN 3D</p>
       <h1>PHANTOM<br><em>EMPIRES</em></h1>
       <span>Raise a civilization. Command the land and sea. Break the rival crown.</span>
       <div class="mode-grid">
@@ -62,7 +62,7 @@
         <button type="button" data-start="sandbox"><b>ARCHITECT MODE</b><small>Abundant resources · build freely</small></button>
       </div>
       <button type="button" class="continue" data-continue hidden>Continue saved empire</button>
-      <div class="feature-line"><span>REAL-TIME ECONOMY</span><span>LAND + NAVAL WAR</span><span>4 AGES</span><span>SIEGE PHYSICS</span></div>
+      <div class="feature-line"><span>3D BATTLEFIELD</span><span>REAL-TIME ECONOMY</span><span>LAND + NAVAL WAR</span><span>4 AGES</span><span>SIEGE PHYSICS</span></div>
     </div>
   </section>
 
@@ -74,7 +74,7 @@
   </section>
 
   <section class="screen modal-screen" data-pause-screen hidden>
-    <div class="modal-card"><p>WAR TABLE</p><h2>Campaign paused</h2><button type="button" data-resume>Return to battle</button><button type="button" class="ghost" data-save>Save empire</button><button type="button" class="ghost" data-menu>Leave to title</button></div>
+    <div class="modal-card"><p>WAR TABLE</p><h2>Campaign paused</h2><button type="button" data-resume>Return to battle</button><button type="button" class="ghost" data-renderer-toggle>3D battlefield</button><button type="button" class="ghost" data-save>Save empire</button><button type="button" class="ghost" data-menu>Leave to title</button></div>
   </section>
 
   <section class="screen modal-screen" data-result-screen hidden>
@@ -84,6 +84,6 @@
   <div class="touch-bar" data-touch-bar hidden><button type="button" data-touch="army">ARMY</button><button type="button" data-touch="home">HOME</button><button type="button" data-touch="attack">ATTACK</button><button type="button" data-touch="build">BUILD</button></div>
 
   <script src="../shared/phantomGameKernel.js?v=2.0.0"></script>
-  <script src="game.js?v=1.0.0"></script>
+  <script type="module" src="boot.js?v=2.0.0"></script>
 </body>
 </html>
