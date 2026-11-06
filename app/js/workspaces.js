@@ -10,26 +10,26 @@ import {
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20261106-251";
+} from "./store.js?v=phantom-live-20261106-252";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, fetchOrgRuns, decideServerRun,
   activeOrgId,
   fetchOrgAuditEvents,
   fetchOrgCrm, saveOrgCrmSettings, createOrgCrmContact, pullOrgCrmContacts, updateOrgCrmContact, deleteOrgCrmContact,
   proposeWorkGraphAction, fetchWorkGraphActions,
-} from "./orgs.js?v=phantom-live-20261106-251";
+} from "./orgs.js?v=phantom-live-20261106-252";
 import {
   proposalServerAvailable, loadProposals,
   createProposal as createServerProposal,
   updateProposal as updateServerProposal,
   deleteProposal as deleteServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20261106-251";
+} from "./proposalpipeline.js?v=phantom-live-20261106-252";
 import {
   approvalServerAvailable, loadWorkspaceApprovals,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
-} from "./approvalpipeline.js?v=phantom-live-20261106-251";
+} from "./approvalpipeline.js?v=phantom-live-20261106-252";
 import {
   financeServerAvailable, loadFinanceLedger,
   createFinanceTransaction as createServerFinanceTransaction,
@@ -37,10 +37,10 @@ import {
   reconcileFinanceLedgerTransaction as reconcileServerFinanceTransaction,
   voidFinanceLedgerTransaction as voidServerFinanceTransaction,
   financeContentKey,
-} from "./financeledger.js?v=phantom-live-20261106-251";
-import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20261106-251";
-import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20261106-251";
-import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20261106-251";
+} from "./financeledger.js?v=phantom-live-20261106-252";
+import { createScopedSelection, productStateHtml } from "./product-grammar.js?v=phantom-live-20261106-252";
+import { mountProductionCorePanel } from "./production-core.js?v=phantom-live-20261106-252";
+import { getEmailConnectionSnapshot } from "./connection-center.js?v=phantom-live-20261106-252";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -2712,7 +2712,7 @@ async function loadAuthoritativeFinance(ws, rerender) {
   const tenant = currentTenantId();
   if (!financeServerAvailable() || financeUi.loadingTenant === tenant || financeUi.loadedTenant === tenant) return;
   financeUi.loadingTenant = tenant;
-  financeUi.notice = "Loading verified accounting records…";
+  financeUi.notice = "Loading saved accounting records…";
   rerender();
   try {
     let payload = await loadFinanceLedger();
@@ -2721,16 +2721,16 @@ async function loadAuthoritativeFinance(ws, rerender) {
       const key = await financeContentKey(JSON.stringify(legacy));
       payload = await importServerFinanceLedger({
         idempotencyKey: `legacy-browser:${key}`,
-        sourceName: "Verified browser-ledger migration",
+        sourceName: "Browser-ledger migration",
         transactions: legacy,
       });
-      financeUi.notice = `Moved ${payload.batch?.created || 0} existing record${payload.batch?.created === 1 ? "" : "s"} into the verified ledger.`;
+      financeUi.notice = `Saved ${payload.batch?.created || 0} existing browser record${payload.batch?.created === 1 ? "" : "s"} in the server ledger.`;
     } else {
-      financeUi.notice = "Verified ledger is synchronized.";
+      financeUi.notice = "Saved ledger records are synchronized.";
     }
     applyServerFinanceDocument(payload.document, ws);
   } catch (error) {
-    financeUi.notice = error instanceof Error ? error.message : "The verified ledger could not be loaded.";
+    financeUi.notice = error instanceof Error ? error.message : "The saved ledger could not be loaded.";
   } finally {
     financeUi.loadedTenant = tenant;
     financeUi.loadingTenant = "";
@@ -2749,17 +2749,18 @@ function renderMoney(el, rerender) {
   el.innerHTML = `
     <section class="finance-shell">
       <div class="finance-toolbar">
-        <span class="finance-authority ${serverBacked ? "is-live" : "is-local"}">${serverBacked ? "Verified server ledger" : "Sign in for verified persistence"}</span>
+        <span class="finance-authority ${serverBacked ? "is-live" : "is-local"}">${serverBacked ? "Server-backed ledger" : "Sign in to save records on the server"}</span>
         ${financeUi.notice ? `<span class="finance-notice">${esc(financeUi.notice)}</span>` : ""}
         ${serverBacked ? `<button class="btn btn-quiet" type="button" data-act="finance-refresh">Refresh</button>` : ""}
         <button class="btn" type="button" data-act="export" aria-label="Export accounting transactions as CSV">Export CSV</button>
       </div>
       <div class="stat-row finance-stats">
-        <div class="stat"><span>Cash collected</span><b>${fmtMoney(m.cashIn)}</b><i>${actualCount ? "from real transactions" : "no income recorded"}</i></div>
-        <div class="stat"><span>Operating spend</span><b>${fmtMoney(m.cashOut)}</b><i>${actualCount ? "expenses and withdrawals" : "no expenses recorded"}</i></div>
-        <div class="stat"><span>Net cashflow</span><b>${moneySigned(m.netCash)}</b><i>${actualCount ? "income minus outflow" : "no transactions yet"}</i></div>
+        <div class="stat"><span>Recorded cash inflow</span><b>${fmtMoney(m.cashIn)}</b><i>${actualCount ? "positive ledger entries" : "no inflow recorded"}</i></div>
+        <div class="stat"><span>Recorded cash outflow</span><b>${fmtMoney(m.cashOut)}</b><i>${actualCount ? "expenses and withdrawals" : "no outflow recorded"}</i></div>
+        <div class="stat"><span>Net recorded cashflow</span><b>${moneySigned(m.netCash)}</b><i>${actualCount ? "recorded inflow minus outflow" : "no transactions yet"}</i></div>
         <div class="stat"><span>Book balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
       </div>
+      <p class="ws-note">Totals reflect recorded entries, including manual entries and imported files. Inflow may include transfers or loans; it is not verified customer revenue. Reconciliation records your review and does not independently verify payment.</p>
 
       <div class="finance-grid">
         <section class="finance-panel">
@@ -2805,7 +2806,7 @@ function renderMoney(el, rerender) {
       <section class="finance-panel">
         <div class="finance-panel-head">
           <h3>Accounting transaction reader</h3>
-          <span>${actualCount} actual record${actualCount === 1 ? "" : "s"}</span>
+          <span>${actualCount} recorded entr${actualCount === 1 ? "y" : "ies"}</span>
         </div>
         <div class="finance-table" role="table" aria-label="Business transactions">
           ${recent.map((tx) => `
@@ -2869,7 +2870,7 @@ function renderMoney(el, rerender) {
         testMode: false,
       };
       if (!serverBacked) {
-        financeUi.notice = "Sign in before recording accounting data so it can be verified and recovered.";
+        financeUi.notice = "Sign in before recording accounting data so it can be saved and recovered.";
         rerender();
         return;
       }
@@ -2878,7 +2879,7 @@ function renderMoney(el, rerender) {
       try {
         const payload = await createServerFinanceTransaction(transaction);
         applyServerFinanceDocument(payload.document, ws);
-        financeUi.notice = payload.duplicate ? "Duplicate transaction skipped." : "Transaction recorded in the verified ledger.";
+        financeUi.notice = payload.duplicate ? "Duplicate transaction skipped." : "Transaction saved in the server ledger.";
         pushActivity("Accounting Ledger", `recorded a ${direction > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(direction * rawAmount)}.`, ws);
       } catch (error) {
         financeUi.notice = error instanceof Error ? error.message : "Transaction could not be recorded.";
@@ -2898,7 +2899,7 @@ function renderMoney(el, rerender) {
         rerender();
         return;
       }
-      financeUi.notice = `Verifying ${rows.length} row${rows.length === 1 ? "" : "s"}…`;
+      financeUi.notice = `Importing ${rows.length} row${rows.length === 1 ? "" : "s"}…`;
       rerender();
       try {
         const key = await financeContentKey(text);
@@ -2918,7 +2919,7 @@ function renderMoney(el, rerender) {
         });
         applyServerFinanceDocument(payload.document, ws);
         financeUi.notice = `Imported ${payload.batch?.created || 0}; skipped ${payload.batch?.duplicates || 0} duplicate${payload.batch?.duplicates === 1 ? "" : "s"}.`;
-        pushActivity("Accounting Ledger", `verified ${payload.batch?.created || 0} transaction${payload.batch?.created === 1 ? "" : "s"} from ${file.name}.`, ws);
+        pushActivity("Accounting Ledger", `imported ${payload.batch?.created || 0} transaction${payload.batch?.created === 1 ? "" : "s"} from ${file.name}.`, ws);
       } catch (error) {
         financeUi.notice = error instanceof Error ? error.message : "CSV import failed.";
       }
@@ -3224,7 +3225,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20261106-251")
+      import("./brain.js?v=phantom-live-20261106-252")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

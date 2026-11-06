@@ -38,6 +38,7 @@ export function requiresWrite(method: string, url: string): boolean {
   // honeypot, timing, rate-limit, validation, and idempotency boundaries; it
   // only records an inquiry and an approval-required response draft.
   if (path === "/api/public/chicagoshots/inquiries" || path === "/api/public/chicagoshots/website-events") return false;
+  if (path === "/api/public/occasionally-odd/inquiries") return false; // Scoped, validated draft intake; never payment or fulfillment.
   if (/(^|-)(preview|dry-run|preflight|contract|validate)$/.test(seg)) return false; // read-only computes
   if (path === "/phantom-ai/chat") return false; // conversational; its side effects are separately gated
   // Native PhantomPlay deliberately has no browser/account session. These

@@ -14,6 +14,11 @@ assert.match(workspace, /reconcileServerFinanceTransaction/u, "Reconciliation mu
 assert.match(workspace, /isDatabaseSession\(\) && !canManageActiveOrg\(\)/u, "Client-role Accounting must be read-only");
 assert.match(workspace, /testMode: false/u, "UI writes must explicitly distinguish actual records from test data");
 assert.doesNotMatch(workspace, /This cannot be undone/u, "Accounting must not describe audited voiding as hard deletion");
+const accounting = workspace.slice(workspace.indexOf("async function loadAuthoritativeFinance"), workspace.indexOf("function render", workspace.indexOf("function renderMoney") + 1));
+assert.match(accounting, /Recorded cash inflow/u, "Positive ledger entries must be labeled as recorded inflow");
+assert.match(accounting, /Inflow may include transfers or loans; it is not verified customer revenue/u, "The inflow total must distinguish recorded cash from verified customer revenue");
+assert.match(accounting, /Reconciliation records your review and does not independently verify payment/u, "Manual reconciliation must not certify a payment");
+assert.doesNotMatch(accounting, /Cash collected|from real transactions|Verified server ledger|verified ledger|Verified browser-ledger migration|Verifying \$\{rows/u, "Saving or importing a ledger entry must not claim payment verification");
 
 assert.match(client, /\/api\/finance\/ledger/u);
 assert.match(client, /\/api\/finance\/import/u);

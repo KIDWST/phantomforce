@@ -100,16 +100,26 @@ export async function listBusinessRecords(tenantId: string, root?: string) {
   return (await readDocument(tenantId, root)).records;
 }
 export async function createBusinessRecord(tenantId: string, input: unknown, actor: string, root?: string) {
+  return (await createBusinessRecordOnce(tenantId, input, actor, undefined, root)).record;
+}
+// Public intake retries reuse a deterministic, tenant-scoped identifier under
+// the existing record lock. This creates a draft, never a paid commerce order.
+export async function createBusinessRecordOnce(tenantId: string, input: unknown, actor: string, intakeKey?: string, root?: string) {
   const validation = BusinessRecordInput.safeParse(input);
   if (!validation.success) throw businessError("BUSINESS_RECORD_INVALID", "Check the record fields and try again.", 400);
   const parsed = validation.data;
   assertWorkflowPolicy(parsed, tenantId);
   return mutate(tenantId, root, (document) => {
+    const digest = intakeKey ? createHash("sha256").update(`${tenantId}:website-intake:${intakeKey}`).digest("hex") : null;
+    const id = digest ? `${digest.slice(0,8)}-${digest.slice(8,12)}-4${digest.slice(13,16)}-a${digest.slice(17,20)}-${digest.slice(20,32)}` : randomUUID();
+    const existing = intakeKey ? document.records.find((record) => record.id === id) : undefined;
+    if (existing) return { record: existing, created: false };
+    if (intakeKey && document.records.length >= 10_000) throw businessError("INQUIRY_QUEUE_FULL", "Please contact the shop directly.", 503);
     const now = new Date().toISOString();
-    const record: BusinessRecord = { ...parsed, id: randomUUID(), tenantId, businessId: tenantId, ws: tenantId,
+    const record: BusinessRecord = { ...parsed, id, tenantId, businessId: tenantId, ws: tenantId,
       version: 1, createdAt: now, updatedAt: now, updatedBy: actor };
     document.records.push(record);
-    return record;
+    return { record, created: true };
   });
 }
 export async function updateBusinessRecord(tenantId: string, id: string, input: unknown, actor: string, root?: string) {

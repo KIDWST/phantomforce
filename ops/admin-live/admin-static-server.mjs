@@ -240,6 +240,7 @@ async function fileExists(filePath) {
 
 function shouldProxy(urlPath) {
   return urlPath === "/api/public/chicagoshots/inquiries"
+    || urlPath === "/api/public/occasionally-odd/inquiries"
     || urlPath === "/api/public/chicagoshots/website-events"
     || urlPath === "/session"
     || urlPath === "/sessions"

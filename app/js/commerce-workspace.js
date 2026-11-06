@@ -1,9 +1,9 @@
-import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261106-251";
-import { workPriority, compareWorkPriority } from "./business-priorities.js?v=phantom-live-20261106-251";
+import { ctx, session, currentWs } from "./store.js?v=phantom-live-20261106-252";
+import { workPriority, compareWorkPriority } from "./business-priorities.js?v=phantom-live-20261106-252";
 
-import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261106-251";
-import { createBambuFeedState, renderBambuPrintFeed } from "./bambu-print-feed.js?v=phantom-live-20261106-251";
-import { renderBambuPrinterSetup } from "./bambu-printer-setup.js?v=phantom-live-20261106-251";
+import { createPrintOpportunityState, renderPrintOpportunities } from "./print-opportunity.js?v=phantom-live-20261106-252";
+import { createBambuFeedState, renderBambuPrintFeed } from "./bambu-print-feed.js?v=phantom-live-20261106-252";
+import { renderBambuPrinterSetup } from "./bambu-printer-setup.js?v=phantom-live-20261106-252";
 
 const mounts = new WeakMap();
 const API = "/api/business-workspaces/commerce";

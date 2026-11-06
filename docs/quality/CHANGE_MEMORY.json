@@ -4,6 +4,22 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "occasionally-odd-public-inquiry",
+      "status": "active",
+      "title": "Storefront requests reach the existing Odd workroom as unpaid drafts",
+      "ownerDecision": "Manage Occasionally Odd from PhantomForce and repair its path to paid work without treating inquiries as sales.",
+      "requiredPatterns": [
+        {
+          "file": "server/src/business-workspaces/occasionally-odd-inquiries.ts",
+          "pattern": "createBusinessRecordOnce\\(\"occasionally-odd\"[\\s\\S]*not a confirmed order or payment"
+        },
+        {
+          "file": "server/src/connectors/social-analytics-connector.ts",
+          "pattern": "return specific \\|\\| social \\|\\| `\\$\\{CLIENT_PUBLIC_URL\\}/phantom-ai/ops/social-oauth/callback`"
+        }
+      ]
+    },
+    {
       "id": "chicagoshots-first-party-measurements",
       "status": "active",
       "title": "ChicagoShots public inquiry gateway and private measured activity",
@@ -1309,7 +1325,7 @@
     {
       "id": "accounting-real-transactions-not-fake-pipeline",
       "status": "active",
-      "title": "Accounting means confirmed transactions",
+      "title": "Accounting distinguishes recorded inflow from customer revenue",
       "ownerDecision": "The owner-facing destination is Quotes & Money. Its Accounting section must still track real/imported transaction records. Pipeline, won quotes, and retainers belong to offer potential, not cash truth.",
       "requiredPatterns": [
         {
@@ -1324,8 +1340,8 @@
         },
         {
           "file": "app/js/workspaces.js",
-          "pattern": "from real transactions",
-          "description": "Cash collected is explicitly from real transactions."
+          "pattern": "Inflow may include transfers or loans; it is not verified customer revenue",
+          "description": "Recorded inflow distinguishes bookkeeping from verified customer payments."
         },
         {
           "file": "app/js/command.js",

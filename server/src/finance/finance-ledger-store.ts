@@ -149,6 +149,26 @@ function normalizeTransaction(value: unknown, tenantId: string, actor: string, e
   return transaction;
 }
 
+// Manual entry and file imports describe bookkeeping records. They cannot
+// supply provider provenance, reconciliation, identity, or audit metadata.
+// Keep normalizeTransaction's legacy read behavior separate from this boundary.
+function newRecordedTransaction(value: unknown, source: "manual" | "file_import", tenantId: string, actor: string) {
+  const entry = isRecord(value) ? value : {};
+  return normalizeTransaction({
+    date: entry.date,
+    description: entry.description,
+    amountMinor: entry.amountMinor,
+    amount: entry.amount,
+    currency: entry.currency,
+    category: entry.category,
+    account: entry.account,
+    sourceReference: entry.sourceReference,
+    externalId: entry.externalId,
+    testMode: entry.testMode,
+    source,
+  }, tenantId, actor);
+}
+
 function documentWithChecksum(document: Omit<FinanceLedgerDocument, "checksum">): FinanceLedgerDocument {
   return { ...document, checksum: canonicalHash(document) };
 }
@@ -250,7 +270,7 @@ async function mutate<T>(tenantId: string, actor: string, operation: (document: 
 
 export async function addFinanceTransaction(options: { tenantId: string; actor: string; transaction: unknown; root?: string }) {
   return mutate(options.tenantId, options.actor, (document) => {
-    const transaction = normalizeTransaction(options.transaction, document.tenantId, options.actor);
+    const transaction = newRecordedTransaction(options.transaction, "manual", document.tenantId, options.actor);
     if (!transaction) throw new Error("transaction_amount_required");
     const existing = document.transactions.find((candidate) => candidate.fingerprint === transaction.fingerprint);
     if (existing) return { transaction: existing, created: false, duplicate: true };
@@ -277,7 +297,7 @@ export async function importFinanceTransactions(options: {
     const transactionIds: string[] = [];
     let duplicates = 0;
     options.transactions.slice(0, 5_000).forEach((raw) => {
-      const normalized = normalizeTransaction({ ...(isRecord(raw) ? raw : {}), source: "file_import" }, document.tenantId, options.actor);
+      const normalized = newRecordedTransaction(raw, "file_import", document.tenantId, options.actor);
       if (!normalized) return;
       if (known.has(normalized.fingerprint)) {
         duplicates += 1;

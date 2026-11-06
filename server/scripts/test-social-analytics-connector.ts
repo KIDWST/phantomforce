@@ -3,6 +3,7 @@ import {
   createSocialOAuthStart,
   getSocialAnalyticsConnectorStatus,
   getSocialOAuthSetupStatus,
+  getSuperAdminSocialDiagnostics,
   saveSocialOAuthSetup,
   syncSocialAnalytics,
 } from "../src/connectors/social-analytics-connector.js";
@@ -28,6 +29,7 @@ const keys = [
   "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET",
   "PINTEREST_CLIENT_ID", "PINTEREST_CLIENT_SECRET",
   "SOCIAL_OAUTH_REDIRECT_URI",
+  ...["YOUTUBE", "INSTAGRAM", "FACEBOOK", "TIKTOK", "X", "LINKEDIN", "PINTEREST"].map((platform) => `${platform}_OAUTH_REDIRECT_URI`),
 ];
 const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 const originalDataDir = process.env.PHANTOMFORCE_SOCIAL_DATA_DIR;
@@ -65,6 +67,24 @@ try {
   assert(setupEmpty.providers.every((provider) => provider.oauthConfigured === false), "Provider setup status must not pretend apps are ready.");
   assert(setupEmpty.providers.every((provider) => /^https:\/\//.test(provider.consoleUrl)), "Every provider setup row should include a safe console URL.");
   assert(setupEmpty.providers.find((provider) => provider.id === "instagram")?.scopes.includes("instagram_content_publish"), "Meta setup row must show posting-capable Instagram scope.");
+
+  const canonicalCallback = "https://app.phantomforce.online/phantom-ai/ops/social-oauth/callback";
+  assert(setupEmpty.redirectUri === canonicalCallback, "Default OAuth callbacks must use the reachable canonical app host.");
+  assert(setupEmpty.recommendedRedirectUri === canonicalCallback, "Setup must recommend the same app-host callback.");
+  assert(empty.oauthPreflight.platforms.every((provider) => provider.callbackUrl === canonicalCallback), "Every provider default must use the canonical app callback.");
+  assert(getSuperAdminSocialDiagnostics().canonicalCallbackBase === canonicalCallback, "Diagnostics must report the canonical app callback.");
+  process.env.GOOGLE_OAUTH_CLIENT_ID = "fixture-default-client";
+  process.env.GOOGLE_OAUTH_CLIENT_SECRET = "fixture-default-secret";
+  const defaultStart = createSocialOAuthStart("youtube", "client-chicagoshots");
+  assert(new URL(defaultStart.authorizationUrl).searchParams.get("redirect_uri") === canonicalCallback, "Real authorization URLs must use the app callback by default.");
+  process.env.SOCIAL_OAUTH_REDIRECT_URI = "https://shared-fixture.example/callback";
+  assert(createSocialOAuthStart("youtube", "client-chicagoshots").redirectUri === process.env.SOCIAL_OAUTH_REDIRECT_URI, "Explicit shared registered callbacks must be preserved.");
+  process.env.YOUTUBE_OAUTH_REDIRECT_URI = "https://provider-fixture.example/callback";
+  assert(createSocialOAuthStart("youtube", "client-chicagoshots").redirectUri === process.env.YOUTUBE_OAUTH_REDIRECT_URI, "Provider-specific registered callbacks must win over shared settings.");
+  delete process.env.YOUTUBE_OAUTH_REDIRECT_URI;
+  delete process.env.SOCIAL_OAUTH_REDIRECT_URI;
+  delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+  delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
 
   const savedSetup = saveSocialOAuthSetup({
     platform: "youtube",

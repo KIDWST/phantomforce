@@ -59,6 +59,8 @@ const checks = [
   "test:proposal-pipeline",
   "test:proposal-lifecycle",
   "test:finance-ledger",
+  "test:occasionally-odd-inquiries",
+  "test:chicagoshots-website",
   "test:commerce-order-lifecycle",
   "test:content-asset-storage",
   "test:media-generation-lifecycle",

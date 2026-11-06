@@ -1,6 +1,6 @@
-import { store, ctx, session, currentWs, uid, pushActivity } from "./store.js?v=phantom-live-20261106-251";
-import { getBusinessProfile } from "./business-profiles.js?v=phantom-live-20261106-251";
-import { workPriority, compareWorkPriority } from "./business-priorities.js?v=phantom-live-20261106-251";
+import { store, ctx, session, currentWs, uid, pushActivity } from "./store.js?v=phantom-live-20261106-252";
+import { getBusinessProfile } from "./business-profiles.js?v=phantom-live-20261106-252";
+import { workPriority, compareWorkPriority } from "./business-priorities.js?v=phantom-live-20261106-252";
 
 const mounted = new WeakMap();
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);

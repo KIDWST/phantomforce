@@ -20,7 +20,7 @@ import {
   finishSocialAuthorization,
   type SocialAssetPage,
 } from "./social-connection-store.js";
-import { ADMIN_PUBLIC_URL } from "../access/public-hosts.js";
+import { CLIENT_PUBLIC_URL } from "../access/public-hosts.js";
 import { buildCustomerSocialStatus, type InternalConnectorRow } from "./social-customer-view.js";
 
 export type SocialAnalyticsPlatform = "youtube" | "instagram" | "facebook" | "tiktok" | "x" | "linkedin" | "pinterest";
@@ -434,7 +434,7 @@ function socialCapabilities(platform: SocialAnalyticsPlatform, scopes: string[])
 export function getSuperAdminSocialDiagnostics() {
   return {
     featureFlagEnabled: socialConnectV2Enabled(),
-    canonicalCallbackBase: `${ADMIN_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`,
+    canonicalCallbackBase: `${CLIENT_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`,
     providers: CONNECTORS.map((connector) => {
       const setup = OAUTH_SETUP_PROVIDERS.find((s) => s.id === connector.id);
       return {
@@ -520,7 +520,7 @@ function buildSocialOAuthPreflight(
     browserSessionRead: false,
     secretsExposed: false,
     redirectUri: requiredOAuthRedirectUri("youtube"),
-    recommendedRedirectUri: `${ADMIN_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`,
+    recommendedRedirectUri: `${CLIENT_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`,
     oauthAppReadyCount,
     accountAuthorizedCount,
     liveSyncReadyCount,
@@ -573,7 +573,7 @@ export function getSocialOAuthSetupStatus() {
     ok: true as const,
     envFile: serverEnvPath(),
     redirectUri,
-    recommendedRedirectUri: `${ADMIN_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`,
+    recommendedRedirectUri: `${CLIENT_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`,
     providers: uniqueProviders,
     readyCount: uniqueProviders.filter((provider) => provider.oauthConfigured).length,
     totalCount: uniqueProviders.length,
@@ -607,10 +607,12 @@ export function isSocialAnalyticsPlatform(value: unknown): value is SocialAnalyt
   return typeof value === "string" && socialPlatforms.includes(value as SocialAnalyticsPlatform);
 }
 
+// Use the canonical authenticated app for new authorizations. Explicit registered
+// provider overrides still win; in-flight callbacks keep their saved redirect URI.
 function requiredOAuthRedirectUri(platform: SocialAnalyticsPlatform) {
   const specific = env(`${platform.toUpperCase()}_OAUTH_REDIRECT_URI`);
   const social = env("SOCIAL_OAUTH_REDIRECT_URI");
-  return specific || social || `${ADMIN_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`;
+  return specific || social || `${CLIENT_PUBLIC_URL}/phantom-ai/ops/social-oauth/callback`;
 }
 
 function oauthState(platform: SocialAnalyticsPlatform) {

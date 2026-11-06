@@ -17,6 +17,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { authorizedBusinessWorkspaces, databaseBusinessWorkspaces, bindBusinessRequest, businessAssistantContext, businessCanManage, businessError, businessHermesEnvironment, businessProfile, selectedBusinessTenant } from "./business-workspaces/business-scope.js";
 import { createBusinessRecord, listBusinessRecords, updateBusinessRecord } from "./business-workspaces/business-records.js";
+import { registerOccasionallyOddInquiries } from "./business-workspaces/occasionally-odd-inquiries.js";
 import { registerCommerceRoutes } from "./business-workspaces/commerce-routes.js";
 import { registerPrintRunRoutes } from "./business-workspaces/print-run-routes.js";
 import { startBambuCollector } from "./business-workspaces/bambu-collector.js";
@@ -1003,6 +1004,8 @@ await app.register(cors, {
     /^http:\/\/localhost:\d+$/,
     "https://chicagoshots.com",
     "https://www.chicagoshots.com",
+    "https://occasionallyodd.com",
+    "https://www.occasionallyodd.com",
     ...PUBLIC_WEB_ORIGINS,
   ],
   credentials: true,
@@ -9047,6 +9050,7 @@ app.post("/api/email/provider/events", async (request, reply) => {
   }
 });
 const chicagoShotsInquiryRate = new Map<string, number[]>();
+registerOccasionallyOddInquiries(app);
 registerChicagoShotsWebsiteRoutes(app,(request,reply)=>requireClientWorkspaceView(request,reply,"client-chicagoshots"));
 
 app.post("/api/public/chicagoshots/inquiries", async (request, reply) => {

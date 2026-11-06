@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,rm,writeFile,readdir} from 'node:fs/promises';
+import {tmpdir} from 'node:os';import {join} from 'node:path';import {randomUUID} from 'node:crypto';
+import Fastify from 'fastify';import cors from '@fastify/cors';
+import {registerOccasionallyOddInquiries} from '../src/business-workspaces/occasionally-odd-inquiries.js';
+import {createBusinessRecordOnce,listBusinessRecords,updateBusinessRecord} from '../src/business-workspaces/business-records.js';
+const root=await mkdtemp(join(tmpdir(),'odd-inquiry-'));const now=Date.now();
+const app=Fastify();await app.register(cors,{origin:['https://occasionallyodd.com','https://www.occasionallyodd.com']});registerOccasionallyOddInquiries(app,{recordsRoot:root,now:()=>now});
+const headers={origin:'https://occasionallyodd.com'};
+const body=()=>({idempotency_key:randomUUID(),name:'Fixture Customer',email:'fixture@example.com',message:'Please quote delivery.',started_at:now-5000,website:'',items:[{product_id:'chloe-bat',option:'product',quantity:2}]});
+const send=(payload:unknown,h=headers)=>app.inject({method:'POST',url:'/api/public/occasionally-odd/inquiries',headers:h,payload});
+try{
+ let r=await app.inject({method:'OPTIONS',url:'/api/public/occasionally-odd/inquiries',headers:{...headers,'access-control-request-method':'POST','access-control-request-headers':'content-type'}});assert.equal(r.statusCode,204);assert.equal(r.headers['access-control-allow-origin'],headers.origin);
+ assert.equal((await send(body(),{origin:'https://chicagoshots.com'})).statusCode,403);
+ assert.equal((await send({...body(),tenant_id:'client-chicagoshots'})).statusCode,400);
+ assert.equal((await send({...body(),items:[{product_id:'chloe-bat',option:'paint-pack',quantity:1}]})).statusCode,400,'digital product cannot get paint variant');
+ assert.equal((await send({...body(),items:[{product_id:'made-up-item',option:'product',quantity:1}]})).statusCode,400);
+ assert.equal((await send({...body(),started_at:now})).statusCode,400);
+ assert.equal((await send({...body(),website:'spam'})).statusCode,202);
+ assert.equal((await listBusinessRecords('occasionally-odd',root)).length,0,'invalid and honeypot create nothing');
+ const input=body();r=await send(input);assert.equal(r.statusCode,201);const id=r.json().inquiry_id;assert(id);assert.equal(r.headers['cache-control'],'no-store');assert(!JSON.stringify(r.json()).includes(input.email));
+ r=await send(input);assert.equal(r.statusCode,200);assert.equal(r.json().inquiry_id,id);
+ let records=await listBusinessRecords('occasionally-odd',root);assert.equal(records.length,1);assert.equal(records[0].status,'draft');assert.match(records[0].notes,/not a confirmed order or payment/);assert.match(records[0].notes,/Chloe the Bat/);assert.equal(records[0].metadata.channel,'storefront');
+ for(const tenant of ['client-chicagoshots','phantomforce-internal'])assert.equal((await listBusinessRecords(tenant,root)).length,0,'scope fixed to Odd');
+ await updateBusinessRecord('occasionally-odd',id,{status:'quoted'},'fixture-owner',root);await send(input);assert.equal((await listBusinessRecords('occasionally-odd',root))[0].status,'quoted','retry preserves owner review');
+ const key=randomUUID();const args={kind:'order',title:'Concurrency fixture',status:'draft'};
+ await Promise.all(Array.from({length:12},()=>createBusinessRecordOnce('occasionally-odd',args,'fixture',key,root)));assert.equal((await listBusinessRecords('occasionally-odd',root)).length,2,'concurrent retry writes once');
+ for(let i=0;i<3;i++)await send(body());assert.equal((await send(body())).statusCode,429);
+ await app.close();
+ const failure=Fastify();registerOccasionallyOddInquiries(failure,{recordsRoot:root,now:()=>now});const [file]=await readdir(root);await writeFile(join(root,file),'corrupt');r=await failure.inject({method:'POST',url:'/api/public/occasionally-odd/inquiries',headers,payload:body()});assert.equal(r.statusCode,503);assert.equal(r.json().received,undefined);await failure.close();
+ console.log('PASS Odd inquiry origin, CORS, validation, fixed business, real draft visibility, privacy, retries/concurrency, rate and failure receipts');
+}finally{await app.close();await rm(root,{recursive:true,force:true});}

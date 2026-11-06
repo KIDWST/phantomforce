@@ -101,6 +101,7 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Website inquiries and revenue evidence (2026-11-06)** — build 252 routes Occasionally Odd storefront requests into its existing workroom as draft requests, never paid orders. Finance distinguishes recorded inflow from verified customer revenue. New social authorizations default to the working app callback while preserving registered overrides. See docs/quality/REVENUE_INTAKE_20261106.md for verification and deployment status.
 - **Script-informed gathering and formations (2026-11-06)** — Phantom Empires
   2.1.0, build `phantom-live-20261106-250`. Independently adapts the studied
   resource-assignment and formation behavior to our actual simulation. Mills,
