@@ -10,6 +10,7 @@
   const canvas = $("#empire");
   const ctx = canvas.getContext("2d", { alpha: true });
   const battlefield = window.PhantomEmpires3D;
+  const {chooseDeposit,chooseDropoff,formationDestinations}=window.PhantomEmpiresTactics;
   const minimap = $("#minimap");
   const mctx = minimap.getContext("2d");
   const embedded = window.parent !== window;
@@ -35,7 +36,10 @@
   };
 
   const BUILDING = {
-    citadel: { label: "Citadel", glyph: "C", hp: 1800, size: 74, cost: {}, age: 1, color: "#d7c18d" },
+    citadel: { accepts: ["food","wood","gold","stone"], label: "Citadel", glyph: "C", hp: 1800, size: 74, cost: {}, age: 1, color: "#d7c18d" },
+    mill: { label: "Mill", glyph: "M", hp: 430, size: 34, cost: { wood: 75 }, age: 1, accepts: ["food"], color: "#b7a079" },
+    lumbercamp: { label: "Lumber Camp", glyph: "L", hp: 430, size: 34, cost: { wood: 75 }, age: 1, accepts: ["wood"], color: "#92704d" },
+    miningcamp: { label: "Mining Camp", glyph: "Q", hp: 480, size: 34, cost: { wood: 85 }, age: 1, accepts: ["gold","stone"], color: "#9c9586" },
     house: { label: "House", glyph: "H", hp: 390, size: 38, cost: { wood: 75 }, age: 1, pop: 6, color: "#b98c61" },
     barracks: { label: "Barracks", glyph: "B", hp: 720, size: 50, cost: { wood: 120, stone: 45 }, age: 1, trains: ["sword"], color: "#9f7050" },
     range: { label: "Archery Range", glyph: "R", hp: 610, size: 48, cost: { wood: 135, gold: 25 }, age: 1, trains: ["archer"], color: "#7d8c62" },
@@ -54,7 +58,7 @@
     { label: "SOVEREIGN", cost: { food: 900, gold: 700, stone: 480 } },
   ];
 
-  const BUILD_ORDERS = ["house", "barracks", "range", "stable", "workshop", "dock", "tower", "wall", "market"];
+  const BUILD_ORDERS = ["house", "mill", "lumbercamp", "miningcamp", "barracks", "range", "stable", "workshop", "dock", "tower", "wall", "market"];
   const TRAIN_ORDERS = ["worker", "sword", "archer", "cavalry", "catapult", "ship"];
   const TUTORIAL = [
     { title: "Command the frontier", copy: "Drag across your units to select them. Right-click anywhere to move, attack, gather, or construct. WASD pans the war camera and the wheel zooms.", art: "SELECT · MOVE · CONQUER" },
@@ -217,7 +221,7 @@
     $("[data-title-screen]").hidden = true; $("[data-pause-screen]").hidden = true; $("[data-result-screen]").hidden = true;
     $("[data-hud]").hidden = false; $("[data-mission]").hidden = false; $("[data-command-deck]").hidden = false;
     $("[data-touch-bar]").hidden = !matchMedia("(pointer: coarse)").matches;
-    updateUI(true); host("ready", { version: "2.0.0", mode });
+    updateUI(true); host("ready", { version: "2.1.0", mode });
   }
   function startGame(nextMode, tutorial = true) {
     createAudio(); resetWorld(nextMode); showGame();
@@ -367,13 +371,21 @@
   function commandSelected(point, target = null) {
     const chosen = selectedUnits();
     if (!chosen.length) return;
-    const columns = Math.ceil(Math.sqrt(chosen.length));
-    chosen.forEach((unit, index) => {
-      const offset = { x: (index % columns - (columns - 1) / 2) * 32, y: (Math.floor(index / columns) - 1) * 32 };
-      unit.targetX = point.x + offset.x; unit.targetY = point.y + offset.y; unit.targetId = target?.id || null;
-      if (target?.id?.startsWith("node") && unit.type === "worker") { unit.order = "gather"; unit.gatherNodeId = target.id; }
-      else if (target && target.team && target.team !== unit.team) unit.order = "attack";
-      else unit.order = attackMove ? "attack-move" : "move";
+    const slots=formationDestinations(chosen,point);
+    const minX=Math.min(...slots.map(s=>s.x)),maxX=Math.max(...slots.map(s=>s.x)),minY=Math.min(...slots.map(s=>s.y)),maxY=Math.max(...slots.map(s=>s.y));
+    const dx=minX<25?25-minX:maxX>WORLD.w-25?WORLD.w-25-maxX:0;
+    const dy=minY<25?25-minY:maxY>WORLD.h-25?WORLD.h-25-maxY:0;
+    const destinations=new Map(slots.map(slot=>[slot.id,{x:slot.x+dx,y:slot.y+dy}]));
+    chosen.forEach(unit=>{
+      const slot=destinations.get(unit.id);
+      unit.targetX=clamp(slot.x,25,WORLD.w-25);unit.targetY=clamp(slot.y,25,WORLD.h-25);unit.targetId=target?.id||null;
+      if(target?.id?.startsWith("node")&&unit.type==="worker"){
+        unit.gatherType=target.type;
+        const node=chooseDeposit(unit,nodes,target.type,units,target);
+        unit.gatherNodeId=node?.id||null;unit.targetId=node?.id||null;
+        unit.order=unit.carry>=24||unit.carry>0&&unit.carryType!==target.type?"return":"gather";
+      }else if(target?.team&&target.team!==unit.team)unit.order="attack";
+      else {unit.targetId=null;unit.order=attackMove?"attack-move":"move";}
     });
     attackMove = false; showOrderCursor(worldToScreen(point.x, point.y)); sfx("click", .5);
   }
@@ -419,26 +431,33 @@
     if (distance(unit, point) > 8) moveToward(unit, point, dt); else if (unit.order === "move") unit.order = "idle";
   }
   function updateGather(unit, dt) {
-    const home = buildings.find((building) => building.team === unit.team && building.type === "citadel" && building.hp > 0);
-    if (!home) { unit.order = "idle"; return; }
-    if (unit.order === "return") {
-      if (distance(unit, home) > BUILDING.citadel.size + 12) moveToward(unit, home, dt);
-      else {
-        if (unit.team === "player" && unit.carryType) resources[unit.carryType] += unit.carry;
-        unit.carry = 0; unit.carryType = null;
-        const node = nodes.find((entry) => entry.id === unit.gatherNodeId && entry.amount > 0);
-        if (node) { unit.order = "gather"; unit.targetId = node.id; } else unit.order = "idle";
-        sfx("gather", .18);
+    const prior=nodes.find(node=>node.id===unit.gatherNodeId);
+    unit.gatherType ||= prior?.type||unit.carryType;
+    const returning=unit.order==="return";
+    const resource=returning?unit.carryType:unit.gatherType;
+    const home=chooseDropoff(unit,buildings,BUILDING,resource);
+    if(!home){unit.order="idle";unit.targetId=null;return;}
+    if(returning){
+      unit.targetId=home.id;
+      if(distance(unit,home)>BUILDING[home.type].size+12)moveToward(unit,home,dt);
+      else{
+        if(unit.team==="player"&&unit.carryType)resources[unit.carryType]+=unit.carry;
+        unit.carry=0;unit.carryType=null;
+        const node=prior?.amount>0&&prior.type===unit.gatherType?prior:chooseDeposit(unit,nodes,unit.gatherType,units);
+        unit.gatherNodeId=node?.id||null;unit.targetId=node?.id||null;unit.order=node?"gather":"idle";
+        sfx("gather",.18);
       }
       return;
     }
-    const node = nodes.find((entry) => entry.id === unit.gatherNodeId && entry.amount > 0);
-    if (!node) { unit.order = "idle"; unit.targetId = null; return; }
-    if (distance(unit, node) > node.r + 10) moveToward(unit, node, dt);
-    else {
-      const amount = Math.min(node.amount, dt * (node.type === "food" ? 10 : 8)); node.amount -= amount; unit.carry += amount; unit.carryType = node.type;
-      if (Math.random() < dt * 4) burst(node.x + rand(-8, 8), node.y + rand(-8, 8), nodeColor(node.type), 1, 20);
-      if (unit.carry >= 24 || node.amount <= 0) { unit.order = "return"; unit.targetId = home.id; }
+    let node=prior?.amount>0?prior:chooseDeposit(unit,nodes,unit.gatherType,units);
+    if(!node){unit.order=unit.carry>0?"return":"idle";unit.targetId=null;return;}
+    unit.gatherNodeId=node.id;unit.targetId=node.id;
+    if(distance(unit,node)>node.r+10)moveToward(unit,node,dt);
+    else{
+      const amount=Math.min(node.amount,24-unit.carry,dt*(node.type==="food"?10:8));
+      node.amount-=amount;unit.carry+=amount;unit.carryType=node.type;
+      if(Math.random()<dt*4)burst(node.x+rand(-8,8),node.y+rand(-8,8),nodeColor(node.type),1,20);
+      if(unit.carry>=24-1e-8||node.amount<=0){unit.order="return";unit.targetId=home.id;}
     }
   }
   function updateBuild(unit, dt) {
@@ -844,7 +863,7 @@
   document.addEventListener("battlefield-context-lost",rendererLabel);rendererLabel();
   $("[data-continue]").hidden = !loadLocal();
   window.__PhantomEmpiresTest = {
-    version: "2.0.0",
+    version: "2.1.0",
     start: (nextMode = "campaign") => startGame(nextMode, false),
     renderer: () => battlefield?.enabled ? battlefield.diagnostics() : {engine:"Canvas2D compatibility"},
     project: (x,y) => worldToScreen(x,y), unproject: (x,y) => screenToWorld(x,y),
@@ -855,6 +874,6 @@
     buildAt: (type, x, y) => placeBuilding(type, { x, y }),
     save: () => serialize(), restore: restoreGame,
   };
-  host("ready", { version: "2.0.0", engine: "PhantomPlay Strategy Engine" });
+  host("ready", { version: "2.1.0", engine: "PhantomPlay Strategy Engine" });
   requestAnimationFrame(frame);
 })();

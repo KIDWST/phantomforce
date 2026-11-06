@@ -4,6 +4,24 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "empires-script-informed-economy",
+      "status": "active",
+      "title": "Extracted-script study improves real gathering and army movement",
+      "ownerDecision": "Apply the actual local AoE IV script findings to our standalone RTS. Preserve provenance and implement working behavior rather than claiming native engine integration.",
+      "requiredPatterns": [
+        {
+          "file": "app/games/phantom-empires/game.js",
+          "pattern": "chooseDropoff[\\s\\S]*lumbercamp:[\\s\\S]*miningcamp:[\\s\\S]*formationDestinations[\\s\\S]*unit.gatherType",
+          "description": "Drop-off buildings and the adapted gathering/formation behavior remain connected to the actual simulation."
+        },
+        {
+          "file": "app/games/phantom-empires/tactics.js",
+          "pattern": "chooseDeposit[\\s\\S]*construction>=1[\\s\\S]*formationDestinations",
+          "description": "Resource selection and friendly completed drop-offs retain explicit filtering."
+        }
+      ]
+    },
+    {
       "id": "phantom-empires-3d-standalone",
       "status": "active",
       "title": "Phantom Empires uses an original 3D RTS battlefield and preserves its simulation",
@@ -11,7 +29,7 @@
       "requiredPatterns": [
         {
           "file": "app/games/phantom-empires/index.html",
-          "pattern": "type=\"module\" src=\"boot.js\\?v=2\\.0\\.0\"",
+          "pattern": "type=\"module\" src=\"boot.js\\?v=2\\.1\\.0\"",
           "description": "The launched game boots the 3D scene before the shared simulation."
         },
         {
@@ -3393,12 +3411,12 @@
         },
         {
           "file": "app/js/phantomplay.js",
-          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=2.0.0\"[\\s\\S]*PhantomPlay Strategy Engine 2.0",
+          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=2.1.0\"[\\s\\S]*PhantomPlay Strategy Engine 2.0",
           "description": "The shared PhantomPlay client catalog retains the playable Phantom Empires release and truthful engine label."
         },
         {
           "file": "server/src/phantom-ai/phantomplay-flagship.ts",
-          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=2.0.0\"[\\s\\S]*PhantomPlay Strategy Engine 2.0",
+          "pattern": "id: \"phantom-empires\"[\\s\\S]*launchUrl: \"/app/games/phantom-empires/index.html\\?v=2.1.0\"[\\s\\S]*PhantomPlay Strategy Engine 2.0",
           "description": "The server-owned catalog retains the same game route used by web and desktop."
         },
         {

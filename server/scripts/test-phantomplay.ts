@@ -45,7 +45,7 @@ try {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
   const phantomEmpires = initial.catalog.find((game) => game.id === "phantom-empires");
-  assert(phantomEmpires?.launchUrl === "/app/games/phantom-empires/index.html?v=2.0.0", "Phantom Empires must launch the shared hosted desktop/web build.");
+  assert(phantomEmpires?.launchUrl === "/app/games/phantom-empires/index.html?v=2.1.0", "Phantom Empires must launch the shared hosted desktop/web build.");
   assert(phantomEmpires?.engine?.tier === "PhantomPlay Strategy Engine 2.0 · WebGL 3D", "Phantom Empires must advertise its real shipped engine without pretending the browser build is Unreal.");
   for (const unrealId of ["cubetown", "phantom-ages", "phantom-legends", "phantom-strike"]) {
     const game = initial.catalog.find((item) => item.id === unrealId);

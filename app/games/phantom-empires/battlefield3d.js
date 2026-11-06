@@ -116,6 +116,12 @@ export function createBattlefield3D() {
         box(group,'#77563d',i*s*.6,13,s,22,26,20);box(group,i%2?color:'#dac593',i*s*.6,36,s,27,5,24);
       }
       if(entity.type==='workshop')for(const x of [-1,1])part(group,cylinderGeo,'#554839',x*s*.8,18,s*.6,17,8,17).rotation.z=Math.PI/2;
+      if(entity.type==='lumbercamp')for(let i=0;i<4;i++)part(group,cylinderGeo,'#84603f',s*.85,5+i*5,(i%2)*12,5,44,5).rotation.x=Math.PI/2;
+      if(entity.type==='miningcamp')for(let i=0;i<3;i++)part(group,sphereGeo,i%2?'#b7a16a':'#93978f',s*.9,8,i*14-14,13,10,10);
+      if(entity.type==='mill'){
+        const wheel=part(group,geometry('mill-wheel',()=>new THREE.TorusGeometry(19,3,5,12)),'#806145',-s*.85,22,0,1,1,1);wheel.rotation.y=Math.PI/2;
+        for(let i=0;i<4;i++){const spoke=box(group,'#ab8b58',-s*.85,22,0,3,38,3);spoke.rotation.x=i*Math.PI/4;}
+      }
       flag(group,color,-s*.75,s*1.5,-s*.5);
     }
     return group;

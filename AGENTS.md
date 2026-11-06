@@ -101,6 +101,12 @@
   explicit approval; do not interpret this candidate as live.
 
 ## Recent, merged & live (newest first)
+- **Script-informed gathering and formations (2026-11-06)** — Phantom Empires
+  2.1.0, build `phantom-live-20261106-250`. Independently adapts the studied
+  resource-assignment and formation behavior to our actual simulation. Mills,
+  lumber/mining camps, correct cargo deposits, depletion retargeting and
+  direction-aware centered army orders are playable. Private extracted source
+  remains local. See `docs/quality/EMPIRES_SCRIPT_APPLICATION_20261106.md`.
 - **Phantom Empires 3D (2026-11-06)** — game 2.0.0, app build
   `phantom-live-20261106-249`. Original WebGL medieval battlefield extends the
   existing standalone RTS simulation with batched scenery, animated units,

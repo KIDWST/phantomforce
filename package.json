@@ -40,7 +40,7 @@
     "test:topbar-media": "node scripts/test-topbar-media-responsive.mjs",
     "test:workspace-mobile-integrity": "node scripts/test-workspace-mobile-integrity.mjs",
     "test:product-grammar": "npm run build --workspace @phantomforce/contracts && node scripts/test-product-grammar.mjs",
-    "test:phantomplay": "node scripts/test-phantomplay.mjs && node scripts/test-phantom-empires.mjs && node scripts/test-phantom-empires-3d-browser.mjs && node scripts/test-phantomplay-desktop-mods.mjs && npm run test:phantomplay --workspace @phantomforce/server && npm run test:phantomplay:edge --workspace @phantomforce/server && npm run test:phantomplay:edge:storage --workspace @phantomforce/server && npm run test:phantomplay:dev-mode --workspace @phantomforce/server && npm run test --workspace @phantomforce/phantomplay-edge-worker",
+    "test:phantomplay": "node scripts/test-phantomplay.mjs && node scripts/test-phantom-empires.mjs && node scripts/test-empires-tactics.mjs && node scripts/test-phantom-empires-3d-browser.mjs && node scripts/test-phantomplay-desktop-mods.mjs && npm run test:phantomplay --workspace @phantomforce/server && npm run test:phantomplay:edge --workspace @phantomforce/server && npm run test:phantomplay:edge:storage --workspace @phantomforce/server && npm run test:phantomplay:dev-mode --workspace @phantomforce/server && npm run test --workspace @phantomforce/phantomplay-edge-worker",
     "test:phantom-empires": "node scripts/test-phantom-empires.mjs",
     "test:phantom-empires:browser": "node scripts/test-phantom-empires-3d-browser.mjs",
     "test:phantomplay-production": "npm run test:phantomplay-production --workspace @phantomforce/server && npm run test:phantomplay-ai-edit --workspace @phantomforce/server",
