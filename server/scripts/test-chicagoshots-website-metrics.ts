@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {randomUUID} from 'node:crypto';
+import Fastify from 'fastify';
+import {recordWebsiteEvent,websiteMetrics,registerChicagoShotsWebsiteRoutes} from '../src/phantom-ai/chicagoshots-website-metrics.js';
+const dir=await mkdtemp(join(tmpdir(),'cs-metrics-'));const file=join(dir,'events.json');
+process.env.PHANTOMFORCE_CHICAGOSHOTS_WEBSITE_FILE=file;
+const now=new Date('2026-11-06T12:00:00Z');
+const event=()=>({id:randomUUID(),session:randomUUID(),event:'page_view',page:'/',source:'direct',campaign:''});
+try{
+ const first=event();await Promise.all(Array.from({length:12},()=>recordWebsiteEvent(first,file,now)));
+ assert.equal((await websiteMetrics(file,now)).page_views,1,'retries are deduplicated');
+ await Promise.all(Array.from({length:20},()=>recordWebsiteEvent(event(),file,now)));
+ assert.equal((await websiteMetrics(file,now)).page_views,21,'concurrent writes survive');
+ await assert.rejects(recordWebsiteEvent({...event(),email:'private@example.com'},file,now));
+ await assert.rejects(recordWebsiteEvent({...event(),campaign:'email@example.com'},file,now));
+ await recordWebsiteEvent(event(),file,new Date('2026-12-10T12:00:00Z'));
+ assert.equal((await websiteMetrics(file,new Date('2026-12-10T12:00:00Z'))).page_views,1,'expired events removed');
+ assert.equal(JSON.parse(await readFile(file,'utf8')).events.length,1);
+ const app=Fastify();registerChicagoShotsWebsiteRoutes(app,(req,reply)=>{if(req.headers.authorization==='fixture')return true;reply.code(403).send({ok:false});return false;});
+ const headers={origin:'https://chicagoshots.com','user-agent':'Chrome'};
+ assert.equal((await app.inject({method:'POST',url:'/api/public/chicagoshots/website-events',payload:event()})).statusCode,403);
+ assert.equal((await app.inject({method:'GET',url:'/phantom-ai/ops/chicagoshots/website-metrics'})).statusCode,403);
+ let r=await app.inject({method:'POST',url:'/api/public/chicagoshots/website-events',headers:{...headers,dnt:'1'},payload:event()});assert.equal(r.json().recorded,false);
+ r=await app.inject({method:'POST',url:'/api/public/chicagoshots/website-events',headers,payload:{...event(),secret:'no'}});assert.equal(r.statusCode,400);
+ r=await app.inject({method:'POST',url:'/api/public/chicagoshots/website-events',headers,payload:event()});assert.equal(r.statusCode,202);
+ r=await app.inject({method:'GET',url:'/phantom-ai/ops/chicagoshots/website-metrics',headers:{authorization:'fixture'}});assert.equal(r.statusCode,200);assert.equal('events' in r.json(),false);assert.equal(r.headers['cache-control'],'no-store');
+ await writeFile(file,'corrupt');r=await app.inject({method:'GET',url:'/phantom-ai/ops/chicagoshots/website-metrics',headers:{authorization:'fixture'}});assert.equal(r.statusCode,503);
+ await app.close();console.log('PASS website metrics concurrency, privacy, retention, access and unavailable states');
+}finally{await rm(dir,{recursive:true,force:true});delete process.env.PHANTOMFORCE_CHICAGOSHOTS_WEBSITE_FILE;}

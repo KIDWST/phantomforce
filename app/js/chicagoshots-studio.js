@@ -1,4 +1,4 @@
-import { session } from "./store.js?v=phantom-live-20261106-250";
+import { session } from "./store.js?v=phantom-live-20261106-251";
 
 const TENANT_ID = "client-chicagoshots";
 const MAX_INLINE_FILE_BYTES = 12 * 1024 * 1024;
@@ -91,7 +91,11 @@ async function loadStudio(force = false) {
   studioState = { ...studioState, status: "loading", error: "" };
   rerender();
   try {
-    const data = await api("/phantom-ai/ops/chicagoshots/studio?limit=12");
+    const [data,website] = await Promise.all([
+      api("/phantom-ai/ops/chicagoshots/studio?limit=12"),
+      api("/phantom-ai/ops/chicagoshots/website-metrics").catch(()=>({ok:false})),
+    ]);
+    data.website=website;
     studioState = { ...studioState, status: "ready", data, error: "" };
   } catch (error) {
     studioState = { ...studioState, status: "error", error: error?.message || "ChicagoShots Studio could not load." };
@@ -424,11 +428,14 @@ function crmMarkup(data) {
     </section>`;
 }
 
-function siteMarkup() {
+function siteMarkup(data) {
+  const website=data.website;
+  const metrics=website?.ok ? `<div class="cs-crm-proof"><span><b>${Number(website.page_views)}</b> page views</span><span><b>${Number(website.visit_sessions)}</b> visit sessions</span><span><b>${Number(website.cta_clicks)}</b> inquiry / booking clicks</span><span><b>${Number(website.inquiry_submissions)}</b> form success events</span></div><p class="cs-fineprint">Last 30 days · first-party browser events. Counts are not unique people, paying customers, or revenue.${website.last_event_at?` Latest activity ${esc(shortDate(website.last_event_at))}.`:' No measured activity yet.'}</p>` : '<p class="cs-empty">Website measurements are unavailable. Refresh to reconnect; missing data is not a zero.</p>';
+
   return `
     <section class="cs-panel cs-site-panel">
       <header><div><p class="cs-eyebrow">04 · OWN THE MARKET</p><h3>ChicagoShots.com</h3></div><a class="cs-link" href="https://chicagoshots.com" target="_blank" rel="noreferrer">View site →</a></header>
-      <div class="cs-site-preview">
+      ${metrics}<div class="cs-site-preview">
         <span>CHICAGO CREATIVE STUDIO</span>
         <strong>Stories that<br>move people.</strong>
         <p>Weddings · conferences · expert media · sports</p>
@@ -443,7 +450,7 @@ function renderReady(data) {
     ${runwayMarkup()}
     ${campaignMarkup(data)}
     ${metricsMarkup(data)}
-    <div class="cs-grid">${mediaMarkup(data)}${socialMarkup(data)}${crmMarkup(data)}${siteMarkup()}</div>
+    <div class="cs-grid">${mediaMarkup(data)}${socialMarkup(data)}${crmMarkup(data)}${siteMarkup(data)}</div>
     <footer class="cs-footer"><b>ChicagoShots runs on PhantomForce.</b><span>CRM source is read-only · drafts require approval · external actions require provider confirmation.</span><button type="button" data-cs-refresh>Refresh all</button></footer>
   </div>`;
 }

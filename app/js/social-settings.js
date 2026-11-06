@@ -1,7 +1,7 @@
 /* Provider-verified social accounts. Public references never imply authorization. */
-import { currentTenantId, session as accessSession } from "./store.js?v=phantom-live-20261106-250";
-import { loadSocialAccounts, saveSocialAccounts } from "./contenthub.js?v=phantom-live-20261106-250";
-import { socialConnectorsFromResponse } from "./social-connection-state.js?v=phantom-live-20261106-250";
+import { currentTenantId, session as accessSession } from "./store.js?v=phantom-live-20261106-251";
+import { loadSocialAccounts, saveSocialAccounts } from "./contenthub.js?v=phantom-live-20261106-251";
+import { socialConnectorsFromResponse } from "./social-connection-state.js?v=phantom-live-20261106-251";
 
 const API = "/phantom-ai/ops/social-oauth";
 const esc = (value = "") => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);

@@ -616,3 +616,6 @@ build id **everywhere** or browsers serve stale assets. Bump `phantom-live-YYYYM
   ```bash
   git bundle create /tmp/phantom-3d.bundle origin/main..HEAD   # or: git format-patch origin/main..HEAD
   ```
+
+## ChicagoShots measurements — 2026-11-06
+Public inquiry and website event paths must be explicitly proxied by the live gateway. Metrics stay behind ChicagoShots workspace access. Keep event data anonymous and aggregate; unavailable metrics are not zero revenue. Regression: node --import tsx server/scripts/test-chicagoshots-website-metrics.ts.

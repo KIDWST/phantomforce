@@ -134,7 +134,8 @@
     "test:bambu-connections": "node --import tsx server/scripts/test-bambu-connections.ts",
     "test:bambu-printer-setup:browser": "node scripts/test-bambu-printer-setup-browser.mjs",
     "test:print-decision-lab": "node scripts/test-print-decision-lab.mjs",
-    "test:print-decision-lab:browser": "node scripts/test-print-decision-lab-browser.mjs"
+    "test:print-decision-lab:browser": "node scripts/test-print-decision-lab-browser.mjs",
+    "test:chicagoshots-website": "node --import tsx server/scripts/test-chicagoshots-website-metrics.ts && node scripts/test-chicagoshots-public-gateway.mjs"
   },
   "engines": {
     "node": ">=22"

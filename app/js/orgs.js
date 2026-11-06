@@ -6,8 +6,8 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20261106-250";
-import { accountErrorMessage, accountSignInResult } from "./account-errors.js?v=phantom-live-20261106-250";
+import { ctx, session } from "./store.js?v=phantom-live-20261106-251";
+import { accountErrorMessage, accountSignInResult } from "./account-errors.js?v=phantom-live-20261106-251";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const isCustomerOrgSession = () => !!(ctx.session?.database || ctx.session?.localCustomer);

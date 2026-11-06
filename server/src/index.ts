@@ -1,3 +1,4 @@
+import {registerChicagoShotsWebsiteRoutes} from './phantom-ai/chicagoshots-website-metrics.js';
 import "./load-env.js";
 
 import { execFile, execFileSync } from "node:child_process";
@@ -9046,6 +9047,7 @@ app.post("/api/email/provider/events", async (request, reply) => {
   }
 });
 const chicagoShotsInquiryRate = new Map<string, number[]>();
+registerChicagoShotsWebsiteRoutes(app,(request,reply)=>requireClientWorkspaceView(request,reply,"client-chicagoshots"));
 
 app.post("/api/public/chicagoshots/inquiries", async (request, reply) => {
   reply.header("cache-control", "no-store");

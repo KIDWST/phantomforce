@@ -4,6 +4,26 @@
   "purpose": "Release integrity ledger for PhantomForce decisions that must not disappear, regress, or be resurrected by stale worktrees.",
   "rules": [
     {
+      "id": "chicagoshots-first-party-measurements",
+      "status": "active",
+      "title": "ChicagoShots public inquiry gateway and private measured activity",
+      "ownerDecision": "Repair ChicagoShots inquiries and show actual website activity inside its business workspace without claiming missing social data or collected revenue.",
+      "requiredPatterns": [
+        {
+          "file": "ops/admin-live/admin-static-server.mjs",
+          "pattern": "/api/public/chicagoshots/inquiries"
+        },
+        {
+          "file": "server/src/phantom-ai/chicagoshots-website-metrics.ts",
+          "pattern": "origin_not_allowed[\\s\\S]*invalid_website_event[\\s\\S]*authorize\\(request,reply\\)"
+        },
+        {
+          "file": "app/js/chicagoshots-studio.js",
+          "pattern": "Website measurements are unavailable"
+        }
+      ]
+    },
+    {
       "id": "empires-script-informed-economy",
       "status": "active",
       "title": "Extracted-script study improves real gathering and army movement",

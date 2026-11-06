@@ -37,7 +37,7 @@ export function requiresWrite(method: string, url: string): boolean {
   // ChicagoShots.com lead intake is intentionally public. The route owns its
   // honeypot, timing, rate-limit, validation, and idempotency boundaries; it
   // only records an inquiry and an approval-required response draft.
-  if (path === "/api/public/chicagoshots/inquiries") return false;
+  if (path === "/api/public/chicagoshots/inquiries" || path === "/api/public/chicagoshots/website-events") return false;
   if (/(^|-)(preview|dry-run|preflight|contract|validate)$/.test(seg)) return false; // read-only computes
   if (path === "/phantom-ai/chat") return false; // conversational; its side effects are separately gated
   // Native PhantomPlay deliberately has no browser/account session. These

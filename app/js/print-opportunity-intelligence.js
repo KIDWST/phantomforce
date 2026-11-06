@@ -1,4 +1,4 @@
-import { nonnegative, printEconomics } from "./print-opportunity-core.js?v=phantom-live-20261106-250";
+import { nonnegative, printEconomics } from "./print-opportunity-core.js?v=phantom-live-20261106-251";
 
 const normalized = value => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 const measured = value => nonnegative(value) !== null && Number(value) > 0;
